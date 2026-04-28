@@ -7,10 +7,12 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:scolarhub/main.dart';
+import 'package:scolarhub/app/scolar_hub_app.dart';
 
 void main() {
-  testWidgets('ScolarHub affiche l ecran d authentification', (WidgetTester tester) async {
+  testWidgets('ScolarHub affiche l ecran d authentification', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const ScolarHubApp());
 
     expect(find.text('ScolarHub'), findsOneWidget);
