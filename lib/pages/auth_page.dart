@@ -4,7 +4,8 @@ import '../pages/student_shell.dart';
 import '../pages/splash_screen.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
-import 'parent_shell.dart';
+import 'bureau_des_etudiants.dart';
+
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
 // ════════════════════════════════════════════════════════════════════════════
@@ -450,6 +451,42 @@ const Center(
         color: Colors.orange,
         fontStyle: FontStyle.italic)),
 ),
+
+      // Boutons de redirection ajoutés
+      SizedBox(width: double.infinity, height: 54,
+        child: OutlinedButton(
+          onPressed: () {
+            // TODO: Action de redirection 1
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.blue,
+            side: const BorderSide(color: AppPalette.blue, width: 1.5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('BGE',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        ),
+      ),
+      const SizedBox(height: 12),
+      SizedBox(width: double.infinity, height: 54,
+        child: OutlinedButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const BureauDesEtudiantsScreen(),
+              )
+            );
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.blue,
+            side: const BorderSide(color: AppPalette.blue, width: 1.5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('Redirection 2',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        ),
+      ),
+      const SizedBox(height: 24),
 
       if (_tab == 0) _infoMatricule(e),
     ]);
