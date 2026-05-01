@@ -41,6 +41,22 @@ class ProfileTab extends StatefulWidget {
   State<ProfileTab> createState() => _ProfileTabState();
 }
 
+class _ProfileTabState extends State<ProfileTab> {
+
+  // ── Données modifiables ───────────────────────────────────────────────
+  String _email        = '';
+  String _telephone    = '';
+  String _ville        = 'Ouagadougou, Burkina Faso';
+  String _dateNaiss    = '';
+  String _interets     = '';
+  String _bio          = '';
+  String _facebook     = '';
+  String _whatsapp     = '';
+  String _linkedin     = '';
+
+  // ── Confidentialité ───────────────────────────────────────────────────
+  bool _emailVisible   = true;
+  bool _telVisible     = true;
 class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
   // ── Données modifiables ───────────────────────────────────────────────
@@ -189,20 +205,24 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
               topLeft:  Radius.circular(24),
               topRight: Radius.circular(24),
             ),
           ),
           child: Column(mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Handle
             Center(child: Container(width: 40, height: 4,
                 decoration: BoxDecoration(color: const Color(0xFFE2E8F0),
                     borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 20),
+
             Text('Modifier — $titre',
                 style: const TextStyle(fontSize: 18,
                     fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
             const SizedBox(height: 16),
+
             Container(
               decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(14),
@@ -224,6 +244,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(height: 16),
+
             Row(children: [
               Expanded(child: OutlinedButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -267,6 +288,15 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      body: SingleChildScrollView(
+        child: Column(children: [
+
+          // ══════════════════════════════════════════════════════════
+          // PHOTO DE COUVERTURE
+          // ══════════════════════════════════════════════════════════
+          Stack(clipBehavior: Clip.none, children: [
+
+            // Couverture gradient bleu + jaune
 
       // ══ AppBar avec bouton notification ══════════════════════════════
       appBar: AppBar(
@@ -340,6 +370,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                   ),
                 ),
                 child: Stack(children: [
+                  // Cercles décoratifs
                   Positioned(top: -30, right: -30,
                       child: Container(width: 140, height: 140,
                           decoration: BoxDecoration(shape: BoxShape.circle,
@@ -348,6 +379,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                       child: Container(width: 100, height: 100,
                           decoration: BoxDecoration(shape: BoxShape.circle,
                               color: Colors.white.withOpacity(0.06)))),
+                  // Bouton modifier couverture
                   Positioned(bottom: 12, right: 12, child: GestureDetector(
                     onTap: () => _snackbar('Photo de couverture — Upload disponible en production'),
                     child: Container(
@@ -398,12 +430,14 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
             ),
           ]),
 
+          // Espace photo
           const SizedBox(height: 62),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
+              // ── Nom + rôle ────────────────────────────────────────
               // ── Nom + rôle ──────────────────────────────────────────
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -428,6 +462,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
               const SizedBox(height: 16),
 
+              // ── Filière + domaine (non modifiable) ────────────────
               // ── Filière ─────────────────────────────────────────────
               if (widget.profile.filiere.isNotEmpty) ...[
                 Container(
@@ -455,6 +490,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                 const SizedBox(height: 20),
               ],
 
+              // ── Biographie ────────────────────────────────────────
               // ── Biographie ──────────────────────────────────────────
               _sectionCard(
                 titre: 'Biographie',
@@ -472,6 +508,15 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     ),
                     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Expanded(child: Text(
+                        _bio.isEmpty
+                            ? 'Appuyez pour ajouter une biographie...'
+                            : _bio,
+                        style: TextStyle(fontSize: 15, height: 1.6,
+                          color: _bio.isEmpty
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF0F172A),
+                          fontStyle: _bio.isEmpty
+                              ? FontStyle.italic : FontStyle.normal,
                         _bio.isEmpty ? 'Appuyez pour ajouter une biographie...' : _bio,
                         style: TextStyle(fontSize: 15, height: 1.6,
                           color: _bio.isEmpty ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
@@ -492,12 +537,15 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
               const SizedBox(height: 16),
 
+              // ── Informations modifiables ───────────────────────────
               // ── Informations personnelles ───────────────────────────
               _sectionCard(
                 titre: 'Informations personnelles',
                 icon: Icons.person_outline,
                 couleur: AppPalette.blue,
                 enfants: [
+
+                  // Email
                   _ligneModifiable(
                     icon: Icons.email_outlined,
                     label: 'Email',
@@ -516,6 +564,8 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     ),
                   ),
                   _div(),
+
+                  // Téléphone
                   _ligneModifiable(
                     icon: Icons.phone_outlined,
                     label: 'Téléphone',
@@ -534,6 +584,8 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     ),
                   ),
                   _div(),
+
+                  // Ville
                   _ligneModifiable(
                     icon: Icons.location_on_outlined,
                     label: 'Ville / Localité',
@@ -547,6 +599,8 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     ),
                   ),
                   _div(),
+
+                  // Date de naissance
                   _ligneModifiable(
                     icon: Icons.cake_outlined,
                     label: 'Date de naissance',
@@ -560,6 +614,8 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     ),
                   ),
                   _div(),
+
+                  // Centres d'intérêt
                   _ligneModifiable(
                     icon: Icons.interests_outlined,
                     label: 'Centres d\'intérêt',
@@ -578,6 +634,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
               const SizedBox(height: 16),
 
+              // ── Informations académiques (non modifiables) ─────────
               // ── Informations académiques ────────────────────────────
               _sectionCard(
                 titre: 'Informations académiques',
@@ -599,6 +656,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
               const SizedBox(height: 16),
 
+              // ── Réseaux sociaux ────────────────────────────────────
               // ── Réseaux sociaux ─────────────────────────────────────
               _sectionCard(
                 titre: 'Réseaux sociaux',
@@ -652,6 +710,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
               const SizedBox(height: 16),
 
+              // ── Confidentialité ────────────────────────────────────
               // ── Confidentialité ─────────────────────────────────────
               _sectionCard(
                 titre: 'Confidentialité',
@@ -696,6 +755,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
               const SizedBox(height: 32),
 
+              // ── Bouton déconnexion ─────────────────────────────────
               // ── Déconnexion ─────────────────────────────────────────
               SizedBox(
                 width: double.infinity, height: 54,
@@ -722,6 +782,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   }
 
   // ════════════════════════════════════════════════════════════════════════
+  // WIDGETS HELPERS
   // WIDGETS HELPERS  (identiques à l'original)
   // ════════════════════════════════════════════════════════════════════════
 
@@ -791,6 +852,8 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     Color? iconColor,
     Widget? trailing,
   }) {
+    final c      = iconColor ?? AppPalette.blue;
+    final empty  = valeur.isEmpty;
     final c     = iconColor ?? AppPalette.blue;
     final empty = valeur.isEmpty;
     return GestureDetector(
@@ -886,6 +949,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
         ElevatedButton(
           onPressed: () {
             Navigator.of(context).pop();
+            // Retour au splash et suppression de toute la pile
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const SplashScreen()),
               (_) => false,

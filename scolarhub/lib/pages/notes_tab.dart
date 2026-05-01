@@ -1,212 +1,685 @@
 import 'package:flutter/material.dart';
-
 import '../theme/app_palette.dart';
 
-class NotesTab extends StatelessWidget {
+// ── Modèle note ──────────────────────────────────────────────────────────────
+class _NoteModule {
+  final String module, code, prof;
+  final double? note;
+  final int coefficient;
+  final Color color;
+
+  const _NoteModule({required this.module, required this.code, required this.prof,
+      required this.note, required this.coefficient, required this.color});
+
+  String get statut => note == null ? 'en_attente' : note! >= 10 ? 'valide' : note! >= 5 ? 'danger' : 'blamable';
+
+  Color get couleurStatut {
+    switch (statut) {
+      case 'valide':   return const Color(0xFF15803D);
+      case 'danger':   return const Color(0xFFD97706);
+      case 'blamable': return const Color(0xFFC62828);
+      default:         return const Color(0xFF64748B);
+    }
+  }
+
+  String get labelStatut {
+    switch (statut) {
+      case 'valide':   return '✅ Validé';
+      case 'danger':   return '⚠️ En danger';
+      case 'blamable': return '🚨 Blâmable';
+      default:         return '⏳ En attente';
+    }
+  }
+
+  String get effetIA {
+    switch (statut) {
+      case 'valide':   return 'Chat IA vous félicite !';
+      case 'danger':   return 'Chat IA propose un plan de révision.';
+      case 'blamable': return 'Alerte envoyée — Chat IA intervient.';
+      default:         return 'Note pas encore disponible.';
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+class NotesTab extends StatefulWidget {
   const NotesTab({super.key});
+  @override State<NotesTab> createState() => _NotesTabState();
+}
+
+class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+
+  final List<_NoteModule> _notes = [
+    _NoteModule(module: 'Algorithmique & Structures', code: 'INFO101',
+        prof: 'Prof Ouédraogo', note: 14.5, coefficient: 3, color: AppPalette.blue),
+    _NoteModule(module: 'Base de données', code: 'INFO102',
+        prof: 'Prof Traoré', note: 8.0, coefficient: 3, color: Color(0xFF7C3AED)),
+    _NoteModule(module: 'Réseaux informatiques', code: 'INFO103',
+        prof: 'Prof Sawadogo', note: 4.5, coefficient: 2, color: Color(0xFF0891B2)),
+    _NoteModule(module: 'Mathématiques discrètes', code: 'MATH201',
+        prof: 'Prof Kaboré', note: 12.0, coefficient: 2, color: Color(0xFF15803D)),
+    _NoteModule(module: 'Anglais technique', code: 'ANG101',
+        prof: 'Prof Johnson', note: 16.0, coefficient: 1, color: Color(0xFFD97706)),
+    _NoteModule(module: 'Programmation OO', code: 'INFO104',
+        prof: 'Prof Ouédraogo', note: 9.5, coefficient: 3, color: AppPalette.blue),
+    _NoteModule(module: 'Systèmes d\'exploitation', code: 'INFO105',
+        prof: 'Prof Traoré', note: null, coefficient: 2, color: Color(0xFF7C3AED)),
+  ];
+
+  double get _moyenne {
+    final notees = _notes.where((n) => n.note != null).toList();
+    if (notees.isEmpty) return 0;
+    final pts = notees.fold(0.0, (s, n) => s + n.note! * n.coefficient);
+    final cff = notees.fold(0,   (s, n) => s + n.coefficient);
+    return cff == 0 ? 0 : pts / cff;
+  }
+
+  int get _nbValides  => _notes.where((n) => n.statut == 'valide').length;
+  int get _nbDanger   => _notes.where((n) => n.statut == 'danger').length;
+  int get _nbBlamable => _notes.where((n) => n.statut == 'blamable').length;
+  int get _nbAttente  => _notes.where((n) => n.statut == 'en_attente').length;
+
+  @override
+  void initState() { super.initState(); _tabCtrl = TabController(length: 2, vsync: this); }
+  @override
+  void dispose() { _tabCtrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    const notes = [
-      _NoteItem(
-        code: 'INFO101',
-        matiere: 'Algorithmique',
-        cc: '14.00',
-        tp: '15.00',
-        exam: '16.00',
-        moyenne: '15.10',
+    return Column(children: [
+
+      // ── Header gradient bleu ──────────────────────────────────────
+      Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: [AppPalette.blue, Color(0xFF0F23A0)]),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        child: Column(children: [
+
+          Row(children: [
+            Container(width: 48, height: 48,
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.grade_rounded, color: Colors.white, size: 26)),
+            const SizedBox(width: 14),
+            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Mes Notes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold,
+                  color: Colors.white, letterSpacing: -0.3)),
+              SizedBox(height: 2),
+              Text('Semestre 3 — 2024/2025',
+                  style: TextStyle(fontSize: 13, color: Colors.white70)),
+            ])),
+          ]),
+
+          const SizedBox(height: 20),
+
+          // Moyenne + stats
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
+            ),
+            child: Column(children: [
+              Row(mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                Text(_moyenne.toStringAsFixed(2), style: const TextStyle(fontSize: 52,
+                    fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -1)),
+                const Text(' / 20', style: TextStyle(fontSize: 20, color: Colors.white70)),
+              ]),
+              const Text('Moyenne générale',
+                  style: TextStyle(fontSize: 13, color: Colors.white70)),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white24, height: 1),
+              const SizedBox(height: 16),
+              Row(children: [
+                _stat('$_nbValides',  'Validés',  const Color(0xFF86EFAC)),
+                _div(), _stat('$_nbDanger',   'Danger',   const Color(0xFFFDE68A)),
+                _div(), _stat('$_nbBlamable', 'Blâmables',const Color(0xFFFCA5A5)),
+                _div(), _stat('$_nbAttente',  'Attente',  Colors.white54),
+              ]),
+            ]),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Bouton contester moyenne
+          GestureDetector(
+            onTap: () => showModalBottomSheet(context: context,
+                isScrollControlled: true, backgroundColor: Colors.transparent,
+                builder: (_) => _ReclamationMoyenneSheet(notes: _notes, moyenne: _moyenne)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withOpacity(0.25))),
+              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.flag_outlined, color: Colors.white, size: 16),
+                SizedBox(width: 8),
+                Text('Contester ma moyenne', style: TextStyle(fontSize: 13,
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          TabBar(controller: _tabCtrl,
+            indicatorColor: AppPalette.yellow,
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white54,
+            labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            unselectedLabelStyle: const TextStyle(fontSize: 14),
+            tabs: const [Tab(text: 'Toutes les notes'), Tab(text: 'Par statut')],
+          ),
+        ]),
       ),
-      _NoteItem(
-        code: 'INFO102',
-        matiere: 'Bases de Donnees',
-        cc: '12.00',
-        tp: '13.00',
-        exam: '14.00',
-        moyenne: '13.10',
-      ),
-      _NoteItem(
-        code: 'MATH201',
-        matiere: 'Maths Discretes',
-        cc: '11.00',
-        tp: '—',
-        exam: '13.00',
-        moyenne: '12.20',
-      ),
-      _NoteItem(
-        code: 'ANG101',
-        matiere: 'Anglais Technique',
-        cc: '16.00',
-        tp: '—',
-        exam: '17.00',
-        moyenne: '16.60',
-      ),
+
+      // ── Contenu ────────────────────────────────────────────────────
+      Expanded(child: TabBarView(controller: _tabCtrl, children: [
+        _ListeNotes(notes: _notes, onReclamer: _ouvrirReclamation),
+        _NotesParStatut(notes: _notes, onReclamer: _ouvrirReclamation),
+      ])),
+    ]);
+  }
+
+  void _ouvrirReclamation(_NoteModule note) => showModalBottomSheet(
+    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+    builder: (_) => _ReclamationNoteSheet(note: note),
+  );
+
+  Widget _stat(String val, String label, Color color) => Expanded(child: Column(children: [
+    Text(val, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+    const SizedBox(height: 3),
+    Text(label, style: const TextStyle(fontSize: 11, color: Colors.white60)),
+  ]));
+
+  Widget _div() => Container(width: 1, height: 30, color: Colors.white24);
+}
+
+// ── Liste toutes notes ──────────────────────────────────────────────────────
+class _ListeNotes extends StatelessWidget {
+  final List<_NoteModule> notes;
+  final void Function(_NoteModule) onReclamer;
+  const _ListeNotes({required this.notes, required this.onReclamer});
+
+  @override
+  Widget build(BuildContext context) => ListView.separated(
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+    itemCount: notes.length,
+    separatorBuilder: (_, __) => const SizedBox(height: 12),
+    itemBuilder: (_, i) => _NoteCard(note: notes[i], onReclamer: onReclamer),
+  );
+}
+
+// ── Notes par statut ────────────────────────────────────────────────────────
+class _NotesParStatut extends StatelessWidget {
+  final List<_NoteModule> notes;
+  final void Function(_NoteModule) onReclamer;
+  const _NotesParStatut({required this.notes, required this.onReclamer});
+
+  @override
+  Widget build(BuildContext context) {
+    final groupes = [
+      {'label': '🚨 Blâmables',  'statut': 'blamable',   'bg': Color(0xFFFFEBEE), 'border': Color(0xFFEF9A9A)},
+      {'label': '⚠️ En danger',  'statut': 'danger',     'bg': Color(0xFFFFFBEB), 'border': Color(0xFFFDE68A)},
+      {'label': '✅ Validés',    'statut': 'valide',     'bg': Color(0xFFF0FDF4), 'border': Color(0xFF86EFAC)},
+      {'label': '⏳ En attente', 'statut': 'en_attente', 'bg': Color(0xFFF8FAFC), 'border': Color(0xFFE2E8F0)},
     ];
-
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          color: AppPalette.blue,
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
-          child: Column(
-            children: [
-              Text(
-                'Notes',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppPalette.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Moyenne generale',
-                style: TextStyle(color: AppPalette.white),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                '14.25 / 20',
-                style: TextStyle(
-                  color: AppPalette.white,
-                  fontSize: 48,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const Text(
-                '2024-2025',
-                style: TextStyle(color: AppPalette.white),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(14),
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 6, bottom: 10),
-                child: Text(
-                  'SEMESTRE 3',
-                  style: TextStyle(
-                    color: Colors.black54,
-                    letterSpacing: 1.3,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              ...notes.map((note) => _noteCard(note)),
-            ],
-          ),
-        ),
-      ],
-    );
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: groupes.map((g) {
+      final filtered = notes.where((n) => n.statut == g['statut']).toList();
+      if (filtered.isEmpty) return const SizedBox.shrink();
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(color: g['bg'] as Color,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: g['border'] as Color)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Row(children: [
+            Text(g['label'] as String, style: const TextStyle(fontSize: 15,
+                fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            const Spacer(),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(color: (g['border'] as Color).withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text('${filtered.length}', style: const TextStyle(fontSize: 12,
+                    fontWeight: FontWeight.bold, color: Color(0xFF0F172A)))),
+          ])),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          ...filtered.map((n) => _NoteCard(note: n, onReclamer: onReclamer, compact: true)),
+        ]),
+      );
+    }).toList());
   }
+}
 
-  Widget _noteCard(_NoteItem note) {
+// ── Carte note ──────────────────────────────────────────────────────────────
+class _NoteCard extends StatelessWidget {
+  final _NoteModule note;
+  final void Function(_NoteModule) onReclamer;
+  final bool compact;
+  const _NoteCard({required this.note, required this.onReclamer, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = note.couleurStatut;
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppPalette.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppPalette.blue.withValues(alpha: 0.07),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+      margin: compact ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6) : EdgeInsets.zero,
+      padding: const EdgeInsets.all(16),
+      decoration: compact ? null : BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: note.statut == 'blamable' ? const Color(0xFFEF9A9A) : const Color(0xFFE2E8F0),
+            width: note.statut == 'blamable' ? 1.5 : 1),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                note.code,
-                style: const TextStyle(
-                  color: AppPalette.blue,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppPalette.softYellow,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Text(
-                  'Valide',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          ),
-          Text(
-            note.matiere,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 34),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _scoreBox('CC', note.cc),
-              _scoreBox('TP', note.tp),
-              _scoreBox('Exam', note.exam),
-              _scoreBox('Moy.', note.moyenne, highlighted: true),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text('Semestre 3', style: TextStyle(color: Colors.black54)),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 46, height: 46,
+              decoration: BoxDecoration(color: note.color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Center(child: Text(note.code.substring(0, 2),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: note.color)))),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(note.module, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 3),
+            Text(note.prof, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          ])),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(note.note != null ? '${note.note!.toStringAsFixed(1)} / 20' : '— / 20',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: sc)),
+            const SizedBox(height: 4),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: sc.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text(note.labelStatut,
+                    style: TextStyle(fontSize: 11, color: sc, fontWeight: FontWeight.w700))),
+          ]),
+        ]),
+        const SizedBox(height: 12),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: sc.withOpacity(0.06), borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+            Icon(Icons.smart_toy_outlined, size: 14, color: sc),
+            const SizedBox(width: 8),
+            Flexible(child: Text(note.effetIA,
+                style: TextStyle(fontSize: 12, color: sc, fontWeight: FontWeight.w500))),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(8)),
+              child: Text('Coeff. ${note.coefficient}', style: const TextStyle(fontSize: 12,
+                  color: AppPalette.blue, fontWeight: FontWeight.w600))),
+          const Spacer(),
+          if (note.note != null)
+            GestureDetector(
+              onTap: () => onReclamer(note),
+              child: const Row(children: [
+                Icon(Icons.flag_outlined, size: 14, color: Color(0xFF64748B)),
+                SizedBox(width: 4),
+                Text('Contester', style: TextStyle(fontSize: 12, color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w500)),
+              ]),
+            ),
+        ]),
+      ]),
     );
   }
+}
 
-  Widget _scoreBox(String title, String value, {bool highlighted = false}) {
-    return Expanded(
+// ── Réclamation note ────────────────────────────────────────────────────────
+class _ReclamationNoteSheet extends StatefulWidget {
+  final _NoteModule note;
+  const _ReclamationNoteSheet({required this.note});
+  @override State<_ReclamationNoteSheet> createState() => _ReclamationNoteSheetState();
+}
+
+class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
+  String? _typeNote;
+  final _partiesCtrl = TextEditingController();
+  final _justifCtrl  = TextEditingController();
+  bool _loading = false, _envoye = false;
+
+  final _types = ['Devoir sur table','Travaux Pratiques (TP)','Examen partiel','Examen final'];
+
+  @override void dispose() { _partiesCtrl.dispose(); _justifCtrl.dispose(); super.dispose(); }
+
+  Future<void> _envoyer() async {
+    if (_typeNote == null || _partiesCtrl.text.isEmpty || _justifCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Veuillez remplir tous les champs obligatoires.'),
+          backgroundColor: Color(0xFFC62828)));
+      return;
+    }
+    setState(() => _loading = true);
+    await Future.delayed(const Duration(milliseconds: 1200));
+    setState(() { _loading = false; _envoye = true; });
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: highlighted ? AppPalette.softYellow : const Color(0xFFF4F6FA),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Text(title, style: const TextStyle(color: Colors.black54)),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: highlighted ? AppPalette.blue : AppPalette.black,
+        decoration: const BoxDecoration(color: Colors.white,
+            borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24))),
+        child: _envoye ? _confirmation() : SingleChildScrollView(padding: const EdgeInsets.all(24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            const Text('Réclamation de note', style: TextStyle(fontSize: 20,
+                fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: -0.3)),
+            const SizedBox(height: 6),
+            const Text('Votre réclamation sera transmise à l\'administration.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4)),
+            const SizedBox(height: 20),
+            Container(padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: AppPalette.blue.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppPalette.blue.withOpacity(0.2))),
+              child: Column(children: [
+                _infoLigne('Module',     widget.note.module),
+                const SizedBox(height: 8),
+                _infoLigne('Professeur', widget.note.prof),
+                const SizedBox(height: 8),
+                _infoLigne('Note reçue', '${widget.note.note!.toStringAsFixed(1)} / 20 — ${widget.note.labelStatut}'),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            _lbl('Type de note *'),
+            Wrap(spacing: 8, runSpacing: 8, children: _types.map((t) {
+              final sel = _typeNote == t;
+              return GestureDetector(onTap: () => setState(() => _typeNote = t),
+                child: AnimatedContainer(duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: sel ? AppPalette.blue : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: sel ? AppPalette.blue : const Color(0xFFE2E8F0)),
+                  ),
+                  child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                      color: sel ? Colors.white : const Color(0xFF0F172A)))),
+              );
+            }).toList()),
+            const SizedBox(height: 18),
+            _lbl('Parties contestées *'),
+            _champ(_partiesCtrl, 'Ex: Question 3 et 4, exercice 2...', maxLines: 2),
+            const SizedBox(height: 18),
+            _lbl('Justification *'),
+            _champ(_justifCtrl, 'Pourquoi pensez-vous que la note est incorrecte ?', maxLines: 3),
+            const SizedBox(height: 18),
+            GestureDetector(
+              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Upload disponible en production'), backgroundColor: AppPalette.blue)),
+              child: Container(padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0))),
+                child: const Row(children: [
+                  Icon(Icons.attach_file, color: Color(0xFF64748B), size: 20),
+                  SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Pièce jointe (optionnel)', style: TextStyle(fontSize: 14,
+                        fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                    SizedBox(height: 2),
+                    Text('Photo de votre copie', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  ])),
+                  Icon(Icons.chevron_right, color: Color(0xFF64748B), size: 20),
+                ]),
               ),
             ),
-          ],
+            const SizedBox(height: 20),
+            _fluxProcessus(),
+            const SizedBox(height: 24),
+            SizedBox(width: double.infinity, height: 54,
+              child: ElevatedButton.icon(
+                onPressed: _loading ? null : _envoyer,
+                icon: _loading ? const SizedBox(width: 20, height: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                    : const Icon(Icons.send_rounded, size: 20),
+                label: Text(_loading ? 'Envoi en cours...' : 'Envoyer la réclamation',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0, disabledBackgroundColor: const Color(0xFFE2E8F0)),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ]),
         ),
+      ),
+    );
+  }
+
+  Widget _infoLigne(String lbl, String val) => Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    SizedBox(width: 90, child: Text(lbl, style: const TextStyle(fontSize: 12,
+        color: Color(0xFF64748B), fontWeight: FontWeight.w500))),
+    Expanded(child: Text(val, style: const TextStyle(fontSize: 13,
+        color: Color(0xFF0F172A), fontWeight: FontWeight.w600))),
+  ]);
+
+  Widget _confirmation() => Padding(padding: const EdgeInsets.all(40),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 72, height: 72,
+          decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1DB954)),
+          child: const Icon(Icons.check_rounded, color: Colors.white, size: 40)),
+      const SizedBox(height: 20),
+      const Text('Réclamation envoyée !', style: TextStyle(fontSize: 20,
+          fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+      const SizedBox(height: 10),
+      const Text('Votre réclamation a été transmise à l\'administration.\nVous serez notifié de la réponse.',
+          textAlign: TextAlign.center, style: TextStyle(fontSize: 15,
+              color: Color(0xFF64748B), height: 1.55)),
+    ]),
+  );
+}
+
+// ── Réclamation moyenne ──────────────────────────────────────────────────────
+class _ReclamationMoyenneSheet extends StatefulWidget {
+  final List<_NoteModule> notes;
+  final double moyenne;
+  const _ReclamationMoyenneSheet({required this.notes, required this.moyenne});
+  @override State<_ReclamationMoyenneSheet> createState() => _ReclamationMoyenneSheetState();
+}
+
+class _ReclamationMoyenneSheetState extends State<_ReclamationMoyenneSheet> {
+  final Set<String> _modulesContestes = {};
+  final _justifCtrl = TextEditingController();
+  bool _loading = false, _envoye = false;
+
+  @override void dispose() { _justifCtrl.dispose(); super.dispose(); }
+
+  Future<void> _envoyer() async {
+    if (_modulesContestes.isEmpty || _justifCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Sélectionnez au moins un module et ajoutez une justification.'),
+          backgroundColor: Color(0xFFC62828)));
+      return;
+    }
+    setState(() => _loading = true);
+    await Future.delayed(const Duration(milliseconds: 1200));
+    setState(() { _loading = false; _envoye = true; });
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notees = widget.notes.where((n) => n.note != null).toList();
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(color: Colors.white,
+            borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24))),
+        child: _envoye
+            ? Padding(padding: const EdgeInsets.all(40), child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 72, height: 72, decoration: const BoxDecoration(
+                    shape: BoxShape.circle, color: Color(0xFF1DB954)),
+                    child: const Icon(Icons.check_rounded, color: Colors.white, size: 40)),
+                const SizedBox(height: 20),
+                const Text('Réclamation envoyée !', style: TextStyle(fontSize: 20,
+                    fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const SizedBox(height: 10),
+                const Text('Votre contestation de moyenne a été transmise à l\'administration.',
+                    textAlign: TextAlign.center, style: TextStyle(fontSize: 15,
+                        color: Color(0xFF64748B), height: 1.55)),
+              ]))
+            : SingleChildScrollView(padding: const EdgeInsets.all(24),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 20),
+                  const Text('Contester ma moyenne', style: TextStyle(fontSize: 20,
+                      fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: -0.3)),
+                  const SizedBox(height: 6),
+                  const Text('Envoyée UNIQUEMENT à l\'administration.',
+                      style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4)),
+                  const SizedBox(height: 20),
+                  Container(padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: AppPalette.lightBlue,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppPalette.blue.withOpacity(0.2))),
+                    child: Row(children: [
+                      const Icon(Icons.info_outline, color: AppPalette.blue, size: 20),
+                      const SizedBox(width: 12),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Semestre 3 — 2024/2025',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        Text('Moyenne actuelle : ${widget.moyenne.toStringAsFixed(2)} / 20',
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
+                                color: AppPalette.blue)),
+                      ]),
+                    ]),
+                  ),
+                  const SizedBox(height: 20),
+                  _lbl('Modules contestés *'),
+                  ...notees.map((n) {
+                    final sel = _modulesContestes.contains(n.module);
+                    return GestureDetector(
+                      onTap: () => setState(() => sel
+                          ? _modulesContestes.remove(n.module)
+                          : _modulesContestes.add(n.module)),
+                      child: Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: sel ? AppPalette.lightBlue : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: sel ? AppPalette.blue : const Color(0xFFE2E8F0),
+                              width: sel ? 1.5 : 1),
+                        ),
+                        child: Row(children: [
+                          Container(width: 22, height: 22, decoration: BoxDecoration(shape: BoxShape.circle,
+                              color: sel ? AppPalette.blue : Colors.white,
+                              border: Border.all(color: sel ? AppPalette.blue : const Color(0xFFE2E8F0), width: 1.5)),
+                              child: sel ? const Icon(Icons.check, size: 14, color: Colors.white) : null),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(n.module, style: TextStyle(fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: sel ? AppPalette.blue : const Color(0xFF0F172A)))),
+                          Text('${n.note!.toStringAsFixed(1)} / 20',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
+                                  color: n.couleurStatut)),
+                        ]),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 18),
+                  _lbl('Justification *'),
+                  _champ(_justifCtrl, 'Pourquoi contestez-vous cette moyenne ?', maxLines: 3),
+                  const SizedBox(height: 20),
+                  Container(padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFDE68A))),
+                    child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Icon(Icons.info_outline, color: Color(0xFFD97706), size: 18),
+                      SizedBox(width: 10),
+                      Expanded(child: Text(
+                        'Cette réclamation est envoyée UNIQUEMENT à l\'administration. '
+                        'Elle ne sera pas transmise aux professeurs.',
+                        style: TextStyle(fontSize: 13, color: Color(0xFF0F172A), height: 1.5),
+                      )),
+                    ]),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(width: double.infinity, height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: _loading ? null : _envoyer,
+                      icon: _loading ? const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                          : const Icon(Icons.send_rounded, size: 20),
+                      label: Text(_loading ? 'Envoi en cours...' : 'Envoyer la contestation',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 0),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ]),
+            ),
       ),
     );
   }
 }
 
-class _NoteItem {
-  const _NoteItem({
-    required this.code,
-    required this.matiere,
-    required this.cc,
-    required this.tp,
-    required this.exam,
-    required this.moyenne,
-  });
+// ── Helpers ──────────────────────────────────────────────────────────────────
+Widget _lbl(String text) => Padding(padding: const EdgeInsets.only(bottom: 10),
+  child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+      color: Color(0xFF0F172A))));
 
-  final String code;
-  final String matiere;
-  final String cc;
-  final String tp;
-  final String exam;
-  final String moyenne;
+Widget _champ(TextEditingController ctrl, String hint, {int maxLines = 1}) =>
+    Container(
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: TextField(controller: ctrl, maxLines: maxLines,
+        style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
+        decoration: InputDecoration(hintText: hint,
+            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+            border: InputBorder.none, contentPadding: const EdgeInsets.all(14))),
+    );
+
+Widget _fluxProcessus() {
+  final steps = [
+    'Vous soumettez la réclamation',
+    'L\'administration reçoit et examine',
+    'Transmise au professeur concerné',
+    'Le professeur répond via l\'app',
+    'Vous recevez une notification',
+  ];
+  return Container(padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Processus de traitement', style: TextStyle(fontSize: 13,
+          fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+      const SizedBox(height: 10),
+      ...steps.asMap().entries.map((e) => Padding(padding: const EdgeInsets.only(bottom: 7),
+        child: Row(children: [
+          Container(width: 22, height: 22, decoration: const BoxDecoration(
+              color: AppPalette.blue, shape: BoxShape.circle),
+              child: Center(child: Text('${e.key + 1}', style: const TextStyle(fontSize: 11,
+                  fontWeight: FontWeight.bold, color: Colors.white)))),
+          const SizedBox(width: 10),
+          Text(e.value, style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A))),
+        ]),
+      )),
+    ]),
+  );
 }

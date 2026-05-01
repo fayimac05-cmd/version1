@@ -724,43 +724,6 @@ SizedBox(
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const BureauDesEtudiantsScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.campaign_outlined, size: 22),
-              label: const Text(
-                'Accès Démo BDE',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0891B2),
-                side: const BorderSide(color: Color(0xFF0891B2), width: 2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Center(
-            child: Text(
-              'Bureau des Étudiants - Événements et annonces',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF64748B),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
           const SizedBox(height: 24),
         ] else
           const SizedBox(height: 8),

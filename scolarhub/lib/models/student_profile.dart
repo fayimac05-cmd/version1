@@ -7,6 +7,8 @@ class StudentProfile {
     required this.telephone,
     required this.filiere,
     required this.motDePasse,
+    this.domaine = '',
+    this.role = 'etudiant',
   });
 
   final String nom;
@@ -16,4 +18,6 @@ class StudentProfile {
   final String telephone;
   final String filiere;
   final String motDePasse;
+  final String domaine;
+  final String role;
 }

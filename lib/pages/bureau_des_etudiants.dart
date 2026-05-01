@@ -18,6 +18,9 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
 
   List<Widget> get _pages => [
     _buildAccueilBDE(),
+    const Center(child: Text('Validations', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+    const Center(child: Text('Événements', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+    const Center(child: Text('Objectifs', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
     _buildPageEvenements(),
     _buildPageAnnonces(),
     _buildPageProfil(),
@@ -33,6 +36,44 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Container(
+            height: 74,
+            decoration: BoxDecoration(
+              color: AppPalette.blue.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.15),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppPalette.blue.withOpacity(0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(40),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildNavItem(0, Icons.home_rounded),
+                    _buildNavItem(1, Icons.check_circle_outline_rounded),
+                    _buildNavItem(2, Icons.calendar_month_outlined),
+                    _buildNavItem(3, Icons.track_changes_rounded),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon) {
             height: 76,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -72,6 +113,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Icon(
+          icon,
+          color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
+          size: 30,
         height: double.infinity,
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF1E1E1E) : Colors.transparent,
@@ -105,6 +155,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       child: ListView(
         padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
         children: [
+          _buildCardEvenements(),
           _buildCardEvenements(withButton: false),
           const SizedBox(height: 16),
           _buildCardVentes(),
@@ -113,6 +164,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
+  Widget _buildCardEvenements() {
   Widget _buildPageEvenements() {
     return SafeArea(
       child: ListView(
@@ -330,6 +382,18 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             status: 'Ouvert',
             statusBg: const Color(0xFFDBEAFE),
             statusColor: const Color(0xFF1E40AF),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {},
+            style: ElevatedButton.styleFrom(
+              backgroundColor: bdeGreen,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
+            ),
+            child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
           if (withButton) ...[
             const SizedBox(height: 24),
