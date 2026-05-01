@@ -4,7 +4,7 @@ import '../pages/student_shell.dart';
 import '../pages/splash_screen.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
-
+import 'parent_shell.dart';
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
 // ════════════════════════════════════════════════════════════════════════════
@@ -211,6 +211,22 @@ class _AuthPageState extends State<AuthPage> {
       role: 'etudiant',
     ));
   }
+  void _goToParentDashboard(StudentProfile profile) {
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: (_) => ParentShell(
+        nomEnfant: profile.nom,
+        onLogout: () {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const SplashScreen()),
+            (_) => false,
+          );
+        },
+      ),
+    ),
+    (_) => false,
+  );
+}
 
   void _setError(String msg) =>
       setState(() { _error = msg; _loading = false; });
@@ -399,6 +415,41 @@ class _AuthPageState extends State<AuthPage> {
                 fontStyle: FontStyle.italic))),
         const SizedBox(height: 24),
       ] else const SizedBox(height: 8),
+      const SizedBox(height: 12),
+SizedBox(
+  width: double.infinity,
+  height: 54,
+  child: OutlinedButton.icon(
+    onPressed: () => _goToParentDashboard(const StudentProfile(
+  nom: 'KOURAOGO',
+  prenoms: 'Ibrahim',
+  matricule: '24IST-02/1851',
+  email: 'parent@ist.bf',
+  telephone: '',
+  filiere: 'Réseaux Informatiques et Télécom',
+  motDePasse: '1851',
+  domaine: 'Sciences & Technologies',
+  role: 'parent',
+)),
+    icon: const Text('👨‍👩‍👦', style: TextStyle(fontSize: 20)),
+    label: const Text('Accès Démo — Parent',
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: Colors.orange,
+      side: const BorderSide(color: Colors.orange, width: 2),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14)),
+    ),
+  ),
+),
+const SizedBox(height: 8),
+const Center(
+  child: Text('Espace parent · IST Campus Ouaga 2000',
+    style: TextStyle(
+        fontSize: 12,
+        color: Colors.orange,
+        fontStyle: FontStyle.italic)),
+),
 
       if (_tab == 0) _infoMatricule(e),
     ]);
