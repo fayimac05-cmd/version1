@@ -5,6 +5,7 @@ import '../pages/splash_screen.dart';
 import '../professeur/professor_shell.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
+import 'bureau_des_etudiants.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
@@ -294,6 +295,22 @@ class _AuthPageState extends State<AuthPage> {
       ),
     );
   }
+  void _goToParentDashboard(StudentProfile profile) {
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: (_) => ParentShell(
+        nomEnfant: profile.nom,
+        onLogout: () {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const SplashScreen()),
+            (_) => false,
+          );
+        },
+      ),
+    ),
+    (_) => false,
+  );
+}
 
   void _demoProf() {
     _goToDashboard(
