@@ -43,7 +43,7 @@ class HomeTab extends StatelessWidget {
 
         Row(children: [
 
-          // Groupe Filière — blanc avec bordure bleue
+          // Groupe Filière
           Expanded(
             child: GestureDetector(
               onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -57,8 +57,7 @@ class HomeTab extends StatelessWidget {
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
                       blurRadius: 8, offset: const Offset(0, 2))],
                 ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Container(width: 44, height: 44,
                     decoration: BoxDecoration(
                         color: AppPalette.blue.withOpacity(0.1),
@@ -71,12 +70,10 @@ class HomeTab extends StatelessWidget {
                           color: Color(0xFF0F172A), height: 1.2)),
                   const SizedBox(height: 6),
                   Row(children: [
-                    const Icon(Icons.lock_outline,
-                        color: Color(0xFF64748B), size: 11),
+                    const Icon(Icons.lock_outline, color: Color(0xFF64748B), size: 11),
                     const SizedBox(width: 4),
-                    const Text('100% Privé', style: TextStyle(
-                        fontSize: 11, color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500)),
+                    const Text('100% Privé', style: TextStyle(fontSize: 11,
+                        color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
                   ]),
                 ]),
               ),
@@ -85,7 +82,7 @@ class HomeTab extends StatelessWidget {
 
           const SizedBox(width: 14),
 
-          // Tickets — blanc avec bordure simple
+          // Tickets
           Expanded(
             child: GestureDetector(
               onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -99,8 +96,7 @@ class HomeTab extends StatelessWidget {
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
                       blurRadius: 8, offset: const Offset(0, 2))],
                 ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Container(width: 44, height: 44,
                     decoration: BoxDecoration(
                         color: const Color(0xFFFF6B00).withOpacity(0.1),
@@ -115,9 +111,8 @@ class HomeTab extends StatelessWidget {
                   Row(children: [
                     const Text('🟠', style: TextStyle(fontSize: 10)),
                     const SizedBox(width: 4),
-                    const Text('Orange Money', style: TextStyle(
-                        fontSize: 11, color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500)),
+                    const Text('Orange Money', style: TextStyle(fontSize: 11,
+                        color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
                   ]),
                 ]),
               ),
@@ -132,7 +127,9 @@ class HomeTab extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
                 color: Color(0xFF121212), letterSpacing: -0.2)),
         const SizedBox(height: 12),
-        const FilActualiteWidget(),
+
+        // ← SEULE MODIFICATION : on passe le profile
+        FilActualiteWidget(profile: profile),
 
         const SizedBox(height: 28),
 
