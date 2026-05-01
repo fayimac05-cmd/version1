@@ -4,6 +4,7 @@ import '../pages/student_shell.dart';
 import '../pages/splash_screen.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
+import 'bureau_des_etudiants.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
@@ -421,9 +422,9 @@ class _AuthPageState extends State<AuthPage> {
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => CoursesTab()
+                builder: (_) => const BureauDesEtudiantsScreen(),
               )
-            )
+            );
           },
           style: OutlinedButton.styleFrom(
             foregroundColor: AppPalette.blue,
