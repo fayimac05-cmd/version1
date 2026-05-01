@@ -655,6 +655,33 @@ class _AuthPageState extends State<AuthPage> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+SizedBox(
+  width: double.infinity,
+  height: 54,
+  child: OutlinedButton.icon(
+    onPressed: () => _goToParentDashboard(const StudentProfile(
+      nom: 'KOURAOGO',
+      prenoms: 'Ibrahim',
+      matricule: '24IST-02/1851',
+      email: 'parent@ist.bf',
+      telephone: '',
+      filiere: 'Réseaux Informatiques et Télécom',
+      motDePasse: '1851',
+      domaine: 'Sciences & Technologies',
+      role: 'parent',
+    )),
+    icon: const Text('👨‍👩‍👦', style: TextStyle(fontSize: 20)),
+    label: const Text('Accès Démo — Parent',
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: Colors.orange,
+      side: const BorderSide(color: Colors.orange, width: 2),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14)),
+    ),
+  ),
+),
           const SizedBox(height: 8),
           const Center(
             child: Text(

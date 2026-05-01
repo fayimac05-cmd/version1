@@ -20,6 +20,11 @@ class FilActualiteWidget extends StatelessWidget {
     return adminAnnonces.where((a) =>
         a.cible == 'tous' || a.cible == 'filiere:${profile.filiere}').length;
   }
+import '../theme/app_palette.dart';
+import '../pages/canal_screen.dart';
+
+class FilActualiteWidget extends StatelessWidget {
+  const FilActualiteWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +42,14 @@ class FilActualiteWidget extends StatelessWidget {
             color: AppPalette.blue,
             icon: Icons.account_balance_outlined,
             filiereId: profile.filiere,
+        nbNonLus: 3,
+        lastMessage: 'Programme ST2 publié pour la semaine du 27 Avr.',
+        lastTime: '13:16',
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const CanalScreen(
+            canal: 'Administration',
+            color: AppPalette.blue,
+            icon: Icons.account_balance_outlined,
           ),
         )),
       )),
@@ -45,6 +58,7 @@ class FilActualiteWidget extends StatelessWidget {
         titre: 'Bureau des Étudiants',
         icon: Icons.groups_outlined,
         color: const Color(0xFF7C3AED),
+        color: Color(0xFF7C3AED),
         nbNonLus: 1,
         lastMessage: 'Soirée étudiante vendredi 02 Mai ! Tickets dispo.',
         lastTime: 'Hier',
@@ -89,6 +103,8 @@ class _CanalCard extends StatelessWidget {
             width: nbNonLus > 0 ? 1.5 : 1,
           ),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+          boxShadow: [BoxShadow(
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -97,6 +113,10 @@ class _CanalCard extends StatelessWidget {
               width: 46, height: 46,
               decoration: BoxDecoration(color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(13)),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(13),
+              ),
               child: Icon(icon, color: color, size: 24),
             ),
             const Spacer(),
@@ -123,6 +143,21 @@ class _CanalCard extends StatelessWidget {
                 color: nbNonLus > 0 ? color : const Color(0xFF64748B),
                 fontWeight: nbNonLus > 0 ? FontWeight.bold : FontWeight.normal,
               ))),
+          Text(titre,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A), letterSpacing: -0.1),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 5),
+          Text(lastMessage,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 8),
+          Align(alignment: Alignment.centerRight,
+              child: Text(lastTime,
+                  style: TextStyle(fontSize: 11,
+                    color: nbNonLus > 0 ? color : const Color(0xFF64748B),
+                    fontWeight: nbNonLus > 0 ? FontWeight.bold : FontWeight.normal,
+                  ))),
         ]),
       ),
     );
