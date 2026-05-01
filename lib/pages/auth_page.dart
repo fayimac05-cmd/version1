@@ -6,7 +6,7 @@ import '../professeur/professor_shell.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
 import 'bureau_des_etudiants.dart';
-
+import 'parent_shell.dart';
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
 // ════════════════════════════════════════════════════════════════════════════
