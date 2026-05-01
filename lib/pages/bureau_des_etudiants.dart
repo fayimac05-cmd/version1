@@ -6,7 +6,8 @@ class BureauDesEtudiantsScreen extends StatefulWidget {
   const BureauDesEtudiantsScreen({super.key});
 
   @override
-  State<BureauDesEtudiantsScreen> createState() => _BureauDesEtudiantsScreenState();
+  State<BureauDesEtudiantsScreen> createState() =>
+      _BureauDesEtudiantsScreenState();
 }
 
 class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
@@ -18,9 +19,24 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
 
   List<Widget> get _pages => [
     _buildAccueilBDE(),
-    const Center(child: Text('Validations', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-    const Center(child: Text('Événements', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-    const Center(child: Text('Objectifs', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+    const Center(
+      child: Text(
+        'Validations',
+        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    ),
+    const Center(
+      child: Text(
+        'Événements',
+        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    ),
+    const Center(
+      child: Text(
+        'Objectifs',
+        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    ),
     _buildPageEvenements(),
     _buildPageAnnonces(),
     _buildPageProfil(),
@@ -38,15 +54,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           child: Container(
             height: 74,
             decoration: BoxDecoration(
-              color: AppPalette.blue.withOpacity(0.9),
+              color: AppPalette.blue.withValues(alpha: 230),
               borderRadius: BorderRadius.circular(40),
               border: Border.all(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 38),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppPalette.blue.withOpacity(0.25),
+                  color: AppPalette.blue.withValues(alpha: 64),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -59,41 +75,17 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildNavItem(0, Icons.home_rounded),
-                    _buildNavItem(1, Icons.check_circle_outline_rounded),
-                    _buildNavItem(2, Icons.calendar_month_outlined),
-                    _buildNavItem(3, Icons.track_changes_rounded),
+                    _buildNavItem(0, Icons.home_rounded, 'Accueil'),
+                    _buildNavItem(
+                      1,
+                      Icons.check_circle_outline_rounded,
+                      'Tâches',
+                    ),
+                    _buildNavItem(2, Icons.calendar_month_outlined, 'Agenda'),
+                    _buildNavItem(3, Icons.track_changes_rounded, 'Bilan'),
                   ],
                 ),
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon) {
-            height: 76,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(40),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(child: _buildNavItem(0, Icons.home_filled, 'Accueil')),
-                Expanded(child: _buildNavItem(1, Icons.event, 'Evenements')),
-                Expanded(child: _buildNavItem(2, Icons.announcement, 'Anonces')),
-                Expanded(child: _buildNavItem(3, Icons.account_circle, 'Profil')),
-              ],
             ),
           ),
         ),
@@ -115,16 +107,9 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
-        ),
-        child: Icon(
-          icon,
-          color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
-          size: 30,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E1E1E) : Colors.transparent,
+          color: isSelected
+              ? Colors.white.withValues(alpha: 38)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
         ),
         child: Column(
@@ -153,7 +138,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildAccueilBDE() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           _buildCardEvenements(),
           _buildCardEvenements(withButton: false),
@@ -164,11 +154,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildCardEvenements() {
   Widget _buildPageEvenements() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           Align(
             alignment: Alignment.centerRight,
@@ -177,15 +171,23 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: bdeGreen,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Créer un événement',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          _buildCardEvenements(withButton: false),
+          _buildCardEvenements(),
         ],
       ),
     );
@@ -194,7 +196,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildPageAnnonces() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           Align(
             alignment: Alignment.centerRight,
@@ -203,11 +210,19 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: bdeGreen,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Nouvelle annonce', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Nouvelle annonce',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -225,7 +240,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 8),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -240,7 +255,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               const SizedBox(width: 8),
               const Text(
                 'Annonces récentes',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
@@ -304,24 +323,41 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textDark,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: statusBg,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       status,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
-              Text(subtitle, style: const TextStyle(fontSize: 12, color: textLight)),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 12, color: textLight),
+              ),
             ],
           ),
         ),
@@ -337,7 +373,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 8),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -352,7 +388,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               const SizedBox(width: 8),
               const Text(
                 'Événements en cours',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
@@ -390,10 +430,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               backgroundColor: bdeGreen,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               elevation: 0,
             ),
-            child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: const Text(
+              '+ Créer un événement',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
           if (withButton) ...[
             const SizedBox(height: 24),
@@ -402,11 +447,19 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: bdeGreen,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Créer un événement',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ],
@@ -428,15 +481,32 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textDark,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 12, color: textLight)),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 12, color: textLight),
+            ),
           ],
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(count, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+            Text(
+              count,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textDark,
+              ),
+            ),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -446,7 +516,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               ),
               child: Text(
                 status,
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
               ),
             ),
           ],
@@ -463,7 +537,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 8),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -478,7 +552,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               const SizedBox(width: 8),
               const Text(
                 'Ventes par événement',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
@@ -517,7 +595,10 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       children: [
         SizedBox(
           width: 80,
-          child: Text(label, style: const TextStyle(fontSize: 13, color: textLight)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: textLight),
+          ),
         ),
         Expanded(
           child: ClipRRect(
@@ -533,7 +614,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         const SizedBox(width: 12),
         SizedBox(
           width: 36,
-          child: Text(percent, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textDark), textAlign: TextAlign.right),
+          child: Text(
+            percent,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: textDark,
+            ),
+            textAlign: TextAlign.right,
+          ),
         ),
       ],
     );
@@ -559,21 +648,28 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             children: [
               // Top Bar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const SizedBox(width: 32),
                     const Text(
                       'Profil',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(width: 32),
                   ],
                 ),
               ),
               const SizedBox(height: 30),
-              
+
               // Profile Picture
               Center(
                 child: Container(
@@ -582,7 +678,10 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFF8FAFC), width: 4),
+                    border: Border.all(
+                      color: const Color(0xFFF8FAFC),
+                      width: 4,
+                    ),
                   ),
                   child: const Center(
                     child: Icon(Icons.person, size: 50, color: bdeGreen),
@@ -590,12 +689,16 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               // Name and Subtitle
               const Center(
                 child: Text(
                   'Aïcha OUÉDRAOGO',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: textDark,
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
@@ -610,9 +713,9 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Account Card
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -623,7 +726,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: Colors.black.withValues(alpha: 8),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -634,19 +737,26 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                     children: [
                       const Text(
                         'Mon Compte',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: textDark,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      _buildProfileItem(Icons.person_outline, 'Données personnelles'),
+                      _buildProfileItem(
+                        Icons.person_outline,
+                        'Données personnelles',
+                      ),
                       const Divider(height: 24, color: Color(0xFFF1F5F9)),
                       _buildProfileItem(Icons.settings_outlined, 'Paramètres'),
                     ],
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 20),
-              
+
               // Notification Card
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -657,7 +767,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: Colors.black.withValues(alpha: 8),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -672,7 +782,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildProfileItem(IconData icon, String title, {bool showArrow = true}) {
+  Widget _buildProfileItem(
+    IconData icon,
+    String title, {
+    bool showArrow = true,
+  }) {
     return Row(
       children: [
         Icon(icon, color: const Color(0xFF64748B), size: 22),
@@ -680,11 +794,19 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textDark),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: textDark,
+            ),
           ),
         ),
         if (showArrow)
-          const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF94A3B8)),
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: 14,
+            color: Color(0xFF94A3B8),
+          ),
       ],
     );
   }
