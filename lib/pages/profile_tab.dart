@@ -3,6 +3,34 @@ import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'splash_screen.dart';
 
+// ════════════════════════════════════════════════════════════════════════════
+// MODÈLE NOTIFICATION
+// ════════════════════════════════════════════════════════════════════════════
+
+enum NotifType { examen, note, cours, inscription, message }
+
+class AppNotification {
+  final String id;
+  final NotifType type;
+  final String titre;
+  final String corps;
+  final String temps;
+  bool lu;
+
+  AppNotification({
+    required this.id,
+    required this.type,
+    required this.titre,
+    required this.corps,
+    required this.temps,
+    this.lu = false,
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PROFILE TAB
+// ════════════════════════════════════════════════════════════════════════════
+
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key, required this.profile, required this.onLogout});
 
@@ -13,22 +41,61 @@ class ProfileTab extends StatefulWidget {
   State<ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<ProfileTab> {
+class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
   // ── Données modifiables ───────────────────────────────────────────────
-  String _email        = '';
-  String _telephone    = '';
-  String _ville        = 'Ouagadougou, Burkina Faso';
-  String _dateNaiss    = '';
-  String _interets     = '';
-  String _bio          = '';
-  String _facebook     = '';
-  String _whatsapp     = '';
-  String _linkedin     = '';
+  String _email     = '';
+  String _telephone = '';
+  String _ville     = 'Ouagadougou, Burkina Faso';
+  String _dateNaiss = '';
+  String _interets  = '';
+  String _bio       = '';
+  String _facebook  = '';
+  String _whatsapp  = '';
+  String _linkedin  = '';
 
   // ── Confidentialité ───────────────────────────────────────────────────
-  bool _emailVisible   = true;
-  bool _telVisible     = true;
+  bool _emailVisible = true;
+  bool _telVisible   = true;
+
+  // ── Notifications ─────────────────────────────────────────────────────
+  OverlayEntry?   _overlayEntry;
+  bool            _panelOuvert = false;
+  final GlobalKey _clochKey    = GlobalKey();
+
+  final List<AppNotification> _notifs = [
+    AppNotification(
+      id: '1',
+      type: NotifType.examen,
+      titre: 'Examen de mi-parcours',
+      corps: 'Algorithmes & Structures de données — dans 48h',
+      temps: 'Il y a 12 min',
+    ),
+    AppNotification(
+      id: '2',
+      type: NotifType.note,
+      titre: 'Note publiée',
+      corps: 'Analyse numérique : 16.5/20',
+      temps: 'Il y a 2h',
+    ),
+    AppNotification(
+      id: '3',
+      type: NotifType.cours,
+      titre: 'Nouveau cours disponible',
+      corps: 'Pr. Koanda a posté un nouveau cours — Réseaux informatiques',
+      temps: 'Il y a 5h',
+    ),
+    AppNotification(
+      id: '4',
+      type: NotifType.inscription,
+      titre: 'Inscription validée',
+      corps: 'Votre inscription en Master 2 Génie Logiciel a été validée',
+      temps: 'Hier, 14:30',
+      lu: true,
+    ),
+  ];
+
+  int get _nonLus => _notifs.where((n) => !n.lu).length;
 
   @override
   void initState() {
@@ -39,9 +106,66 @@ class _ProfileTabState extends State<ProfileTab> {
     _telephone = widget.profile.telephone;
   }
 
+  @override
+  void dispose() {
+    _fermerPanel();
+    super.dispose();
+  }
+
   String get _initiales =>
       '${widget.profile.prenoms.isNotEmpty ? widget.profile.prenoms[0] : ''}'
       '${widget.profile.nom.isNotEmpty ? widget.profile.nom[0] : ''}'.toUpperCase();
+
+  // ── Gestion du panel notifications ───────────────────────────────────
+
+  void _togglePanel() {
+    if (_panelOuvert) {
+      _fermerPanel();
+    } else {
+      _ouvrirPanel();
+    }
+  }
+
+  void _ouvrirPanel() {
+    final RenderBox? renderBox =
+        _clochKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final Offset position = renderBox.localToGlobal(Offset.zero);
+    final Size    size    = renderBox.size;
+
+    setState(() => _panelOuvert = true);
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => _NotifPanel(
+        top:      position.dy + size.height + 8,
+        right:    MediaQuery.of(context).size.width - position.dx - size.width,
+        notifs:   _notifs,
+        onLu: (id) {
+          setState(() {
+            final n = _notifs.firstWhere((n) => n.id == id);
+            n.lu = true;
+          });
+          _overlayEntry?.markNeedsBuild();
+        },
+        onToutLu: () {
+          setState(() {
+            for (final n in _notifs) n.lu = true;
+          });
+          _overlayEntry?.markNeedsBuild();
+        },
+        onFermer: _fermerPanel,
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _fermerPanel() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    if (mounted) setState(() => _panelOuvert = false);
+  }
 
   // ── Dialog d'édition ──────────────────────────────────────────────────
   void _editer({
@@ -65,23 +189,20 @@ class _ProfileTabState extends State<ProfileTab> {
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(24),
+              topLeft:  Radius.circular(24),
               topRight: Radius.circular(24),
             ),
           ),
           child: Column(mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Handle
             Center(child: Container(width: 40, height: 4,
                 decoration: BoxDecoration(color: const Color(0xFFE2E8F0),
                     borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 20),
-
             Text('Modifier — $titre',
                 style: const TextStyle(fontSize: 18,
                     fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
             const SizedBox(height: 16),
-
             Container(
               decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(14),
@@ -103,7 +224,6 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ),
             const SizedBox(height: 16),
-
             Row(children: [
               Expanded(child: OutlinedButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -141,19 +261,68 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
+  // ── BUILD ─────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+
+      // ══ AppBar avec bouton notification ══════════════════════════════
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: const Color(0xFFE2E8F0),
+        actions: [
+          // ── Bouton Notification ──────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              key: _clochKey,
+              onTap: _togglePanel,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: _panelOuvert
+                      ? AppPalette.blue.withOpacity(0.08)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _panelOuvert
+                        ? AppPalette.blue.withOpacity(0.4)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Stack(alignment: Alignment.center, children: [
+                  Icon(
+                    _panelOuvert
+                        ? Icons.notifications_rounded
+                        : Icons.notifications_outlined,
+                    color: _panelOuvert
+                        ? AppPalette.blue
+                        : const Color(0xFF64748B),
+                    size: 22,
+                  ),
+                  if (_nonLus > 0)
+                    Positioned(
+                      top: 7, right: 7,
+                      child: _BadgePulse(count: _nonLus),
+                    ),
+                ]),
+              ),
+            ),
+          ),
+        ],
+      ),
+
       body: SingleChildScrollView(
         child: Column(children: [
 
-          // ══════════════════════════════════════════════════════════
-          // PHOTO DE COUVERTURE
-          // ══════════════════════════════════════════════════════════
+          // ══ PHOTO DE COUVERTURE ═════════════════════════════════════
           Stack(clipBehavior: Clip.none, children: [
 
-            // Couverture gradient bleu + jaune
             GestureDetector(
               onTap: () => _snackbar('Photo de couverture — Upload disponible en production'),
               child: Container(
@@ -171,7 +340,6 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 ),
                 child: Stack(children: [
-                  // Cercles décoratifs
                   Positioned(top: -30, right: -30,
                       child: Container(width: 140, height: 140,
                           decoration: BoxDecoration(shape: BoxShape.circle,
@@ -180,7 +348,6 @@ class _ProfileTabState extends State<ProfileTab> {
                       child: Container(width: 100, height: 100,
                           decoration: BoxDecoration(shape: BoxShape.circle,
                               color: Colors.white.withOpacity(0.06)))),
-                  // Bouton modifier couverture
                   Positioned(bottom: 12, right: 12, child: GestureDetector(
                     onTap: () => _snackbar('Photo de couverture — Upload disponible en production'),
                     child: Container(
@@ -231,14 +398,13 @@ class _ProfileTabState extends State<ProfileTab> {
             ),
           ]),
 
-          // Espace photo
           const SizedBox(height: 62),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-              // ── Nom + rôle ────────────────────────────────────────
+              // ── Nom + rôle ──────────────────────────────────────────
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('${widget.profile.prenoms} ${widget.profile.nom}',
@@ -262,7 +428,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 16),
 
-              // ── Filière + domaine (non modifiable) ────────────────
+              // ── Filière ─────────────────────────────────────────────
               if (widget.profile.filiere.isNotEmpty) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -289,7 +455,7 @@ class _ProfileTabState extends State<ProfileTab> {
                 const SizedBox(height: 20),
               ],
 
-              // ── Biographie ────────────────────────────────────────
+              // ── Biographie ──────────────────────────────────────────
               _sectionCard(
                 titre: 'Biographie',
                 icon: Icons.edit_outlined,
@@ -306,15 +472,10 @@ class _ProfileTabState extends State<ProfileTab> {
                     ),
                     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Expanded(child: Text(
-                        _bio.isEmpty
-                            ? 'Appuyez pour ajouter une biographie...'
-                            : _bio,
+                        _bio.isEmpty ? 'Appuyez pour ajouter une biographie...' : _bio,
                         style: TextStyle(fontSize: 15, height: 1.6,
-                          color: _bio.isEmpty
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF0F172A),
-                          fontStyle: _bio.isEmpty
-                              ? FontStyle.italic : FontStyle.normal,
+                          color: _bio.isEmpty ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
+                          fontStyle: _bio.isEmpty ? FontStyle.italic : FontStyle.normal,
                         ),
                       )),
                       const SizedBox(width: 8),
@@ -331,14 +492,12 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 16),
 
-              // ── Informations modifiables ───────────────────────────
+              // ── Informations personnelles ───────────────────────────
               _sectionCard(
                 titre: 'Informations personnelles',
                 icon: Icons.person_outline,
                 couleur: AppPalette.blue,
                 enfants: [
-
-                  // Email
                   _ligneModifiable(
                     icon: Icons.email_outlined,
                     label: 'Email',
@@ -357,8 +516,6 @@ class _ProfileTabState extends State<ProfileTab> {
                     ),
                   ),
                   _div(),
-
-                  // Téléphone
                   _ligneModifiable(
                     icon: Icons.phone_outlined,
                     label: 'Téléphone',
@@ -377,8 +534,6 @@ class _ProfileTabState extends State<ProfileTab> {
                     ),
                   ),
                   _div(),
-
-                  // Ville
                   _ligneModifiable(
                     icon: Icons.location_on_outlined,
                     label: 'Ville / Localité',
@@ -392,8 +547,6 @@ class _ProfileTabState extends State<ProfileTab> {
                     ),
                   ),
                   _div(),
-
-                  // Date de naissance
                   _ligneModifiable(
                     icon: Icons.cake_outlined,
                     label: 'Date de naissance',
@@ -407,8 +560,6 @@ class _ProfileTabState extends State<ProfileTab> {
                     ),
                   ),
                   _div(),
-
-                  // Centres d'intérêt
                   _ligneModifiable(
                     icon: Icons.interests_outlined,
                     label: 'Centres d\'intérêt',
@@ -427,7 +578,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 16),
 
-              // ── Informations académiques (non modifiables) ─────────
+              // ── Informations académiques ────────────────────────────
               _sectionCard(
                 titre: 'Informations académiques',
                 icon: Icons.school_outlined,
@@ -448,7 +599,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 16),
 
-              // ── Réseaux sociaux ────────────────────────────────────
+              // ── Réseaux sociaux ─────────────────────────────────────
               _sectionCard(
                 titre: 'Réseaux sociaux',
                 icon: Icons.link,
@@ -501,7 +652,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 16),
 
-              // ── Confidentialité ────────────────────────────────────
+              // ── Confidentialité ─────────────────────────────────────
               _sectionCard(
                 titre: 'Confidentialité',
                 icon: Icons.privacy_tip_outlined,
@@ -545,7 +696,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 32),
 
-              // ── Bouton déconnexion ─────────────────────────────────
+              // ── Déconnexion ─────────────────────────────────────────
               SizedBox(
                 width: double.infinity, height: 54,
                 child: OutlinedButton.icon(
@@ -571,7 +722,7 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   // ════════════════════════════════════════════════════════════════════════
-  // WIDGETS HELPERS
+  // WIDGETS HELPERS  (identiques à l'original)
   // ════════════════════════════════════════════════════════════════════════
 
   String get _roleLabel {
@@ -640,8 +791,8 @@ class _ProfileTabState extends State<ProfileTab> {
     Color? iconColor,
     Widget? trailing,
   }) {
-    final c      = iconColor ?? AppPalette.blue;
-    final empty  = valeur.isEmpty;
+    final c     = iconColor ?? AppPalette.blue;
+    final empty = valeur.isEmpty;
     return GestureDetector(
       onTap: onTap,
       child: Row(children: [
@@ -735,7 +886,6 @@ class _ProfileTabState extends State<ProfileTab> {
         ElevatedButton(
           onPressed: () {
             Navigator.of(context).pop();
-            // Retour au splash et suppression de toute la pile
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const SplashScreen()),
               (_) => false,
@@ -752,5 +902,269 @@ class _ProfileTabState extends State<ProfileTab> {
         ),
       ],
     ));
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BADGE PULSANT
+// ════════════════════════════════════════════════════════════════════════════
+
+class _BadgePulse extends StatefulWidget {
+  const _BadgePulse({required this.count});
+  final int count;
+
+  @override
+  State<_BadgePulse> createState() => _BadgePulseState();
+}
+
+class _BadgePulseState extends State<_BadgePulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double>    _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.35).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width: 8, height: 8,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE24B4A),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PANEL NOTIFICATIONS (Overlay)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _NotifPanel extends StatelessWidget {
+  const _NotifPanel({
+    required this.top,
+    required this.right,
+    required this.notifs,
+    required this.onLu,
+    required this.onToutLu,
+    required this.onFermer,
+  });
+
+  final double top;
+  final double right;
+  final List<AppNotification> notifs;
+  final void Function(String id) onLu;
+  final VoidCallback onToutLu;
+  final VoidCallback onFermer;
+
+  @override
+  Widget build(BuildContext context) {
+    final nonLus = notifs.where((n) => !n.lu).length;
+
+    return Stack(children: [
+      // Fond transparent pour fermer au tap extérieur
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: onFermer,
+          behavior: HitTestBehavior.opaque,
+          child: const ColoredBox(color: Colors.transparent),
+        ),
+      ),
+
+      // Panel positionné sous la cloche
+      Positioned(
+        top: top, right: right,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(16),
+          shadowColor: Colors.black.withOpacity(0.12),
+          child: Container(
+            width: 320,
+            constraints: const BoxConstraints(maxHeight: 480),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+
+              // ── En-tête ──────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+                child: Row(children: [
+                  const Expanded(
+                    child: Text('Notifications',
+                        style: TextStyle(fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A))),
+                  ),
+                  if (nonLus > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text('$nonLus nouvelle${nonLus > 1 ? 's' : ''}',
+                          style: const TextStyle(fontSize: 11,
+                              color: Color(0xFFB91C1C),
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  const SizedBox(width: 8),
+                  if (nonLus > 0)
+                    TextButton(
+                      onPressed: onToutLu,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('Tout lire',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF0A4DA2))),
+                    ),
+                ]),
+              ),
+
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+              // ── Liste ────────────────────────────────────────────
+              Flexible(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  shrinkWrap: true,
+                  itemCount: notifs.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Color(0xFFF1F5F9), indent: 60),
+                  itemBuilder: (_, i) => _NotifItem(
+                    notif: notifs[i],
+                    onTap: () => onLu(notifs[i].id),
+                  ),
+                ),
+              ),
+
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+              // ── Pied ─────────────────────────────────────────────
+              TextButton(
+                onPressed: onFermer,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  minimumSize: const Size(double.infinity, 0),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.only(
+                      bottomLeft:  Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                ),
+                child: const Text('Voir toutes les notifications',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF0A4DA2),
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ITEM DE NOTIFICATION
+// ════════════════════════════════════════════════════════════════════════════
+
+class _NotifItem extends StatelessWidget {
+  const _NotifItem({required this.notif, required this.onTap});
+  final AppNotification notif;
+  final VoidCallback    onTap;
+
+  (Color bg, Color icon, IconData icone) get _style {
+    switch (notif.type) {
+      case NotifType.examen:
+        return (const Color(0xFFFCEBEB), const Color(0xFFA32D2D), Icons.alarm_outlined);
+      case NotifType.note:
+        return (const Color(0xFFFAEEDA), const Color(0xFF854F0B), Icons.star_outline_rounded);
+      case NotifType.cours:
+        return (const Color(0xFFE6F1FB), const Color(0xFF185FA5), Icons.menu_book_outlined);
+      case NotifType.inscription:
+        return (const Color(0xFFEAF3DE), const Color(0xFF3B6D11), Icons.check_circle_outline);
+      case NotifType.message:
+        return (const Color(0xFFEEEDFE), const Color(0xFF534AB7), Icons.chat_bubble_outline);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, ic, icone) = _style;
+
+    return InkWell(
+      onTap: notif.lu ? null : onTap,
+      child: Container(
+        color: notif.lu ? Colors.transparent : const Color(0xFFF8FAFF),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+          // Point non-lu
+          Padding(
+            padding: const EdgeInsets.only(top: 18, right: 6),
+            child: Container(
+              width: 6, height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: notif.lu
+                    ? Colors.transparent
+                    : const Color(0xFF0A4DA2),
+              ),
+            ),
+          ),
+
+          // Icône
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icone, color: ic, size: 18),
+          ),
+          const SizedBox(width: 10),
+
+          // Texte
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(notif.titre,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: notif.lu ? FontWeight.w500 : FontWeight.bold,
+                  color: const Color(0xFF0F172A),
+                )),
+            const SizedBox(height: 2),
+            Text(notif.corps,
+                style: const TextStyle(fontSize: 12,
+                    color: Color(0xFF64748B), height: 1.4),
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Text(notif.temps,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          ])),
+        ]),
+      ),
+    );
   }
 }
