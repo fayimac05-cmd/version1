@@ -400,6 +400,42 @@ class _AuthPageState extends State<AuthPage> {
         const SizedBox(height: 24),
       ] else const SizedBox(height: 8),
 
+      // Boutons de redirection ajoutés
+      SizedBox(width: double.infinity, height: 54,
+        child: OutlinedButton(
+          onPressed: () {
+            // TODO: Action de redirection 1
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.blue,
+            side: const BorderSide(color: AppPalette.blue, width: 1.5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('BGE',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        ),
+      ),
+      const SizedBox(height: 12),
+      SizedBox(width: double.infinity, height: 54,
+        child: OutlinedButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CoursesTab()
+              )
+            )
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.blue,
+            side: const BorderSide(color: AppPalette.blue, width: 1.5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('Redirection 2',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        ),
+      ),
+      const SizedBox(height: 24),
+
       if (_tab == 0) _infoMatricule(e),
     ]);
   }
