@@ -5,7 +5,8 @@ import '../pages/admin_shell.dart';
 import '../pages/splash_screen.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
-
+import '../professeur/professor_shell.dart';
+import '../pages/parent_shell.dart';
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
 // ════════════════════════════════════════════════════════════════════════════
@@ -104,37 +105,37 @@ class _AuthPageState extends State<AuthPage> {
   // ── Navigation vers le dashboard ─────────────────────────────────────
   void _goToDashboard(StudentProfile profile) {
   final role = profile.role;
-
   Widget destination;
 
   if (role == 'admin' || role == 'bde') {
     destination = AdminShell(
       profile: profile,
-      onLogout: () {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()),
-          (_) => false,
-        );
-      },
+      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
+    );
+  } else if (role == 'professeur') {
+    destination = ProfessorShell(
+      profile: profile,
+      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
+    );
+  } else if (role == 'parent') {
+    destination = ParentShell(
+      nomEnfant: '${profile.prenoms} ${profile.nom}',
+      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
     );
   } else {
     destination = StudentShell(
       profile: profile,
-      onLogout: () {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()),
-          (_) => false,
-        );
-      },
+      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
     );
   }
 
   Navigator.of(context).pushAndRemoveUntil(
-    MaterialPageRoute(builder: (_) => destination),
-    (_) => false,
-  );
+      MaterialPageRoute(builder: (_) => destination), (_) => false);
 }
-
   // ── Vérifier identité ────────────────────────────────────────────────
   void _verifier() async {
     setState(() { _loading = true; _error = null; });
