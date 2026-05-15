@@ -140,9 +140,9 @@ class _AuthPageState extends State<AuthPage> {
   void _goToDashboard(StudentProfile profile) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) {
+        builder: (dashboardContext) {
           void logout() {
-            Navigator.of(context).pushAndRemoveUntil(
+            Navigator.of(dashboardContext).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const SplashScreen()),
               (_) => false,
             );
@@ -298,10 +298,10 @@ class _AuthPageState extends State<AuthPage> {
   void _goToParentDashboard(StudentProfile profile) {
   Navigator.of(context).pushAndRemoveUntil(
     MaterialPageRoute(
-      builder: (_) => ParentShell(
+      builder: (parentContext) => ParentShell(
         nomEnfant: profile.nom,
         onLogout: () {
-          Navigator.of(context).pushAndRemoveUntil(
+          Navigator.of(parentContext).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const SplashScreen()),
             (_) => false,
           );
