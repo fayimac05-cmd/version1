@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../pages/student_shell.dart';
-import '../pages/admin_shell.dart';
 import '../pages/splash_screen.dart';
+import '../professeur/professor_shell.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
-import '../professeur/professor_shell.dart';
-import '../pages/parent_shell.dart';
+import 'bureau_des_etudiants.dart';
+import 'parent_shell.dart';
+import '../admin/admin_shell.dart';
+
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
 // ════════════════════════════════════════════════════════════════════════════
@@ -68,13 +70,11 @@ enum _Etape { saisie, motDePasse, premiereFois }
 class AuthPage extends StatefulWidget {
   final Etablissement etablissement;
   const AuthPage({super.key, required this.etablissement});
-
-  @override
-  State<AuthPage> createState() => _AuthPageState();
+  @override State<AuthPage> createState() => _AuthPageState();
 }
 
 class _AuthPageState extends State<AuthPage> {
-  int    _tab   = 0;
+  int _tab = 0;
   _Etape _etape = _Etape.saisie;
 
   final _matriculeCtrl = TextEditingController();
@@ -104,38 +104,29 @@ class _AuthPageState extends State<AuthPage> {
 
   // ── Navigation vers le dashboard ─────────────────────────────────────
   void _goToDashboard(StudentProfile profile) {
-  final role = profile.role;
-  Widget destination;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) {
+        void logout() => Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
 
-  if (role == 'admin' || role == 'bde') {
-    destination = AdminShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else if (role == 'professeur') {
-    destination = ProfessorShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else if (role == 'parent') {
-    destination = ParentShell(
-      nomEnfant: '${profile.prenoms} ${profile.nom}',
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else {
-    destination = StudentShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
+        if (profile.role == 'admin' || profile.role == 'bde') {
+          return AdminShell(profile: profile, onLogout: logout);
+        }
+        if (profile.role == 'professeur') {
+          return ProfessorShell(profile: profile, onLogout: logout);
+        }
+        if (profile.role == 'parent') {
+          return ParentShell(
+            nomEnfant: '${profile.prenoms} ${profile.nom}',
+            onLogout: logout,
+          );
+        }
+        return StudentShell(profile: profile, onLogout: logout);
+      }),
+      (_) => false,
     );
   }
 
-  Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => destination), (_) => false);
-}
   // ── Vérifier identité ────────────────────────────────────────────────
   void _verifier() async {
     setState(() { _loading = true; _error = null; });
@@ -164,16 +155,15 @@ class _AuthPageState extends State<AuthPage> {
         return;
       }
       setState(() {
-        _userTrouve  = user;
-        _cleTrouvee  = '${user['role'].toString().toUpperCase()}-$num';
-        _loading     = false;
+        _userTrouve = user;
+        _cleTrouvee = '${user['role'].toString().toUpperCase()}-$num';
+        _loading = false;
       });
     }
 
     await Future.delayed(const Duration(milliseconds: 200));
     setState(() => _etape = _userTrouve!['premiereFois'] == true
-        ? _Etape.premiereFois
-        : _Etape.motDePasse);
+        ? _Etape.premiereFois : _Etape.motDePasse);
   }
 
   // ── Connexion avec MDP ───────────────────────────────────────────────
@@ -181,9 +171,7 @@ class _AuthPageState extends State<AuthPage> {
     setState(() { _loading = true; _error = null; });
     await Future.delayed(const Duration(milliseconds: 800));
     if (_passCtrl.text.isEmpty) { _setError('Veuillez saisir votre mot de passe.'); return; }
-    if (_passCtrl.text != _userTrouve!['motDePasse']) {
-      _setError('Mot de passe incorrect.'); return;
-    }
+    if (_passCtrl.text != _userTrouve!['motDePasse']) { _setError('Mot de passe incorrect.'); return; }
     setState(() => _loading = false);
     _goToDashboard(_buildProfile(_passCtrl.text));
   }
@@ -206,32 +194,43 @@ class _AuthPageState extends State<AuthPage> {
     final u = _userTrouve!;
     return StudentProfile(
       nom: u['nom'], prenoms: u['prenoms'],
-      matricule: _cleTrouvee!,
-      email: _emailCtrl.text,
-      telephone: '',
-      filiere: u['filiere'],
-      motDePasse: mdp,
-      domaine: u['domaine'] ?? '',
+      matricule: _cleTrouvee!, email: _emailCtrl.text,
+      telephone: '', filiere: u['filiere'],
+      motDePasse: mdp, domaine: u['domaine'] ?? '',
       role: u['role'] ?? 'etudiant',
     );
   }
 
-  // ── Accès démo IBRAHIM ────────────────────────────────────────────────
-  void _demoBrahim() {
-    _goToDashboard(const StudentProfile(
-      nom: 'KOURAOGO', prenoms: 'Ibrahim',
-      matricule: '24IST-O2/1851',
-      email: 'ibrahim.kouraogo@ist.bf',
-      telephone: '',
-      filiere: 'Réseaux Informatiques et Télécom',
-      motDePasse: '1851',
-      domaine: 'Sciences & Technologies',
-      role: 'etudiant',
-    ));
-  }
+  // ── Accès démo ────────────────────────────────────────────────────────
+  void _demoBrahim() => _goToDashboard(const StudentProfile(
+    nom: 'KOURAOGO', prenoms: 'Ibrahim', matricule: '24IST-O2/1851',
+    email: 'ibrahim.kouraogo@ist.bf', telephone: '',
+    filiere: 'Réseaux Informatiques et Télécom',
+    motDePasse: '1851', domaine: 'Sciences & Technologies', role: 'etudiant',
+  ));
 
-  void _setError(String msg) =>
-      setState(() { _error = msg; _loading = false; });
+  void _demoAdmin() => _goToDashboard(const StudentProfile(
+    nom: 'COMPAORÉ', prenoms: 'Idrissa', matricule: '24IST-ADM/001',
+    email: 'admin@ist.bf', telephone: '',
+    filiere: 'Direction Pédagogique',
+    motDePasse: 'admin123', domaine: '', role: 'admin',
+  ));
+
+  void _demoProf() => _goToDashboard(const StudentProfile(
+    nom: 'OUEDRAOGO', prenoms: 'Mamadou', matricule: 'PROF-70123456',
+    email: 'mamadou.ouedraogo@ist.bf', telephone: '70123456',
+    filiere: 'Algorithmes & Reseaux',
+    motDePasse: 'prof123', domaine: 'Sciences & Technologies', role: 'professeur',
+  ));
+
+  void _demoParent() => _goToDashboard(const StudentProfile(
+    nom: 'KOURAOGO', prenoms: 'Seydou', matricule: 'PARENT-65001234',
+    email: 'parent@ist.bf', telephone: '65001234',
+    filiere: 'Parent d\'élève',
+    motDePasse: 'parent123', domaine: '', role: 'parent',
+  ));
+
+  void _setError(String msg) => setState(() { _error = msg; _loading = false; });
 
   void _recommencer() => setState(() {
     _etape = _Etape.saisie; _userTrouve = null; _error = null;
@@ -241,31 +240,25 @@ class _AuthPageState extends State<AuthPage> {
 
   // ════════════════════════════════════════════════════════════════════════
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: _buildEtape(),
-              ),
-            ),
-          ),
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFFF8FAFC),
+    body: SafeArea(child: Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: _buildEtape(),
         ),
       ),
-    );
-  }
+    ))),
+  );
 
   Widget _buildEtape() {
     switch (_etape) {
-      case _Etape.saisie:        return _buildSaisie();
-      case _Etape.motDePasse:    return _buildMotDePasse();
-      case _Etape.premiereFois:  return _buildPremiereFois();
+      case _Etape.saisie:       return _buildSaisie();
+      case _Etape.motDePasse:   return _buildMotDePasse();
+      case _Etape.premiereFois: return _buildPremiereFois();
     }
   }
 
@@ -277,7 +270,7 @@ class _AuthPageState extends State<AuthPage> {
     return Column(key: const ValueKey('saisie'),
       crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-      // Header retour + école
+      // Header
       Row(children: [
         GestureDetector(
           onTap: () => Navigator.of(context).pop(),
@@ -285,8 +278,7 @@ class _AuthPageState extends State<AuthPage> {
             decoration: BoxDecoration(color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFE2E8F0))),
-            child: const Icon(Icons.arrow_back_ios_new,
-                size: 16, color: Color(0xFF0F172A))),
+            child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Color(0xFF0F172A))),
         ),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -300,7 +292,7 @@ class _AuthPageState extends State<AuthPage> {
 
       const SizedBox(height: 28),
 
-      // Logo + badge école
+      // Logo
       Center(child: Column(children: [
         Stack(alignment: Alignment.bottomRight, children: [
           Container(width: 80, height: 80,
@@ -322,11 +314,9 @@ class _AuthPageState extends State<AuthPage> {
           decoration: BoxDecoration(color: AppPalette.lightBlue,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppPalette.blue.withOpacity(0.2))),
-          child: Text(
-            e.campus.isNotEmpty ? '${e.abreviation} · ${e.campus}' : e.nom,
-            style: const TextStyle(fontSize: 13, color: AppPalette.blue,
-                fontWeight: FontWeight.w700),
-          ),
+          child: Text(e.campus.isNotEmpty ? '${e.abreviation} · ${e.campus}' : e.nom,
+              style: const TextStyle(fontSize: 13, color: AppPalette.blue,
+                  fontWeight: FontWeight.w700)),
         ),
       ])),
 
@@ -338,7 +328,7 @@ class _AuthPageState extends State<AuthPage> {
             borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.all(4),
         child: Row(children: [
-          _tabBtn(0, 'Matricule',    Icons.badge_outlined),
+          _tabBtn(0, 'Matricule', Icons.badge_outlined),
           _tabBtn(1, 'Nom & Prénom', Icons.person_outline),
         ]),
       ),
@@ -372,11 +362,11 @@ class _AuthPageState extends State<AuthPage> {
       SizedBox(width: double.infinity, height: 54,
         child: ElevatedButton(
           onPressed: _loading ? null : _verifier,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFFE2E8F0),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            elevation: 0),
+          style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFFE2E8F0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0),
           child: _loading
               ? const SizedBox(width: 22, height: 22,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
@@ -396,31 +386,47 @@ class _AuthPageState extends State<AuthPage> {
 
       const SizedBox(height: 20),
 
-      // Accès démo
+      // ── Accès démo ────────────────────────────────────────────────────
       if (e.abreviation == 'IST') ...[
-        SizedBox(width: double.infinity, height: 54,
-          child: OutlinedButton.icon(
-            onPressed: _demoBrahim,
-            icon: const Text('⚡', style: TextStyle(fontSize: 20)),
-            label: const Text('Accès Démo — Ibrahim KOURAOGO',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppPalette.blue,
-              side: const BorderSide(color: AppPalette.blue, width: 2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Center(child: Text('24IST-O2/1851 · IST Campus Ouaga 2000',
-            style: TextStyle(fontSize: 12, color: Color(0xFF64748B),
-                fontStyle: FontStyle.italic))),
+        // Étudiant
+        _demoBtn('⚡', 'Accès Démo — Ibrahim KOURAOGO', '24IST-O2/1851 · Étudiant RIT L2',
+            AppPalette.blue, _demoBrahim),
+        const SizedBox(height: 10),
+        // Admin
+        _demoBtn('🛡️', 'Accès Démo — Administration', '24IST-ADM/001 · Direction Pédagogique',
+            const Color(0xFF1A3C34), _demoAdmin),
+        const SizedBox(height: 10),
+        // Professeur
+        _demoBtn('👨‍🏫', 'Accès Démo — Professeur', 'OUÉDRAOGO Mamadou · Algorithmes & Réseaux',
+            const Color(0xFF7C3AED), _demoProf),
+        const SizedBox(height: 10),
+        // Parent
+        _demoBtn('👨‍👩‍👦', 'Accès Démo — Parent', 'KOURAOGO Seydou · Parent d\'Ibrahim',
+            const Color(0xFFD97706), _demoParent),
         const SizedBox(height: 24),
       ] else const SizedBox(height: 8),
 
       if (_tab == 0) _infoMatricule(e),
     ]);
   }
+
+  Widget _demoBtn(String emoji, String label, String sub, Color color, VoidCallback onTap) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: double.infinity, height: 54,
+          child: OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Text(emoji, style: const TextStyle(fontSize: 20)),
+            label: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            style: OutlinedButton.styleFrom(foregroundColor: color,
+                side: BorderSide(color: color, width: 2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Padding(padding: const EdgeInsets.only(left: 4),
+          child: Text(sub, style: const TextStyle(fontSize: 11,
+              color: Color(0xFF64748B), fontStyle: FontStyle.italic))),
+      ]);
 
   // ════════════════════════════════════════════════════════════════════════
   // ÉTAPE 2A — MOT DE PASSE
@@ -449,11 +455,11 @@ class _AuthPageState extends State<AuthPage> {
     SizedBox(width: double.infinity, height: 54,
       child: ElevatedButton(
         onPressed: _loading ? null : _connecter,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFFE2E8F0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: 0),
+        style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xFFE2E8F0),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            elevation: 0),
         child: _loading
             ? const SizedBox(width: 22, height: 22,
                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
@@ -503,11 +509,11 @@ class _AuthPageState extends State<AuthPage> {
             : const Icon(Icons.check_circle_outline, size: 22),
         label: Text(_loading ? 'Création...' : 'CRÉER MON COMPTE',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF15803D), foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFFE2E8F0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: 0),
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF15803D),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xFFE2E8F0),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            elevation: 0),
       ),
     ),
     const SizedBox(height: 16),
@@ -519,18 +525,17 @@ class _AuthPageState extends State<AuthPage> {
   // ════════════════════════════════════════════════════════════════════════
   // WIDGETS PARTAGÉS
   // ════════════════════════════════════════════════════════════════════════
-
   Widget _carteUser(Map<String, dynamic> u) {
     final role = u['role'] as String;
     final domaine = (u['domaine'] ?? '') as String;
     Color rc; String rl;
     switch (role) {
-      case 'etudiant':   rc = AppPalette.blue;         rl = 'Étudiant'; break;
-      case 'professeur': rc = const Color(0xFF7C3AED); rl = 'Professeur'; break;
-      case 'admin':      rc = const Color(0xFF15803D); rl = 'Administration'; break;
-      case 'bde':        rc = const Color(0xFF0891B2); rl = 'Bureau des Étudiants'; break;
-      case 'parent':     rc = const Color(0xFFD97706); rl = 'Parent'; break;
-      default:           rc = AppPalette.blue;         rl = role;
+      case 'etudiant':   rc = AppPalette.blue;           rl = 'Étudiant'; break;
+      case 'professeur': rc = const Color(0xFF7C3AED);   rl = 'Professeur'; break;
+      case 'admin':      rc = const Color(0xFF1A3C34);   rl = 'Administration'; break;
+      case 'bde':        rc = const Color(0xFF0891B2);   rl = 'Bureau des Étudiants'; break;
+      case 'parent':     rc = const Color(0xFFD97706);   rl = 'Parent'; break;
+      default:           rc = AppPalette.blue;           rl = role;
     }
     return Container(
       padding: const EdgeInsets.all(18),
@@ -554,8 +559,7 @@ class _AuthPageState extends State<AuthPage> {
           Text('${u['prenoms']} ${u['nom']}', style: const TextStyle(fontSize: 18,
               fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.2)),
           const SizedBox(height: 4),
-          Text(_cleTrouvee ?? '',
-              style: const TextStyle(fontSize: 12, color: Colors.white70)),
+          Text(_cleTrouvee ?? '', style: const TextStyle(fontSize: 12, color: Colors.white70)),
           const SizedBox(height: 5),
           Text(u['filiere'], style: const TextStyle(fontSize: 13,
               color: Colors.white, fontWeight: FontWeight.w500)),
@@ -595,9 +599,7 @@ class _AuthPageState extends State<AuthPage> {
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE2E8F0))),
-      child: const Icon(Icons.arrow_back_ios_new,
-          size: 16, color: Color(0xFF0F172A))),
-  );
+      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Color(0xFF0F172A))));
 
   Widget _tabBtn(int index, String label, IconData icon) {
     final active = _tab == index;
@@ -642,14 +644,11 @@ class _AuthPageState extends State<AuthPage> {
         child: TextField(controller: ctrl, keyboardType: type,
           onChanged: (_) => setState(() => _error = null),
           style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
-            prefixIcon: Icon(ico, color: const Color(0xFF64748B), size: 22),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 18),
-          ),
-        ),
+          decoration: InputDecoration(hintText: hint,
+              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
+              prefixIcon: Icon(ico, color: const Color(0xFF64748B), size: 22),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 18))),
       );
 
   Widget _champPass(TextEditingController ctrl, String hint,
@@ -663,21 +662,17 @@ class _AuthPageState extends State<AuthPage> {
         child: TextField(controller: ctrl, obscureText: obscure,
           onChanged: (_) => setState(() => _error = null),
           style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
-            prefixIcon: const Icon(Icons.lock_outline,
-                color: Color(0xFF64748B), size: 22),
-            suffixIcon: IconButton(
-              icon: Icon(obscure ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-                  color: const Color(0xFF64748B), size: 22),
-              onPressed: toggle,
-            ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 18),
-          ),
-        ),
+          decoration: InputDecoration(hintText: hint,
+              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
+              prefixIcon: const Icon(Icons.lock_outline,
+                  color: Color(0xFF64748B), size: 22),
+              suffixIcon: IconButton(
+                icon: Icon(obscure ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                    color: const Color(0xFF64748B), size: 22),
+                onPressed: toggle),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 18))),
       );
 
   Widget _erreur(String msg) => Container(
@@ -740,8 +735,8 @@ class _AuthPageState extends State<AuthPage> {
       title: const Row(children: [
         Icon(Icons.lock_reset, color: AppPalette.blue),
         SizedBox(width: 10),
-        Text('Mot de passe oublié', style: TextStyle(fontSize: 17,
-            fontWeight: FontWeight.bold)),
+        Text('Mot de passe oublié',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
       ]),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         const Text('Un lien sera envoyé à votre adresse email.',
@@ -753,10 +748,10 @@ class _AuthPageState extends State<AuthPage> {
           child: const TextField(style: TextStyle(fontSize: 15),
             decoration: InputDecoration(hintText: 'votre@email.com',
                 hintStyle: TextStyle(color: Color(0xFF64748B)),
-                prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF64748B), size: 20),
+                prefixIcon: Icon(Icons.email_outlined,
+                    color: Color(0xFF64748B), size: 20),
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 14))),
-        ),
+                contentPadding: EdgeInsets.symmetric(vertical: 14)))),
       ]),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(),
