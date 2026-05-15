@@ -5,14 +5,13 @@ import '../pages/admin_etudiants.dart';
 import '../pages/admin_filieres.dart';
 import '../pages/admin_reclamations.dart';
 import '../pages/admin_comptes.dart';
-import '../pages/admin_notes.dart';
-import '../pages/admin_communications.dart';
 import '../pages/splash_screen.dart';
 import '../theme/app_palette.dart';
 
 class AdminShell extends StatefulWidget {
   final StudentProfile profile;
   final VoidCallback onLogout;
+
   const AdminShell({super.key, required this.profile, required this.onLogout});
 
   @override
@@ -29,10 +28,8 @@ class _AdminShellState extends State<AdminShell> {
     _pages = [
       AdminDashboard(profile: widget.profile),
       const AdminEtudiants(),
-      const AdminNotes(),
-      const AdminCommunications(),
-      const AdminReclamations(),
       const AdminFilieres(),
+      const AdminReclamations(),
       const AdminComptes(),
     ];
   }
@@ -52,43 +49,33 @@ class _AdminShellState extends State<AdminShell> {
           backgroundColor: Colors.white,
           selectedItemColor: AppPalette.blue,
           unselectedItemColor: const Color(0xFF94A3B8),
-          selectedLabelStyle: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
-          unselectedLabelStyle: const TextStyle(fontSize: 9),
+          selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+          unselectedLabelStyle: const TextStyle(fontSize: 10),
           elevation: 0,
           items: const [
             BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_outlined, size: 22),
-              activeIcon: Icon(Icons.dashboard_rounded, size: 22),
-              label: 'Accueil',
+              icon: Icon(Icons.dashboard_outlined),
+              activeIcon: Icon(Icons.dashboard_rounded),
+              label: 'Tableau de bord',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline, size: 22),
-              activeIcon: Icon(Icons.people_rounded, size: 22),
+              icon: Icon(Icons.people_outline),
+              activeIcon: Icon(Icons.people_rounded),
               label: 'Étudiants',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.grade_outlined, size: 22),
-              activeIcon: Icon(Icons.grade_rounded, size: 22),
-              label: 'Notes',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.campaign_outlined, size: 22),
-              activeIcon: Icon(Icons.campaign_rounded, size: 22),
-              label: 'Comms',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.report_problem_outlined, size: 22),
-              activeIcon: Icon(Icons.report_problem_rounded, size: 22),
-              label: 'Réclamations',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.school_outlined, size: 22),
-              activeIcon: Icon(Icons.school_rounded, size: 22),
+              icon: Icon(Icons.school_outlined),
+              activeIcon: Icon(Icons.school_rounded),
               label: 'Filières',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.manage_accounts_outlined, size: 22),
-              activeIcon: Icon(Icons.manage_accounts_rounded, size: 22),
+              icon: Icon(Icons.report_problem_outlined),
+              activeIcon: Icon(Icons.report_problem_rounded),
+              label: 'Réclamations',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.manage_accounts_outlined),
+              activeIcon: Icon(Icons.manage_accounts_rounded),
               label: 'Comptes',
             ),
           ],
