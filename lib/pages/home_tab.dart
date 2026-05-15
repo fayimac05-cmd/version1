@@ -3,6 +3,7 @@ import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import '../widgets/banner_widget.dart';
 import '../widgets/fil_actualite_widget.dart';
+import '../widgets/weekly_program_quick_widget.dart';
 import 'groupe_filiere_screen.dart';
 import 'tickets_screen.dart';
 
@@ -32,6 +33,9 @@ class HomeTab extends StatelessWidget {
                 color: Color(0xFF121212), letterSpacing: -0.2)),
         const SizedBox(height: 12),
         const BannerWidget(),
+
+        const SizedBox(height: 20),
+        const WeeklyProgramQuickWidget(),
 
         const SizedBox(height: 28),
 

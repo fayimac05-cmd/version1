@@ -130,6 +130,24 @@ class _AuthPageState extends State<AuthPage> {
       profile: profile,
       onLogout: () => Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (dashboardContext) {
+          void logout() {
+            Navigator.of(dashboardContext).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const SplashScreen()),
+              (_) => false,
+            );
+          }
+
+          if (profile.role == 'professeur') {
+            return ProfessorShell(profile: profile, onLogout: logout);
+          }
+
+          return StudentShell(profile: profile, onLogout: logout);
+        },
+      ),
+      (_) => false,
     );
   }
 
@@ -228,6 +246,51 @@ class _AuthPageState extends State<AuthPage> {
       domaine: 'Sciences & Technologies',
       role: 'etudiant',
     ));
+    _goToDashboard(
+      const StudentProfile(
+        nom: 'KOURAOGO',
+        prenoms: 'Ibrahim',
+        matricule: '24IST-O2/1851',
+        email: 'ibrahim.kouraogo@ist.bf',
+        telephone: '',
+        filiere: 'Réseaux Informatiques et Télécom',
+        motDePasse: '1851',
+        domaine: 'Sciences & Technologies',
+        role: 'etudiant',
+      ),
+    );
+  }
+  void _goToParentDashboard(StudentProfile profile) {
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: (parentContext) => ParentShell(
+        nomEnfant: profile.nom,
+        onLogout: () {
+          Navigator.of(parentContext).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const SplashScreen()),
+            (_) => false,
+          );
+        },
+      ),
+    ),
+    (_) => false,
+  );
+}
+
+  void _demoProf() {
+    _goToDashboard(
+      const StudentProfile(
+        nom: 'OUEDRAOGO',
+        prenoms: 'Mamadou',
+        matricule: 'PROF-70123456',
+        email: 'mamadou.ouedraogo@ist.bf',
+        telephone: '70123456',
+        filiere: 'Algorithmes & Reseaux',
+        motDePasse: 'prof123',
+        domaine: 'Sciences & Technologies',
+        role: 'professeur',
+      ),
+    );
   }
 
   void _setError(String msg) =>
