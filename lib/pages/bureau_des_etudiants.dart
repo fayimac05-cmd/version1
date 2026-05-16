@@ -1,810 +1,295 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
-import 'create_event_page.dart';
-import 'create_announcement_page.dart';
 
-class BureauDesEtudiantsScreen extends StatefulWidget {
-  const BureauDesEtudiantsScreen({super.key});
+class CreateEventPage extends StatefulWidget {
+  const CreateEventPage({super.key});
 
   @override
-  State<BureauDesEtudiantsScreen> createState() =>
-      _BureauDesEtudiantsScreenState();
+  State<CreateEventPage> createState() => _CreateEventPageState();
 }
 
-class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
-  int _currentIndex = 0;
+class _CreateEventPageState extends State<CreateEventPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _priceController = TextEditingController();
+  
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
 
   static const primaryBlue = AppPalette.blue;
-  static const accentYellow = AppPalette.yellow;
-  static const bdeGreen = Color(0xFF15803D);
   static const textDark = Color(0xFF0F172A);
   static const textLight = Color(0xFF64748B);
 
-  List<Widget> get _pages => [
-    _buildAccueilBDE(),
-    const Center(
-      child: Text(
-        'Validations',
-        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-      ),
-    ),
-    const Center(
-      child: Text(
-        'Événements',
-        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-      ),
-    ),
-    const Center(
-      child: Text(
-        'Objectifs',
-        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-      ),
-    ),
-    _buildPageEvenements(),
-    _buildPageAnnonces(),
-    _buildPageProfil(),
-  ];
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: now,
+      lastDate: DateTime(now.year + 2),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: primaryBlue,
+              onPrimary: Colors.white,
+              onSurface: textDark,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: primaryBlue,
+              onPrimary: Colors.white,
+              onSurface: textDark,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedTime = picked);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      extendBody: true,
-      body: _pages[_currentIndex],
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Container(
-            height: 74,
-            decoration: BoxDecoration(
-              color: AppPalette.blue.withValues(alpha: 230),
-              borderRadius: BorderRadius.circular(40),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 38),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppPalette.blue.withValues(alpha: 64),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(40),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildNavItem(0, Icons.home_rounded, 'Accueil'),
-                    _buildNavItem(
-                      1,
-                      Icons.check_circle_outline_rounded,
-                      'Tâches',
-                    ),
-                    _buildNavItem(2, Icons.calendar_month_outlined, 'Agenda'),
-                    _buildNavItem(3, Icons.track_changes_rounded, 'Bilan'),
-                  ],
-                ),
-              ),
-            ),
-          ),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: textDark, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withValues(alpha: 38)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
+        title: const Text(
+          'Nouvel Événement',
+          style: TextStyle(color: textDark, fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : const Color(0xFF64748B),
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? Colors.white : const Color(0xFF64748B),
-              ),
-            ),
-          ],
-        ),
+        centerTitle: true,
       ),
-    );
-  }
-
-  Widget _buildAccueilBDE() {
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: 120,
-        ),
-        children: [
-          _buildCardEvenements(),
-          _buildCardEvenements(withButton: false),
-          const SizedBox(height: 16),
-          _buildCardAnnoncesGestion(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPageEvenements() {
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: 120,
-        ),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CreateEventPage()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                '+ Créer un événement',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildCardEvenements(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPageAnnonces() {
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: 120,
-        ),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CreateAnnouncementPage()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                '+ Nouvelle annonce',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildCardAnnoncesGestion(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardAnnoncesGestion() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 8),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Icon(Icons.circle, size: 10, color: bdeGreen),
-              const SizedBox(width: 8),
-              const Text(
-                'Annonces récentes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: textDark,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _buildAnnonceItem(
-            icon: Icons.campaign_outlined,
-            title: 'Résultats Concours Photo BDE',
-            subtitle: '08 Jan 2025 · 312 vues',
-            status: 'Diffusé',
-            statusBg: const Color(0xFFDCFCE7),
-            statusColor: const Color(0xFF166534),
-            canEdit: true,
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildAnnonceItem(
-            icon: Icons.schedule_outlined,
-            title: 'Rappel : Soirée Culturelle J-3',
-            subtitle: '09 Jan 2025 · 180 vues',
-            status: 'Diffusé',
-            statusBg: const Color(0xFFDCFCE7),
-            statusColor: const Color(0xFF166534),
-            canEdit: true,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnnonceItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String status,
-    required Color statusBg,
-    required Color statusColor,
-    bool canEdit = false,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFDCFCE7),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: primaryBlue, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildSectionTitle('Informations Générales'),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: _nameController,
+                label: 'Nom de l\'événement',
+                hint: 'Ex: Soirée de Gala',
+                icon: Icons.event,
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: _locationController,
+                label: 'Lieu',
+                hint: 'Ex: Amphi A ou Salle Polyvalente',
+                icon: Icons.location_on_outlined,
+              ),
+              const SizedBox(height: 32),
+              _buildSectionTitle('Date et Heure'),
+              const SizedBox(height: 16),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: textDark,
-                      ),
+                    child: _buildPickerCard(
+                      label: 'Date',
+                      value: _selectedDate == null 
+                          ? 'Choisir' 
+                          : DateFormat('dd MMM yyyy').format(_selectedDate!),
+                      icon: Icons.calendar_today_outlined,
+                      onTap: _pickDate,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      status,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: statusColor,
-                      ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildPickerCard(
+                      label: 'Heure',
+                      value: _selectedTime == null 
+                          ? 'Choisir' 
+                          : _selectedTime!.format(context),
+                      icon: Icons.access_time,
+                      onTap: _pickTime,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 12, color: textLight),
+              const SizedBox(height: 32),
+              _buildSectionTitle('Billetterie'),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: _priceController,
+                label: 'Prix du ticket',
+                hint: '0 pour gratuit',
+                icon: Icons.confirmation_number_outlined,
+                keyboardType: TextInputType.number,
+                suffix: const Text('FCFA', style: TextStyle(fontWeight: FontWeight.bold, color: primaryBlue)),
               ),
+              const SizedBox(height: 48),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (_formKey.currentState!.validate()) {
+                      // Logique de création ici
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Événement créé avec succès !')),
+                      );
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Créer l\'événement',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildCardEvenements({String title = 'Événements en cours', bool withButton = true, bool isUpcoming = false}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 8),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.circle, size: 10, color: primaryBlue),
-              const SizedBox(width: 8),
-              const Text(
-                'Événements en cours',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: textDark,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _buildEventItem(
-            title: 'Soirée Culturelle',
-            subtitle: '12 Jan 2025 · Salle polyvalente',
-            count: '120 / 150',
-            status: 'Approuvé',
-            statusBg: const Color(0xFFDCFCE7),
-            statusColor: const Color(0xFF166534),
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildEventItem(
-            title: 'Cérémonie Prix BDE',
-            subtitle: '20 Jan 2025 · Amphi A',
-            count: '87 / 120',
-            status: 'En attente',
-            statusBg: const Color(0xFFFEF3C7),
-            statusColor: const Color(0xFF92400E),
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildEventItem(
-            title: 'Journée Sport',
-            subtitle: '28 Jan 2025 · Terrain',
-            count: '40 / 80',
-            status: 'Ouvert',
-            statusBg: const Color(0xFFDBEAFE),
-            statusColor: const Color(0xFF1E40AF),
-          ),
-          if (withButton) ...[
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CreateEventPage()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                '+ Créer un événement',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
 
-  Widget _buildEventItem({
-    required String title,
-    required String subtitle,
-    required String count,
-    required String status,
-    required Color statusBg,
-    required Color statusColor,
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        color: primaryBlue,
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    Widget? suffix,
   }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: textDark,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(fontSize: 12, color: textLight),
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: textLight),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              count,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: textDark,
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: statusBg,
+            ],
+          ),
+          child: TextFormField(
+            controller: controller,
+            keyboardType: keyboardType,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textDark),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(fontSize: 14, color: textLight.withOpacity(0.5)),
+              prefixIcon: Icon(icon, color: primaryBlue, size: 20),
+              suffixIcon: suffix != null ? Padding(
+                padding: const EdgeInsets.all(16),
+                child: suffix,
+              ) : null,
+              border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: statusColor,
-                ),
-              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),
-          ],
+            validator: (value) => value == null || value.isEmpty ? 'Ce champ est requis' : null,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildCardVentesApprouvees() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 8),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+  Widget _buildPickerCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.circle, size: 10, color: bdeGreen),
-              const SizedBox(width: 8),
-              const Text(
-                'Ventes par événement',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: textDark,
-                ),
-              ),
-            ],
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: textLight),
           ),
-          const SizedBox(height: 20),
-          _buildProgressItem('Soirée Cult.', 0.80, '120/150'),
-          const SizedBox(height: 16),
-          _buildProgressItem('Sport Day', 0.50, '40/80'),
-          const SizedBox(height: 24),
+          const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFF1F5F9)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.info_outline, size: 16, color: primaryBlue),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Seuls les événements validés par l\'administration sont listés ici pour le suivi des ventes.',
-                    style: TextStyle(fontSize: 12, color: textLight, height: 1.4),
-                  ),
+                Icon(icon, color: primaryBlue, size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textDark),
                 ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildProgressItem(String label, double progress, String percent) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: textLight),
-          ),
-        ),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: const AlwaysStoppedAnimation<Color>(primaryBlue),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 36,
-          child: Text(
-            percent,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: textDark,
-            ),
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPageProfil() {
-    return Stack(
-      children: [
-        // Header background with curved bottom
-        Container(
-          height: 200,
-          decoration: const BoxDecoration(
-            color: primaryBlue,
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(40),
-              bottomRight: Radius.circular(40),
-            ),
-          ),
-        ),
-        SafeArea(
-          child: Column(
-            children: [
-              // Top Bar
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const SizedBox(width: 32),
-                    const Text(
-                      'Profil',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 32),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-
-              // Profile Picture
-              Center(
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFFF8FAFC),
-                      width: 4,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.person, size: 50, color: bdeGreen),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Name and Subtitle
-              const Center(
-                child: Text(
-                  'Aïcha OUÉDRAOGO',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: textDark,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.circle, size: 8, color: Colors.grey),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Delegué Général, IST',
-                    style: TextStyle(fontSize: 13, color: textLight),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // Account Card
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 8),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Mon Compte',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: textDark,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildProfileItem(
-                        Icons.person_outline,
-                        'Données personnelles',
-                      ),
-                      const Divider(height: 24, color: Color(0xFFF1F5F9)),
-                      _buildProfileItem(Icons.settings_outlined, 'Paramètres'),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Notification Card
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 8),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProfileItem(
-    IconData icon,
-    String title, {
-    bool showArrow = true,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, color: const Color(0xFF64748B), size: 22),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: textDark,
-            ),
-          ),
-        ),
-        if (showArrow)
-          const Icon(
-            Icons.arrow_forward_ios,
-            size: 14,
-            color: Color(0xFF94A3B8),
-          ),
-      ],
     );
   }
 }
