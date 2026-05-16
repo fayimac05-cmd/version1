@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import '../models/student_profile.dart';
+import 'paiement_scolarite_screen.dart';
 
 class ParentShell extends StatefulWidget {
   const ParentShell({
@@ -26,6 +27,7 @@ class _ParentShellState extends State<ParentShell> {
       _ParentNotesTab(nomEnfant: widget.nomEnfant),
       _ParentPlanningTab(),
       _ParentProfilTab(onLogout: widget.onLogout),
+      const PaiementScolariteScreen(),
     ];
 
     return Scaffold(
@@ -42,10 +44,8 @@ class _ParentShellState extends State<ParentShell> {
         backgroundColor: AppPalette.white,
         indicatorColor: AppPalette.yellow.withOpacity(0.45),
         selectedIndex: _currentTab,
-        onDestinationSelected: (index) =>
-            setState(() => _currentTab = index),
-        labelBehavior:
-            NavigationDestinationLabelBehavior.alwaysShow,
+        onDestinationSelected: (index) => setState(() => _currentTab = index),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -67,6 +67,11 @@ class _ParentShellState extends State<ParentShell> {
             selectedIcon: Icon(Icons.person_rounded),
             label: 'Profil',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.payment_outlined),
+            selectedIcon: Icon(Icons.payment_rounded),
+            label: 'Paiements',
+          ),
         ],
       ),
     );
@@ -85,62 +90,75 @@ class _ParentAccueilTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Bonjour 👋',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+          Text(
+            'Bonjour 👋',
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          ),
           const SizedBox(height: 4),
-          Text('Espace Parent',
-              style: const TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(
+            'Espace Parent',
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppPalette.yellow.withOpacity(0.15),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: AppPalette.yellow.withOpacity(0.4)),
+              border: Border.all(color: AppPalette.yellow.withOpacity(0.4)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.school_rounded,
-                    size: 40, color: AppPalette.yellow),
+                const Icon(
+                  Icons.school_rounded,
+                  size: 40,
+                  color: AppPalette.yellow,
+                ),
                 const SizedBox(width: 16),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Enfant suivi',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey)),
-                    Text(nomEnfant,
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold)),
-                    const Text('IST Campus Ouaga 2000',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey)),
+                    const Text(
+                      'Enfant suivi',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    Text(
+                      nomEnfant,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Text(
+                      'IST Campus Ouaga 2000',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          const Text('Résumé',
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Résumé',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
               _StatCard(
-                  icon: Icons.grading_rounded,
-                  label: 'Notes',
-                  value: 'Voir',
-                  color: Colors.blue),
+                icon: Icons.grading_rounded,
+                label: 'Notes',
+                value: 'Voir',
+                color: Colors.blue,
+              ),
               const SizedBox(width: 12),
               _StatCard(
-                  icon: Icons.calendar_month_rounded,
-                  label: 'Planning',
-                  value: 'Voir',
-                  color: Colors.green),
+                icon: Icons.calendar_month_rounded,
+                label: 'Planning',
+                value: 'Voir',
+                color: Colors.green,
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -153,8 +171,7 @@ class _ParentAccueilTab extends StatelessWidget {
             ),
             child: Row(
               children: const [
-                Icon(Icons.notifications_active_rounded,
-                    color: Colors.red),
+                Icon(Icons.notifications_active_rounded, color: Colors.red),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -172,11 +189,12 @@ class _ParentAccueilTab extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.color});
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   final IconData icon;
   final String label;
   final String value;
@@ -196,12 +214,14 @@ class _StatCard extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 30),
             const SizedBox(height: 8),
-            Text(label,
-                style:
-                    const TextStyle(fontSize: 12, color: Colors.grey)),
-            Text(value,
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, color: color)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            Text(
+              value,
+              style: TextStyle(fontWeight: FontWeight.bold, color: color),
+            ),
           ],
         ),
       ),
@@ -221,32 +241,31 @@ class _ParentNotesTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Notes de l\'enfant',
-              style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold)),
+          const Text(
+            'Notes de l\'enfant',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          Text('Suivi académique de $nomEnfant',
-              style: TextStyle(color: Colors.grey[600])),
+          Text(
+            'Suivi académique de $nomEnfant',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
           const SizedBox(height: 20),
           Expanded(
             child: ListView(
               children: const [
                 _NoteCard(
-                    matiere: 'Mathématiques',
-                    note: 15.5,
-                    status: 'validé'),
+                  matiere: 'Mathématiques',
+                  note: 15.5,
+                  status: 'validé',
+                ),
+                _NoteCard(matiere: 'Réseaux', note: 12.0, status: 'validé'),
                 _NoteCard(
-                    matiere: 'Réseaux',
-                    note: 12.0,
-                    status: 'validé'),
-                _NoteCard(
-                    matiere: 'Programmation',
-                    note: 8.0,
-                    status: 'danger'),
-                _NoteCard(
-                    matiere: 'Anglais',
-                    note: 6.5,
-                    status: 'blâmable'),
+                  matiere: 'Programmation',
+                  note: 8.0,
+                  status: 'danger',
+                ),
+                _NoteCard(matiere: 'Anglais', note: 6.5, status: 'blâmable'),
               ],
             ),
           ),
@@ -257,10 +276,11 @@ class _ParentNotesTab extends StatelessWidget {
 }
 
 class _NoteCard extends StatelessWidget {
-  const _NoteCard(
-      {required this.matiere,
-      required this.note,
-      required this.status});
+  const _NoteCard({
+    required this.matiere,
+    required this.note,
+    required this.status,
+  });
   final String matiere;
   final double note;
   final String status;
@@ -293,15 +313,19 @@ class _NoteCard extends StatelessWidget {
           Icon(icon, color: color),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(matiere,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w500)),
+            child: Text(
+              matiere,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
           ),
-          Text('$note / 20',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                  fontSize: 16)),
+          Text(
+            '$note / 20',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color,
+              fontSize: 16,
+            ),
+          ),
         ],
       ),
     );
@@ -319,14 +343,17 @@ class _ParentPlanningTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Emploi du temps',
-              style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(
+            'Emploi du temps',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
           SizedBox(height: 16),
           Center(
-            child: Text('Planning de la semaine\n(à venir)',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey)),
+            child: Text(
+              'Planning de la semaine\n(à venir)',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
         ],
       ),
@@ -346,9 +373,10 @@ class _ParentProfilTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Mon Profil',
-              style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold)),
+          const Text(
+            'Mon Profil',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 20),
           const CircleAvatar(
             radius: 40,
@@ -356,21 +384,23 @@ class _ParentProfilTab extends StatelessWidget {
             child: Icon(Icons.person, size: 40, color: Colors.white),
           ),
           const SizedBox(height: 12),
-          const Text('Parent / Tuteur',
-              style: TextStyle(color: Colors.grey)),
+          const Text('Parent / Tuteur', style: TextStyle(color: Colors.grey)),
           const Spacer(),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: onLogout,
               icon: const Icon(Icons.logout, color: Colors.red),
-              label: const Text('Se déconnecter',
-                  style: TextStyle(color: Colors.red)),
+              label: const Text(
+                'Se déconnecter',
+                style: TextStyle(color: Colors.red),
+              ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Colors.red),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),

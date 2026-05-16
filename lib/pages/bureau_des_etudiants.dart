@@ -7,7 +7,8 @@ class BureauDesEtudiantsScreen extends StatefulWidget {
   const BureauDesEtudiantsScreen({super.key});
 
   @override
-  State<BureauDesEtudiantsScreen> createState() => _BureauDesEtudiantsScreenState();
+  State<BureauDesEtudiantsScreen> createState() =>
+      _BureauDesEtudiantsScreenState();
 }
 
 class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
@@ -20,6 +21,24 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
 
   List<Widget> get _pages => [
     _buildAccueilBDE(),
+    const Center(
+      child: Text(
+        'Validations',
+        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    ),
+    const Center(
+      child: Text(
+        'Événements',
+        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    ),
+    const Center(
+      child: Text(
+        'Objectifs',
+        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    ),
     _buildPageEvenements(),
     _buildPageAnnonces(),
     _buildPageProfil(),
@@ -35,26 +54,40 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Container(
-            height: 76,
-            padding: const EdgeInsets.all(8),
+            height: 74,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppPalette.blue.withValues(alpha: 230),
               borderRadius: BorderRadius.circular(40),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 38),
+                width: 1,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
+                  color: AppPalette.blue.withValues(alpha: 64),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                Expanded(child: _buildNavItem(0, Icons.home_filled, 'Accueil')),
-                Expanded(child: _buildNavItem(1, Icons.event, 'Evenements')),
-                Expanded(child: _buildNavItem(2, Icons.announcement, 'Anonces')),
-                Expanded(child: _buildNavItem(3, Icons.account_circle, 'Profil')),
-              ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(40),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildNavItem(0, Icons.home_rounded, 'Accueil'),
+                    _buildNavItem(
+                      1,
+                      Icons.check_circle_outline_rounded,
+                      'Tâches',
+                    ),
+                    _buildNavItem(2, Icons.calendar_month_outlined, 'Agenda'),
+                    _buildNavItem(3, Icons.track_changes_rounded, 'Bilan'),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -74,9 +107,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
-        height: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E1E1E) : Colors.transparent,
+          color: isSelected
+              ? Colors.white.withValues(alpha: 38)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
         ),
         child: Column(
@@ -105,27 +140,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildAccueilBDE() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
-          // Header Bienvenue
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tableau de bord BDE',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textDark),
-                ),
-                Text(
-                  'Suivi des activités et annonces',
-                  style: TextStyle(fontSize: 14, color: textLight),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildCardVentesApprouvees(),
+          _buildCardEvenements(),
+          _buildCardEvenements(withButton: false),
           const SizedBox(height: 16),
           _buildCardAnnoncesGestion(),
         ],
@@ -136,7 +159,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildPageEvenements() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           Align(
             alignment: Alignment.centerRight,
@@ -150,17 +178,23 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Créer un événement',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          _buildCardEvenements(withButton: false),
-          const SizedBox(height: 16),
-          _buildCardEvenements(title: 'Événements à venir', withButton: false, isUpcoming: true),
+          _buildCardEvenements(),
         ],
       ),
     );
@@ -169,7 +203,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildPageAnnonces() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           Align(
             alignment: Alignment.centerRight,
@@ -183,11 +222,19 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Nouvelle annonce', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Nouvelle annonce',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -205,7 +252,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 8),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -217,19 +264,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.check_circle, size: 18, color: primaryBlue),
-                  SizedBox(width: 8),
-                  Text(
-                    'Annonces Approuvées',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
-                  ),
-                ],
-              ),
-              TextButton(
-                onPressed: () {},
-                child: const Text('Voir tout', style: TextStyle(color: primaryBlue, fontSize: 12, fontWeight: FontWeight.bold)),
+              const Icon(Icons.circle, size: 10, color: bdeGreen),
+              const SizedBox(width: 8),
+              const Text(
+                'Annonces récentes',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
@@ -287,33 +330,40 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
-                  ),
-                  const SizedBox(width: 8),
-                  if (!canEdit)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textDark,
                       ),
                     ),
-                  if (canEdit)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () {},
-                      icon: const Icon(Icons.edit_outlined, size: 18, color: primaryBlue),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 4),
-              Text(subtitle, style: const TextStyle(fontSize: 12, color: textLight)),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 12, color: textLight),
+              ),
             ],
           ),
         ),
@@ -329,7 +379,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 8),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -342,68 +392,60 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             children: [
               const Icon(Icons.circle, size: 10, color: primaryBlue),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+              const Text(
+                'Événements en cours',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-          if (!isUpcoming) ...[
-            _buildEventItem(
-              title: 'Soirée Culturelle',
-              subtitle: '12 Jan 2025 · Salle polyvalente',
-              count: '120 / 150',
-              status: 'Approuvé',
-              statusBg: const Color(0xFFDCFCE7),
-              statusColor: const Color(0xFF166534),
+          _buildEventItem(
+            title: 'Soirée Culturelle',
+            subtitle: '12 Jan 2025 · Salle polyvalente',
+            count: '120 / 150',
+            status: 'Approuvé',
+            statusBg: const Color(0xFFDCFCE7),
+            statusColor: const Color(0xFF166534),
+          ),
+          const Divider(height: 24, color: Color(0xFFF1F5F9)),
+          _buildEventItem(
+            title: 'Cérémonie Prix BDE',
+            subtitle: '20 Jan 2025 · Amphi A',
+            count: '87 / 120',
+            status: 'En attente',
+            statusBg: const Color(0xFFFEF3C7),
+            statusColor: const Color(0xFF92400E),
+          ),
+          const Divider(height: 24, color: Color(0xFFF1F5F9)),
+          _buildEventItem(
+            title: 'Journée Sport',
+            subtitle: '28 Jan 2025 · Terrain',
+            count: '40 / 80',
+            status: 'Ouvert',
+            statusBg: const Color(0xFFDBEAFE),
+            statusColor: const Color(0xFF1E40AF),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {},
+            style: ElevatedButton.styleFrom(
+              backgroundColor: bdeGreen,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
             ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Cérémonie Prix BDE',
-              subtitle: '20 Jan 2025 · Amphi A',
-              count: '87 / 120',
-              status: 'En attente',
-              statusBg: const Color(0xFFFEF3C7),
-              statusColor: const Color(0xFF92400E),
+            child: const Text(
+              '+ Créer un événement',
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Journée Sport',
-              subtitle: '28 Jan 2025 · Terrain',
-              count: '40 / 80',
-              status: 'Ouvert',
-              statusBg: const Color(0xFFDBEAFE),
-              statusColor: const Color(0xFF1E40AF),
-            ),
-          ] else ...[
-            _buildEventItem(
-              title: 'Gala de fin d\'année',
-              subtitle: '15 Juin 2025 · Grand Amphi',
-              count: '0 / 500',
-              status: 'Planifié',
-              statusBg: const Color(0xFFF1F5F9),
-              statusColor: const Color(0xFF475569),
-            ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Forum Entreprises',
-              subtitle: '10 Avr 2025 · Hall Principal',
-              count: '0 / 200',
-              status: 'Ouvert',
-              statusBg: const Color(0xFFDBEAFE),
-              statusColor: const Color(0xFF1E40AF),
-            ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Tournoi E-sport',
-              subtitle: '05 Mar 2025 · Salle Info',
-              count: '12 / 32',
-              status: 'En attente',
-              statusBg: const Color(0xFFFEF3C7),
-              statusColor: const Color(0xFF92400E),
-            ),
-          ],
+          ),
           if (withButton) ...[
             const SizedBox(height: 24),
             ElevatedButton(
@@ -416,11 +458,19 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Créer un événement',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ],
@@ -442,15 +492,32 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textDark,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 12, color: textLight)),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 12, color: textLight),
+            ),
           ],
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(count, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+            Text(
+              count,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textDark,
+              ),
+            ),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -460,7 +527,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               ),
               child: Text(
                 status,
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
               ),
             ),
           ],
@@ -477,7 +548,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 8),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -488,11 +559,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.analytics_outlined, size: 18, color: primaryBlue),
-              SizedBox(width: 8),
-              Text(
-                'Ventes (Événements Approuvés)',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+              const Icon(Icons.circle, size: 10, color: bdeGreen),
+              const SizedBox(width: 8),
+              const Text(
+                'Ventes par événement',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
@@ -531,7 +606,10 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       children: [
         SizedBox(
           width: 80,
-          child: Text(label, style: const TextStyle(fontSize: 13, color: textLight)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: textLight),
+          ),
         ),
         Expanded(
           child: ClipRRect(
@@ -547,7 +625,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         const SizedBox(width: 12),
         SizedBox(
           width: 36,
-          child: Text(percent, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textDark), textAlign: TextAlign.right),
+          child: Text(
+            percent,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: textDark,
+            ),
+            textAlign: TextAlign.right,
+          ),
         ),
       ],
     );
@@ -570,131 +656,132 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         SafeArea(
           child: Column(
             children: [
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 20),
+              // Top Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Top Bar
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const SizedBox(width: 32),
-                          const Text(
-                            'Profil',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                          const SizedBox(width: 32),
-                        ],
+                    const SizedBox(width: 32),
+                    const Text(
+                      'Profil',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 30),
-                    
-                    // Profile Picture
-                    Center(
-                      child: Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFF8FAFC), width: 4),
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.person, size: 50, color: primaryBlue),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    
-                    // Name and Subtitle
-                    const Center(
-                      child: Text(
-                        'Aïcha OUÉDRAOGO',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.circle, size: 8, color: Colors.grey),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Delegué Général, IST',
-                          style: TextStyle(fontSize: 13, color: textLight),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Account Card
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Mon Compte',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
-                            ),
-                            const SizedBox(height: 16),
-                            _buildProfileItem(Icons.person_outline, 'Données personnelles'),
-                            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-                            _buildProfileItem(Icons.settings_outlined, 'Paramètres'),
-                          ],
-                        ),
-                      ),
-                    ),
+                    const SizedBox(width: 32),
                   ],
                 ),
               ),
-              
-              // Logout Button (FIXÉ EN BAS)
+              const SizedBox(height: 30),
+
+              // Profile Picture
+              Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFF8FAFC),
+                      width: 4,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.person, size: 50, color: bdeGreen),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Name and Subtitle
+              const Center(
+                child: Text(
+                  'Aïcha OUÉDRAOGO',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: textDark,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.circle, size: 8, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Delegué Général, IST',
+                    style: TextStyle(fontSize: 13, color: textLight),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 32),
+
+              // Account Card
               Padding(
-                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 16), // Espace réduit
-                child: InkWell(
-                  onTap: () {
-                    Navigator.pop(context);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFFEE2E2)),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 20),
-                        SizedBox(width: 12),
-                        Text(
-                          'Se déconnecter',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFEF4444),
-                          ),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 8),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Mon Compte',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: textDark,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildProfileItem(
+                        Icons.person_outline,
+                        'Données personnelles',
+                      ),
+                      const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                      _buildProfileItem(Icons.settings_outlined, 'Paramètres'),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Notification Card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 8),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -705,7 +792,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildProfileItem(IconData icon, String title, {bool showArrow = true}) {
+  Widget _buildProfileItem(
+    IconData icon,
+    String title, {
+    bool showArrow = true,
+  }) {
     return Row(
       children: [
         Icon(icon, color: const Color(0xFF64748B), size: 22),
@@ -713,11 +804,19 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textDark),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: textDark,
+            ),
           ),
         ),
         if (showArrow)
-          const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF94A3B8)),
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: 14,
+            color: Color(0xFF94A3B8),
+          ),
       ],
     );
   }
