@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import 'course_detail_screen.dart';
 
 class CoursesTab extends StatefulWidget {
   const CoursesTab({super.key});
@@ -185,27 +184,15 @@ class _CoursesTabState extends State<CoursesTab> {
   Widget _coursCard(Map<String, dynamic> cours) {
     final color = cours['color'] as Color;
     final isNew = cours['nouveau'] as bool;
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CourseDetailScreen(
-              courseName: cours['titre'],
-              professorName: cours['prof'],
-            ),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppPalette.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isNew ? color.withOpacity(0.4) : const Color(0xFFE2E8F0),
-              width: isNew ? 1.5 : 1),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
-              blurRadius: 10, offset: const Offset(0, 3))],
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppPalette.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isNew ? color.withOpacity(0.4) : const Color(0xFFE2E8F0),
+            width: isNew ? 1.5 : 1),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+            blurRadius: 10, offset: const Offset(0, 3))],
+      ),
       child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [
         Container(width: 58, height: 58,
             decoration: BoxDecoration(color: color.withOpacity(0.1),
@@ -260,7 +247,6 @@ class _CoursesTabState extends State<CoursesTab> {
               color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
         ]),
       ])),
-      ),
     );
   }
 

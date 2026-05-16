@@ -109,8 +109,11 @@ class _AuthPageState extends State<AuthPage> {
         void logout() => Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
 
-        if (profile.role == 'admin' || profile.role == 'bde') {
+        if (profile.role == 'admin') {
           return AdminShell(profile: profile, onLogout: logout);
+        }
+        if (profile.role == 'bde') {
+          return const BureauDesEtudiantsScreen();
         }
         if (profile.role == 'professeur') {
           return ProfessorShell(profile: profile, onLogout: logout);
@@ -250,6 +253,13 @@ class _AuthPageState extends State<AuthPage> {
     email: 'ibrahim.kouraogo@ist.bf', telephone: '',
     filiere: 'Réseaux Informatiques et Télécom',
     motDePasse: '1851', domaine: 'Sciences & Technologies', role: 'etudiant',
+  ));
+
+  void _demoBDE() => _goToDashboard(const StudentProfile(
+    nom: 'OUÉDRAOGO', prenoms: 'Aïcha', matricule: '24IST-BDE/001',
+    email: 'bde@ist.bf', telephone: '',
+    filiere: 'Bureau des Étudiants',
+    motDePasse: 'bde123', domaine: '', role: 'bde',
   ));
 
   void _demoAdmin() => _goToDashboard(const StudentProfile(
@@ -495,6 +505,10 @@ class _AuthPageState extends State<AuthPage> {
         // Étudiant
         _demoBtn('⚡', 'Accès Démo — Ibrahim KOURAOGO', '24IST-O2/1851 · Étudiant RIT L2',
             AppPalette.blue, _demoBrahim),
+        const SizedBox(height: 10),
+        // BDE
+        _demoBtn('🎓', 'Accès Démo — BDE (Aïcha)', '24IST-BDE/001 · Bureau des Étudiants',
+            const Color(0xFF0891B2), _demoBDE),
         const SizedBox(height: 10),
         // Admin
         _demoBtn('🛡️', 'Accès Démo — Administration', '24IST-ADM/001 · Direction Pédagogique',

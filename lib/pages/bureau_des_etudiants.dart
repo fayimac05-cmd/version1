@@ -52,7 +52,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               children: [
                 Expanded(child: _buildNavItem(0, Icons.home_filled, 'Accueil')),
                 Expanded(child: _buildNavItem(1, Icons.event, 'Evenements')),
-                Expanded(child: _buildNavItem(2, Icons.announcement, 'Anonces')),
+                Expanded(child: _buildNavItem(2, Icons.announcement, 'Annonces')),
                 Expanded(child: _buildNavItem(3, Icons.account_circle, 'Profil')),
               ],
             ),
