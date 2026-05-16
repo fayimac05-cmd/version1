@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import 'create_event_page.dart';
@@ -16,6 +18,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
 
   static const primaryBlue = AppPalette.blue;
   static const accentYellow = AppPalette.yellow;
+  static const bdeGreen = Color(0xFF15803D);
   static const textDark = Color(0xFF0F172A);
   static const textLight = Color(0xFF64748B);
 
@@ -357,6 +360,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                         color: statusColor,
                       ),
                     ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -428,23 +432,6 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             status: 'Ouvert',
             statusBg: const Color(0xFFDBEAFE),
             statusColor: const Color(0xFF1E40AF),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: bdeGreen,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              '+ Créer un événement',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
           ),
           if (withButton) ...[
             const SizedBox(height: 24),
@@ -557,7 +544,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               const Icon(Icons.circle, size: 10, color: bdeGreen),
               const SizedBox(width: 8),
