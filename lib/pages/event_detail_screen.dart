@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import 'ticket_purchase_screen.dart';
 
 class EventDetailScreen extends StatelessWidget {
   final Map<String, dynamic> event;
@@ -114,9 +113,12 @@ class EventDetailScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity, height: 56,
               child: ElevatedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const TicketPurchaseScreen()),
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Paiement Orange Money — ${event['prix']}'),
+                    backgroundColor: const Color(0xFFFF6B00),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
                 icon: const Icon(Icons.payment, size: 22),
                 label: Text('Acheter un ticket — ${event['prix']}',

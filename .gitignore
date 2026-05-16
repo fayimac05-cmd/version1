@@ -1,8 +1,0 @@
-# Flutter 
-.dart_tool/ 
-.flutter-plugins 
-.flutter-plugins-dependencies 
-build/ 
-.packages 
-pubspec.lock 
-.vscode/ 
