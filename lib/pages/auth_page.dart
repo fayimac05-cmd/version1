@@ -104,6 +104,28 @@ class _AuthPageState extends State<AuthPage> {
 
   // ── Navigation vers le dashboard ─────────────────────────────────────
   void _goToDashboard(StudentProfile profile) {
+    void logout() => Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
+
+    final Widget destination;
+    switch (profile.role) {
+      case 'admin':
+      case 'bde':
+        destination = AdminShell(profile: profile, onLogout: logout);
+        break;
+      case 'professeur':
+        destination = ProfessorShell(profile: profile, onLogout: logout);
+        break;
+      case 'parent':
+        destination = ParentShell(
+          nomEnfant: '${profile.prenoms} ${profile.nom}',
+          onLogout: logout,
+        );
+        break;
+      default:
+        destination = StudentShell(profile: profile, onLogout: logout);
+    }
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) {
         void logout() => Navigator.of(context).pushAndRemoveUntil(
@@ -125,8 +147,8 @@ class _AuthPageState extends State<AuthPage> {
       }),
       (_) => false,
     );
+        MaterialPageRoute(builder: (_) => destination), (_) => false);
   }
-
   // ── Vérifier identité ────────────────────────────────────────────────
   void _verifier() async {
     setState(() { _loading = true; _error = null; });

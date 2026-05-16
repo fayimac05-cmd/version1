@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE MESSAGE
 // ════════════════════════════════════════════════════════════════════════════
@@ -19,6 +21,20 @@ class _Message {
     required this.heure,
     this.estErreur = false,
   });
+
+  Map<String, dynamic> toJson() => {
+    'texte': texte,
+    'estIA': estIA,
+    'heure': heure.toIso8601String(),
+    'estErreur': estErreur,
+  };
+
+  factory _Message.fromJson(Map<String, dynamic> json) => _Message(
+    texte: json['texte'] as String,
+    estIA: json['estIA'] as bool,
+    heure: DateTime.parse(json['heure'] as String),
+    estErreur: json['estErreur'] as bool? ?? false,
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -84,18 +100,47 @@ Ton rôle :
   @override
   void initState() {
     super.initState();
-    // Message de bienvenue
-    _messages.add(_Message(
-      texte: 'Bonjour ${widget.profile.prenoms} ! 👋\n\n'
-          'Je suis ton conseiller académique IA. J\'ai accès à ton bilan du Semestre 3.\n\n'
-          '**Situation rapide :**\n'
-          '• ✅ 3 modules validés\n'
-          '• ⚠️ 2 modules en danger\n'
-          '• 🚨 1 module blâmable (Réseaux : 4.5/20)\n\n'
-          'Comment puis-je t\'aider aujourd\'hui ?',
-      estIA: true,
-      heure: DateTime.now(),
-    ));
+    _chargerHistorique();
+  }
+
+  Future<void> _chargerHistorique() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getStringList('chat_history');
+    if (data != null && data.isNotEmpty) {
+      setState(() {
+        _messages.clear();
+        for (var msgJson in data) {
+          try {
+            _messages.add(_Message.fromJson(jsonDecode(msgJson)));
+          } catch (e) {
+            // Ignorer les erreurs de parsing
+          }
+        }
+      });
+      // Scroll to bottom après le chargement
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
+    } else {
+      // Message de bienvenue initial
+      setState(() {
+        _messages.add(_Message(
+          texte: 'Bonjour ${widget.profile.prenoms} ! 👋\n\n'
+              'Je suis ton conseiller académique IA. J\'ai accès à ton bilan du Semestre 3.\n\n'
+              '**Situation rapide :**\n'
+              '• ✅ 3 modules validés\n'
+              '• ⚠️ 2 modules en danger\n'
+              '• 🚨 1 module blâmable (Réseaux : 4.5/20)\n\n'
+              'Comment puis-je t\'aider aujourd\'hui ?',
+          estIA: true,
+          heure: DateTime.now(),
+        ));
+      });
+    }
+  }
+
+  Future<void> _sauvegarderHistorique() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = _messages.map((m) => jsonEncode(m.toJson())).toList();
+    await prefs.setStringList('chat_history', data);
   }
 
   @override
@@ -105,7 +150,7 @@ Ton rôle :
     super.dispose();
   }
 
-  // ── Appel API Claude ──────────────────────────────────────────────────
+  // ── Appel API Claude / OpenAI ─────────────────────────────────────────
   Future<void> _envoyer(String texte) async {
     if (texte.trim().isEmpty || _enChargement) return;
 
@@ -116,10 +161,17 @@ Ton rôle :
       _messages.add(_Message(texte: messageUser, estIA: false, heure: DateTime.now()));
       _enChargement = true;
     });
+    _sauvegarderHistorique();
     _scrollBas();
 
     try {
-      // Construire l'historique pour Claude
+      // ⚠️ À MODIFIER : Insérez votre clé API ici
+      // Pour des raisons de sécurité, en production, utilisez un backend ou un package comme flutter_dotenv
+      const String apiKey = 'VOTRE_CLE_API_ICI'; 
+      
+      // Choisissez l'API à utiliser (true pour Claude, false pour OpenAI)
+      const bool useClaude = true; 
+
       final List<Map<String, String>> historique = [];
       for (final msg in _messages.where((m) => !m.estErreur)) {
         historique.add({
@@ -128,31 +180,69 @@ Ton rôle :
         });
       }
 
-      final response = await http.post(
-        Uri.parse('https://api.anthropic.com/v1/messages'),
-        headers: {
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
-        },
-        body: jsonEncode({
-          'model': 'claude-sonnet-4-20250514',
-          'max_tokens': 600,
-          'system': _contexteEtudiant,
-          'messages': historique,
-        }),
-      );
+      http.Response response;
+
+      if (useClaude) {
+        // --- API CLAUDE (Anthropic) ---
+        response = await http.post(
+          Uri.parse('https://api.anthropic.com/v1/messages'),
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            // Optionnel selon la plateforme (ex: Flutter Web) :
+            // 'anthropic-dangerous-direct-browser-access': 'true', 
+          },
+          body: jsonEncode({
+            'model': 'claude-3-haiku-20240307', // Ou claude-3-5-sonnet-20241022
+            'max_tokens': 600,
+            'system': _contexteEtudiant,
+            'messages': historique,
+          }),
+        );
+      } else {
+        // --- API OPENAI ---
+        // Ajout du contexte système au début pour OpenAI
+        final List<Map<String, String>> messagesOpenAI = [
+          {'role': 'system', 'content': _contexteEtudiant},
+          ...historique,
+        ];
+        
+        response = await http.post(
+          Uri.parse('https://api.openai.com/v1/chat/completions'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          body: jsonEncode({
+            'model': 'gpt-4o-mini', // Ou gpt-3.5-turbo, gpt-4
+            'messages': messagesOpenAI,
+            'max_tokens': 600,
+          }),
+        );
+      }
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final reponse = data['content'][0]['text'] as String;
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        String reponse = '';
+        
+        if (useClaude) {
+          reponse = data['content'][0]['text'] as String;
+        } else {
+          reponse = data['choices'][0]['message']['content'] as String;
+        }
+
         setState(() {
           _messages.add(_Message(texte: reponse, estIA: true, heure: DateTime.now()));
           _enChargement = false;
         });
+        _sauvegarderHistorique();
       } else {
-        _ajouterErreur('Erreur ${response.statusCode}. Réessayez dans un instant.');
+        print("API Error: ${response.body}"); // Pour le debug
+        _ajouterErreur('Erreur ${response.statusCode}. Vérifiez votre clé API.');
       }
     } catch (e) {
+      print("Exception: $e"); // Pour le debug
       _ajouterErreur('Connexion impossible. Vérifiez votre réseau.');
     }
 
@@ -164,6 +254,7 @@ Ton rôle :
       _messages.add(_Message(texte: msg, estIA: true, heure: DateTime.now(), estErreur: true));
       _enChargement = false;
     });
+    _sauvegarderHistorique();
   }
 
   void _scrollBas() {
