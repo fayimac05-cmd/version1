@@ -1,6 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
+import 'create_event_page.dart';
+import 'create_announcement_page.dart';
 
 class BureauDesEtudiantsScreen extends StatefulWidget {
   const BureauDesEtudiantsScreen({super.key});
@@ -13,7 +14,8 @@ class BureauDesEtudiantsScreen extends StatefulWidget {
 class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   int _currentIndex = 0;
 
-  static const bdeGreen = Color(0xFF1A4331); // Vert foncé BDE
+  static const primaryBlue = AppPalette.blue;
+  static const accentYellow = AppPalette.yellow;
   static const textDark = Color(0xFF0F172A);
   static const textLight = Color(0xFF64748B);
 
@@ -148,7 +150,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           _buildCardEvenements(),
           _buildCardEvenements(withButton: false),
           const SizedBox(height: 16),
-          _buildCardVentes(),
+          _buildCardAnnoncesGestion(),
         ],
       ),
     );
@@ -167,9 +169,14 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CreateEventPage()),
+                );
+              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: bdeGreen,
+                backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -206,9 +213,14 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CreateAnnouncementPage()),
+                );
+              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: bdeGreen,
+                backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -226,13 +238,13 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildCardAnnonces(),
+          _buildCardAnnoncesGestion(),
         ],
       ),
     );
   }
 
-  Widget _buildCardAnnonces() {
+  Widget _buildCardAnnoncesGestion() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -250,6 +262,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Icon(Icons.circle, size: 10, color: bdeGreen),
               const SizedBox(width: 8),
@@ -263,32 +276,25 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
           _buildAnnonceItem(
             icon: Icons.campaign_outlined,
             title: 'Résultats Concours Photo BDE',
-            subtitle: 'Publié · 08 Jan 2025 · 312 vues',
+            subtitle: '08 Jan 2025 · 312 vues',
             status: 'Diffusé',
             statusBg: const Color(0xFFDCFCE7),
             statusColor: const Color(0xFF166534),
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildAnnonceItem(
-            icon: Icons.calendar_today_outlined,
-            title: 'Calendrier activités Janvier',
-            subtitle: 'En attente · 09 Jan 2025',
-            status: 'En attente',
-            statusBg: const Color(0xFFFEF3C7),
-            statusColor: const Color(0xFF92400E),
+            canEdit: true,
           ),
           const Divider(height: 24, color: Color(0xFFF1F5F9)),
           _buildAnnonceItem(
             icon: Icons.schedule_outlined,
             title: 'Rappel : Soirée Culturelle J-3',
-            subtitle: 'Publié · 09 Jan 2025 · 180 vues',
+            subtitle: '09 Jan 2025 · 180 vues',
             status: 'Diffusé',
             statusBg: const Color(0xFFDCFCE7),
             statusColor: const Color(0xFF166534),
+            canEdit: true,
           ),
         ],
       ),
@@ -302,6 +308,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     required String status,
     required Color statusBg,
     required Color statusColor,
+    bool canEdit = false,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,7 +319,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             color: const Color(0xFFDCFCE7),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: bdeGreen, size: 22),
+          child: Icon(icon, color: primaryBlue, size: 22),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -350,7 +357,6 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                         color: statusColor,
                       ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -365,7 +371,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildCardEvenements({bool withButton = true}) {
+  Widget _buildCardEvenements({String title = 'Événements en cours', bool withButton = true, bool isUpcoming = false}) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -384,7 +390,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.circle, size: 10, color: bdeGreen),
+              const Icon(Icons.circle, size: 10, color: primaryBlue),
               const SizedBox(width: 8),
               const Text(
                 'Événements en cours',
@@ -443,9 +449,14 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           if (withButton) ...[
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CreateEventPage()),
+                );
+              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: bdeGreen,
+                backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -529,7 +540,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildCardVentes() {
+  Widget _buildCardVentesApprouvees() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -546,7 +557,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               const Icon(Icons.circle, size: 10, color: bdeGreen),
               const SizedBox(width: 8),
@@ -561,26 +572,26 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          _buildProgressItem('Soirée Cult.', 0.80, '80%'),
+          _buildProgressItem('Soirée Cult.', 0.80, '120/150'),
           const SizedBox(height: 16),
-          _buildProgressItem('Prix BDE', 0.72, '72%'),
-          const SizedBox(height: 16),
-          _buildProgressItem('Sport', 0.50, '50%'),
+          _buildProgressItem('Sport Day', 0.50, '40/80'),
           const SizedBox(height: 24),
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
             ),
-            child: Column(
+            child: const Row(
               children: [
-                const Icon(Icons.qr_code_2, color: bdeGreen, size: 64),
-                const SizedBox(height: 12),
-                const Text(
-                  'Scanner à l\'entrée pour contrôle',
-                  style: TextStyle(fontSize: 13, color: textLight),
+                Icon(Icons.info_outline, size: 16, color: primaryBlue),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Seuls les événements validés par l\'administration sont listés ici pour le suivi des ventes.',
+                    style: TextStyle(fontSize: 12, color: textLight, height: 1.4),
+                  ),
                 ),
               ],
             ),
@@ -607,7 +618,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               value: progress,
               minHeight: 8,
               backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: const AlwaysStoppedAnimation<Color>(bdeGreen),
+              valueColor: const AlwaysStoppedAnimation<Color>(primaryBlue),
             ),
           ),
         ),
@@ -635,7 +646,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Container(
           height: 200,
           decoration: const BoxDecoration(
-            color: bdeGreen,
+            color: primaryBlue,
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(40),
               bottomRight: Radius.circular(40),
@@ -643,8 +654,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           ),
         ),
         SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 120),
+          child: Column(
             children: [
               // Top Bar
               Padding(
