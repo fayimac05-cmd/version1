@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'splash_screen.dart';
+import 'paiement_scolarite_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE NOTIFICATION
@@ -691,6 +692,32 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                       )),
                     ]),
                   ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // ── Paiement Scolarité ──────────────────────────────────
+              _sectionCard(
+                titre: 'Scolarité',
+                icon: Icons.account_balance_wallet_outlined,
+                couleur: AppPalette.yellow,
+                enfants: [
+                  SizedBox(
+                    width: double.infinity, height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const PaiementScolariteScreen()));
+                      },
+                      icon: const Icon(Icons.payment, color: AppPalette.black),
+                      label: const Text('Gérer mes paiements',
+                          style: TextStyle(color: AppPalette.black, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppPalette.yellow,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  )
                 ],
               ),
 

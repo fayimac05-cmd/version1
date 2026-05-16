@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
+import 'bulletin_screen.dart';
 
 // ── Modèle note ──────────────────────────────────────────────────────────────
 class _NoteModule {
@@ -147,6 +148,26 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
           ),
 
           const SizedBox(height: 16),
+          
+          // Bouton voir le bulletin complet
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const BulletinScreen()));
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(color: AppPalette.yellow,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.assessment_outlined, color: AppPalette.black, size: 16),
+                SizedBox(width: 8),
+                Text('Voir mon bulletin complet', style: TextStyle(fontSize: 13,
+                    color: AppPalette.black, fontWeight: FontWeight.bold)),
+              ]),
+            ),
+          ),
+
+          const SizedBox(height: 12),
 
           // Bouton contester moyenne
           GestureDetector(

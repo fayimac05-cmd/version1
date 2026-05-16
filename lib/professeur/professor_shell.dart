@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
+import '../pages/class_detail_screen.dart';
 
 class ProfessorShell extends StatefulWidget {
   const ProfessorShell({
@@ -166,22 +167,25 @@ class _ClassTab extends StatelessWidget {
       title: 'Ma classe',
       subtitle:
           'Suivez les effectifs, les groupes et les derniers points de classe.',
-      children: const [
-        _MetricRow(),
-        SizedBox(height: 16),
+      children: [
+        const _MetricRow(),
+        const SizedBox(height: 16),
         _InfoCard(
           icon: Icons.school_rounded,
           title: 'Licence 2 Reseaux & Telecom',
           subtitle: '38 etudiants inscrits, 4 groupes de TD',
           tag: 'Classe active',
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const ClassDetailScreen(className: 'Licence 2 Reseaux & Telecom', studentCount: 38)));
+          },
         ),
-        _InfoCard(
+        const _InfoCard(
           icon: Icons.group_work_rounded,
           title: 'Groupes de travail',
           subtitle: 'Groupe A, B, C et D disponibles pour les devoirs.',
           tag: '4 groupes',
         ),
-        _InfoCard(
+        const _InfoCard(
           icon: Icons.warning_amber_rounded,
           title: 'Suivi pedagogique',
           subtitle: '3 etudiants a accompagner sur les derniers exercices.',
@@ -372,17 +376,21 @@ class _InfoCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.tag,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String tag;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -443,6 +451,7 @@ class _InfoCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
