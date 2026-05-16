@@ -17,6 +17,7 @@ const filiereRoutes = require('./routes/filieres');
 const moduleRoutes = require('./routes/modules');
 const professeurRoutes = require('./routes/professeurs');
 const membreRoutes = require('./routes/membres');
+const etudiantRoutes = require('./routes/etudiants');
 const statistiqueRoutes = require('./routes/statistiques');
 
 // Routes Middleware
@@ -24,6 +25,7 @@ app.use('/api/filieres', filiereRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/professeurs', professeurRoutes);
 app.use('/api/membres', membreRoutes);
+app.use('/api/etudiants', etudiantRoutes);
 app.use('/api/statistiques', statistiqueRoutes);
 
 // Base Route

@@ -8,6 +8,7 @@ import 'choose_school_page.dart';
 import 'bureau_des_etudiants.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
+import '../services/auth_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // BASE DE DONNÉES SIMULÉE
@@ -105,8 +106,8 @@ class _AuthPageState extends State<AuthPage> {
   // ── Navigation vers le dashboard ─────────────────────────────────────
   void _goToDashboard(StudentProfile profile) {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) {
-        void logout() => Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (routeContext) {
+        void logout() => Navigator.of(routeContext).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
 
         if (profile.role == 'admin') {
@@ -126,49 +127,6 @@ class _AuthPageState extends State<AuthPage> {
         }
         return StudentShell(profile: profile, onLogout: logout);
       }),
-  final role = profile.role;
-  Widget destination;
-
-  if (role == 'admin' || role == 'bde') {
-    destination = AdminShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else if (role == 'professeur') {
-    destination = ProfessorShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else if (role == 'parent') {
-    destination = ParentShell(
-      nomEnfant: '${profile.prenoms} ${profile.nom}',
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else {
-    destination = StudentShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (dashboardContext) {
-          void logout() {
-            Navigator.of(dashboardContext).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const SplashScreen()),
-              (_) => false,
-            );
-          }
-
-          if (profile.role == 'professeur') {
-            return ProfessorShell(profile: profile, onLogout: logout);
-          }
-
-          return StudentShell(profile: profile, onLogout: logout);
-        },
-      ),
       (_) => false,
     );
   }
@@ -176,17 +134,23 @@ class _AuthPageState extends State<AuthPage> {
   // ── Vérifier identité ────────────────────────────────────────────────
   void _verifier() async {
     setState(() { _loading = true; _error = null; });
-    await Future.delayed(const Duration(milliseconds: 900));
-
+    
+    // Tentative de connexion via API
     if (_tab == 0) {
       final mat = _matriculeCtrl.text.trim().toUpperCase();
       if (mat.isEmpty) { _setError('Veuillez saisir votre matricule.'); return; }
-      final user = _dbEtudiants[mat];
-      if (user == null) {
-        _setError('Matricule non reconnu dans ${widget.etablissement.abreviation}.\nContactez l\'administration.');
+      
+      // On vérifie d'abord si c'est un utilisateur connu dans la démo (fallback)
+      final demoUser = _dbEtudiants[mat];
+      if (demoUser != null) {
+        setState(() { _userTrouve = demoUser; _cleTrouvee = mat; _loading = false; });
+      } else {
+        // Sinon on appelle le backend (futur)
+        // Pour l'instant on reste sur la simulation si le serveur est absent
+        _setError('Matricule non reconnu.\nUtilisez un accès démo pour tester.');
+        setState(() => _loading = false);
         return;
       }
-      setState(() { _userTrouve = user; _cleTrouvee = mat; _loading = false; });
     } else {
       final nom    = _nomCtrl.text.trim().toLowerCase();
       final prenom = _prenomCtrl.text.trim().toLowerCase();
@@ -212,28 +176,72 @@ class _AuthPageState extends State<AuthPage> {
         ? _Etape.premiereFois : _Etape.motDePasse);
   }
 
-  // ── Connexion avec MDP ───────────────────────────────────────────────
+  // ── Connexion réelle ou simulée ──────────────────────────────────────
   void _connecter() async {
     setState(() { _loading = true; _error = null; });
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (_passCtrl.text.isEmpty) { _setError('Veuillez saisir votre mot de passe.'); return; }
-    if (_passCtrl.text != _userTrouve!['motDePasse']) { _setError('Mot de passe incorrect.'); return; }
-    setState(() => _loading = false);
-    _goToDashboard(_buildProfile(_passCtrl.text));
+    
+    // 1. On tente d'abord l'API réelle
+    final result = await AuthService.login(
+      _cleTrouvee!, 
+      _passCtrl.text, 
+      isStudent: _userTrouve!['role'] == 'etudiant'
+    );
+
+    if (result['success']) {
+      setState(() => _loading = false);
+      // On construit le profil à partir des données réelles
+      final data = result['data']['user'];
+      _goToDashboard(StudentProfile(
+        nom: data['nom'] ?? _userTrouve!['nom'],
+        prenoms: data['prenoms'] ?? _userTrouve!['prenoms'],
+        matricule: data['matricule'] ?? _cleTrouvee!,
+        email: data['email'] ?? '',
+        telephone: '',
+        filiere: _userTrouve!['filiere'],
+        motDePasse: _passCtrl.text,
+        domaine: _userTrouve!['domaine'] ?? '',
+        role: data['role'] ?? _userTrouve!['role'],
+      ));
+      return;
+    }
+
+    // 2. Fallback simulation (si le serveur est éteint ou utilisateur démo)
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (_passCtrl.text == _userTrouve!['motDePasse']) {
+      setState(() => _loading = false);
+      _goToDashboard(_buildProfile(_passCtrl.text));
+    } else {
+      _setError(result['error'] ?? 'Mot de passe incorrect.');
+    }
   }
 
   // ── Créer compte (1ère fois) ─────────────────────────────────────────
   void _creerCompte() async {
     setState(() { _loading = true; _error = null; });
-    await Future.delayed(const Duration(milliseconds: 800));
+    
     if (_emailCtrl.text.isEmpty || _newPassCtrl.text.isEmpty || _confPassCtrl.text.isEmpty) {
       _setError('Veuillez remplir tous les champs.'); return;
     }
     if (!_emailCtrl.text.contains('@')) { _setError('Email invalide.'); return; }
     if (_newPassCtrl.text.length < 4) { _setError('Mot de passe : minimum 4 caractères.'); return; }
     if (_newPassCtrl.text != _confPassCtrl.text) { _setError('Les mots de passe ne correspondent pas.'); return; }
-    setState(() => _loading = false);
-    _goToDashboard(_buildProfile(_newPassCtrl.text));
+
+    // Tentative API
+    final ok = await AuthService.finaliserCompte(
+      _userTrouve!['id'] ?? 0, 
+      _emailCtrl.text, 
+      _newPassCtrl.text
+    );
+
+    if (ok) {
+      setState(() => _loading = false);
+      _goToDashboard(_buildProfile(_newPassCtrl.text));
+    } else {
+      // Fallback démo
+      await Future.delayed(const Duration(milliseconds: 800));
+      setState(() => _loading = false);
+      _goToDashboard(_buildProfile(_newPassCtrl.text));
+    }
   }
 
   StudentProfile _buildProfile(String mdp) {
@@ -284,67 +292,6 @@ class _AuthPageState extends State<AuthPage> {
   ));
 
   void _setError(String msg) => setState(() { _error = msg; _loading = false; });
-  // ── Accès démo IBRAHIM ────────────────────────────────────────────────
-  void _demoBrahim() {
-    _goToDashboard(const StudentProfile(
-      nom: 'KOURAOGO', prenoms: 'Ibrahim',
-      matricule: '24IST-O2/1851',
-      email: 'ibrahim.kouraogo@ist.bf',
-      telephone: '',
-      filiere: 'Réseaux Informatiques et Télécom',
-      motDePasse: '1851',
-      domaine: 'Sciences & Technologies',
-      role: 'etudiant',
-    ));
-    _goToDashboard(
-      const StudentProfile(
-        nom: 'KOURAOGO',
-        prenoms: 'Ibrahim',
-        matricule: '24IST-O2/1851',
-        email: 'ibrahim.kouraogo@ist.bf',
-        telephone: '',
-        filiere: 'Réseaux Informatiques et Télécom',
-        motDePasse: '1851',
-        domaine: 'Sciences & Technologies',
-        role: 'etudiant',
-      ),
-    );
-  }
-  void _goToParentDashboard(StudentProfile profile) {
-  Navigator.of(context).pushAndRemoveUntil(
-    MaterialPageRoute(
-      builder: (parentContext) => ParentShell(
-        nomEnfant: profile.nom,
-        onLogout: () {
-          Navigator.of(parentContext).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const SplashScreen()),
-            (_) => false,
-          );
-        },
-      ),
-    ),
-    (_) => false,
-  );
-}
-
-  void _demoProf() {
-    _goToDashboard(
-      const StudentProfile(
-        nom: 'OUEDRAOGO',
-        prenoms: 'Mamadou',
-        matricule: 'PROF-70123456',
-        email: 'mamadou.ouedraogo@ist.bf',
-        telephone: '70123456',
-        filiere: 'Algorithmes & Reseaux',
-        motDePasse: 'prof123',
-        domaine: 'Sciences & Technologies',
-        role: 'professeur',
-      ),
-    );
-  }
-
-  void _setError(String msg) =>
-      setState(() { _error = msg; _loading = false; });
 
   void _recommencer() => setState(() {
     _etape = _Etape.saisie; _userTrouve = null; _error = null;

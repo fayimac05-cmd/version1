@@ -37,7 +37,7 @@ exports.updateModule = async (req, res) => {
       'UPDATE modules SET nom = $1, coefficient = $2, volume_horaire = $3 WHERE id = $4 RETURNING *',
       [nom, coefficient, volume_horaire, id]
     );
-    if (result.rows.length === 0) return res.status(440).json({ error: 'Module non trouvé' });
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Module non trouvé' });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
