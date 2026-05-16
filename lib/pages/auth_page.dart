@@ -104,72 +104,31 @@ class _AuthPageState extends State<AuthPage> {
 
   // ── Navigation vers le dashboard ─────────────────────────────────────
   void _goToDashboard(StudentProfile profile) {
+    void logout() => Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
+
+    final Widget destination;
+    switch (profile.role) {
+      case 'admin':
+      case 'bde':
+        destination = AdminShell(profile: profile, onLogout: logout);
+        break;
+      case 'professeur':
+        destination = ProfessorShell(profile: profile, onLogout: logout);
+        break;
+      case 'parent':
+        destination = ParentShell(
+          nomEnfant: '${profile.prenoms} ${profile.nom}',
+          onLogout: logout,
+        );
+        break;
+      default:
+        destination = StudentShell(profile: profile, onLogout: logout);
+    }
+
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) {
-        void logout() => Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
-
-        if (profile.role == 'admin' || profile.role == 'bde') {
-          return AdminShell(profile: profile, onLogout: logout);
-        }
-        if (profile.role == 'professeur') {
-          return ProfessorShell(profile: profile, onLogout: logout);
-        }
-        if (profile.role == 'parent') {
-          return ParentShell(
-            nomEnfant: '${profile.prenoms} ${profile.nom}',
-            onLogout: logout,
-          );
-        }
-        return StudentShell(profile: profile, onLogout: logout);
-      }),
-  final role = profile.role;
-  Widget destination;
-
-  if (role == 'admin' || role == 'bde') {
-    destination = AdminShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else if (role == 'professeur') {
-    destination = ProfessorShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else if (role == 'parent') {
-    destination = ParentShell(
-      nomEnfant: '${profile.prenoms} ${profile.nom}',
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    );
-  } else {
-    destination = StudentShell(
-      profile: profile,
-      onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false),
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (dashboardContext) {
-          void logout() {
-            Navigator.of(dashboardContext).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const SplashScreen()),
-              (_) => false,
-            );
-          }
-
-          if (profile.role == 'professeur') {
-            return ProfessorShell(profile: profile, onLogout: logout);
-          }
-
-          return StudentShell(profile: profile, onLogout: logout);
-        },
-      ),
-      (_) => false,
-    );
+        MaterialPageRoute(builder: (_) => destination), (_) => false);
   }
-
   // ── Vérifier identité ────────────────────────────────────────────────
   void _verifier() async {
     setState(() { _loading = true; _error = null; });
@@ -274,67 +233,6 @@ class _AuthPageState extends State<AuthPage> {
   ));
 
   void _setError(String msg) => setState(() { _error = msg; _loading = false; });
-  // ── Accès démo IBRAHIM ────────────────────────────────────────────────
-  void _demoBrahim() {
-    _goToDashboard(const StudentProfile(
-      nom: 'KOURAOGO', prenoms: 'Ibrahim',
-      matricule: '24IST-O2/1851',
-      email: 'ibrahim.kouraogo@ist.bf',
-      telephone: '',
-      filiere: 'Réseaux Informatiques et Télécom',
-      motDePasse: '1851',
-      domaine: 'Sciences & Technologies',
-      role: 'etudiant',
-    ));
-    _goToDashboard(
-      const StudentProfile(
-        nom: 'KOURAOGO',
-        prenoms: 'Ibrahim',
-        matricule: '24IST-O2/1851',
-        email: 'ibrahim.kouraogo@ist.bf',
-        telephone: '',
-        filiere: 'Réseaux Informatiques et Télécom',
-        motDePasse: '1851',
-        domaine: 'Sciences & Technologies',
-        role: 'etudiant',
-      ),
-    );
-  }
-  void _goToParentDashboard(StudentProfile profile) {
-  Navigator.of(context).pushAndRemoveUntil(
-    MaterialPageRoute(
-      builder: (parentContext) => ParentShell(
-        nomEnfant: profile.nom,
-        onLogout: () {
-          Navigator.of(parentContext).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const SplashScreen()),
-            (_) => false,
-          );
-        },
-      ),
-    ),
-    (_) => false,
-  );
-}
-
-  void _demoProf() {
-    _goToDashboard(
-      const StudentProfile(
-        nom: 'OUEDRAOGO',
-        prenoms: 'Mamadou',
-        matricule: 'PROF-70123456',
-        email: 'mamadou.ouedraogo@ist.bf',
-        telephone: '70123456',
-        filiere: 'Algorithmes & Reseaux',
-        motDePasse: 'prof123',
-        domaine: 'Sciences & Technologies',
-        role: 'professeur',
-      ),
-    );
-  }
-
-  void _setError(String msg) =>
-      setState(() { _error = msg; _loading = false; });
 
   void _recommencer() => setState(() {
     _etape = _Etape.saisie; _userTrouve = null; _error = null;
