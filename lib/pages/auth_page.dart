@@ -127,6 +127,26 @@ class _AuthPageState extends State<AuthPage> {
     }
 
     Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) {
+        void logout() => Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
+
+        if (profile.role == 'admin' || profile.role == 'bde') {
+          return AdminShell(profile: profile, onLogout: logout);
+        }
+        if (profile.role == 'professeur') {
+          return ProfessorShell(profile: profile, onLogout: logout);
+        }
+        if (profile.role == 'parent') {
+          return ParentShell(
+            nomEnfant: '${profile.prenoms} ${profile.nom}',
+            onLogout: logout,
+          );
+        }
+        return StudentShell(profile: profile, onLogout: logout);
+      }),
+      (_) => false,
+    );
         MaterialPageRoute(builder: (_) => destination), (_) => false);
   }
   // ── Vérifier identité ────────────────────────────────────────────────

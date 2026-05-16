@@ -81,7 +81,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Nouvel Événement',
+          'Nouvel Événemenst',
           style: TextStyle(color: textDark, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
