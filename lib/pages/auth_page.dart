@@ -120,8 +120,12 @@ class _AuthPageState extends State<AuthPage> {
           return ProfessorShell(profile: profile, onLogout: logout);
         }
         if (profile.role == 'parent') {
+          // Seydou KOURAOGO est le tuteur de l'étudiant Ibrahim KOURAOGO
+          final childName = (profile.nom == 'KOURAOGO' && profile.prenoms == 'Seydou')
+              ? 'Ibrahim KOURAOGO'
+              : 'Ibrahim KOURAOGO'; // Valeur par défaut pour la démo parent
           return ParentShell(
-            nomEnfant: '${profile.prenoms} ${profile.nom}',
+            nomEnfant: childName,
             onLogout: logout,
           );
         }
