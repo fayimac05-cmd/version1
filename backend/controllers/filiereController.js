@@ -30,7 +30,7 @@ exports.updateFiliere = async (req, res) => {
       'UPDATE filieres SET nom = $1, description = $2 WHERE id = $3 RETURNING *',
       [nom, description, id]
     );
-    if (result.rows.length === 0) return res.status(440).json({ error: 'Filière non trouvée' });
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Filière non trouvée' });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -41,8 +41,14 @@ CREATE TABLE membres (
 -- Table des étudiants
 CREATE TABLE etudiants (
     id SERIAL PRIMARY KEY,
+    matricule VARCHAR(50) UNIQUE NOT NULL,
     nom VARCHAR(255) NOT NULL,
-    filiere_id INTEGER REFERENCES filieres(id)
+    prenoms VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255), -- Peut être nul si premiereFois est true
+    filiere_id INTEGER REFERENCES filieres(id),
+    premiereFois BOOLEAN DEFAULT TRUE,
+    role VARCHAR(50) DEFAULT 'etudiant'
 );
 
 -- Table des notes (pour les statistiques)

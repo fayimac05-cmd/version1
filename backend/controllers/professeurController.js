@@ -30,7 +30,7 @@ exports.updateProfesseur = async (req, res) => {
       'UPDATE professeurs SET nom = $1, email = $2, specialite = $3 WHERE id = $4 RETURNING *',
       [nom, email, specialite, id]
     );
-    if (result.rows.length === 0) return res.status(440).json({ error: 'Professeur non trouvé' });
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Professeur non trouvé' });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
