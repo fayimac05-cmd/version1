@@ -28,7 +28,7 @@ const login = async (req, res) => {
     if (user.statut === 'renvoye')  return res.status(403).json({ message: 'Compte desactive.' });
 
     if (!user.mot_de_passe) {
-      return res.status(200).json({ premierLogin: true, userId: user.id, message: 'Premiere connexion — creez votre mot de passe.' });
+      return res.status(200).json({ premierLogin: true, userId: user.id, message: 'Premiere connexion.' });
     }
 
     const isValid = await bcrypt.compare(motDePasse, user.mot_de_passe);

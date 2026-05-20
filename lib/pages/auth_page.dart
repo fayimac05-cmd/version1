@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../pages/student_shell.dart';
@@ -9,10 +10,6 @@ import 'bureau_des_etudiants.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/auth_service.dart';
-
-// ════════════════════════════════════════════════════════════════════════════
-// BASE DE DONNÉES SIMULÉE
-// ════════════════════════════════════════════════════════════════════════════
 final Map<String, Map<String, dynamic>> _dbEtudiants = {
   '24IST-O2/1851': {
     'nom': 'KOURAOGO', 'prenoms': 'Ibrahim',
@@ -65,9 +62,6 @@ final Map<String, Map<String, dynamic>> _dbParents = {
 
 enum _Etape { saisie, motDePasse, premiereFois }
 
-// ════════════════════════════════════════════════════════════════════════════
-// PAGE AUTH
-// ════════════════════════════════════════════════════════════════════════════
 class AuthPage extends StatefulWidget {
   final Etablissement etablissement;
   const AuthPage({super.key, required this.etablissement});
@@ -103,149 +97,99 @@ class _AuthPageState extends State<AuthPage> {
     super.dispose();
   }
 
-  // ── Navigation vers le dashboard ─────────────────────────────────────
   void _goToDashboard(StudentProfile profile) {
+    void logout() => Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
+
+    final Widget destination;
+    switch (profile.role) {
+      case 'admin':
+        destination = AdminShell(profile: profile, onLogout: logout);
+        break;
+      case 'bde':
+        destination = const BureauDesEtudiantsScreen();
+        break;
+      case 'professeur':
+        destination = ProfessorShell(profile: profile, onLogout: logout);
+        break;
+      case 'parent':
+        destination = ParentShell(
+          nomEnfant: '${profile.prenoms} ${profile.nom}',
+          onLogout: logout,
+        );
+        break;
+      default:
+        destination = StudentShell(profile: profile, onLogout: logout);
+    }
+
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (routeContext) {
-        void logout() => Navigator.of(routeContext).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
-
-        if (profile.role == 'admin') {
-          return AdminShell(profile: profile, onLogout: logout);
-        }
-        if (profile.role == 'bde') {
-          return const BureauDesEtudiantsScreen();
-        }
-        if (profile.role == 'professeur') {
-          return ProfessorShell(profile: profile, onLogout: logout);
-        }
-        if (profile.role == 'parent') {
-          // Seydou KOURAOGO est le tuteur de l'étudiant Ibrahim KOURAOGO
-          final childName = (profile.nom == 'KOURAOGO' && profile.prenoms == 'Seydou')
-              ? 'Ibrahim KOURAOGO'
-              : 'Ibrahim KOURAOGO'; // Valeur par défaut pour la démo parent
-          return ParentShell(
-            nomEnfant: childName,
-            onLogout: logout,
-          );
-        }
-        return StudentShell(profile: profile, onLogout: logout);
-      }),
-      (_) => false,
-    );
+        MaterialPageRoute(builder: (_) => destination), (_) => false);
   }
 
-  // ── Vérifier identité ────────────────────────────────────────────────
-  void _verifier() async {
-    setState(() { _loading = true; _error = null; });
-    
-    // Tentative de connexion via API
-    if (_tab == 0) {
-      final mat = _matriculeCtrl.text.trim().toUpperCase();
-      if (mat.isEmpty) { _setError('Veuillez saisir votre matricule.'); return; }
-      
-      // On vérifie d'abord si c'est un utilisateur connu dans la démo (fallback)
-      final demoUser = _dbEtudiants[mat];
-      if (demoUser != null) {
-        setState(() { _userTrouve = demoUser; _cleTrouvee = mat; _loading = false; });
-      } else {
-        // Sinon on appelle le backend (futur)
-        // Pour l'instant on reste sur la simulation si le serveur est absent
-        _setError('Matricule non reconnu.\nUtilisez un accès démo pour tester.');
-        setState(() => _loading = false);
-        return;
-      }
-    } else {
-      final nom    = _nomCtrl.text.trim().toLowerCase();
-      final prenom = _prenomCtrl.text.trim().toLowerCase();
-      final num    = _numeroCtrl.text.trim();
-      if (nom.isEmpty || prenom.isEmpty || num.isEmpty) {
-        _setError('Veuillez remplir tous les champs.'); return;
-      }
-      final key  = '$nom $prenom $num';
-      final user = _dbProfs[key] ?? _dbParents[key];
-      if (user == null) {
-        _setError('Aucun compte trouvé.\nVérifiez l\'orthographe ou votre numéro.');
-        return;
-      }
-      setState(() {
-        _userTrouve = user;
-        _cleTrouvee = '${user['role'].toString().toUpperCase()}-$num';
-        _loading = false;
-      });
-    }
+void _verifier() async {
+  setState(() { _loading = true; _error = null; });
 
-    await Future.delayed(const Duration(milliseconds: 200));
-    setState(() => _etape = _userTrouve!['premiereFois'] == true
-        ? _Etape.premiereFois : _Etape.motDePasse);
+  final mat = _matriculeCtrl.text.trim().toUpperCase();
+  if (mat.isEmpty) { _setError('Veuillez saisir votre matricule.'); return; }
+
+  // Simuler la vérification du matricule côté backend
+  // On vérifie juste que le matricule existe dans notre DB simulée
+  final user = _dbEtudiants[mat];
+  if (user == null) {
+    _setError('Matricule non reconnu.\nContactez l\'administration.');
+    return;
   }
 
-  // ── Connexion réelle ou simulée ──────────────────────────────────────
+  setState(() {
+    _userTrouve = user;
+    _cleTrouvee = mat;
+    _loading = false;
+    _etape = user['premiereFois'] == true ? _Etape.premiereFois : _Etape.motDePasse;
+  });
+}
+
+
   void _connecter() async {
-    setState(() { _loading = true; _error = null; });
-    
-    // 1. On tente d'abord l'API réelle
-    final result = await AuthService.login(
-      _cleTrouvee!, 
-      _passCtrl.text, 
-      isStudent: _userTrouve!['role'] == 'etudiant'
-    );
+  setState(() { _loading = true; _error = null; });
 
-    if (result['success']) {
-      setState(() => _loading = false);
-      // On construit le profil à partir des données réelles
-      final data = result['data']['user'];
-      _goToDashboard(StudentProfile(
-        nom: data['nom'] ?? _userTrouve!['nom'],
-        prenoms: data['prenoms'] ?? _userTrouve!['prenoms'],
-        matricule: data['matricule'] ?? _cleTrouvee!,
-        email: data['email'] ?? '',
-        telephone: '',
-        filiere: _userTrouve!['filiere'],
-        motDePasse: _passCtrl.text,
-        domaine: _userTrouve!['domaine'] ?? '',
-        role: data['role'] ?? _userTrouve!['role'],
-      ));
-      return;
-    }
-
-    // 2. Fallback simulation (si le serveur est éteint ou utilisateur démo)
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (_passCtrl.text == _userTrouve!['motDePasse']) {
-      setState(() => _loading = false);
-      _goToDashboard(_buildProfile(_passCtrl.text));
-    } else {
-      _setError(result['error'] ?? 'Mot de passe incorrect.');
-    }
+  if (_passCtrl.text.isEmpty) { 
+    _setError('Veuillez saisir votre mot de passe.'); 
+    return; 
   }
 
-  // ── Créer compte (1ère fois) ─────────────────────────────────────────
+  final result = await AuthService.login(
+  matricule: _cleTrouvee,
+  motDePasse: _passCtrl.text,
+);
+  if (result['success'] == true) {
+    setState(() => _loading = false);
+    final user = result['user'];
+    _goToDashboard(StudentProfile(
+      nom: user['nom'],
+      prenoms: user['prenoms'] ?? '',
+      matricule: user['matricule'] ?? _cleTrouvee!,
+      email: user['email'] ?? '',
+      telephone: user['tel'] ?? '',
+      filiere: user['filiere_id'] ?? '',
+      motDePasse: '',
+      domaine: user['domaine'] ?? '',
+      role: user['role'] ?? 'etudiant',
+    ));
+  } else {
+    _setError(result['error'] ?? 'Mot de passe incorrect.');
+  }
+}
   void _creerCompte() async {
     setState(() { _loading = true; _error = null; });
-    
+    await Future.delayed(const Duration(milliseconds: 800));
     if (_emailCtrl.text.isEmpty || _newPassCtrl.text.isEmpty || _confPassCtrl.text.isEmpty) {
       _setError('Veuillez remplir tous les champs.'); return;
     }
     if (!_emailCtrl.text.contains('@')) { _setError('Email invalide.'); return; }
     if (_newPassCtrl.text.length < 4) { _setError('Mot de passe : minimum 4 caractères.'); return; }
     if (_newPassCtrl.text != _confPassCtrl.text) { _setError('Les mots de passe ne correspondent pas.'); return; }
-
-    // Tentative API
-    final ok = await AuthService.finaliserCompte(
-      _userTrouve!['id'] ?? 0, 
-      _emailCtrl.text, 
-      _newPassCtrl.text
-    );
-
-    if (ok) {
-      setState(() => _loading = false);
-      _goToDashboard(_buildProfile(_newPassCtrl.text));
-    } else {
-      // Fallback démo
-      await Future.delayed(const Duration(milliseconds: 800));
-      setState(() => _loading = false);
-      _goToDashboard(_buildProfile(_newPassCtrl.text));
-    }
+    setState(() => _loading = false);
+    _goToDashboard(_buildProfile(_newPassCtrl.text));
   }
 
   StudentProfile _buildProfile(String mdp) {
@@ -259,7 +203,6 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
-  // ── Accès démo ────────────────────────────────────────────────────────
   void _demoBrahim() => _goToDashboard(const StudentProfile(
     nom: 'KOURAOGO', prenoms: 'Ibrahim', matricule: '24IST-O2/1851',
     email: 'ibrahim.kouraogo@ist.bf', telephone: '',
@@ -303,7 +246,6 @@ class _AuthPageState extends State<AuthPage> {
         _passCtrl, _emailCtrl, _newPassCtrl, _confPassCtrl]) c.clear();
   });
 
-  // ════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF8FAFC),
@@ -327,15 +269,10 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // ÉTAPE 1 — SAISIE
-  // ════════════════════════════════════════════════════════════════════════
   Widget _buildSaisie() {
     final e = widget.etablissement;
     return Column(key: const ValueKey('saisie'),
       crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-      // Header
       Row(children: [
         GestureDetector(
           onTap: () => Navigator.of(context).pop(),
@@ -354,10 +291,7 @@ class _AuthPageState extends State<AuthPage> {
               overflow: TextOverflow.ellipsis),
         ])),
       ]),
-
       const SizedBox(height: 28),
-
-      // Logo
       Center(child: Column(children: [
         Stack(alignment: Alignment.bottomRight, children: [
           Container(width: 80, height: 80,
@@ -384,10 +318,7 @@ class _AuthPageState extends State<AuthPage> {
                   fontWeight: FontWeight.w700)),
         ),
       ])),
-
       const SizedBox(height: 28),
-
-      // Switch onglets
       Container(
         decoration: BoxDecoration(color: AppPalette.lightBlue,
             borderRadius: BorderRadius.circular(12)),
@@ -401,10 +332,7 @@ class _AuthPageState extends State<AuthPage> {
       Text(_tab == 0 ? 'Pour : Étudiant, Administration, BDE'
                      : 'Pour : Professeur, Parent',
           style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-
       const SizedBox(height: 20),
-
-      // Champs
       if (_tab == 0) ...[
         _lbl('Matricule ${e.abreviation}'),
         _champ(_matriculeCtrl,
@@ -420,10 +348,8 @@ class _AuthPageState extends State<AuthPage> {
         _lbl('Numéro de téléphone'),
         _champ(_numeroCtrl, 'Ex: 70123456', Icons.phone_outlined, TextInputType.phone),
       ],
-
       if (_error != null) ...[const SizedBox(height: 14), _erreur(_error!)],
       const SizedBox(height: 20),
-
       SizedBox(width: double.infinity, height: 54,
         child: ElevatedButton(
           onPressed: _loading ? null : _verifier,
@@ -439,42 +365,31 @@ class _AuthPageState extends State<AuthPage> {
                   fontWeight: FontWeight.bold, letterSpacing: 1)),
         ),
       ),
-
       const SizedBox(height: 28),
-
       Row(children: [
         const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
         Padding(padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Text('ou', style: TextStyle(fontSize: 13, color: Colors.grey.shade400))),
         const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
       ]),
-
       const SizedBox(height: 20),
-
-      // ── Accès démo ────────────────────────────────────────────────────
       if (e.abreviation == 'IST') ...[
-        // Étudiant
         _demoBtn('⚡', 'Accès Démo — Ibrahim KOURAOGO', '24IST-O2/1851 · Étudiant RIT L2',
             AppPalette.blue, _demoBrahim),
         const SizedBox(height: 10),
-        // BDE
         _demoBtn('🎓', 'Accès Démo — BDE (Aïcha)', '24IST-BDE/001 · Bureau des Étudiants',
             const Color(0xFF0891B2), _demoBDE),
         const SizedBox(height: 10),
-        // Admin
         _demoBtn('🛡️', 'Accès Démo — Administration', '24IST-ADM/001 · Direction Pédagogique',
             const Color(0xFF1A3C34), _demoAdmin),
         const SizedBox(height: 10),
-        // Professeur
         _demoBtn('👨‍🏫', 'Accès Démo — Professeur', 'OUÉDRAOGO Mamadou · Algorithmes & Réseaux',
             const Color(0xFF7C3AED), _demoProf),
         const SizedBox(height: 10),
-        // Parent
         _demoBtn('👨‍👩‍👦', 'Accès Démo — Parent', 'KOURAOGO Seydou · Parent d\'Ibrahim',
             const Color(0xFFD97706), _demoParent),
         const SizedBox(height: 24),
       ] else const SizedBox(height: 8),
-
       if (_tab == 0) _infoMatricule(e),
     ]);
   }
@@ -497,9 +412,6 @@ class _AuthPageState extends State<AuthPage> {
               color: Color(0xFF64748B), fontStyle: FontStyle.italic))),
       ]);
 
-  // ════════════════════════════════════════════════════════════════════════
-  // ÉTAPE 2A — MOT DE PASSE
-  // ════════════════════════════════════════════════════════════════════════
   Widget _buildMotDePasse() => Column(key: const ValueKey('mdp'),
     crossAxisAlignment: CrossAxisAlignment.start, children: [
     _boutonRetour(_recommencer),
@@ -542,9 +454,6 @@ class _AuthPageState extends State<AuthPage> {
             style: TextStyle(color: Color(0xFF64748B), fontSize: 13)))),
   ]);
 
-  // ════════════════════════════════════════════════════════════════════════
-  // ÉTAPE 2B — PREMIÈRE CONNEXION
-  // ════════════════════════════════════════════════════════════════════════
   Widget _buildPremiereFois() => Column(key: const ValueKey('premier'),
     crossAxisAlignment: CrossAxisAlignment.start, children: [
     _boutonRetour(_recommencer),
@@ -591,9 +500,6 @@ class _AuthPageState extends State<AuthPage> {
             style: TextStyle(color: Color(0xFF64748B), fontSize: 13)))),
   ]);
 
-  // ════════════════════════════════════════════════════════════════════════
-  // WIDGETS PARTAGÉS
-  // ════════════════════════════════════════════════════════════════════════
   Widget _carteUser(Map<String, dynamic> u) {
     final role = u['role'] as String;
     final domaine = (u['domaine'] ?? '') as String;
