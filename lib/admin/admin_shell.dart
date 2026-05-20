@@ -171,12 +171,16 @@ class _AdminShellState extends State<AdminShell> {
         Padding(
           padding: EdgeInsets.symmetric(horizontal: c ? 8 : 12, vertical: 10),
           child: c ? Column(children: [
-            _sideBtn(Icons.dark_mode_outlined, 'Mode sombre', () {}),
+            _sideBtn(Icons.dark_mode_outlined, 'Mode sombre', () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mode sombre en cours de développement...')));
+            }),
             const SizedBox(height: 6),
             _sideBtn(Icons.logout_rounded, 'Déconnexion', _logout,
                 color: AdminTheme.danger),
           ]) : Row(children: [
-            _sideBtn(Icons.dark_mode_outlined, 'Mode sombre', () {}),
+            _sideBtn(Icons.dark_mode_outlined, 'Mode sombre', () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mode sombre en cours de développement...')));
+            }),
             const SizedBox(width: 8),
             Expanded(child: GestureDetector(
               onTap: _logout,

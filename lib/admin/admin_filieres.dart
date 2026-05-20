@@ -600,16 +600,16 @@ class _DetailFiliereState extends State<_DetailFiliere>
     padding: const EdgeInsets.all(20),
     child: Column(children: [
       _actionRow(Icons.campaign_rounded, 'Envoyer une annonce à la filière',
-          'Cibler uniquement les étudiants de ${f.nom}', color, () {}),
+          'Cibler uniquement les étudiants de ${f.nom}', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
       const SizedBox(height: 12),
       _actionRow(Icons.forum_rounded, 'Ouvrir le groupe de messagerie',
-          'Voir le groupe privé de la filière', color, () {}),
+          'Voir le groupe privé de la filière', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
       const SizedBox(height: 12),
       _actionRow(Icons.calendar_today_rounded, 'Emploi du temps',
-          'Voir ou modifier l\'emploi du temps', color, () {}),
+          'Voir ou modifier l\'emploi du temps', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
       const SizedBox(height: 12),
       _actionRow(Icons.grade_rounded, 'Notes de la filière',
-          'Voir toutes les notes et moyennes', color, () {}),
+          'Voir toutes les notes et moyennes', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
     ]),
   );
 

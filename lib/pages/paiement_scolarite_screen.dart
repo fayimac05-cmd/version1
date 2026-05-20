@@ -88,7 +88,7 @@ class PaiementScolariteScreen extends StatelessWidget {
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppPalette.yellow,
                   shape: RoundedRectangleBorder(

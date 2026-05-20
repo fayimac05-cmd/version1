@@ -147,7 +147,6 @@ class _AuthPageState extends State<AuthPage> {
       }),
       (_) => false,
     );
-        MaterialPageRoute(builder: (_) => destination), (_) => false);
   }
   // ── Vérifier identité ────────────────────────────────────────────────
   void _verifier() async {

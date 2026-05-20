@@ -29,7 +29,7 @@ class BulletinScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.download_rounded, color: Colors.white),
-            onPressed: () {},
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
           )
         ],
       ),

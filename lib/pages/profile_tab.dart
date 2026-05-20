@@ -109,7 +109,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _fermerPanel();
+    _fermerPanel(isDisposing: true);
     super.dispose();
   }
 
@@ -162,10 +162,14 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     Overlay.of(context).insert(_overlayEntry!);
   }
 
-  void _fermerPanel() {
+  void _fermerPanel({bool isDisposing = false}) {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    if (mounted) setState(() => _panelOuvert = false);
+    if (isDisposing) {
+      _panelOuvert = false;
+    } else {
+      if (mounted) setState(() => _panelOuvert = false);
+    }
   }
 
   // ── Dialog d'édition ──────────────────────────────────────────────────
@@ -727,7 +731,41 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
               SizedBox(
                 width: double.infinity, height: 54,
                 child: OutlinedButton.icon(
-                  onPressed: _confirmerDeconnexion,
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: const Row(children: [
+                          Icon(Icons.logout_rounded, color: Color(0xFFC62828)),
+                          SizedBox(width: 10),
+                          Text('Déconnexion', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                        ]),
+                        content: const Text('Voulez-vous vous déconnecter ?',
+                            style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Annuler', style: TextStyle(color: Color(0xFF64748B))),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.of(context).pushAndRemoveUntil(
+                                  MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFC62828),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text('Déconnecter'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.logout, color: Color(0xFFC62828)),
                   label: const Text('Se déconnecter',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,

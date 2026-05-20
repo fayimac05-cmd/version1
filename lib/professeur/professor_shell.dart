@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import '../pages/class_detail_screen.dart';
+import '../pages/splash_screen.dart';
+import '../pages/professor_course_detail_screen.dart';
 
 class ProfessorShell extends StatefulWidget {
   const ProfessorShell({
@@ -24,9 +26,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _ProgramTab(profile: widget.profile),
       const _ClassTab(),
-      const _UploadCourseTab(),
+      const _CoursesTab(),
       const _SendGradesTab(),
       _ProfessorProfileTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
@@ -50,18 +51,13 @@ class _ProfessorShellState extends State<ProfessorShell> {
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month_rounded),
-            label: 'Programme',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.groups_outlined),
             selectedIcon: Icon(Icons.groups_rounded),
-            label: 'Classe',
+            label: 'Classes',
           ),
           NavigationDestination(
-            icon: Icon(Icons.upload_file_outlined),
-            selectedIcon: Icon(Icons.upload_file_rounded),
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book_rounded),
             label: 'Cours',
           ),
           NavigationDestination(
@@ -123,158 +119,101 @@ class _ProfessorPage extends StatelessWidget {
   }
 }
 
-class _ProgramTab extends StatelessWidget {
-  const _ProgramTab({required this.profile});
-
-  final StudentProfile profile;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ProfessorPage(
-      title: 'Mon programme',
-      subtitle:
-          'Bienvenue ${profile.prenoms}. Voici vos cours et seances de la semaine.',
-      children: const [
-        _InfoCard(
-          icon: Icons.computer_rounded,
-          title: 'Lundi, 08:00 - 10:00',
-          subtitle: 'Reseaux informatiques - Licence 2',
-          tag: 'Salle B12',
-        ),
-        _InfoCard(
-          icon: Icons.hub_rounded,
-          title: 'Mercredi, 10:15 - 12:15',
-          subtitle: 'Architecture reseau - Licence 2',
-          tag: 'Labo 2',
-        ),
-        _InfoCard(
-          icon: Icons.assignment_rounded,
-          title: 'Vendredi, 14:00 - 16:00',
-          subtitle: 'Travaux diriges et evaluation continue',
-          tag: 'Salle A04',
-        ),
-      ],
-    );
-  }
-}
-
 class _ClassTab extends StatelessWidget {
   const _ClassTab();
 
   @override
   Widget build(BuildContext context) {
     return _ProfessorPage(
-      title: 'Ma classe',
-      subtitle:
-          'Suivez les effectifs, les groupes et les derniers points de classe.',
+      title: 'Mes classes',
+      subtitle: 'Suivez les effectifs et le détail de vos classes actives.',
       children: [
         const _MetricRow(),
         const SizedBox(height: 16),
         _InfoCard(
           icon: Icons.school_rounded,
-          title: 'Licence 2 Reseaux & Telecom',
-          subtitle: '38 etudiants inscrits, 4 groupes de TD',
-          tag: 'Classe active',
+          title: 'Licence 2 Réseaux & Telecom',
+          subtitle: '38 étudiants inscrits, 4 groupes de TD',
+          tag: 'Gérer',
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ClassDetailScreen(className: 'Licence 2 Reseaux & Telecom', studentCount: 38)));
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ClassDetailScreen(
+                  className: 'Licence 2 Réseaux & Telecom',
+                  studentCount: 38,
+                ),
+              ),
+            );
           },
         ),
-        const _InfoCard(
-          icon: Icons.group_work_rounded,
-          title: 'Groupes de travail',
-          subtitle: 'Groupe A, B, C et D disponibles pour les devoirs.',
-          tag: '4 groupes',
-        ),
-        const _InfoCard(
-          icon: Icons.warning_amber_rounded,
-          title: 'Suivi pedagogique',
-          subtitle: '3 etudiants a accompagner sur les derniers exercices.',
-          tag: 'A verifier',
+        _InfoCard(
+          icon: Icons.school_rounded,
+          title: 'Licence 3 Informatique',
+          subtitle: '45 étudiants inscrits, 5 groupes de TD',
+          tag: 'Gérer',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ClassDetailScreen(
+                  className: 'Licence 3 Informatique',
+                  studentCount: 45,
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
   }
 }
 
-class _UploadCourseTab extends StatefulWidget {
-  const _UploadCourseTab();
-
-  @override
-  State<_UploadCourseTab> createState() => _UploadCourseTabState();
-}
-
-class _UploadCourseTabState extends State<_UploadCourseTab> {
-  final _titleCtrl = TextEditingController();
-  final _chapterCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _titleCtrl.dispose();
-    _chapterCtrl.dispose();
-    super.dispose();
-  }
-
-  void _publish() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Cours televerse et rendu disponible pour la classe.'),
-        backgroundColor: Color(0xFF15803D),
-      ),
-    );
-    _titleCtrl.clear();
-    _chapterCtrl.clear();
-  }
+class _CoursesTab extends StatelessWidget {
+  const _CoursesTab();
 
   @override
   Widget build(BuildContext context) {
+    final courses = [
+      {
+        'name': 'Réseaux Informatiques',
+        'class': 'Licence 2 Réseaux & Telecom',
+        'students': '38 étudiants',
+      },
+      {
+        'name': 'Architecture Réseau',
+        'class': 'Licence 2 Réseaux & Telecom',
+        'students': '38 étudiants',
+      },
+      {
+        'name': 'Administration Linux',
+        'class': 'Licence 3 Informatique',
+        'students': '45 étudiants',
+      },
+    ];
+
     return _ProfessorPage(
-      title: 'Televerser un cours',
-      subtitle: 'Ajoutez un support de cours pour vos etudiants.',
-      children: [
-        _FormCard(
-          children: [
-            _Input(
-              controller: _titleCtrl,
-              label: 'Titre du cours',
-              icon: Icons.title,
-            ),
-            const SizedBox(height: 14),
-            _Input(
-              controller: _chapterCtrl,
-              label: 'Chapitre ou description',
-              icon: Icons.notes,
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppPalette.lightBlue,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppPalette.blue.withOpacity(0.18)),
+      title: 'Mes cours',
+      subtitle: 'Sélectionnez un cours pour gérer et publier les supports.',
+      children: courses.map((course) {
+        return _InfoCard(
+          icon: Icons.menu_book_rounded,
+          title: course['name']!,
+          subtitle: '${course['class']} • ${course['students']}',
+          tag: 'Détail',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProfessorCourseDetailScreen(
+                  courseName: course['name']!,
+                  className: course['class']!,
+                ),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.attach_file_rounded, color: AppPalette.blue),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Selection du fichier PDF, Word ou PowerPoint',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            _PrimaryButton(
-              label: 'Televerser le cours',
-              icon: Icons.cloud_upload_rounded,
-              onPressed: _publish,
-            ),
-          ],
-        ),
-      ],
+            );
+          },
+        );
+      }).toList(),
     );
   }
 }
@@ -287,7 +226,7 @@ class _SendGradesTab extends StatefulWidget {
 }
 
 class _SendGradesTabState extends State<_SendGradesTab> {
-  final _courseCtrl = TextEditingController(text: 'Reseaux informatiques');
+  final _courseCtrl = TextEditingController(text: 'Réseaux informatiques');
   final _notesCtrl = TextEditingController();
 
   @override
@@ -298,9 +237,19 @@ class _SendGradesTabState extends State<_SendGradesTab> {
   }
 
   void _send() {
+    if (_notesCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez saisir des notes ou commentaires.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Notes envoyees a l administration.'),
+        content: Text('Notes envoyées avec succès au secrétariat académique !'),
         backgroundColor: Color(0xFF15803D),
       ),
     );
@@ -310,26 +259,27 @@ class _SendGradesTabState extends State<_SendGradesTab> {
   @override
   Widget build(BuildContext context) {
     return _ProfessorPage(
-      title: 'Envoyer les notes',
-      subtitle: 'Transmettez les notes finalisees au service administratif.',
+      title: 'Saisie des notes',
+      subtitle:
+          'Formulaire de saisie et de transmission des notes des étudiants.',
       children: [
         _FormCard(
           children: [
             _Input(
               controller: _courseCtrl,
-              label: 'Matiere',
+              label: 'Module ou Matière',
               icon: Icons.menu_book_outlined,
             ),
             const SizedBox(height: 14),
             _Input(
               controller: _notesCtrl,
-              label: 'Notes ou commentaire',
+              label: 'Notes (ex: Alexandre: 15/20, Marie: 18/20...)',
               icon: Icons.edit_note_rounded,
               maxLines: 5,
             ),
             const SizedBox(height: 18),
             _PrimaryButton(
-              label: 'Envoyer a l administration',
+              label: 'Transmettre au secrétariat',
               icon: Icons.send_rounded,
               onPressed: _send,
             ),
@@ -349,21 +299,174 @@ class _ProfessorProfileTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ProfessorPage(
-      title: 'Profil professeur',
-      subtitle: 'Compte de demonstration professeur.',
+      title: 'Mon Profil',
+      subtitle: 'Espace Enseignant Universitaire',
       children: [
-        _InfoCard(
-          icon: Icons.person_rounded,
-          title: '${profile.prenoms} ${profile.nom}',
-          subtitle: profile.filiere,
-          tag: 'Professeur',
+        Center(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppPalette.yellow, width: 3),
+                ),
+                child: const CircleAvatar(
+                  radius: 40,
+                  backgroundColor: AppPalette.blue,
+                  child: Icon(Icons.school, size: 48, color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Dr. ${profile.prenoms} ${profile.nom}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const Text(
+                'Enseignant - Chercheur',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Divider(color: Color(0xFFE2E8F0)),
+        const SizedBox(height: 16),
+        const Text(
+          'Détails Professionnels',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
+          ),
         ),
         const SizedBox(height: 12),
-        _PrimaryButton(
-          label: 'Se deconnecter',
-          icon: Icons.logout_rounded,
-          onPressed: onLogout,
-          color: const Color(0xFFDC2626),
+        _infoLigne(
+          Icons.alternate_email,
+          'Email Académique',
+          '${profile.prenoms.toLowerCase()}.${profile.nom.toLowerCase()}@ist.bf',
+        ),
+        const SizedBox(height: 12),
+        _infoLigne(Icons.phone_outlined, 'Téléphone', '+226 75 00 00 00'),
+        const SizedBox(height: 12),
+        _infoLigne(Icons.domain_rounded, 'Département', profile.filiere),
+        const SizedBox(height: 12),
+        _infoLigne(
+          Icons.class_outlined,
+          'Responsabilité',
+          'Responsable de la filière R&T',
+        ),
+        const SizedBox(height: 32),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Row(
+                    children: [
+                      Icon(Icons.logout_rounded, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text(
+                        'Déconnexion',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: const Text(
+                    'Voulez-vous vous déconnecter ?',
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        'Annuler',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (_) => const SplashScreen(),
+                          ),
+                          (_) => false,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Déconnecter'),
+                    ),
+                  ],
+                ),
+              );
+            },
+            icon: const Icon(Icons.logout, color: Colors.red),
+            label: const Text(
+              'Se déconnecter',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.red, width: 1.5),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoLigne(IconData icon, String lbl, String val) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.grey, size: 20),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              lbl,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              val,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -391,67 +494,67 @@ class _InfoCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppPalette.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
-            child: Icon(icon, color: AppPalette.blue),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppPalette.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: AppPalette.blue),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
-                    height: 1.35,
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                      height: 1.35,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            tag,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppPalette.blue,
-              fontWeight: FontWeight.w700,
+            const SizedBox(width: 10),
+            Text(
+              tag,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppPalette.blue,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

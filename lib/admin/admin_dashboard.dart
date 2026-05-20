@@ -125,7 +125,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   Widget _alertChip(String label, IconData icon) => GestureDetector(
-    onTap: () {},
+    onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -406,7 +406,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   Widget _actionBtn(String label, Color fg, Color bg) => GestureDetector(
-    onTap: () {},
+    onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: bg,
@@ -462,7 +462,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             const SizedBox(width: 10),
             Expanded(child: Text(title, style: AdminTheme.headingSmall)),
             if (action != null)
-              TextButton(onPressed: () {},
+              TextButton(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
                   child: Text(action, style: const TextStyle(
                       fontSize: 12, color: AdminTheme.primary,
                       fontWeight: FontWeight.w600))),

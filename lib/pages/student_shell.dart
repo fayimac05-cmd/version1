@@ -6,7 +6,6 @@ import 'home_tab.dart';
 import 'notes_tab.dart';
 import 'planning_tab.dart';
 import 'profile_tab.dart';
-import 'chat_ia_screen.dart';
 
 class StudentShell extends StatefulWidget {
   const StudentShell({
@@ -87,7 +86,6 @@ class _StudentShellState extends State<StudentShell> {
       const CoursesTab(),
       const NotesTab(),
       const PlanningTab(),
-      ChatIAScreen(profile: widget.profile),
       ProfileTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
@@ -136,11 +134,6 @@ class _StudentShellState extends State<StudentShell> {
               icon: Icon(Icons.calendar_month_outlined),
               selectedIcon: Icon(Icons.calendar_month_rounded),
               label: 'Planning',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.smart_toy_outlined),
-              selectedIcon: Icon(Icons.smart_toy_rounded),
-              label: 'IA',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline),

@@ -228,7 +228,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                 ],
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
                 child: const Text('Voir tout', style: TextStyle(color: primaryBlue, fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             ],
@@ -305,7 +305,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   if (canEdit)
                     IconButton(
                       visualDensity: VisualDensity.compact,
-                      onPressed: () {},
+                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
                       icon: const Icon(Icons.edit_outlined, size: 18, color: primaryBlue),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
