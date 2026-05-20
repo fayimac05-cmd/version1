@@ -9,7 +9,7 @@ import 'choose_school_page.dart';
 import 'bureau_des_etudiants.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
-
+import '../services/auth_service.dart';
 final Map<String, Map<String, dynamic>> _dbEtudiants = {
   '24IST-O2/1851': {
     'nom': 'KOURAOGO', 'prenoms': 'Ibrahim',
@@ -126,53 +126,59 @@ class _AuthPageState extends State<AuthPage> {
         MaterialPageRoute(builder: (_) => destination), (_) => false);
   }
 
-  void _verifier() async {
-    setState(() { _loading = true; _error = null; });
-    await Future.delayed(const Duration(milliseconds: 900));
+void _verifier() async {
+  setState(() { _loading = true; _error = null; });
 
-    if (_tab == 0) {
-      final mat = _matriculeCtrl.text.trim().toUpperCase();
-      if (mat.isEmpty) { _setError('Veuillez saisir votre matricule.'); return; }
-      final user = _dbEtudiants[mat];
-      if (user == null) {
-        _setError('Matricule non reconnu dans ${widget.etablissement.abreviation}.\nContactez l\'administration.');
-        return;
-      }
-      setState(() { _userTrouve = user; _cleTrouvee = mat; _loading = false; });
-    } else {
-      final nom    = _nomCtrl.text.trim().toLowerCase();
-      final prenom = _prenomCtrl.text.trim().toLowerCase();
-      final num    = _numeroCtrl.text.trim();
-      if (nom.isEmpty || prenom.isEmpty || num.isEmpty) {
-        _setError('Veuillez remplir tous les champs.'); return;
-      }
-      final key  = '$nom $prenom $num';
-      final user = _dbProfs[key] ?? _dbParents[key];
-      if (user == null) {
-        _setError('Aucun compte trouvé.\nVérifiez l\'orthographe ou votre numéro.');
-        return;
-      }
-      setState(() {
-        _userTrouve = user;
-        _cleTrouvee = '${user['role'].toString().toUpperCase()}-$num';
-        _loading = false;
-      });
-    }
+  final mat = _matriculeCtrl.text.trim().toUpperCase();
+  if (mat.isEmpty) { _setError('Veuillez saisir votre matricule.'); return; }
 
-    await Future.delayed(const Duration(milliseconds: 200));
-    setState(() => _etape = _userTrouve!['premiereFois'] == true
-        ? _Etape.premiereFois : _Etape.motDePasse);
+  // Simuler la vérification du matricule côté backend
+  // On vérifie juste que le matricule existe dans notre DB simulée
+  final user = _dbEtudiants[mat];
+  if (user == null) {
+    _setError('Matricule non reconnu.\nContactez l\'administration.');
+    return;
   }
+
+  setState(() {
+    _userTrouve = user;
+    _cleTrouvee = mat;
+    _loading = false;
+    _etape = user['premiereFois'] == true ? _Etape.premiereFois : _Etape.motDePasse;
+  });
+}
+
 
   void _connecter() async {
-    setState(() { _loading = true; _error = null; });
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (_passCtrl.text.isEmpty) { _setError('Veuillez saisir votre mot de passe.'); return; }
-    if (_passCtrl.text != _userTrouve!['motDePasse']) { _setError('Mot de passe incorrect.'); return; }
-    setState(() => _loading = false);
-    _goToDashboard(_buildProfile(_passCtrl.text));
+  setState(() { _loading = true; _error = null; });
+
+  if (_passCtrl.text.isEmpty) { 
+    _setError('Veuillez saisir votre mot de passe.'); 
+    return; 
   }
 
+  final result = await AuthService.login(
+  matricule: _cleTrouvee,
+  motDePasse: _passCtrl.text,
+);
+  if (result['success'] == true) {
+    setState(() => _loading = false);
+    final user = result['user'];
+    _goToDashboard(StudentProfile(
+      nom: user['nom'],
+      prenoms: user['prenoms'] ?? '',
+      matricule: user['matricule'] ?? _cleTrouvee!,
+      email: user['email'] ?? '',
+      telephone: user['tel'] ?? '',
+      filiere: user['filiere_id'] ?? '',
+      motDePasse: '',
+      domaine: user['domaine'] ?? '',
+      role: user['role'] ?? 'etudiant',
+    ));
+  } else {
+    _setError(result['error'] ?? 'Mot de passe incorrect.');
+  }
+}
   void _creerCompte() async {
     setState(() { _loading = true; _error = null; });
     await Future.delayed(const Duration(milliseconds: 800));

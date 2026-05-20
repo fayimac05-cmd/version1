@@ -1,51 +1,95 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/student_profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://localhost:5000/api';
+  static const String baseUrl = 'http://localhost:3000/api';
 
-  // Connexion générique (Étudiant ou Membre/Prof)
-  static Future<Map<String, dynamic>> login(String identifier, String password, {bool isStudent = true}) async {
+  static Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', token);
+  }
+
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  static Future<void> clearToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('token');
+  }
+
+  static Future<Map<String, String>> getHeaders() async {
+    final token = await getToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  static Future<Map<String, dynamic>> login({
+    String? matricule,
+    String? nom,
+    String? tel,
+    required String motDePasse,
+  }) async {
     try {
-      final endpoint = isStudent ? '/etudiants/login' : '/membres/login';
+      final body = matricule != null
+          ? {'matricule': matricule, 'motDePasse': motDePasse}
+          : {'nom': nom, 'tel': tel, 'motDePasse': motDePasse};
+
       final response = await http.post(
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse('$baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(isStudent 
-          ? {'matricule': identifier, 'password': password}
-          : {'email': identifier, 'password': password}
-        ),
+        body: jsonEncode(body),
       );
 
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200) {
-        return {'success': true, 'data': data};
-      } else if (isStudent && response.statusCode == 200 && data['premiereFois'] == true) {
-        return {'success': true, 'premiereFois': true, 'student': data['student']};
+      if (response.statusCode == 200 && data['token'] != null) {
+        await saveToken(data['token']);
+        return {'success': true, 'user': data['user']};
+      } else if (data['premierLogin'] == true) {
+        return {'success': true, 'premierLogin': true, 'userId': data['userId']};
       } else {
-        return {'success': false, 'error': data['error'] ?? 'Erreur d\'authentification'};
+        return {'success': false, 'error': data['message'] ?? 'Erreur de connexion'};
       }
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable ($baseUrl)'};
+      return {'success': false, 'error': 'Serveur injoignable. Verifiez votre connexion.'};
     }
   }
 
-  static Future<bool> finaliserCompte(int id, String email, String password) async {
+  static Future<bool> setupPassword({
+    required String userId,
+    required String email,
+    required String motDePasse,
+  }) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/etudiants/finaliser'),
+        Uri.parse('$baseUrl/auth/setup-password'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'id': id,
-          'email': email,
-          'password': password,
-        }),
+        body: jsonEncode({'userId': userId, 'email': email, 'motDePasse': motDePasse}),
       );
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getMe() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/me'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 }
