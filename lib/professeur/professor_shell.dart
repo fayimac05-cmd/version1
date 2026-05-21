@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../models/student_profile.dart';
+import '../models/class_model.dart';
 import '../theme/app_palette.dart';
 import '../pages/class_detail_screen.dart';
 import '../pages/splash_screen.dart';
 import '../pages/professor_course_detail_screen.dart';
+import 'class_detail_screen.dart';
+import 'confirm_screens.dart';
+import 'mock_data.dart';
 
 class ProfessorShell extends StatefulWidget {
   const ProfessorShell({
@@ -29,6 +33,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
       const _ClassTab(),
       const _CoursesTab(),
       const _SendGradesTab(),
+      const _UploadCourseTab(),
+      _SendGradesTab(onNavigateToTab: (i) => setState(() => _currentTab = i)),
       _ProfessorProfileTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
@@ -171,6 +177,221 @@ class _ClassTab extends StatelessWidget {
 
 class _CoursesTab extends StatelessWidget {
   const _CoursesTab();
+      subtitle:
+          'Sélectionnez une classe pour faire l\'appel et gérer les notes.',
+      children: [
+        const _MetricRow(),
+        const SizedBox(height: 16),
+        ...mockClasses.asMap().entries.map(
+          (entry) =>
+              _AnimatedClassCard(classData: entry.value, index: entry.key),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnimatedClassCard extends StatelessWidget {
+  const _AnimatedClassCard({required this.classData, required this.index});
+
+  final ClassModel classData;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 700),
+      curve: Interval(
+        (index * 0.1).clamp(0.0, 1.0),
+        1.0,
+        curve: Curves.easeOutQuart,
+      ),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 40 * (1 - value)),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
+      child: _ClassCard(classData: classData),
+    );
+  }
+}
+
+class _ClassCard extends StatefulWidget {
+  const _ClassCard({required this.classData});
+
+  final ClassModel classData;
+
+  @override
+  State<_ClassCard> createState() => _ClassCardState();
+}
+
+class _ClassCardState extends State<_ClassCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.96,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) => _controller.reverse(),
+      onTapCancel: () => _controller.reverse(),
+      onTap: () {
+        Future.delayed(const Duration(milliseconds: 150), () {
+          Navigator.of(context).push(
+            PageRouteBuilder(
+              transitionDuration: const Duration(milliseconds: 400),
+              pageBuilder: (context, animation, secondaryAnimation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: ClassDetailScreen(classData: widget.classData),
+                );
+              },
+            ),
+          );
+        });
+      },
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: AppPalette.blue.withOpacity(0.06),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Hero(
+                  tag: 'class_icon_${widget.classData.id}',
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFEAF2FF), Color(0xFFD3E4FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.school_rounded,
+                      color: AppPalette.blue,
+                      size: 28,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Hero(
+                        tag: 'class_title_${widget.classData.id}',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Text(
+                            widget.classData.name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${widget.classData.level} • ${widget.classData.students.length} étudiants',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: AppPalette.blue,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadCourseTab extends StatefulWidget {
+  const _UploadCourseTab();
+
+  @override
+  State<_UploadCourseTab> createState() => _UploadCourseTabState();
+}
+
+class _UploadCourseTabState extends State<_UploadCourseTab> {
+  final _titleCtrl = TextEditingController();
+  final _chapterCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _chapterCtrl.dispose();
+    super.dispose();
+  }
+
+  void _publish() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Cours televerse et rendu disponible pour la classe.'),
+        backgroundColor: Color(0xFF15803D),
+      ),
+    );
+    _titleCtrl.clear();
+    _chapterCtrl.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +440,9 @@ class _CoursesTab extends StatelessWidget {
 }
 
 class _SendGradesTab extends StatefulWidget {
-  const _SendGradesTab();
+  const _SendGradesTab({required this.onNavigateToTab});
+
+  final void Function(int) onNavigateToTab;
 
   @override
   State<_SendGradesTab> createState() => _SendGradesTabState();
@@ -251,13 +474,104 @@ class _SendGradesTabState extends State<_SendGradesTab> {
       const SnackBar(
         content: Text('Notes envoyées avec succès au secrétariat académique !'),
         backgroundColor: Color(0xFF15803D),
+  void _verifyAndSend(GradeSession session) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (context, animation, _) => FadeTransition(
+          opacity: animation,
+          child: GradeConfirmScreen(
+            session: session,
+            onConfirm: () {
+              setState(() {
+                session.isSent = true;
+              });
+              // After confirmation, navigate to Programme tab (index 0)
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (!mounted) return;
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF22C55E), Color(0xFF15803D)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const Text(
+                          'Notes envoyées !',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Vos notes ont été transmises avec succès à l\'administration.',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            height: 1.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppPalette.blue,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              widget.onNavigateToTab(0); // Retour au Programme
+                            },
+                            child: const Text(
+                              'Retour au Programme',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              });
+            },
+          ),
+        ),
       ),
     );
-    _notesCtrl.clear();
   }
 
   @override
   Widget build(BuildContext context) {
+    final sessions = GlobalStore.gradeSessions;
+
     return _ProfessorPage(
       title: 'Saisie des notes',
       subtitle:
@@ -282,9 +596,113 @@ class _SendGradesTabState extends State<_SendGradesTab> {
               label: 'Transmettre au secrétariat',
               icon: Icons.send_rounded,
               onPressed: _send,
+      title: 'Notes en attente',
+      subtitle: 'Vérifiez et envoyez vos notes à l\'administration.',
+      children: [
+        if (sessions.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(30),
+            alignment: Alignment.center,
+            child: const Column(
+              children: [
+                Icon(Icons.inbox_rounded, size: 60, color: Color(0xFFCBD5E1)),
+                SizedBox(height: 16),
+                Text(
+                  'Aucune note en attente',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
+                ),
+              ],
             ),
-          ],
-        ),
+          )
+        else
+          ...sessions.reversed.map((session) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          session.className,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: session.isSent
+                              ? const Color(0xFFDCFCE7)
+                              : const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          session.isSent ? 'Envoyé' : 'À vérifier',
+                          style: TextStyle(
+                            color: session.isSent
+                                ? const Color(0xFF166534)
+                                : const Color(0xFF92400E),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Module : ${session.moduleName}',
+                    style: const TextStyle(color: Color(0xFF64748B)),
+                  ),
+                  Text(
+                    'Date : ${session.date.day}/${session.date.month}/${session.date.year}',
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (!session.isSent)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _verifyAndSend(session),
+                        icon: const Icon(Icons.checklist_rtl_rounded),
+                        label: const Text('Vérifier et envoyer'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppPalette.blue,
+                          side: const BorderSide(color: AppPalette.blue),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }),
       ],
     );
   }
@@ -479,14 +897,12 @@ class _InfoCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.tag,
-    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String tag;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -505,6 +921,30 @@ class _InfoCard extends StatelessWidget {
               color: Colors.black.withOpacity(0.04),
               blurRadius: 10,
               offset: const Offset(0, 2),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppPalette.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
           ],
         ),
@@ -555,6 +995,8 @@ class _InfoCard extends StatelessWidget {
             ),
           ],
         ),
+          ),
+        ],
       ),
     );
   }

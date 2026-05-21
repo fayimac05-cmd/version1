@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import '../models/student_profile.dart';
 import 'paiement_scolarite_screen.dart';
 import 'splash_screen.dart';
+import 'parent/parent_home_tab.dart';
+import 'parent/parent_grades_tab.dart';
+import 'parent/parent_schedule_tab.dart';
+import 'parent/parent_profile_tab.dart';
 
 class ParentShell extends StatefulWidget {
   const ParentShell({
@@ -28,6 +31,17 @@ class _ParentShellState extends State<ParentShell> {
       _ParentNotesTab(nomEnfant: widget.nomEnfant),
       _ParentPlanningTab(),
       _ParentProfilTab(onLogout: widget.onLogout),
+      ParentHomeTab(
+        nomEnfant: widget.nomEnfant,
+        onNavigateToTab: (index) => setState(() => _currentTab = index),
+      ),
+      ParentGradesTab(nomEnfant: widget.nomEnfant),
+      const ParentScheduleTab(),
+      ParentProfileTab(
+        nomEnfant: widget.nomEnfant,
+        onLogout: widget.onLogout,
+      ),
+      const PaiementScolariteScreen(),
     ];
 
     return Scaffold(

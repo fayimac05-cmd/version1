@@ -1,8 +1,20 @@
-# Flutter 
-.dart_tool/ 
-.flutter-plugins 
-.flutter-plugins-dependencies 
-build/ 
-.packages 
-pubspec.lock 
-.vscode/ 
+﻿# Flutter
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+
+# Backend
+backend/node_modules/
+backend/.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
