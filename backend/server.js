@@ -13,12 +13,12 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Routes Imports
-const filiereRoutes = require('./routes/filieres');
-const moduleRoutes = require('./routes/modules');
-const professeurRoutes = require('./routes/professeurs');
-const membreRoutes = require('./routes/membres');
-const etudiantRoutes = require('./routes/etudiants');
-const statistiqueRoutes = require('./routes/statistiques');
+const filiereRoutes = require('./src/routes/filieres.routes');
+const moduleRoutes = require('./src/routes/modules.routes');
+const professeurRoutes = require('./src/routes/professeurs.routes');
+const membreRoutes = require('./src/routes/membres.routes');
+const etudiantRoutes = require('./src/routes/etudiants.routes');
+const statistiqueRoutes = require('./src/routes/statistiques.routes');
 
 // Routes Middleware
 app.use('/api/filieres', filiereRoutes);
