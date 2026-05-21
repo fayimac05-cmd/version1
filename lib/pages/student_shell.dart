@@ -34,7 +34,6 @@ class _StudentShellState extends State<StudentShell> {
       const NotesTab(),
       const BulletinScreen(),
       const PlanningTab(),
-      ChatIAScreen(profile: widget.profile),
       ProfileTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
@@ -46,6 +45,40 @@ class _StudentShellState extends State<StudentShell> {
             key: ValueKey(_currentTab),
             child: pages[_currentTab],
           ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          backgroundColor: AppPalette.white,
+          indicatorColor: AppPalette.yellow.withOpacity(0.45),
+          selectedIndex: _currentTab,
+          onDestinationSelected: _onTabSelected,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Accueil',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.menu_book_outlined),
+              selectedIcon: Icon(Icons.menu_book_rounded),
+              label: 'Cours',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.grading_outlined),
+              selectedIcon: Icon(Icons.grading_rounded),
+              label: 'Notes',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.calendar_month_outlined),
+              selectedIcon: Icon(Icons.calendar_month_rounded),
+              label: 'Planning',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'Profil',
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: NavigationBar(

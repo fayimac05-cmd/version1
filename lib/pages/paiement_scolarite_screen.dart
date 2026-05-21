@@ -460,6 +460,9 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
             padding: const EdgeInsets.all(16),
             child: SizedBox(
               width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
               height: 46,
               child: ElevatedButton.icon(
                 onPressed: () => _payer(f),

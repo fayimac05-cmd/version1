@@ -91,107 +91,60 @@ class PlanningTab extends StatelessWidget {
 
       // ── Contenu scrollable ────────────────────────────────────────
       Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-            // ── Zone 1 : Emploi du temps PDF ──────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Text('Emploi du temps',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A), letterSpacing: -0.2)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppPalette.lightBlue,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppPalette.blue.withOpacity(0.2)),
+        child: Container(
+          color: AppPalette.white,
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Emploi du temps hebdomadaire',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
-                  child: const Text('27 Avr — 02 Mai',
-                      style: TextStyle(fontSize: 12, color: AppPalette.blue,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const EmploiDuTempsWidget(),
-
-            const SizedBox(height: 28),
-
-            // ── Zone 2 : Calendrier académique ────────────────────
-            const Row(children: [
-              Icon(Icons.event_outlined, color: AppPalette.blue, size: 20),
-              SizedBox(width: 10),
-              Text('Calendrier académique',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A), letterSpacing: -0.2)),
-            ]),
-            const SizedBox(height: 12),
-
-            ...List.generate(_events.length, (index) {
-              final e     = _events[index];
-              final color = _typeCouleur(e['type']);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
+                  Row(
+                    children: [
+                      Icon(Icons.zoom_in, color: AppPalette.blue, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'Pincez pour zoomer',
+                        style: TextStyle(fontSize: 12, color: AppPalette.blue, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 8, offset: const Offset(0, 2))],
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 5, height: 90,
+                  child: Container(
                     decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: const BorderRadius.horizontal(
-                          left: Radius.circular(16)),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: InteractiveViewer(
+                      minScale: 1.0,
+                      maxScale: 4.0,
+                      child: Image.asset(
+                        'assets/programme_semaine.png',
+                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
                     ),
                   ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Row(children: [
-                          Expanded(child: Text(e['titre'],
-                              style: const TextStyle(fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0F172A)))),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(e['type'],
-                                style: TextStyle(fontSize: 11,
-                                    fontWeight: FontWeight.bold, color: color)),
-                          ),
-                        ]),
-                        const SizedBox(height: 6),
-                        Row(children: [
-                          Icon(Icons.calendar_today, size: 13, color: color),
-                          const SizedBox(width: 6),
-                          Text(e['date'], style: TextStyle(fontSize: 13,
-                              color: color, fontWeight: FontWeight.w700)),
-                        ]),
-                        const SizedBox(height: 4),
-                        Text(e['description'],
-                            style: const TextStyle(fontSize: 13,
-                                color: Color(0xFF64748B), height: 1.4)),
-                      ]),
-                    ),
-                  ),
-                ]),
-              );
-            }),
-          ]),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     ]);

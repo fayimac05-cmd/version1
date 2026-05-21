@@ -591,9 +591,9 @@ class _ConversationViewState extends State<_ConversationView> {
       ])),
     actions: [
       IconButton(icon: const Icon(Icons.videocam_rounded, size: 22),
-          onPressed: () {}),
+          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
       IconButton(icon: const Icon(Icons.call_rounded, size: 20),
-          onPressed: () {}),
+          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
       PopupMenuButton<String>(
         onSelected: (v) {
           if (v == 'profil') _voirProfil();
