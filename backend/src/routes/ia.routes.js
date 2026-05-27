@@ -1,4 +1,11 @@
 ﻿const express = require('express');
 const router = express.Router();
-router.get('/', (req, res) => res.json({ message: 'ia OK' }));
+const { chat, getHistorique } = require('../controllers/ia.controller');
+
+// POST /api/ia/chat
+router.post('/chat', chat);
+
+// GET /api/ia/historique
+router.get('/historique', getHistorique);
+
 module.exports = router;
