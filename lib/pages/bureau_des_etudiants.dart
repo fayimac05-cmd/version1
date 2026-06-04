@@ -7,14 +7,14 @@ class BureauDesEtudiantsScreen extends StatefulWidget {
   const BureauDesEtudiantsScreen({super.key});
 
   @override
-  State<BureauDesEtudiantsScreen> createState() => _BureauDesEtudiantsScreenState();
+  State<BureauDesEtudiantsScreen> createState() =>
+      _BureauDesEtudiantsScreenState();
 }
 
 class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   int _currentIndex = 0;
 
   static const primaryBlue = AppPalette.blue;
-  static const accentYellow = AppPalette.yellow;
   static const textDark = Color(0xFF0F172A);
   static const textLight = Color(0xFF64748B);
 
@@ -52,8 +52,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               children: [
                 Expanded(child: _buildNavItem(0, Icons.home_filled, 'Accueil')),
                 Expanded(child: _buildNavItem(1, Icons.event, 'Evenements')),
-                Expanded(child: _buildNavItem(2, Icons.announcement, 'Annonces')),
-                Expanded(child: _buildNavItem(3, Icons.account_circle, 'Profil')),
+                Expanded(
+                  child: _buildNavItem(2, Icons.announcement, 'Annonces'),
+                ),
+                Expanded(
+                  child: _buildNavItem(3, Icons.account_circle, 'Profil'),
+                ),
               ],
             ),
           ),
@@ -105,7 +109,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildAccueilBDE() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           // Header Bienvenue
           const Padding(
@@ -115,7 +124,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               children: [
                 Text(
                   'Tableau de bord BDE',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textDark),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: textDark,
+                  ),
                 ),
                 Text(
                   'Suivi des activités et annonces',
@@ -136,7 +149,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildPageEvenements() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           Align(
             alignment: Alignment.centerRight,
@@ -144,23 +162,37 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const CreateEventPage()),
+                  MaterialPageRoute(
+                    builder: (context) => const CreateEventPage(),
+                  ),
                 );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Créer un événement',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(height: 16),
           _buildCardEvenements(withButton: false),
           const SizedBox(height: 16),
-          _buildCardEvenements(title: 'Événements à venir', withButton: false, isUpcoming: true),
+          _buildCardEvenements(
+            title: 'Événements à venir',
+            withButton: false,
+            isUpcoming: true,
+          ),
         ],
       ),
     );
@@ -169,7 +201,12 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   Widget _buildPageAnnonces() {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 120,
+        ),
         children: [
           Align(
             alignment: Alignment.centerRight,
@@ -177,17 +214,27 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const CreateAnnouncementPage()),
+                  MaterialPageRoute(
+                    builder: (context) => const CreateAnnouncementPage(),
+                  ),
                 );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Nouvelle annonce', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Nouvelle annonce',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -223,13 +270,26 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   SizedBox(width: 8),
                   Text(
                     'Annonces Approuvées',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: textDark,
+                    ),
                   ),
                 ],
               ),
               TextButton(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
-                child: const Text('Voir tout', style: TextStyle(color: primaryBlue, fontSize: 12, fontWeight: FontWeight.bold)),
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('En cours de développement...')),
+                ),
+                child: const Text(
+                  'Voir tout',
+                  style: TextStyle(
+                    color: primaryBlue,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -287,33 +347,59 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textDark,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   if (!canEdit)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: statusBg,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         status,
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
+                        ),
                       ),
                     ),
                   if (canEdit)
                     IconButton(
                       visualDensity: VisualDensity.compact,
-                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
-                      icon: const Icon(Icons.edit_outlined, size: 18, color: primaryBlue),
+                      onPressed: () =>
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('En cours de développement...'),
+                            ),
+                          ),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: primaryBlue,
+                      ),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
                 ],
               ),
               const SizedBox(height: 4),
-              Text(subtitle, style: const TextStyle(fontSize: 12, color: textLight)),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 12, color: textLight),
+              ),
             ],
           ),
         ),
@@ -321,7 +407,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildCardEvenements({String title = 'Événements en cours', bool withButton = true, bool isUpcoming = false}) {
+  Widget _buildCardEvenements({
+    String title = 'Événements en cours',
+    bool withButton = true,
+    bool isUpcoming = false,
+  }) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -344,7 +434,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
@@ -410,17 +504,27 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const CreateEventPage()),
+                  MaterialPageRoute(
+                    builder: (context) => const CreateEventPage(),
+                  ),
                 );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
-              child: const Text('+ Créer un événement', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text(
+                '+ Créer un événement',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ],
@@ -442,15 +546,32 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textDark,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 12, color: textLight)),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 12, color: textLight),
+            ),
           ],
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(count, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textDark)),
+            Text(
+              count,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textDark,
+              ),
+            ),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -460,7 +581,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               ),
               child: Text(
                 status,
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
               ),
             ),
           ],
@@ -492,7 +617,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               SizedBox(width: 8),
               Text(
                 'Ventes (Événements Approuvés)',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
               ),
             ],
           ),
@@ -515,7 +644,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                 Expanded(
                   child: Text(
                     'Seuls les événements validés par l\'administration sont listés ici pour le suivi des ventes.',
-                    style: TextStyle(fontSize: 12, color: textLight, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textLight,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],
@@ -531,7 +664,10 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
       children: [
         SizedBox(
           width: 80,
-          child: Text(label, style: const TextStyle(fontSize: 13, color: textLight)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: textLight),
+          ),
         ),
         Expanded(
           child: ClipRRect(
@@ -547,7 +683,15 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         const SizedBox(width: 12),
         SizedBox(
           width: 36,
-          child: Text(percent, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textDark), textAlign: TextAlign.right),
+          child: Text(
+            percent,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: textDark,
+            ),
+            textAlign: TextAlign.right,
+          ),
         ),
       ],
     );
@@ -576,21 +720,28 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   children: [
                     // Top Bar
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const SizedBox(width: 32),
                           const Text(
                             'Profil',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                           const SizedBox(width: 32),
                         ],
                       ),
                     ),
                     const SizedBox(height: 30),
-                    
+
                     // Profile Picture
                     Center(
                       child: Container(
@@ -599,20 +750,31 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFF8FAFC), width: 4),
+                          border: Border.all(
+                            color: const Color(0xFFF8FAFC),
+                            width: 4,
+                          ),
                         ),
                         child: const Center(
-                          child: Icon(Icons.person, size: 50, color: primaryBlue),
+                          child: Icon(
+                            Icons.person,
+                            size: 50,
+                            color: primaryBlue,
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    
+
                     // Name and Subtitle
                     const Center(
                       child: Text(
                         'Aïcha OUÉDRAOGO',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: textDark,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -627,9 +789,9 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                         ),
                       ],
                     ),
-                    
+
                     const SizedBox(height: 32),
-                    
+
                     // Account Card
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -651,12 +813,22 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                           children: [
                             const Text(
                               'Mon Compte',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textDark),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: textDark,
+                              ),
                             ),
                             const SizedBox(height: 16),
-                            _buildProfileItem(Icons.person_outline, 'Données personnelles'),
+                            _buildProfileItem(
+                              Icons.person_outline,
+                              'Données personnelles',
+                            ),
                             const Divider(height: 24, color: Color(0xFFF1F5F9)),
-                            _buildProfileItem(Icons.settings_outlined, 'Paramètres'),
+                            _buildProfileItem(
+                              Icons.settings_outlined,
+                              'Paramètres',
+                            ),
                           ],
                         ),
                       ),
@@ -664,10 +836,14 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   ],
                 ),
               ),
-              
+
               // Logout Button (FIXÉ EN BAS)
               Padding(
-                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 16), // Espace réduit
+                padding: const EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  bottom: 16,
+                ), // Espace réduit
                 child: InkWell(
                   onTap: () {
                     Navigator.pop(context);
@@ -683,7 +859,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 20),
+                        Icon(
+                          Icons.logout_rounded,
+                          color: Color(0xFFEF4444),
+                          size: 20,
+                        ),
                         SizedBox(width: 12),
                         Text(
                           'Se déconnecter',
@@ -705,7 +885,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildProfileItem(IconData icon, String title, {bool showArrow = true}) {
+  Widget _buildProfileItem(
+    IconData icon,
+    String title, {
+    bool showArrow = true,
+  }) {
     return Row(
       children: [
         Icon(icon, color: const Color(0xFF64748B), size: 22),
@@ -713,11 +897,19 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textDark),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: textDark,
+            ),
           ),
         ),
         if (showArrow)
-          const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF94A3B8)),
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: 14,
+            color: Color(0xFF94A3B8),
+          ),
       ],
     );
   }
