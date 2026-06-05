@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // backend/src/controllers/notifications.controller.js
 
 const { sendNotification } = require('../services/firebase.service');
@@ -90,3 +91,8 @@ module.exports = {
   marquerToutesLues,
   envoyerNotificationAuto,
 };
+=======
+exports.getNotifications = (req, res) => res.json([]);
+exports.marquerCommeLue = (req, res) => res.json({ success: true });
+exports.marquerToutesLues = (req, res) => res.json({ success: true });
+>>>>>>> c8d01e3f044afae9e341821f613d675a29421b21

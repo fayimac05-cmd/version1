@@ -282,6 +282,7 @@ class _GradesTabState extends State<_GradesTab> {
   }
 }
 
+// ── Onglet Profil ─────────────────────────────────────────────────────────────
 class _ProfessorProfileTab extends StatelessWidget {
   const _ProfessorProfileTab({required this.profile, required this.onLogout});
 
@@ -315,6 +316,7 @@ class _ProfessorProfileTab extends StatelessWidget {
                 profile.filiere,
                 style: const TextStyle(color: Color(0xFF64748B)),
               ),
+              const Text('Enseignant - Chercheur', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -356,6 +358,7 @@ class _ProfessorProfileTab extends StatelessWidget {
   }
 }
 
+// ── Widgets partagés ──────────────────────────────────────────────────────────
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
     required this.icon,
@@ -408,35 +411,14 @@ class _InfoCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
+                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                   const SizedBox(height: 5),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
-                      height: 1.35,
-                    ),
-                  ),
+                  Text(subtitle, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.35)),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            Text(
-              tag,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppPalette.blue,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text(tag, style: const TextStyle(fontSize: 12, color: AppPalette.blue, fontWeight: FontWeight.w700)),
           ],
         ),
       ),
@@ -489,19 +471,9 @@ class _MetricCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppPalette.blue,
-            ),
-          ),
+          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppPalette.blue)),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
+          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
         ],
       ),
     );
@@ -551,9 +523,7 @@ class _PrimaryButton extends StatelessWidget {
           backgroundColor: AppPalette.blue,
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );

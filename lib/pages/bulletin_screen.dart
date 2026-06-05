@@ -4,7 +4,8 @@ import '../theme/app_palette.dart';
 import 'pdf_viewer_screen.dart';
 
 class BulletinScreen extends StatelessWidget {
-  const BulletinScreen({super.key});
+  final String studentName;
+  final String semester;
 
   static const List<Map<String, dynamic>> bulletins = [
     {
@@ -52,8 +53,31 @@ class BulletinScreen extends StatelessWidget {
                 );
               },
             ),
-          );
-        },
+            const SizedBox(height: 30),
+
+            // Liste des bulletins
+            ...bulletins.map((b) => Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ListTile(
+                    leading: Icon(Icons.picture_as_pdf, color: b['color']),
+                    title: Text(b['semestre']),
+                    subtitle: Text('Moyenne : ${b['moyenne']}/20'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.visibility),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PdfViewerScreen(pdf: b),
+                        ),
+                      ),
+                    ),
+                  ),
+                )),
+          ],
+        ),
       ),
     );
   }
