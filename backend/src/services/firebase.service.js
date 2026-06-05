@@ -1,14 +1,20 @@
 // backend/src/services/firebase.service.js
 
-const admin = require('firebase-admin');
-const { createClient } = require('@supabase/supabase-js');
-const serviceAccount = require('../../config/serviceAccountKey.json');
+let admin;
+let hasFirebase = false;
 
-// Initialiser Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+try {
+  admin = require('firebase-admin');
+  const serviceAccount = require('../../config/serviceAccountKey.json');
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
+  hasFirebase = true;
+  console.log('✅ Firebase Admin configuré avec succès');
+} catch (error) {
+  console.warn("⚠️ [Warning] Firebase Admin non configuré ou 'serviceAccountKey.json' introuvable. Les notifications push seront simulées.");
 }
 
 // Initialiser Supabase (clé service_role)
@@ -22,6 +28,11 @@ const supabase = createClient(
  */
 const sendNotification = async (userId, titre, corps, data = {}) => {
   try {
+    if (!hasFirebase) {
+      console.log(`[Notification simulée] Envoi à ${userId} : "${titre}" - "${corps}"`);
+      return { success: true, simulated: true };
+    }
+
     const userToken = await getUserFCMToken(userId);
 
     if (!userToken) {
