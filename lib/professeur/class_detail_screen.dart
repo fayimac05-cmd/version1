@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/class_model.dart';
-import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'confirm_screens.dart';
 import 'mock_data.dart';
@@ -18,7 +17,7 @@ class ClassDetailScreen extends StatefulWidget {
 class _ClassDetailScreenState extends State<ClassDetailScreen> {
   // Mock state for attendance (true = present)
   late Map<String, bool> _attendance;
-  
+
   // Mock state for grades
   late Map<String, TextEditingController> _grade1Controllers;
   late Map<String, TextEditingController> _grade2Controllers;
@@ -28,15 +27,15 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
   void initState() {
     super.initState();
     _attendance = {
-      for (var student in widget.classData.students) student.matricule: true
+      for (var student in widget.classData.students) student.matricule: true,
     };
     _grade1Controllers = {
       for (var student in widget.classData.students)
-        student.matricule: TextEditingController()
+        student.matricule: TextEditingController(),
     };
     _grade2Controllers = {
       for (var student in widget.classData.students)
-        student.matricule: TextEditingController()
+        student.matricule: TextEditingController(),
     };
   }
 
@@ -94,15 +93,21 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
           content: const Text('Veuillez entrer le nom du module.'),
           backgroundColor: const Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
       return;
     }
 
     List<StudentGrade> grades = widget.classData.students.map((student) {
-      final n1 = double.tryParse(_grade1Controllers[student.matricule]!.text.replaceAll(',', '.'));
-      final n2 = double.tryParse(_grade2Controllers[student.matricule]!.text.replaceAll(',', '.'));
+      final n1 = double.tryParse(
+        _grade1Controllers[student.matricule]!.text.replaceAll(',', '.'),
+      );
+      final n2 = double.tryParse(
+        _grade2Controllers[student.matricule]!.text.replaceAll(',', '.'),
+      );
       return StudentGrade(
         matricule: student.matricule,
         name: '${student.prenoms} ${student.nom}',
@@ -140,7 +145,7 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
     final history = GlobalStore.attendanceHistory
         .where((h) => h.classId == widget.classData.id)
         .toList();
-        
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -166,9 +171,16 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                     itemBuilder: (context, index) {
                       final session = history[index];
                       return ListTile(
-                        leading: const Icon(Icons.history, color: AppPalette.blue),
-                        title: Text('${session.date.day}/${session.date.month}/${session.date.year} à ${session.date.hour}h${session.date.minute.toString().padLeft(2, '0')}'),
-                        subtitle: Text('${session.presentCount} présents sur ${session.totalCount}'),
+                        leading: const Icon(
+                          Icons.history,
+                          color: AppPalette.blue,
+                        ),
+                        title: Text(
+                          '${session.date.day}/${session.date.month}/${session.date.year} à ${session.date.hour}h${session.date.minute.toString().padLeft(2, '0')}',
+                        ),
+                        subtitle: Text(
+                          '${session.presentCount} présents sur ${session.totalCount}',
+                        ),
                       );
                     },
                   ),
@@ -217,7 +229,10 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                               height: 64,
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFFEAF2FF), Color(0xFFD3E4FF)],
+                                  colors: [
+                                    Color(0xFFEAF2FF),
+                                    Color(0xFFD3E4FF),
+                                  ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
@@ -230,7 +245,11 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.school_rounded, color: AppPalette.blue, size: 34),
+                              child: const Icon(
+                                Icons.school_rounded,
+                                color: AppPalette.blue,
+                                size: 34,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -269,7 +288,10 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                   indicatorWeight: 3,
                   labelStyle: TextStyle(fontWeight: FontWeight.bold),
                   tabs: [
-                    Tab(icon: Icon(Icons.fact_check_rounded), text: 'Présences'),
+                    Tab(
+                      icon: Icon(Icons.fact_check_rounded),
+                      text: 'Présences',
+                    ),
                     Tab(icon: Icon(Icons.edit_note_rounded), text: 'Notes'),
                   ],
                 ),
@@ -277,10 +299,7 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
             ];
           },
           body: TabBarView(
-            children: [
-              _buildAttendanceTab(),
-              _buildGradesTab(),
-            ],
+            children: [_buildAttendanceTab(), _buildGradesTab()],
           ),
         ),
       ),
@@ -300,15 +319,17 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                   onPressed: _showAttendanceHistory,
                   icon: const Icon(Icons.history_rounded),
                   label: const Text('Historique'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppPalette.blue,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: AppPalette.blue),
                 ),
               ),
             ),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 100),
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  bottom: 100,
+                ),
                 itemCount: widget.classData.students.length,
                 itemBuilder: (context, index) {
                   final student = widget.classData.students[index];
@@ -334,13 +355,15 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                         children: [
                           CircleAvatar(
                             radius: 24,
-                            backgroundColor: isPresent 
-                              ? AppPalette.lightBlue 
-                              : const Color(0xFFFEE2E2),
+                            backgroundColor: isPresent
+                                ? AppPalette.lightBlue
+                                : const Color(0xFFFEE2E2),
                             child: Text(
                               student.nom[0],
                               style: TextStyle(
-                                color: isPresent ? AppPalette.blue : const Color(0xFFDC2626),
+                                color: isPresent
+                                    ? AppPalette.blue
+                                    : const Color(0xFFDC2626),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                               ),
@@ -418,7 +441,11 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
             ),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 100),
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  bottom: 100,
+                ),
                 itemCount: widget.classData.students.length,
                 itemBuilder: (context, index) {
                   final student = widget.classData.students[index];
@@ -472,42 +499,82 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                             children: [
                               Expanded(
                                 child: TextField(
-                                  controller: _grade1Controllers[student.matricule],
+                                  controller:
+                                      _grade1Controllers[student.matricule],
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.bold, 
+                                    fontWeight: FontWeight.bold,
                                     color: AppPalette.blue,
                                   ),
                                   decoration: InputDecoration(
                                     labelText: 'Note 1',
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 12,
+                                    ),
                                     filled: true,
                                     fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppPalette.blue, width: 2)),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: AppPalette.blue,
+                                        width: 2,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextField(
-                                  controller: _grade2Controllers[student.matricule],
+                                  controller:
+                                      _grade2Controllers[student.matricule],
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.bold, 
+                                    fontWeight: FontWeight.bold,
                                     color: AppPalette.blue,
                                   ),
                                   decoration: InputDecoration(
                                     labelText: 'Note 2',
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 12,
+                                    ),
                                     filled: true,
                                     fillColor: const Color(0xFFF8FAFC),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppPalette.blue, width: 2)),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: AppPalette.blue,
+                                        width: 2,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -556,10 +623,7 @@ class _AnimatedListItem extends StatelessWidget {
       builder: (context, value, child) {
         return Transform.translate(
           offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(
-            opacity: value,
-            child: child,
-          ),
+          child: Opacity(opacity: value, child: child),
         );
       },
       child: child,

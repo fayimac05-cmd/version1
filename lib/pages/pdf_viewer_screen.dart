@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/app_palette.dart';
 
 class PdfViewerScreen extends StatelessWidget {
   final Map<String, dynamic> pdf;

@@ -548,9 +548,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 32),
+                  )
                 ],
               ),
             ),
