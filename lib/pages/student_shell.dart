@@ -32,10 +32,7 @@ class _StudentShellState extends State<StudentShell> {
       HomeTab(profile: widget.profile),
       const CoursesTab(),
       const NotesTab(),
-      BulletinScreen(
-        studentName: '${widget.profile.prenoms} ${widget.profile.nom}',
-        semester: widget.profile.filiere,
-      ),
+      const BulletinScreen(),
       const PlanningTab(),
       ChatIAScreen(profile: widget.profile),
       ProfileTab(profile: widget.profile, onLogout: widget.onLogout),
