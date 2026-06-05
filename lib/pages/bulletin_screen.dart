@@ -3,9 +3,16 @@ import '../theme/app_palette.dart';
 import 'pdf_viewer_screen.dart';
 
 class BulletinScreen extends StatelessWidget {
-  const BulletinScreen({super.key});
+  final String studentName;
+  final String semester;
 
-  final List<Map<String, dynamic>> bulletins = const [
+  const BulletinScreen({
+    super.key,
+    required this.studentName,
+    required this.semester,
+  });
+
+  static const List<Map<String, dynamic>> bulletins = [
     {
       'semestre': 'Semestre 1 - 2024',
       'moyenne': 14.5,
@@ -40,8 +47,10 @@ class BulletinScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.download_rounded, color: Colors.white),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
-          )
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('En cours de développement...')),
+            ),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -63,7 +72,11 @@ class BulletinScreen extends StatelessWidget {
                     backgroundColor: AppPalette.blue,
                     child: Text(
                       studentName.substring(0, 1),
-                      style: const TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 15),
@@ -73,16 +86,22 @@ class BulletinScreen extends StatelessWidget {
                       children: [
                         Text(
                           studentName,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppPalette.blue),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppPalette.blue,
+                          ),
                         ),
                         const SizedBox(height: 5),
                         Text(
                           semester,
-                          style: TextStyle(color: AppPalette.black.withOpacity(0.6)),
+                          style: TextStyle(
+                            color: AppPalette.black.withOpacity(0.6),
+                          ),
                         ),
                       ],
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
@@ -101,30 +120,56 @@ class BulletinScreen extends StatelessWidget {
                       color: AppPalette.blue.withOpacity(0.15),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
-                    )
+                    ),
                   ],
                   border: Border.all(color: AppPalette.yellow, width: 4),
-      appBar: AppBar(title: const Text('Bulletins Scolaires')),
-      body: ListView.builder(
-        itemCount: bulletins.length,
-        itemBuilder: (context, i) {
-          final b = bulletins[i];
-          return Card(
-            margin: const EdgeInsets.all(8),
-            child: ListTile(
-              leading: Icon(Icons.picture_as_pdf, color: b['color']),
-              title: Text(b['semestre']),
-              subtitle: Text('Moyenne : ${b['moyenne']}/20'),
-              trailing: IconButton(
-                icon: const Icon(Icons.visibility),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => PdfViewerScreen(pdf: b)),
+                ),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '14.85',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.blue,
+                        ),
+                      ),
+                      Text(
+                        'Moy. Générale',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          );
-        },
+            const SizedBox(height: 30),
+
+            // Liste des bulletins
+            ...bulletins.map((b) => Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ListTile(
+                    leading: Icon(Icons.picture_as_pdf, color: b['color']),
+                    title: Text(b['semestre']),
+                    subtitle: Text('Moyenne : ${b['moyenne']}/20'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.visibility),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PdfViewerScreen(pdf: b),
+                        ),
+                      ),
+                    ),
+                  ),
+                )),
+          ],
+        ),
       ),
     );
   }

@@ -31,7 +31,7 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
     },
   ];
 
-  int _currentTab = 0; // 0 = Frais, 1 = Historique
+  int _currentTab = 0;
 
   void _payer(Map<String, dynamic> f) {
     final telCtrl     = TextEditingController();
@@ -65,7 +65,6 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  // On crée une copie pour le reçu avec le montant réellement payé
                   final recuData = Map<String, dynamic>.from(f);
                   recuData['montant'] = int.tryParse(montantCtrl.text) ?? f['montant'];
                   _voirRecu(recuData);
@@ -339,7 +338,6 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
       ),
       body: Column(
         children: [
-          // Sélecteur d'onglets personnalisé
           Container(
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(4),
@@ -354,7 +352,6 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
               ],
             ),
           ),
-          
           Expanded(
             child: _currentTab == 0 ? _buildFraisList() : _buildHistoriqueList(),
           ),
@@ -398,10 +395,7 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       itemCount: aPayer.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
-        final f = aPayer[i];
-        return _buildFraisCard(f);
-      },
+      itemBuilder: (context, i) => _buildFraisCard(aPayer[i]),
     );
   }
 
@@ -413,10 +407,7 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       itemCount: historique.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
-        final h = historique[i];
-        return _buildHistoryCard(h);
-      },
+      itemBuilder: (context, i) => _buildHistoryCard(historique[i]),
     );
   }
 
@@ -460,10 +451,7 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
             padding: const EdgeInsets.all(16),
             child: SizedBox(
               width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
-              height: 46,
+              height: 48,
               child: ElevatedButton.icon(
                 onPressed: () => _payer(f),
                 icon: const Icon(Icons.payment_outlined, size: 18),
@@ -476,7 +464,7 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
                 ),
               ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -536,7 +524,7 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );

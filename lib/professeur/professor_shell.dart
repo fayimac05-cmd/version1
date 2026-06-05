@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../models/class_model.dart';
 import '../theme/app_palette.dart';
-import '../pages/class_detail_screen.dart';
 import '../pages/splash_screen.dart';
 import '../pages/professor_course_detail_screen.dart';
 import 'class_detail_screen.dart';
@@ -31,9 +30,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
   Widget build(BuildContext context) {
     final pages = [
       const _ClassTab(),
-      const _CoursesTab(),
-      const _SendGradesTab(),
-      const _UploadCourseTab(),
+      _UploadCourseTab(),
       _SendGradesTab(onNavigateToTab: (i) => setState(() => _currentTab = i)),
       _ProfessorProfileTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
@@ -125,6 +122,7 @@ class _ProfessorPage extends StatelessWidget {
   }
 }
 
+// ── Onglet Classes ────────────────────────────────────────────────────────────
 class _ClassTab extends StatelessWidget {
   const _ClassTab();
 
@@ -132,59 +130,12 @@ class _ClassTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ProfessorPage(
       title: 'Mes classes',
-      subtitle: 'Suivez les effectifs et le détail de vos classes actives.',
-      children: [
-        const _MetricRow(),
-        const SizedBox(height: 16),
-        _InfoCard(
-          icon: Icons.school_rounded,
-          title: 'Licence 2 Réseaux & Telecom',
-          subtitle: '38 étudiants inscrits, 4 groupes de TD',
-          tag: 'Gérer',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ClassDetailScreen(
-                  className: 'Licence 2 Réseaux & Telecom',
-                  studentCount: 38,
-                ),
-              ),
-            );
-          },
-        ),
-        _InfoCard(
-          icon: Icons.school_rounded,
-          title: 'Licence 3 Informatique',
-          subtitle: '45 étudiants inscrits, 5 groupes de TD',
-          tag: 'Gérer',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ClassDetailScreen(
-                  className: 'Licence 3 Informatique',
-                  studentCount: 45,
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _CoursesTab extends StatelessWidget {
-  const _CoursesTab();
-      subtitle:
-          'Sélectionnez une classe pour faire l\'appel et gérer les notes.',
+      subtitle: 'Sélectionnez une classe pour faire l\'appel et gérer les notes.',
       children: [
         const _MetricRow(),
         const SizedBox(height: 16),
         ...mockClasses.asMap().entries.map(
-          (entry) =>
-              _AnimatedClassCard(classData: entry.value, index: entry.key),
+          (entry) => _AnimatedClassCard(classData: entry.value, index: entry.key),
         ),
       ],
     );
@@ -239,10 +190,9 @@ class _ClassCardState extends State<_ClassCard>
       vsync: this,
       duration: const Duration(milliseconds: 150),
     );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.96,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -305,11 +255,7 @@ class _ClassCardState extends State<_ClassCard>
                       ),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(
-                      Icons.school_rounded,
-                      color: AppPalette.blue,
-                      size: 28,
-                    ),
+                    child: const Icon(Icons.school_rounded, color: AppPalette.blue, size: 28),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -349,11 +295,7 @@ class _ClassCardState extends State<_ClassCard>
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: AppPalette.blue,
-                    size: 16,
-                  ),
+                  child: const Icon(Icons.arrow_forward_ios_rounded, color: AppPalette.blue, size: 16),
                 ),
               ],
             ),
@@ -364,6 +306,7 @@ class _ClassCardState extends State<_ClassCard>
   }
 }
 
+// ── Onglet Cours ──────────────────────────────────────────────────────────────
 class _UploadCourseTab extends StatefulWidget {
   const _UploadCourseTab();
 
@@ -385,7 +328,7 @@ class _UploadCourseTabState extends State<_UploadCourseTab> {
   void _publish() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Cours televerse et rendu disponible pour la classe.'),
+        content: Text('Cours téléversé et rendu disponible pour la classe.'),
         backgroundColor: Color(0xFF15803D),
       ),
     );
@@ -396,21 +339,9 @@ class _UploadCourseTabState extends State<_UploadCourseTab> {
   @override
   Widget build(BuildContext context) {
     final courses = [
-      {
-        'name': 'Réseaux Informatiques',
-        'class': 'Licence 2 Réseaux & Telecom',
-        'students': '38 étudiants',
-      },
-      {
-        'name': 'Architecture Réseau',
-        'class': 'Licence 2 Réseaux & Telecom',
-        'students': '38 étudiants',
-      },
-      {
-        'name': 'Administration Linux',
-        'class': 'Licence 3 Informatique',
-        'students': '45 étudiants',
-      },
+      {'name': 'Réseaux Informatiques', 'class': 'Licence 2 Réseaux & Telecom', 'students': '38 étudiants'},
+      {'name': 'Architecture Réseau', 'class': 'Licence 2 Réseaux & Telecom', 'students': '38 étudiants'},
+      {'name': 'Administration Linux', 'class': 'Licence 3 Informatique', 'students': '45 étudiants'},
     ];
 
     return _ProfessorPage(
@@ -439,6 +370,7 @@ class _UploadCourseTabState extends State<_UploadCourseTab> {
   }
 }
 
+// ── Onglet Notes ──────────────────────────────────────────────────────────────
 class _SendGradesTab extends StatefulWidget {
   const _SendGradesTab({required this.onNavigateToTab});
 
@@ -469,11 +401,15 @@ class _SendGradesTabState extends State<_SendGradesTab> {
       );
       return;
     }
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Notes envoyées avec succès au secrétariat académique !'),
         backgroundColor: Color(0xFF15803D),
+      ),
+    );
+    _notesCtrl.clear();
+  }
+
   void _verifyAndSend(GradeSession session) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -483,19 +419,14 @@ class _SendGradesTabState extends State<_SendGradesTab> {
           child: GradeConfirmScreen(
             session: session,
             onConfirm: () {
-              setState(() {
-                session.isSent = true;
-              });
-              // After confirmation, navigate to Programme tab (index 0)
+              setState(() { session.isSent = true; });
               Future.delayed(const Duration(milliseconds: 300), () {
                 if (!mounted) return;
                 showDialog(
                   context: context,
                   barrierDismissible: false,
                   builder: (ctx) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -510,28 +441,18 @@ class _SendGradesTabState extends State<_SendGradesTab> {
                             ),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            color: Colors.white,
-                            size: 40,
-                          ),
+                          child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
                         ),
                         const SizedBox(height: 18),
                         const Text(
                           'Notes envoyées !',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 10),
                         const Text(
                           'Vos notes ont été transmises avec succès à l\'administration.',
-                          style: TextStyle(
-                            color: Color(0xFF64748B),
-                            height: 1.5,
-                          ),
+                          style: TextStyle(color: Color(0xFF64748B), height: 1.5),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 20),
@@ -541,19 +462,14 @@ class _SendGradesTabState extends State<_SendGradesTab> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppPalette.blue,
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
                             onPressed: () {
                               Navigator.of(ctx).pop();
-                              widget.onNavigateToTab(0); // Retour au Programme
+                              widget.onNavigateToTab(0);
                             },
-                            child: const Text(
-                              'Retour au Programme',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: const Text('Retour au Programme', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -573,17 +489,12 @@ class _SendGradesTabState extends State<_SendGradesTab> {
     final sessions = GlobalStore.gradeSessions;
 
     return _ProfessorPage(
-      title: 'Saisie des notes',
-      subtitle:
-          'Formulaire de saisie et de transmission des notes des étudiants.',
+      title: 'Notes en attente',
+      subtitle: 'Vérifiez et envoyez vos notes à l\'administration.',
       children: [
         _FormCard(
           children: [
-            _Input(
-              controller: _courseCtrl,
-              label: 'Module ou Matière',
-              icon: Icons.menu_book_outlined,
-            ),
+            _Input(controller: _courseCtrl, label: 'Module ou Matière', icon: Icons.menu_book_outlined),
             const SizedBox(height: 14),
             _Input(
               controller: _notesCtrl,
@@ -592,13 +503,10 @@ class _SendGradesTabState extends State<_SendGradesTab> {
               maxLines: 5,
             ),
             const SizedBox(height: 18),
-            _PrimaryButton(
-              label: 'Transmettre au secrétariat',
-              icon: Icons.send_rounded,
-              onPressed: _send,
-      title: 'Notes en attente',
-      subtitle: 'Vérifiez et envoyez vos notes à l\'administration.',
-      children: [
+            _PrimaryButton(label: 'Transmettre au secrétariat', icon: Icons.send_rounded, onPressed: _send),
+          ],
+        ),
+        const SizedBox(height: 24),
         if (sessions.isEmpty)
           Container(
             padding: const EdgeInsets.all(30),
@@ -607,10 +515,7 @@ class _SendGradesTabState extends State<_SendGradesTab> {
               children: [
                 Icon(Icons.inbox_rounded, size: 60, color: Color(0xFFCBD5E1)),
                 SizedBox(height: 16),
-                Text(
-                  'Aucune note en attente',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
-                ),
+                Text('Aucune note en attente', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 16)),
               ],
             ),
           )
@@ -624,11 +529,7 @@ class _SendGradesTabState extends State<_SendGradesTab> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
                 ],
               ),
               child: Column(
@@ -638,31 +539,18 @@ class _SendGradesTabState extends State<_SendGradesTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: Text(
-                          session.className,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
+                        child: Text(session.className, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: session.isSent
-                              ? const Color(0xFFDCFCE7)
-                              : const Color(0xFFFEF3C7),
+                          color: session.isSent ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           session.isSent ? 'Envoyé' : 'À vérifier',
                           style: TextStyle(
-                            color: session.isSent
-                                ? const Color(0xFF166534)
-                                : const Color(0xFF92400E),
+                            color: session.isSent ? const Color(0xFF166534) : const Color(0xFF92400E),
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -671,16 +559,10 @@ class _SendGradesTabState extends State<_SendGradesTab> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Module : ${session.moduleName}',
-                    style: const TextStyle(color: Color(0xFF64748B)),
-                  ),
+                  Text('Module : ${session.moduleName}', style: const TextStyle(color: Color(0xFF64748B))),
                   Text(
                     'Date : ${session.date.day}/${session.date.month}/${session.date.year}',
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
                   ),
                   const SizedBox(height: 16),
                   if (!session.isSent)
@@ -693,9 +575,7 @@ class _SendGradesTabState extends State<_SendGradesTab> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppPalette.blue,
                           side: const BorderSide(color: AppPalette.blue),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
                     ),
@@ -708,6 +588,7 @@ class _SendGradesTabState extends State<_SendGradesTab> {
   }
 }
 
+// ── Onglet Profil ─────────────────────────────────────────────────────────────
 class _ProfessorProfileTab extends StatelessWidget {
   const _ProfessorProfileTab({required this.profile, required this.onLogout});
 
@@ -738,49 +619,24 @@ class _ProfessorProfileTab extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'Dr. ${profile.prenoms} ${profile.nom}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
               ),
-              const Text(
-                'Enseignant - Chercheur',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              const Text('Enseignant - Chercheur', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
         const SizedBox(height: 24),
         const Divider(color: Color(0xFFE2E8F0)),
         const SizedBox(height: 16),
-        const Text(
-          'Détails Professionnels',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
-          ),
-        ),
+        const Text('Détails Professionnels', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
         const SizedBox(height: 12),
-        _infoLigne(
-          Icons.alternate_email,
-          'Email Académique',
-          '${profile.prenoms.toLowerCase()}.${profile.nom.toLowerCase()}@ist.bf',
-        ),
+        _infoLigne(Icons.alternate_email, 'Email Académique', '${profile.prenoms.toLowerCase()}.${profile.nom.toLowerCase()}@ist.bf'),
         const SizedBox(height: 12),
         _infoLigne(Icons.phone_outlined, 'Téléphone', '+226 75 00 00 00'),
         const SizedBox(height: 12),
         _infoLigne(Icons.domain_rounded, 'Département', profile.filiere),
         const SizedBox(height: 12),
-        _infoLigne(
-          Icons.class_outlined,
-          'Responsabilité',
-          'Responsable de la filière R&T',
-        ),
+        _infoLigne(Icons.class_outlined, 'Responsabilité', 'Responsable de la filière R&T'),
         const SizedBox(height: 32),
         SizedBox(
           width: double.infinity,
@@ -789,41 +645,25 @@ class _ProfessorProfileTab extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   title: const Row(
                     children: [
                       Icon(Icons.logout_rounded, color: Colors.red),
                       SizedBox(width: 10),
-                      Text(
-                        'Déconnexion',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      Text('Déconnexion', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                  content: const Text(
-                    'Voulez-vous vous déconnecter ?',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
+                  content: const Text('Voulez-vous vous déconnecter ?', style: TextStyle(fontSize: 14, color: Colors.grey)),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        'Annuler',
-                        style: TextStyle(color: Colors.grey),
-                      ),
+                      child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
                     ),
                     ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (_) => const SplashScreen(),
-                          ),
+                          MaterialPageRoute(builder: (_) => const SplashScreen()),
                           (_) => false,
                         );
                       },
@@ -831,9 +671,7 @@ class _ProfessorProfileTab extends StatelessWidget {
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       child: const Text('Déconnecter'),
                     ),
@@ -842,16 +680,11 @@ class _ProfessorProfileTab extends StatelessWidget {
               );
             },
             icon: const Icon(Icons.logout, color: Colors.red),
-            label: const Text(
-              'Se déconnecter',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
+            label: const Text('Se déconnecter', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: Colors.red, width: 1.5),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -867,23 +700,9 @@ class _ProfessorProfileTab extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              lbl,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            Text(lbl, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
             const SizedBox(height: 2),
-            Text(
-              val,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF334155),
-              ),
-            ),
+            Text(val, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
           ],
         ),
       ],
@@ -891,18 +710,21 @@ class _ProfessorProfileTab extends StatelessWidget {
   }
 }
 
+// ── Widgets partagés ──────────────────────────────────────────────────────────
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.tag,
+    required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String tag;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -917,35 +739,7 @@ class _InfoCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFE2E8F0)),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppPalette.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2)),
           ],
         ),
         child: Row(
@@ -964,39 +758,16 @@ class _InfoCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
+                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                   const SizedBox(height: 5),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
-                      height: 1.35,
-                    ),
-                  ),
+                  Text(subtitle, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.35)),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            Text(
-              tag,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppPalette.blue,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text(tag, style: const TextStyle(fontSize: 12, color: AppPalette.blue, fontWeight: FontWeight.w700)),
           ],
         ),
-          ),
-        ],
       ),
     );
   }
@@ -1007,19 +778,13 @@ class _MetricRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: const [
-        Expanded(
-          child: _MetricCard(value: '38', label: 'Etudiants'),
-        ),
+    return const Row(
+      children: [
+        Expanded(child: _MetricCard(value: '38', label: 'Etudiants')),
         SizedBox(width: 12),
-        Expanded(
-          child: _MetricCard(value: '4', label: 'Groupes'),
-        ),
+        Expanded(child: _MetricCard(value: '4', label: 'Groupes')),
         SizedBox(width: 12),
-        Expanded(
-          child: _MetricCard(value: '92%', label: 'Presence'),
-        ),
+        Expanded(child: _MetricCard(value: '92%', label: 'Presence')),
       ],
     );
   }
@@ -1042,19 +807,9 @@ class _MetricCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppPalette.blue,
-            ),
-          ),
+          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppPalette.blue)),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
+          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
         ],
       ),
     );
@@ -1139,9 +894,7 @@ class _PrimaryButton extends StatelessWidget {
           backgroundColor: color,
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../pages/student_shell.dart';
@@ -98,30 +97,6 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   void _goToDashboard(StudentProfile profile) {
-    void logout() => Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false);
-
-    final Widget destination;
-    switch (profile.role) {
-      case 'admin':
-        destination = AdminShell(profile: profile, onLogout: logout);
-        break;
-      case 'bde':
-        destination = const BureauDesEtudiantsScreen();
-        break;
-      case 'professeur':
-        destination = ProfessorShell(profile: profile, onLogout: logout);
-        break;
-      case 'parent':
-        destination = ParentShell(
-          nomEnfant: '${profile.prenoms} ${profile.nom}',
-          onLogout: logout,
-        );
-        break;
-      default:
-        destination = StudentShell(profile: profile, onLogout: logout);
-    }
-
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) {
         void logout() => Navigator.of(context).pushAndRemoveUntil(
@@ -143,7 +118,6 @@ class _AuthPageState extends State<AuthPage> {
       }),
       (_) => false,
     );
-        MaterialPageRoute(builder: (_) => destination), (_) => false);
   }
 
 void _verifier() async {
@@ -152,8 +126,6 @@ void _verifier() async {
   final mat = _matriculeCtrl.text.trim().toUpperCase();
   if (mat.isEmpty) { _setError('Veuillez saisir votre matricule.'); return; }
 
-  // Simuler la vérification du matricule côté backend
-  // On vérifie juste que le matricule existe dans notre DB simulée
   final user = _dbEtudiants[mat];
   if (user == null) {
     _setError('Matricule non reconnu.\nContactez l\'administration.');
@@ -167,7 +139,6 @@ void _verifier() async {
     _etape = user['premiereFois'] == true ? _Etape.premiereFois : _Etape.motDePasse;
   });
 }
-
 
   void _connecter() async {
   setState(() { _loading = true; _error = null; });
@@ -199,6 +170,7 @@ void _verifier() async {
     _setError(result['error'] ?? 'Mot de passe incorrect.');
   }
 }
+
   void _creerCompte() async {
     setState(() { _loading = true; _error = null; });
     await Future.delayed(const Duration(milliseconds: 800));
