@@ -20,7 +20,8 @@ const generateBulletinPdf = async (req, res) => {
             SELECT m.nom AS matiere, m.coefficient, n.valeur AS note
             FROM notes n
             JOIN modules m ON n.module_id = m.id
-            WHERE n.etudiant_id = $1
+            JOIN etudiants e ON n.etudiant_id = e.id
+            WHERE e.user_id = $1
         `;
         
         const notesResult = await pool.query(notesQuery, [etudiantId]);
