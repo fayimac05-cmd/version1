@@ -215,12 +215,12 @@ class _AuthPageState extends State<AuthPage> {
       final user = result['user'];
       _goToDashboard(
         StudentProfile(
-          nom: user['nom'],
+          nom: user['nom'] ?? '',
           prenoms: user['prenoms'] ?? '',
           matricule: user['matricule'] ?? _cleTrouvee!,
           email: user['email'] ?? '',
           telephone: user['tel'] ?? '',
-          filiere: user['filiere_id'] ?? '',
+          filiere: (user['filiere_id'] ?? '').toString(),
           motDePasse: '',
           domaine: user['domaine'] ?? '',
           role: user['role'] ?? 'etudiant',
