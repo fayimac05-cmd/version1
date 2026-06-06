@@ -58,3 +58,14 @@ CREATE TABLE notes (
     module_id INTEGER REFERENCES modules(id),
     valeur DECIMAL CHECK (valeur >= 0 AND valeur <= 20)
 );
+
+-- Table des évaluations professeurs
+CREATE TABLE evaluations_professeurs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    etudiant_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    professeur_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    note INTEGER CHECK (note >= 1 AND note <= 5),
+    commentaire TEXT,
+    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (etudiant_id, professeur_id)
+);

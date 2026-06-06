@@ -1,15 +1,42 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_palette.dart';
 
 // ── Modèle note ──────────────────────────────────────────────────────────────
 class _NoteModule {
   final String module, code, prof;
-  final double? note, cc, tp, exam;
+  final double? td, exam;
+  final double coefTd, coefExam;
   final int coefficient;
   final Color color;
 
-  const _NoteModule({required this.module, required this.code, required this.prof,
-      required this.note, this.cc, this.tp, this.exam, required this.coefficient, required this.color});
+  const _NoteModule({
+    required this.module, 
+    required this.code, 
+    required this.prof,
+    this.td, 
+    this.exam, 
+    this.coefTd = 1.0, 
+    this.coefExam = 2.0, 
+    required this.coefficient, 
+    required this.color
+  });
+
+  double? get note {
+    if (td != null && exam != null) {
+      return (td! * coefTd + exam! * coefExam) / (coefTd + coefExam);
+    } else if (exam != null) {
+      return exam;
+    } else if (td != null) {
+      return td;
+    }
+    return null;
+  }
 
   String get statut => note == null ? 'en_attente' : note! >= 10 ? 'valide' : note! >= 5 ? 'danger' : 'blamable';
 
@@ -24,10 +51,10 @@ class _NoteModule {
 
   String get labelStatut {
     switch (statut) {
-      case 'valide':   return '✅ Validé';
-      case 'danger':   return '⚠️ En danger';
-      case 'blamable': return '🚨 Blâmable';
-      default:         return '⏳ En attente';
+      case 'valide':   return ' Validé';
+      case 'danger':   return ' En danger';
+      case 'blamable': return ' Blâmable';
+      default:         return ' En attente';
     }
   }
 
@@ -52,19 +79,19 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
 
   final List<_NoteModule> _notes = [
     _NoteModule(module: 'Algorithmique & Structures', code: 'INFO101',
-        prof: 'Prof Ouédraogo', note: 15.10, cc: 14.0, tp: 15.0, exam: 16.0, coefficient: 3, color: AppPalette.blue),
+        prof: 'Prof Ouédraogo', td: 14.0, exam: 16.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
     _NoteModule(module: 'Bases de Données', code: 'INFO102',
-        prof: 'Prof Traoré', note: 13.10, cc: 12.0, tp: 13.0, exam: 14.0, coefficient: 3, color: Color(0xFF7C3AED)),
+        prof: 'Prof Traoré', td: 12.0, exam: 14.0, coefTd: 1, coefExam: 2, coefficient: 3, color: const Color(0xFF7C3AED)),
     _NoteModule(module: 'Réseaux informatiques', code: 'INFO103',
-        prof: 'Prof Sawadogo', note: 4.5, cc: 5.0, tp: null, exam: 4.0, coefficient: 2, color: Color(0xFF0891B2)),
+        prof: 'Prof Sawadogo', td: 5.0, exam: 4.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF0891B2)),
     _NoteModule(module: 'Maths Discrètes', code: 'MATH201',
-        prof: 'Prof Kaboré', note: 12.20, cc: 11.0, tp: null, exam: 13.0, coefficient: 2, color: Color(0xFF15803D)),
+        prof: 'Prof Kaboré', td: 11.0, exam: 13.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF15803D)),
     _NoteModule(module: 'Anglais Technique', code: 'ANG101',
-        prof: 'Prof Johnson', note: 16.60, cc: 16.0, tp: null, exam: 17.0, coefficient: 1, color: Color(0xFFD97706)),
+        prof: 'Prof Johnson', td: 16.0, exam: 17.0, coefTd: 1, coefExam: 2, coefficient: 1, color: const Color(0xFFD97706)),
     _NoteModule(module: 'Programmation OO', code: 'INFO104',
-        prof: 'Prof Ouédraogo', note: 9.5, cc: 10.0, tp: null, exam: 9.0, coefficient: 3, color: AppPalette.blue),
+        prof: 'Prof Ouédraogo', td: 10.0, exam: 9.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
     _NoteModule(module: 'Systèmes d\'exploitation', code: 'INFO105',
-        prof: 'Prof Traoré', note: null, cc: null, tp: null, exam: null, coefficient: 2, color: Color(0xFF7C3AED)),
+        prof: 'Prof Traoré', td: null, exam: null, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF7C3AED)),
   ];
 
   double get _moyenne {
@@ -84,6 +111,48 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
   void initState() { super.initState(); _tabCtrl = TabController(length: 2, vsync: this); }
   @override
   void dispose() { _tabCtrl.dispose(); super.dispose(); }
+
+  bool _isDownloading = false;
+
+  Future<void> _telechargerBulletin() async {
+    setState(() => _isDownloading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token') ?? '';
+      // ID étudiant de test ou récupéré depuis les préférences
+      final etudiantId = prefs.getString('user_id') ?? '123';
+      
+      // Remplacez l'URL par l'URL de votre backend (ex: http://10.0.2.2:3000 pour émulateur Android)
+      final url = Uri.parse('http://10.0.2.2:3000/api/notes/bulletin/$etudiantId');
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+      });
+
+      if (response.statusCode == 200) {
+        final Uint8List pdfBytes = response.bodyBytes;
+        await Printing.layoutPdf(
+          onLayout: (_) => pdfBytes,
+          name: 'Bulletin_Semestre_3.pdf',
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Erreur serveur: impossible de générer le bulletin.'),
+            backgroundColor: const Color(0xFFC62828),
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Erreur de connexion au serveur API.'),
+          backgroundColor: const Color(0xFFC62828),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +179,27 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
               Text('Semestre 3 — 2024/2025',
                   style: TextStyle(fontSize: 11, color: Colors.white70)),
             ])),
+            if (_isDownloading)
+              const Padding(
+                padding: EdgeInsets.only(right: 12),
+                child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+              )
+            else
+              GestureDetector(
+                onTap: _telechargerBulletin,
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white.withOpacity(0.25))),
+                  child: const Row(children: [
+                    Icon(Icons.picture_as_pdf, color: Colors.white, size: 12),
+                    SizedBox(width: 4),
+                    Text('Bulletin', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
             GestureDetector(
               onTap: () => showModalBottomSheet(context: context,
                   isScrollControlled: true, backgroundColor: Colors.transparent,
@@ -307,7 +397,7 @@ class _NoteCard extends StatelessWidget {
             children: [
               _buildScoreBox('Coefficient', note.coefficient, false),
               const SizedBox(width: 8),
-              _buildScoreBox('TP', note.tp, false),
+              _buildScoreBox('TD', note.td, false),
               const SizedBox(width: 8),
               _buildScoreBox('Exam', note.exam, false),
               const SizedBox(width: 8),
@@ -375,10 +465,72 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
   final _partiesCtrl = TextEditingController();
   final _justifCtrl  = TextEditingController();
   bool _loading = false, _envoye = false;
+  File? _imageFile;
+  final ImagePicker _picker = ImagePicker();
 
   final _types = ['Devoir sur table','Travaux Pratiques (TP)','Examen partiel','Examen final'];
 
   @override void dispose() { _partiesCtrl.dispose(); _justifCtrl.dispose(); super.dispose(); }
+
+  Future<void> _pickImageSource() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            const Text('Ajouter une pièce jointe', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Color(0xFFF0FDF4), shape: BoxShape.circle),
+                child: const Icon(Icons.camera_alt, color: Color(0xFF15803D)),
+              ),
+              title: const Text('Prendre une photo'),
+              onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.camera); },
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Color(0xFFEFF6FF), shape: BoxShape.circle),
+                child: const Icon(Icons.photo_library, color: AppPalette.blue),
+              ),
+              title: const Text('Choisir depuis la galerie'),
+              onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.gallery); },
+            ),
+            const SizedBox(height: 10),
+          ]
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 80);
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Erreur lors de la sélection de l\'image'),
+          backgroundColor: Color(0xFFC62828),
+        ));
+      }
+    }
+  }
 
   Future<void> _envoyer() async {
     if (_typeNote == null || _partiesCtrl.text.isEmpty || _justifCtrl.text.isEmpty) {
@@ -448,22 +600,32 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
             _champ(_justifCtrl, 'Pourquoi pensez-vous que la note est incorrecte ?', maxLines: 3),
             const SizedBox(height: 18),
             GestureDetector(
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Upload disponible en production'), backgroundColor: AppPalette.blue)),
+              onTap: _pickImageSource,
               child: Container(padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFE2E8F0))),
-                child: const Row(children: [
-                  Icon(Icons.attach_file, color: Color(0xFF64748B), size: 20),
-                  SizedBox(width: 10),
+                child: Row(children: [
+                  _imageFile != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(_imageFile!, width: 40, height: 40, fit: BoxFit.cover),
+                        )
+                      : const Icon(Icons.attach_file, color: Color(0xFF64748B), size: 20),
+                  const SizedBox(width: 10),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Pièce jointe (optionnel)', style: TextStyle(fontSize: 14,
+                    Text(_imageFile != null ? 'Image sélectionnée' : 'Pièce jointe (optionnel)', style: const TextStyle(fontSize: 14,
                         fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-                    SizedBox(height: 2),
-                    Text('Photo de votre copie', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    const SizedBox(height: 2),
+                    Text(_imageFile != null ? 'Appuyez pour modifier' : 'Photo de votre copie', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                   ])),
-                  Icon(Icons.chevron_right, color: Color(0xFF64748B), size: 20),
+                  if (_imageFile != null)
+                    GestureDetector(
+                      onTap: () => setState(() => _imageFile = null),
+                      child: const Icon(Icons.close, color: Color(0xFFC62828), size: 20),
+                    )
+                  else
+                    const Icon(Icons.chevron_right, color: Color(0xFF64748B), size: 20),
                 ]),
               ),
             ),
