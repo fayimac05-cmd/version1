@@ -36,6 +36,7 @@ app.use('/api/canaux',        require('./src/routes/canaux.routes'));
 app.use('/api/tickets',       require('./src/routes/tickets.routes'));
 app.use('/api/bde',           require('./src/routes/bde.routes'));
 app.use('/api/edt',           require('./src/routes/edt.routes'));
+app.use('/api/upload',        require('./src/routes/upload.routes'));
 app.use('/api/ia',            require('./src/routes/ia.routes'));
 app.use('/api/notifications', require('./src/routes/notifications.routes'));
 
