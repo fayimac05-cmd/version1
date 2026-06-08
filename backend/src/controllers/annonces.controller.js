@@ -1,5 +1,7 @@
 const AnnonceModel = require('../models/annonceModel');
 const CloudinaryService = require('../services/cloudinary.service');
+const pool = require('../config/db');
+const { resolveFiliere } = require('../utils/filieres');
 
 /**
  * Contrôleur pour les Annonces
@@ -113,10 +115,13 @@ exports.createAnnonce = async (req, res) => {
       });
     }
 
+    const filiereInfo = await resolveFiliere(pool, filiere);
+
     const annonceData = {
       titre,
       contenu,
-      filiere: filiere || null,
+      filiere: filiereInfo.id || filiere || null,
+      filiere_nom: filiereInfo.nom,
       niveau: niveau || null,
       cibleRole,
       statut: 'brouillon', // Statut par défaut
@@ -170,11 +175,15 @@ exports.updateAnnonce = async (req, res) => {
     const updateData = {
       ...(titre && { titre }),
       ...(contenu && { contenu }),
-      ...(filiere && { filiere }),
       ...(niveau && { niveau }),
       ...(cibleRole && { cibleRole }),
       updatedAt: new Date().toISOString(),
     };
+    if (filiere) {
+      const filiereInfo = await resolveFiliere(pool, filiere);
+      updateData.filiere = filiereInfo.id || filiere;
+      updateData.filiere_nom = filiereInfo.nom;
+    }
 
     const updatedAnnonce = await AnnonceModel.update(id, updateData);
 

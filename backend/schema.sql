@@ -26,7 +26,18 @@ CREATE TABLE users (
     tel VARCHAR(50),
     mot_de_passe VARCHAR(255),
     role VARCHAR(50) NOT NULL,
-    statut VARCHAR(50) DEFAULT 'actif'
+    statut VARCHAR(50) DEFAULT 'actif',
+    domaine VARCHAR(255),
+    niveau VARCHAR(50),
+    date_naissance VARCHAR(50),
+    nationalite VARCHAR(100) DEFAULT 'Burkinabè',
+    adresse TEXT,
+    nom_parent VARCHAR(255),
+    tel_parent VARCHAR(50),
+    email_parent VARCHAR(255),
+    etudiant_role VARCHAR(50) DEFAULT 'etudiant',
+    filiere_role VARCHAR(255),
+    filiere_nom VARCHAR(255)
 );
 
 -- Table des filières
@@ -49,7 +60,8 @@ CREATE TABLE modules (
     nom VARCHAR(255) NOT NULL,
     coefficient DECIMAL DEFAULT 1,
     volume_horaire INTEGER,
-    filiere_id INTEGER REFERENCES filieres(id) ON DELETE CASCADE
+    filiere_id INTEGER REFERENCES filieres(id) ON DELETE CASCADE,
+    filiere_nom VARCHAR(255)
 );
 
 -- Table de liaison Modules - Professeurs
@@ -66,12 +78,27 @@ CREATE TABLE membres (
     permissions JSONB DEFAULT '[]'
 );
 
--- Table des étudiants
+-- Table des étudiants (infos lisibles directement dans Supabase)
 CREATE TABLE etudiants (
     id SERIAL PRIMARY KEY,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
     filiere_id INTEGER REFERENCES filieres(id),
-    premiereFois BOOLEAN DEFAULT TRUE
+    premiereFois BOOLEAN DEFAULT TRUE,
+    matricule VARCHAR(50),
+    nom VARCHAR(255),
+    prenoms VARCHAR(255),
+    email VARCHAR(255),
+    tel VARCHAR(50),
+    filiere_nom VARCHAR(255),
+    domaine VARCHAR(255),
+    niveau VARCHAR(50),
+    date_naissance VARCHAR(50),
+    nationalite VARCHAR(100) DEFAULT 'Burkinabè',
+    adresse TEXT,
+    nom_parent VARCHAR(255),
+    tel_parent VARCHAR(50),
+    email_parent VARCHAR(255),
+    statut VARCHAR(50) DEFAULT 'actif'
 );
 
 -- Table des notes
@@ -112,6 +139,7 @@ CREATE TABLE annonces (
     titre VARCHAR(255) NOT NULL,
     contenu TEXT NOT NULL,
     filiere INTEGER REFERENCES filieres(id) ON DELETE SET NULL,
+    filiere_nom VARCHAR(255),
     niveau VARCHAR(50),
     "cibleRole" VARCHAR(50) NOT NULL,
     statut VARCHAR(50) DEFAULT 'brouillon',
@@ -125,6 +153,7 @@ CREATE TABLE annonces (
 CREATE TABLE edt (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     filiere INTEGER REFERENCES filieres(id) ON DELETE CASCADE,
+    filiere_nom VARCHAR(255),
     niveau VARCHAR(50) NOT NULL,
     "anneeAcademique" VARCHAR(50) NOT NULL,
     "pdfUrl" VARCHAR(255) NOT NULL,
