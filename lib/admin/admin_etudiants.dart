@@ -3,6 +3,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../admin/admin_theme.dart';
+import '../services/api_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE ÉTUDIANT
@@ -68,103 +69,27 @@ class Etudiant {
   }
 }
 
-final List<Etudiant> adminEtudiants = [
-  Etudiant(
-    matricule: '24IST-O2/1851', nom: 'KOURAOGO', prenoms: 'Ibrahim',
-    filiere: 'Réseaux Informatiques et Télécom', domaine: 'Sciences & Technologies',
-    niveau: 'Licence 2', email: 'ibrahim.kouraogo@ist.bf', telephone: '70000001',
-    dateNaissance: '15/03/2004', nationalite: 'Burkinabè', adresse: 'Ouaga 2000, Secteur 15',
-    nomParent: 'KOURAOGO Seydou', telParent: '65001234', emailParent: 'seydou@gmail.com',
-    statut: 'actif',
-    role: 'delegue', filiereRole: 'Réseaux Informatiques et Télécom',
-    notes: [
-      {'module': 'Réseaux & Protocoles', 'note': 14.5, 'coef': 3},
-      {'module': 'Programmation Web', 'note': 16.0, 'coef': 2},
-      {'module': 'Base de Données', 'note': 13.0, 'coef': 3},
-      {'module': 'Sécurité Informatique', 'note': 15.5, 'coef': 2},
-    ],
-    badges: ['Major S1', 'Assidu'],
-  ),
-  Etudiant(
-    matricule: '24IST-O2/1234', nom: 'TRAORÉ', prenoms: 'Fatimata',
-    filiere: 'Réseaux Informatiques et Télécom', domaine: 'Sciences & Technologies',
-    niveau: 'Licence 2', email: 'fatimata.traore@ist.bf', telephone: '70000002',
-    dateNaissance: '22/07/2004', nationalite: 'Burkinabè', adresse: 'Pissy, Ouagadougou',
-    nomParent: 'TRAORÉ Moussa', telParent: '76000002', emailParent: 'traore@gmail.com',
-    statut: 'actif',
-    role: 'delegue_adjoint', filiereRole: 'Réseaux Informatiques et Télécom',
-    notes: [
-      {'module': 'Réseaux & Protocoles', 'note': 17.0, 'coef': 3},
-      {'module': 'Programmation Web', 'note': 18.5, 'coef': 2},
-      {'module': 'Base de Données', 'note': 16.0, 'coef': 3},
-    ],
-    badges: ['Major S2', 'Mention TB'],
-  ),
-  Etudiant(
-    matricule: '23IST-O2/0987', nom: 'SAWADOGO', prenoms: 'Moussa',
-    filiere: 'Gestion Comptable et Financière', domaine: 'Sciences de Gestion',
-    niveau: 'Licence 3', email: 'moussa.sawadogo@ist.bf', telephone: '70000003',
-    dateNaissance: '10/01/2003', nationalite: 'Burkinabè', adresse: 'Gounghin, Ouagadougou',
-    nomParent: 'SAWADOGO Ali', telParent: '76000003', emailParent: 'sawadogo@gmail.com',
-    statut: 'suspendu',
-    notes: [
-      {'module': 'Comptabilité Générale', 'note': 8.0, 'coef': 3},
-      {'module': 'Fiscalité', 'note': 7.5, 'coef': 2},
-    ],
-    badges: [],
-  ),
-  Etudiant(
-    matricule: '24IST-O2/1456', nom: 'KABORÉ', prenoms: 'Djeneba',
-    filiere: 'Marketing & Communication', domaine: 'Sciences de Gestion',
-    niveau: 'Licence 2', email: 'djeneba.kabore@ist.bf', telephone: '70000004',
-    dateNaissance: '05/11/2004', nationalite: 'Burkinabè', adresse: 'Ouaga 2000, Secteur 53',
-    nomParent: 'KABORÉ Jean', telParent: '76000004', emailParent: 'kabore@gmail.com',
-    statut: 'actif',
-    role: 'bde_president',
-    notes: [
-      {'module': 'Marketing Digital', 'note': 15.5, 'coef': 3},
-      {'module': 'Communication', 'note': 14.0, 'coef': 2},
-    ],
-    badges: ['Créative'],
-  ),
-  Etudiant(
-    matricule: '24IST-O2/1789', nom: 'OUÉDRAOGO', prenoms: 'Hamidou',
-    filiere: 'Électrotechnique', domaine: 'Sciences & Technologies',
-    niveau: 'Licence 2', email: 'hamidou.ouedraogo@ist.bf', telephone: '70000005',
-    dateNaissance: '18/06/2004', nationalite: 'Burkinabè', adresse: 'Kossodo, Ouagadougou',
-    nomParent: 'OUÉDRAOGO Rasmané', telParent: '76000005', emailParent: 'rasma@gmail.com',
-    statut: 'actif',
-    role: 'bde_adjoint',
-    notes: [
-      {'module': 'Électronique de Puissance', 'note': 12.0, 'coef': 3},
-      {'module': 'Machines Électriques', 'note': 11.5, 'coef': 2},
-    ],
-    badges: [],
-  ),
-  Etudiant(
-    matricule: '23IST-O2/0654', nom: 'COMPAORÉ', prenoms: 'Aminata',
-    filiere: 'Finance Comptabilité', domaine: 'Sciences de Gestion',
-    niveau: 'Licence 3', email: 'aminata.compaore@ist.bf', telephone: '70000006',
-    dateNaissance: '30/09/2003', nationalite: 'Burkinabè', adresse: 'Tampouy, Ouagadougou',
-    nomParent: 'COMPAORÉ Brice', telParent: '76000006', emailParent: 'brice@gmail.com',
-    statut: 'renvoye',
-    role: 'delegue', filiereRole: 'Finance Comptabilité',
-    notes: [], badges: [],
-  ),
-  Etudiant(
-    matricule: '24IST-O2/1320', nom: 'SAWADOGO', prenoms: 'Raïssa',
-    filiere: 'Réseaux Informatiques et Télécom', domaine: 'Sciences & Technologies',
-    niveau: 'Licence 2', email: 'raissa.sawadogo@ist.bf', telephone: '70000008',
-    dateNaissance: '12/04/2004', nationalite: 'Burkinabè', adresse: 'Pissy, Ouagadougou',
-    nomParent: 'SAWADOGO Oumar', telParent: '76000008', emailParent: 'oumar@gmail.com',
-    statut: 'actif',
-    role: 'bde_membre',
-    notes: [
-      {'module': 'Réseaux & Protocoles', 'note': 13.0, 'coef': 3},
-    ],
-    badges: [],
-  ),
-];
+List<Etudiant> adminEtudiants = [];
+
+Etudiant _etudiantFromApi(Map<String, dynamic> j) => Etudiant(
+  matricule: j['matricule'] ?? '',
+  nom: j['nom'] ?? '',
+  prenoms: j['prenoms'] ?? '',
+  filiere: j['filiere'] ?? '',
+  domaine: j['domaine'] ?? '',
+  niveau: j['niveau'] ?? '',
+  email: j['email'] ?? '',
+  telephone: j['telephone'] ?? '',
+  dateNaissance: j['dateNaissance'] ?? '',
+  nationalite: j['nationalite'] ?? 'Burkinabè',
+  adresse: j['adresse'] ?? '',
+  nomParent: j['nomParent'] ?? '',
+  telParent: j['telParent'] ?? '',
+  emailParent: j['emailParent'] ?? '',
+  statut: j['statut'] ?? 'actif',
+  role: j['role'] ?? 'etudiant',
+  filiereRole: j['filiereRole'],
+);
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE ÉTUDIANTS
@@ -182,11 +107,23 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
   String _filtreStatut  = 'tous';
   String _filtredomaine = 'tous';
   String _filtreNiveau  = 'tous';
+  bool _loading = true;
+  bool _inscriptionEnCours = false;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _chargerEtudiants();
+  }
+
+  Future<void> _chargerEtudiants() async {
+    setState(() => _loading = true);
+    final data = await ApiService.getEtudiants();
+    adminEtudiants = data
+        .map((e) => _etudiantFromApi(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -209,6 +146,13 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
   Widget build(BuildContext context) {
     final isDesktop = AdminTheme.isDesktop(context);
     final liste = _filtered;
+
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F7FA),
+        body: Center(child: CircularProgressIndicator(color: AdminTheme.primary)),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -1075,7 +1019,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
             Padding(
               padding: const EdgeInsets.all(16),
               child: GestureDetector(
-                onTap: () {
+                onTap: _inscriptionEnCours ? null : () async {
                   if (nomCtrl.text.isEmpty || prenomCtrl.text.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                       content: Text('Nom et prénom requis.'),
@@ -1083,38 +1027,54 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                       behavior: SnackBarBehavior.floating));
                     return;
                   }
-                  final annee = DateTime.now().year.toString().substring(2);
-                  final num   = (1900 + adminEtudiants.length).toString();
-                  final mat   = '${annee}IST-O2/$num';
-                  setState(() => adminEtudiants.add(Etudiant(
-                    matricule: mat,
-                    nom: nomCtrl.text.toUpperCase(),
-                    prenoms: prenomCtrl.text,
-                    filiere: filiere, domaine: domaine, niveau: niveau,
-                    email: emailCtrl.text.isEmpty ? '$num@ist.bf' : emailCtrl.text,
-                    telephone: telCtrl.text,
-                    dateNaissance: dnCtrl.text,
-                    nationalite: 'Burkinabè',
-                    adresse: adresseCtrl.text,
-                    nomParent: nomParCtrl.text,
-                    telParent: telParCtrl.text,
-                    emailParent: '',
-                  )));
-                  Navigator.pop(ctx);
-                  _snack('✅ ${prenomCtrl.text} inscrit(e) ! Matricule : $mat');
+                  setState(() => _inscriptionEnCours = true);
+                  final result = await ApiService.inscrireEtudiant({
+                    'nom': nomCtrl.text,
+                    'prenoms': prenomCtrl.text,
+                    'email': emailCtrl.text,
+                    'telephone': telCtrl.text,
+                    'filiere': filiere,
+                    'domaine': domaine,
+                    'niveau': niveau,
+                    'dateNaissance': dnCtrl.text,
+                    'adresse': adresseCtrl.text,
+                    'nomParent': nomParCtrl.text,
+                    'telParent': telParCtrl.text,
+                    'nationalite': 'Burkinabè',
+                  });
+                  if (!mounted) return;
+                  setState(() => _inscriptionEnCours = false);
+                  if (result['success'] == true) {
+                    await _chargerEtudiants();
+                    if (!mounted) return;
+                    Navigator.pop(ctx);
+                    _snack('✅ ${prenomCtrl.text} inscrit(e) ! Matricule : ${result['matricule']}');
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(result['error'] ?? 'Erreur inscription.'),
+                      backgroundColor: AdminTheme.danger,
+                      behavior: SnackBarBehavior.floating));
+                  }
                 },
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
-                    color: AdminTheme.primary,
+                    color: _inscriptionEnCours
+                        ? AdminTheme.primary.withOpacity(0.6)
+                        : AdminTheme.primary,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3),
                         blurRadius: 8, offset: const Offset(0, 3))],
                   ),
-                  child: const Center(child: Text('✅ Inscrire l\'étudiant',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                          color: Colors.white))),
+                  child: Center(child: _inscriptionEnCours
+                      ? const SizedBox(
+                          width: 22, height: 22,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('✅ Inscrire l\'étudiant',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+                              color: Colors.white))),
                 ),
               ),
             ),

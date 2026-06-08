@@ -1,4 +1,6 @@
 const EdtModel = require('../models/edtModel');
+const pool = require('../config/db');
+const { resolveFiliere } = require('../utils/filieres');
 
 /**
  * Contrôleur pour les Emplois Du Temps (EDT)
@@ -119,8 +121,11 @@ exports.createEdt = async (req, res) => {
       });
     }
 
+    const filiereInfo = await resolveFiliere(pool, filiere);
+
     const edtData = {
-      filiere,
+      filiere: filiereInfo.id || filiere,
+      filiere_nom: filiereInfo.nom,
       niveau,
       anneeAcademique: anneeAcademique || new Date().getFullYear().toString(),
       pdfUrl: req.uploadedFileUrl,
@@ -162,12 +167,16 @@ exports.updateEdt = async (req, res) => {
     }
 
     const updateData = {
-      ...(filiere && { filiere }),
       ...(niveau && { niveau }),
       ...(anneeAcademique && { anneeAcademique }),
       ...(req.uploadedFileUrl && { pdfUrl: req.uploadedFileUrl }),
       updatedAt: new Date().toISOString(),
     };
+    if (filiere) {
+      const filiereInfo = await resolveFiliere(pool, filiere);
+      updateData.filiere = filiereInfo.id || filiere;
+      updateData.filiere_nom = filiereInfo.nom;
+    }
 
     const updatedEdt = await EdtModel.update(id, updateData);
 

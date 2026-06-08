@@ -83,6 +83,49 @@ class ApiService {
     }
   }
 
+  // ── Liste des étudiants ──────────────────────────────────
+  static Future<List<dynamic>> getEtudiants() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/etudiants'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ── Inscrire un étudiant ─────────────────────────────────
+  static Future<Map<String, dynamic>> inscrireEtudiant(
+      Map<String, dynamic> data) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/etudiants'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 201) {
+        return {'success': true, ...body};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'inscription.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
   // ── Récupérer le profil connecté ─────────────────────────
   static Future<Map<String, dynamic>?> getMe() async {
     try {
