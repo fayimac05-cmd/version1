@@ -1,9 +1,9 @@
-﻿const bcrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 
 const genToken = (user) => jwt.sign(
-  { id: user.id, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id, etablissement_id: user.etablissement_id },
+  { id: user.id, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id },
   process.env.JWT_SECRET,
   { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
 );
@@ -14,10 +14,10 @@ const login = async (req, res) => {
     let user;
 
     if (matricule) {
-      const r = await pool.query('SELECT * FROM users WHERE matricule = $1', [matricule.trim().toUpperCase()]);
+      const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.matricule = $1', [matricule.trim().toUpperCase()]);
       user = r.rows[0];
     } else if (nom && tel) {
-      const r = await pool.query('SELECT * FROM users WHERE LOWER(nom) = LOWER($1) AND tel = $2', [nom.trim(), tel.trim()]);
+      const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE LOWER(u.nom) = LOWER($1) AND u.tel = $2', [nom.trim(), tel.trim()]);
       user = r.rows[0];
     } else {
       return res.status(400).json({ message: 'Identifiants manquants.' });
@@ -36,7 +36,7 @@ const login = async (req, res) => {
 
     return res.status(200).json({
       token: genToken(user),
-      user: { id: user.id, nom: user.nom, prenoms: user.prenoms, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id, etablissement_id: user.etablissement_id, domaine: user.domaine, statut: user.statut },
+      user: { id: user.id, nom: user.nom, prenoms: user.prenoms, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id, statut: user.statut },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -50,7 +50,7 @@ const setupPassword = async (req, res) => {
     if (!userId || !motDePasse) return res.status(400).json({ message: 'Donnees manquantes.' });
     const hashed = await bcrypt.hash(motDePasse, 10);
     await pool.query('UPDATE users SET mot_de_passe = $1, email = $2 WHERE id = $3', [hashed, email || null, userId]);
-    const r = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1', [userId]);
     const user = r.rows[0];
     return res.status(200).json({ token: genToken(user), user: { id: user.id, nom: user.nom, prenoms: user.prenoms, role: user.role } });
   } catch (err) {
@@ -62,7 +62,7 @@ const setupPassword = async (req, res) => {
 const me = async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id, nom, prenoms, matricule, email, tel, role, filiere_id, etablissement_id, domaine, statut FROM users WHERE id = $1',
+      'SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.statut, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1',
       [req.user.id]
     );
     if (!r.rows[0]) return res.status(404).json({ message: 'Introuvable.' });

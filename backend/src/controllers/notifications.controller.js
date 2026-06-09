@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-// backend/src/controllers/notifications.controller.js
-
-const { sendNotification } = require('../services/firebase.service');
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
@@ -66,10 +62,10 @@ const marquerToutesLues = async (req, res) => {
   }
 };
 
-// Fonction utilitaire - Envoyer notification automatique
+// Fonction utilitaire - Enregistrer une notification dans Supabase
 const envoyerNotificationAuto = async (userId, titre, corps, data = {}) => {
   try {
-    // Sauvegarder en base
+    // Sauvegarder en base (Firebase retiré)
     await supabase.from('notifications').insert({
       user_id: userId,
       titre,
@@ -78,10 +74,8 @@ const envoyerNotificationAuto = async (userId, titre, corps, data = {}) => {
       created_at: new Date(),
     });
 
-    // Envoyer push FCM
-    await sendNotification(userId, titre, corps, data);
   } catch (error) {
-    console.error('Erreur notification auto:', error);
+    console.error('Erreur sauvegarde notification:', error);
   }
 };
 
@@ -91,8 +85,3 @@ module.exports = {
   marquerToutesLues,
   envoyerNotificationAuto,
 };
-=======
-exports.getNotifications = (req, res) => res.json([]);
-exports.marquerCommeLue = (req, res) => res.json({ success: true });
-exports.marquerToutesLues = (req, res) => res.json({ success: true });
->>>>>>> c8d01e3f044afae9e341821f613d675a29421b21

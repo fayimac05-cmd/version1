@@ -43,12 +43,12 @@ class HomeTab extends StatelessWidget {
 
   // Modules : alternance bleu / blanc / orange
   static const _modulesItems = [
-    {'nom': 'Algorithmique',   'note': '15.5', 'progress': 0.78, 'style': 'bleu'},
+    {'nom': 'Algorithmique',   'note': '15.5', 'progress': 0.78, 'style': 'blanc'},
     {'nom': 'Réseaux',         'note': '13.0', 'progress': 0.65, 'style': 'blanc'},
-    {'nom': 'Base de données', 'note': '18.0', 'progress': 0.90, 'style': 'orange'},
+    {'nom': 'Base de données', 'note': '18.0', 'progress': 0.90, 'style': 'blanc'},
     {'nom': 'Systèmes',        'note': '9.0',  'progress': 0.45, 'style': 'blanc'},
-    {'nom': 'Maths',           'note': '14.5', 'progress': 0.72, 'style': 'bleu'},
-    {'nom': 'Anglais',         'note': '16.0', 'progress': 0.80, 'style': 'orange'},
+    {'nom': 'Maths',           'note': '14.5', 'progress': 0.72, 'style': 'blanc'},
+    {'nom': 'Anglais',         'note': '16.0', 'progress': 0.80, 'style': 'blanc'},
   ];
 
   Color _bg(String style) {

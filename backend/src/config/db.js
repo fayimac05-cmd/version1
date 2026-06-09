@@ -12,4 +12,8 @@ pool.connect((err) => {
   if (err) console.error('Erreur connexion PostgreSQL :', err.message, '(' + err.code + ')');
   else     console.log('Connecte a PostgreSQL — scolarhub');
 });
+pool.on('error', (err, client) => {
+  console.error('Erreur inattendue sur le client PostgreSQL idle', err);
+});
+
 module.exports = pool;

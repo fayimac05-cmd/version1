@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { getFiliereNomById } = require('../src/utils/filieres');
 
 exports.getAllModules = async (req, res) => {
   const { filiere_id } = req.query;
@@ -19,9 +20,10 @@ exports.getAllModules = async (req, res) => {
 exports.createModule = async (req, res) => {
   const { nom, coefficient, volume_horaire, filiere_id } = req.body;
   try {
+    const filiere_nom = await getFiliereNomById(db, filiere_id);
     const result = await db.query(
-      'INSERT INTO modules (nom, coefficient, volume_horaire, filiere_id) VALUES ($1, $2, $3, $4) RETURNING *',
-      [nom, coefficient, volume_horaire, filiere_id]
+      'INSERT INTO modules (nom, coefficient, volume_horaire, filiere_id, filiere_nom) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [nom, coefficient, volume_horaire, filiere_id, filiere_nom]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
