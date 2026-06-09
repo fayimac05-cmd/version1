@@ -1,4 +1,6 @@
-﻿module.exports = (io) => {
+const { initSocket } = require('./socketHandler');
+
+module.exports = (io) => {
   const connectedUsers = {};
 
   io.on('connection', (socket) => {
@@ -32,4 +34,7 @@
       if (socket.userId) delete connectedUsers[socket.userId];
     });
   });
+
+  // Jalil — Messagerie temps réel
+  initSocket(io);
 };

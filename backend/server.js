@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
@@ -14,6 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
+app.set('io', io);
 
 app.use(helmet());
 app.use(cors());
@@ -31,7 +32,7 @@ app.use('/api/modules',       require('./src/routes/modules.routes'));
 app.use('/api/notes',         require('./src/routes/notes.routes'));
 app.use('/api/reclamations',  require('./src/routes/reclamations.routes'));
 app.use('/api/annonces',      require('./src/routes/annonces.routes'));
-app.use('/api/messages',      require('./src/routes/messages.routes'));
+app.use('/api/messages',      require('./src/routes/messageRoutes'));  // ← Jalil
 app.use('/api/canaux',        require('./src/routes/canaux.routes'));
 app.use('/api/tickets',       require('./src/routes/tickets.routes'));
 app.use('/api/bde',           require('./src/routes/bde.routes'));
