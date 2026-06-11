@@ -9,6 +9,9 @@ import 'bureau_des_etudiants.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/auth_service.dart';
+import '../services/socket_service.dart';
+
+// Dans _goToDashboard(), avant Navigator.of(context).pushAndRemoveUntil(...)
 
 final Map<String, Map<String, dynamic>> _dbEtudiants = {
   '24IST-O2/1851': {
@@ -133,6 +136,7 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   void _goToDashboard(StudentProfile profile) {
+    SocketService().connect(profile.matricule);
     void logout() => Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const SplashScreen()),
       (_) => false,
