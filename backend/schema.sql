@@ -172,3 +172,30 @@ CREATE TABLE notifications (
     lue BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Table des sessions de notes
+CREATE TABLE sessions_notes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    filiere_id INTEGER REFERENCES filieres(id) ON DELETE CASCADE,
+    filiere_nom VARCHAR(255),
+    niveau VARCHAR(50),
+    module_id INTEGER REFERENCES modules(id) ON DELETE CASCADE,
+    professeur_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    date_session TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_sent BOOLEAN DEFAULT FALSE
+);
+
+-- Table des supports de cours
+CREATE TABLE supports_cours (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    titre VARCHAR(255) NOT NULL,
+    description TEXT,
+    filiere_id INTEGER REFERENCES filieres(id) ON DELETE CASCADE,
+    filiere_nom VARCHAR(255),
+    niveau VARCHAR(50),
+    module_id INTEGER REFERENCES modules(id) ON DELETE CASCADE,
+    professeur_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    fichier_url VARCHAR(500) NOT NULL,
+    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
