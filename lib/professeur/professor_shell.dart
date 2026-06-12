@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../models/class_model.dart';
 import '../models/student_profile.dart';
-import '../pages/professor_course_detail_screen.dart';
+import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
-import 'class_detail_screen.dart';
-import 'mock_data.dart';
+import 'edit_profile_screen.dart';
+import 'grade_session_screen.dart';
+import 'upload_course_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfessorShell extends StatefulWidget {
   const ProfessorShell({
@@ -30,40 +31,52 @@ class _ProfessorShellState extends State<ProfessorShell> {
       const _ClassesTab(),
       const _CoursesTab(),
       const _GradesTab(),
-      _ProfessorProfileTab(profile: widget.profile, onLogout: widget.onLogout),
+      _ProfessorProfileTab(onLogout: widget.onLogout),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(child: pages[_currentTab]),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: AppPalette.white,
-        indicatorColor: const Color(0xFFDDEBFF),
-        selectedIndex: _currentTab,
-        onDestinationSelected: (index) => setState(() => _currentTab = index),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.groups_outlined),
-            selectedIcon: Icon(Icons.groups_rounded),
-            label: 'Classes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.menu_book_outlined),
-            selectedIcon: Icon(Icons.menu_book_rounded),
-            label: 'Cours',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.fact_check_outlined),
-            selectedIcon: Icon(Icons.fact_check_rounded),
-            label: 'Notes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profil',
-          ),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: NavigationBar(
+          backgroundColor: Colors.white,
+          indicatorColor: AppPalette.blue.withOpacity(0.15),
+          selectedIndex: _currentTab,
+          onDestinationSelected: (index) => setState(() => _currentTab = index),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          elevation: 0,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.groups_outlined),
+              selectedIcon: Icon(Icons.groups_rounded, color: AppPalette.blue),
+              label: 'Classes',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.menu_book_outlined),
+              selectedIcon: Icon(Icons.menu_book_rounded, color: AppPalette.blue),
+              label: 'Cours',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.fact_check_outlined),
+              selectedIcon: Icon(Icons.fact_check_rounded, color: AppPalette.blue),
+              label: 'Notes',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person_rounded, color: AppPalette.blue),
+              label: 'Profil',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -73,38 +86,49 @@ class _ProfessorPage extends StatelessWidget {
   const _ProfessorPage({
     required this.title,
     required this.subtitle,
+    this.action,
     required this.children,
   });
 
   final String title;
   final String subtitle;
+  final Widget? action;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+              if (action != null) action!,
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             subtitle,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               color: Color(0xFF64748B),
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 28),
           ...children,
         ],
       ),
@@ -112,18 +136,46 @@ class _ProfessorPage extends StatelessWidget {
   }
 }
 
-class _ClassesTab extends StatelessWidget {
+// ── Classes ────────────────────────────────────────────────────────────────
+class _ClassesTab extends StatefulWidget {
   const _ClassesTab();
+
+  @override
+  State<_ClassesTab> createState() => _ClassesTabState();
+}
+
+class _ClassesTabState extends State<_ClassesTab> {
+  List<dynamic> _classes = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchClasses();
+  }
+
+  Future<void> _fetchClasses() async {
+    final data = await ProfessorService.getAssignedClasses();
+    if (mounted) {
+      setState(() {
+        _classes = data;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return _ProfessorPage(
-      title: 'Mes classes',
-      subtitle: 'Suivez les effectifs et ouvrez le detail de chaque classe.',
+      title: 'Mes Classes',
+      subtitle: 'Suivez les effectifs et consultez vos classes assignées.',
       children: [
-        const _MetricRow(),
-        const SizedBox(height: 16),
-        ...mockClasses.map((classData) => _ClassCard(classData: classData)),
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_classes.isEmpty)
+          const _EmptyState(icon: Icons.school, message: 'Aucune classe assignée.')
+        else
+          ..._classes.map((c) => _ClassCard(classData: c)),
       ],
     );
   }
@@ -131,65 +183,95 @@ class _ClassesTab extends StatelessWidget {
 
 class _ClassCard extends StatelessWidget {
   const _ClassCard({required this.classData});
-
-  final ClassModel classData;
+  final dynamic classData;
 
   @override
   Widget build(BuildContext context) {
-    return _InfoCard(
+    return _AnimatedCard(
       icon: Icons.school_rounded,
-      title: classData.name,
-      subtitle: '${classData.students.length} etudiants - ${classData.level}',
-      tag: 'Gerer',
+      iconColor: Colors.deepPurple,
+      title: classData['nom'] ?? 'Classe sans nom',
+      subtitle: classData['niveau'] ?? 'Tous niveaux',
+      tag: 'Voir',
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ClassDetailScreen(classData: classData),
-          ),
-        );
+        // En attendant d'adapter ClassDetailScreen aux données réelles
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Détail de la classe en cours de construction')));
       },
     );
   }
 }
 
-class _CoursesTab extends StatelessWidget {
+// ── Cours ──────────────────────────────────────────────────────────────────
+class _CoursesTab extends StatefulWidget {
   const _CoursesTab();
 
-  static const _courses = [
-    {'name': 'Reseaux informatiques', 'class': 'Licence 2 R&T'},
-    {'name': 'Bases de donnees', 'class': 'Licence 2 Informatique'},
-    {'name': 'Developpement mobile', 'class': 'Licence 3 Informatique'},
-  ];
+  @override
+  State<_CoursesTab> createState() => _CoursesTabState();
+}
+
+class _CoursesTabState extends State<_CoursesTab> {
+  List<dynamic> _cours = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCours();
+  }
+
+  Future<void> _fetchCours() async {
+    final data = await ProfessorService.getCours();
+    if (mounted) {
+      setState(() {
+        _cours = data;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return _ProfessorPage(
-      title: 'Supports de cours',
-      subtitle: 'Publiez et consultez les supports disponibles par classe.',
-      children: [
-        ..._courses.map(
-          (course) => _InfoCard(
-            icon: Icons.menu_book_rounded,
-            title: course['name']!,
-            subtitle: course['class']!,
-            tag: 'Ouvrir',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ProfessorCourseDetailScreen(
-                    courseName: course['name']!,
-                    className: course['class']!,
-                  ),
-                ),
-              );
-            },
-          ),
+      title: 'Mes Supports',
+      subtitle: 'Publiez et gérez les documents de cours pour vos étudiants.',
+      action: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [AppPalette.blue, Colors.blueAccent]),
+          borderRadius: BorderRadius.circular(12),
         ),
+        child: IconButton(
+          icon: const Icon(Icons.add, color: Colors.white),
+          onPressed: () async {
+            final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const UploadCourseScreen()));
+            if (res == true) _fetchCours();
+          },
+        ),
+      ),
+      children: [
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_cours.isEmpty)
+          const _EmptyState(icon: Icons.menu_book, message: 'Aucun cours publié.')
+        else
+          ..._cours.map((c) => _AnimatedCard(
+                icon: Icons.picture_as_pdf_rounded,
+                iconColor: Colors.redAccent,
+                title: c['titre'] ?? 'Sans titre',
+                subtitle: '${c['module_nom']} - ${c['filiere_nom']}',
+                tag: 'Ouvrir',
+                onTap: () async {
+                  final url = Uri.parse(c['fichier_url']);
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(url);
+                  }
+                },
+              )),
       ],
     );
   }
 }
 
+// ── Notes ──────────────────────────────────────────────────────────────────
 class _GradesTab extends StatefulWidget {
   const _GradesTab();
 
@@ -198,158 +280,190 @@ class _GradesTab extends StatefulWidget {
 }
 
 class _GradesTabState extends State<_GradesTab> {
-  final _moduleCtrl = TextEditingController(text: 'Reseaux informatiques');
+  List<dynamic> _sessions = [];
+  bool _isLoading = true;
 
   @override
-  void dispose() {
-    _moduleCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _fetchSessions();
   }
 
-  void _createSession() {
-    final classData = mockClasses.first;
-    final session = GradeSession(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      classId: classData.id,
-      className: classData.name,
-      date: DateTime.now(),
-      moduleName: _moduleCtrl.text.trim().isEmpty
-          ? 'Module sans titre'
-          : _moduleCtrl.text.trim(),
-      grades: classData.students
-          .map(
-            (student) => StudentGrade(
-              matricule: student.matricule,
-              name: '${student.prenoms} ${student.nom}',
-            ),
-          )
-          .toList(),
-    );
-
-    setState(() => GlobalStore.gradeSessions.insert(0, session));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Session de notes creee.'),
-        backgroundColor: Color(0xFF15803D),
-      ),
-    );
+  Future<void> _fetchSessions() async {
+    final data = await ProfessorService.getGradeSessions();
+    if (mounted) {
+      setState(() {
+        _sessions = data;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final sessions = GlobalStore.gradeSessions;
-
     return _ProfessorPage(
-      title: 'Notes',
-      subtitle: 'Preparez les sessions de notes et suivez leur statut.',
-      children: [
-        _FormCard(
-          children: [
-            TextField(
-              controller: _moduleCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Module ou matiere',
-                prefixIcon: Icon(Icons.menu_book_outlined),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _PrimaryButton(
-              label: 'Creer une session',
-              icon: Icons.add_task_rounded,
-              onPressed: _createSession,
-            ),
-          ],
+      title: 'Évaluations',
+      subtitle: 'Créez et envoyez les sessions de notes.',
+      action: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF34D399)]),
+          borderRadius: BorderRadius.circular(12),
         ),
-        const SizedBox(height: 18),
-        if (sessions.isEmpty)
-          const _EmptyState()
+        child: IconButton(
+          icon: const Icon(Icons.add, color: Colors.white),
+          onPressed: () async {
+            final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const GradeSessionScreen()));
+            if (res == true) _fetchSessions();
+          },
+        ),
+      ),
+      children: [
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_sessions.isEmpty)
+          const _EmptyState(icon: Icons.assignment_turned_in, message: 'Aucune session de notes.')
         else
-          ...sessions.map(
-            (session) => _InfoCard(
-              icon: session.isSent
-                  ? Icons.verified_rounded
-                  : Icons.pending_actions_rounded,
-              title: session.className,
-              subtitle:
-                  '${session.moduleName} - ${session.date.day}/${session.date.month}/${session.date.year}',
-              tag: session.isSent ? 'Envoye' : 'Pret',
-              onTap: () => setState(() => session.isSent = true),
-            ),
-          ),
+          ..._sessions.map((s) => _AnimatedCard(
+                icon: s['is_sent'] == true ? Icons.verified_rounded : Icons.pending_actions_rounded,
+                iconColor: s['is_sent'] == true ? Colors.green : Colors.orange,
+                title: '${s['module_nom']} (${s['filiere_nom']})',
+                subtitle: 'Créé le ${DateTime.parse(s['date_session']).toLocal().toString().split(' ')[0]}',
+                tag: s['is_sent'] == true ? 'Envoyé' : 'Envoyer',
+                onTap: s['is_sent'] == true
+                    ? () {}
+                    : () async {
+                        final success = await ProfessorService.markSessionSent(s['id']);
+                        if (success) _fetchSessions();
+                      },
+              )),
       ],
     );
   }
 }
 
-// ── Onglet Profil ─────────────────────────────────────────────────────────────
-class _ProfessorProfileTab extends StatelessWidget {
-  const _ProfessorProfileTab({required this.profile, required this.onLogout});
-
-  final StudentProfile profile;
+// ── Profil ─────────────────────────────────────────────────────────────────
+class _ProfessorProfileTab extends StatefulWidget {
+  const _ProfessorProfileTab({required this.onLogout});
   final VoidCallback onLogout;
 
   @override
+  State<_ProfessorProfileTab> createState() => _ProfessorProfileTabState();
+}
+
+class _ProfessorProfileTabState extends State<_ProfessorProfileTab> {
+  Map<String, dynamic>? _profile;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    final data = await ProfessorService.getProfile();
+    if (mounted) {
+      setState(() {
+        _profile = data;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_profile == null) {
+      return Center(
+        child: ElevatedButton(
+          onPressed: widget.onLogout,
+          child: const Text('Erreur de profil - Déconnexion'),
+        ),
+      );
+    }
+
     return _ProfessorPage(
-      title: 'Mon profil',
-      subtitle: 'Espace enseignant',
+      title: 'Mon Profil',
+      subtitle: 'Espace personnel enseignant',
+      action: IconButton(
+        icon: const Icon(Icons.edit_rounded, color: AppPalette.blue),
+        onPressed: () async {
+          final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => EditProfileScreen(currentProfile: _profile!)));
+          if (res == true) _fetchProfile();
+        },
+      ),
       children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(colors: [AppPalette.blue, Colors.blueAccent]),
+              boxShadow: [
+                BoxShadow(color: AppPalette.blue.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))
+              ],
+            ),
+            child: const CircleAvatar(
+              radius: 46,
+              backgroundColor: Colors.white,
+              child: Icon(Icons.school_rounded, size: 48, color: AppPalette.blue),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         Center(
           child: Column(
             children: [
-              const CircleAvatar(
-                radius: 42,
-                backgroundColor: AppPalette.blue,
-                child: Icon(Icons.school, size: 46, color: Colors.white),
-              ),
-              const SizedBox(height: 12),
               Text(
-                'Dr. ${profile.prenoms} ${profile.nom}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+                '${_profile!['nom']?.toUpperCase()} ${_profile!['prenoms']}',
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppPalette.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _profile!['specialite'] ?? 'Professeur',
+                  style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w600, fontSize: 13),
                 ),
               ),
-              Text(
-                profile.filiere,
-                style: const TextStyle(color: Color(0xFF64748B)),
-              ),
-              const Text('Enseignant - Chercheur', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        _ProfileLine(
-          icon: Icons.alternate_email,
-          label: 'Email',
-          value:
-              '${profile.prenoms.toLowerCase()}.${profile.nom.toLowerCase()}@ist.bf',
+        const SizedBox(height: 32),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            children: [
+              _ProfileLine(icon: Icons.alternate_email, label: 'Email', value: _profile!['email'] ?? 'Non renseigné'),
+              const Divider(height: 1, indent: 56),
+              _ProfileLine(icon: Icons.phone_rounded, label: 'Téléphone', value: _profile!['tel'] ?? 'Non renseigné'),
+              const Divider(height: 1, indent: 56),
+              _ProfileLine(icon: Icons.domain_rounded, label: 'Département', value: _profile!['departement'] ?? 'Non renseigné'),
+            ],
+          ),
         ),
-        _ProfileLine(
-          icon: Icons.badge_outlined,
-          label: 'Matricule',
-          value: profile.matricule,
-        ),
-        _ProfileLine(
-          icon: Icons.domain_rounded,
-          label: 'Departement',
-          value: profile.filiere,
-        ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         SizedBox(
           width: double.infinity,
+          height: 54,
           child: OutlinedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout, color: Colors.red),
-            label: const Text(
-              'Se deconnecter',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
+            onPressed: widget.onLogout,
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            label: const Text('Se déconnecter', style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold)),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.red),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: const BorderSide(color: Colors.redAccent, width: 2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
         ),
@@ -358,10 +472,11 @@ class _ProfessorProfileTab extends StatelessWidget {
   }
 }
 
-// ── Widgets partagés ──────────────────────────────────────────────────────────
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
+// ── Widgets partagés ───────────────────────────────────────────────────────
+class _AnimatedCard extends StatelessWidget {
+  const _AnimatedCard({
     required this.icon,
+    required this.iconColor,
     required this.title,
     required this.subtitle,
     required this.tag,
@@ -369,6 +484,7 @@ class _InfoCard extends StatelessWidget {
   });
 
   final IconData icon;
+  final Color iconColor;
   final String title;
   final String subtitle;
   final String tag;
@@ -376,166 +492,84 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 26),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                      const SizedBox(height: 4),
+                      Text(subtitle, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(tag, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: iconColor)),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: AppPalette.blue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: AppPalette.blue),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                  const SizedBox(height: 5),
-                  Text(subtitle, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.35)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(tag, style: const TextStyle(fontSize: 12, color: AppPalette.blue, fontWeight: FontWeight.w700)),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _MetricRow extends StatelessWidget {
-  const _MetricRow();
-
-  @override
-  Widget build(BuildContext context) {
-    final students = mockClasses.fold<int>(
-      0,
-      (sum, classData) => sum + classData.students.length,
-    );
-
-    return Row(
-      children: [
-        Expanded(
-          child: _MetricCard(value: '$students', label: 'Etudiants'),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _MetricCard(value: '${mockClasses.length}', label: 'Classes'),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: _MetricCard(value: '92%', label: 'Presence'),
-        ),
-      ],
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.value, required this.label});
-
-  final String value;
-  final String label;
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _EmptyState({required this.icon, required this.message});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppPalette.blue)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          Icon(icon, size: 64, color: const Color(0xFFCBD5E1)),
+          const SizedBox(height: 16),
+          Text(message, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 16, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 }
 
-class _FormCard extends StatelessWidget {
-  const _FormCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppPalette.blue,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-      ),
-    );
-  }
-}
-
 class _ProfileLine extends StatelessWidget {
-  const _ProfileLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _ProfileLine({required this.icon, required this.label, required this.value});
 
   final IconData icon;
   final String label;
@@ -544,62 +578,24 @@ class _ProfileLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          Icon(icon, color: Colors.grey, size: 20),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: AppPalette.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: AppPalette.blue, size: 20),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF334155),
-                  ),
-                ),
+                Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(30),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: const Column(
-        children: [
-          Icon(Icons.inbox_rounded, size: 60, color: Color(0xFFCBD5E1)),
-          SizedBox(height: 16),
-          Text(
-            'Aucune note en attente',
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
           ),
         ],
       ),

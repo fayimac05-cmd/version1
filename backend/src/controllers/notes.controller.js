@@ -100,6 +100,73 @@ const generateBulletinPdf = async (req, res) => {
     }
 };
 
+const createGradeSession = async (req, res) => {
+    try {
+        const { filiere_id, filiere_nom, niveau, module_id, notes } = req.body;
+        const professeur_id = req.user.id;
+        
+        const sessionResult = await pool.query(`
+            INSERT INTO sessions_notes (filiere_id, filiere_nom, niveau, module_id, professeur_id) 
+            VALUES ($1, $2, $3, $4, $5) RETURNING id
+        `, [filiere_id, filiere_nom || '', niveau || 'Tous', module_id, professeur_id]);
+        
+        const session_id = sessionResult.rows[0].id;
+        
+        if (notes && notes.length > 0) {
+            for (const note of notes) {
+                const etudiantResult = await pool.query(`SELECT id FROM etudiants WHERE matricule = $1`, [note.matricule]);
+                if (etudiantResult.rows.length > 0) {
+                    const e_id = etudiantResult.rows[0].id;
+                    await pool.query(`
+                        INSERT INTO notes (etudiant_id, module_id, valeur) 
+                        VALUES ($1, $2, $3)
+                    `, [e_id, module_id, note.valeur]);
+                }
+            }
+        }
+        
+        res.status(201).json({ success: true, message: 'Session de notes créée avec succès', session_id });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+const getGradeSessions = async (req, res) => {
+    try {
+        const professeur_id = req.user.id;
+        const result = await pool.query(`
+            SELECT sn.*, m.nom as module_nom 
+            FROM sessions_notes sn
+            JOIN modules m ON sn.module_id = m.id
+            WHERE sn.professeur_id = $1
+            ORDER BY sn.date_session DESC
+        `, [professeur_id]);
+        
+        res.json({ success: true, data: result.rows });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+const markSessionSent = async (req, res) => {
+    try {
+        const { session_id } = req.params;
+        const professeur_id = req.user.id;
+        
+        await pool.query(`
+            UPDATE sessions_notes SET is_sent = true 
+            WHERE id = $1 AND professeur_id = $2
+        `, [session_id, professeur_id]);
+        
+        res.json({ success: true, message: 'Session marquée comme envoyée' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 module.exports = {
-    generateBulletinPdf
+    generateBulletinPdf,
+    createGradeSession,
+    getGradeSessions,
+    markSessionSent
 };
