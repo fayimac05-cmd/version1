@@ -74,7 +74,7 @@ class _ParentShellState extends State<ParentShell> {
           NavigationDestination(
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month_rounded),
-            label: 'Planning',
+            label: 'Programme',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),

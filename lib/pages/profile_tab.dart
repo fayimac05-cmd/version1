@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'splash_screen.dart';
@@ -45,17 +47,32 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   bool _emailVisible = true;
   bool _telVisible = true;
 
+  // ── Photo de profil ──────────────────────────────────────────────
+  File? _photoFile;
+
+  Future<void> _choisirPhoto() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked != null) {
+      setState(() => _photoFile = File(picked.path));
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   OverlayEntry? _overlayEntry;
   bool _panelOuvert = false;
   final GlobalKey _clochKey = GlobalKey();
 
   final List<AppNotification> _notifs = [
     AppNotification(id: '1', type: NotifType.examen, titre: 'Examen de mi-parcours',
-        corps: 'Algorithmes & Structures de données — dans 48h', temps: 'Il y a 12 min'),
+        corps: 'Algorithmes & Structures de données – dans 48h', temps: 'Il y a 12 min'),
     AppNotification(id: '2', type: NotifType.note, titre: 'Note publiée',
         corps: 'Analyse numérique : 16.5/20', temps: 'Il y a 2h'),
     AppNotification(id: '3', type: NotifType.cours, titre: 'Nouveau cours disponible',
-        corps: 'Pr. Koanda a posté un nouveau cours — Réseaux informatiques', temps: 'Il y a 5h'),
+        corps: 'Pr. Koanda a posté un nouveau cours – Réseaux informatiques', temps: 'Il y a 5h'),
     AppNotification(id: '4', type: NotifType.inscription, titre: 'Inscription validée',
         corps: 'Votre inscription en Master 2 Génie Logiciel a été validée',
         temps: 'Hier, 14:30', lu: true),
@@ -155,7 +172,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     borderRadius: BorderRadius.circular(2)),
               )),
               const SizedBox(height: 20),
-              Text('Modifier — $titre', style: const TextStyle(fontSize: 18,
+              Text('Modifier – $titre', style: const TextStyle(fontSize: 18,
                   fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
               const SizedBox(height: 16),
               Container(
@@ -253,12 +270,12 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── Photo de couverture ────────────────────────────────────
+            // ── Photo de couverture ────────────────────────────────────────
             Stack(
               clipBehavior: Clip.none,
               children: [
                 GestureDetector(
-                  onTap: () => _snackbar('Photo de couverture — Upload disponible en production'),
+                  onTap: () => _snackbar('Photo de couverture – Upload disponible en production'),
                   child: Container(
                     height: 190, width: double.infinity,
                     decoration: const BoxDecoration(
@@ -279,7 +296,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                             color: Colors.white.withOpacity(0.06)),
                       )),
                       Positioned(bottom: 12, right: 12, child: GestureDetector(
-                        onTap: () => _snackbar('Photo de couverture — Upload disponible en production'),
+                        onTap: () => _snackbar('Photo de couverture – Upload disponible en production'),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
@@ -296,6 +313,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     ]),
                   ),
                 ),
+                // ── Avatar avec photo ──────────────────────────────────────
                 Positioned(
                   bottom: -52, left: 20,
                   child: Stack(children: [
@@ -307,11 +325,22 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                         color: AppPalette.yellow,
                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12)],
                       ),
-                      child: Center(child: Text(_initiales, style: TextStyle(
-                          fontSize: 36, fontWeight: FontWeight.bold, color: AppPalette.blue))),
+                      child: _photoFile != null
+                          ? ClipOval(
+                              child: Image.file(
+                                _photoFile!,
+                                width: 104, height: 104,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Center(
+                              child: Text(_initiales, style: TextStyle(
+                                  fontSize: 36, fontWeight: FontWeight.bold, color: AppPalette.blue)),
+                            ),
                     ),
+                    // Bouton caméra
                     Positioned(bottom: 3, right: 3, child: GestureDetector(
-                      onTap: () => _snackbar('Photo de profil — Upload disponible en production'),
+                      onTap: _choisirPhoto,
                       child: Container(
                         width: 32, height: 32,
                         decoration: BoxDecoration(color: AppPalette.blue, shape: BoxShape.circle,
@@ -331,7 +360,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Nom + rôle ────────────────────────────────────────
+                  // ── Nom + rôle ────────────────────────────────────────────
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('${widget.profile.prenoms} ${widget.profile.nom}',
@@ -355,7 +384,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
                   const SizedBox(height: 16),
 
-                  // ── Filière ───────────────────────────────────────────
+                  // ── Filière ───────────────────────────────────────────────
                   if (widget.profile.filiere.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -380,7 +409,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     const SizedBox(height: 20),
                   ],
 
-                  // ── Biographie ────────────────────────────────────────
+                  // ── Biographie ────────────────────────────────────────────
                   _sectionCard(
                     titre: 'Biographie', icon: Icons.edit_outlined, couleur: AppPalette.blue,
                     enfants: [
@@ -409,7 +438,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
                   const SizedBox(height: 16),
 
-                  // ── Informations personnelles ─────────────────────────
+                  // ── Informations personnelles ─────────────────────────────
                   _sectionCard(
                     titre: 'Informations personnelles', icon: Icons.person_outline,
                     couleur: AppPalette.blue,
@@ -440,9 +469,9 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                           onTap: () => _editer(titre: 'Date de naissance', valeur: _dateNaiss,
                               hint: 'JJ/MM/AAAA', onSave: (v) => setState(() => _dateNaiss = v))),
                       _div(),
-                      _ligneModifiable(icon: Icons.interests_outlined, label: 'Centres d\'intérêt',
+                      _ligneModifiable(icon: Icons.interests_outlined, label: "Centres d'intérêt",
                           valeur: _interets, hint: 'Optionnel',
-                          onTap: () => _editer(titre: 'Centres d\'intérêt', valeur: _interets,
+                          onTap: () => _editer(titre: "Centres d'intérêt", valeur: _interets,
                               hint: 'Ex: Programmation, Musique, Football...',
                               maxLines: 2, onSave: (v) => setState(() => _interets = v))),
                     ],
@@ -450,7 +479,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
                   const SizedBox(height: 16),
 
-                  // ── Informations académiques ───────────────────────────
+                  // ── Informations académiques ──────────────────────────────
                   _sectionCard(
                     titre: 'Informations académiques', icon: Icons.school_outlined,
                     couleur: AppPalette.blue, badge: '🔒 Géré par l\'admin',
@@ -467,7 +496,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
                   const SizedBox(height: 16),
 
-                  // ── Réseaux sociaux ───────────────────────────────────
+                  // ── Réseaux sociaux ───────────────────────────────────────
                   _sectionCard(
                     titre: 'Réseaux sociaux', icon: Icons.link,
                     couleur: const Color(0xFF0891B2), badge: 'Optionnel',
@@ -494,7 +523,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
                   const SizedBox(height: 16),
 
-                  // ── Confidentialité ───────────────────────────────────
+                  // ── Confidentialité ───────────────────────────────────────
                   _sectionCard(
                     titre: 'Confidentialité', icon: Icons.privacy_tip_outlined,
                     couleur: const Color(0xFF7C3AED),
@@ -533,7 +562,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
                   const SizedBox(height: 32),
 
-                  // ── Déconnexion ───────────────────────────────────────
+                  // ── Déconnexion ───────────────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -706,7 +735,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   }
 }
 
-// ── Badge pulsant ──────────────────────────────────────────────────────────
+// ── Badge pulsant ──────────────────────────────────────────────────────────────
 
 class _BadgePulse extends StatefulWidget {
   const _BadgePulse({required this.count});
@@ -741,7 +770,7 @@ class _BadgePulseState extends State<_BadgePulse> with SingleTickerProviderState
   }
 }
 
-// ── Panel notifications ────────────────────────────────────────────────────
+// ── Panel notifications ────────────────────────────────────────────────────────
 
 class _NotifPanel extends StatelessWidget {
   const _NotifPanel({required this.top, required this.right, required this.notifs,
@@ -808,7 +837,7 @@ class _NotifPanel extends StatelessWidget {
   }
 }
 
-// ── Item notification ──────────────────────────────────────────────────────
+// ── Item notification ──────────────────────────────────────────────────────────
 
 class _NotifItem extends StatelessWidget {
   const _NotifItem({required this.notif, required this.onTap});
