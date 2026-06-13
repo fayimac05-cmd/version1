@@ -6,6 +6,7 @@ import '../pages/canal_screen.dart';
 import '../widgets/weekly_program_quick_widget.dart';
 import 'groupe_filiere_screen.dart';
 import 'tickets_screen.dart';
+import 'notifications_page.dart';
 
 class HomeTab extends StatelessWidget {
   const HomeTab({super.key, required this.profile});
@@ -89,25 +90,32 @@ class HomeTab extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('$_salutation, ${profile.prenoms} 👋',
+                  Text('$_salutation, ${profile.prenoms} ',
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold,
                           color: Color(0xFF0F172A))),
                   Text(profile.filiere.isNotEmpty ? profile.filiere : 'IST Ouaga 2000',
                       style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                 ])),
-                Stack(children: [
-                  Container(width: 40, height: 40,
-                    decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0))),
-                    child: const Icon(Icons.notifications_outlined,
-                        color: Color(0xFF64748B), size: 20)),
-                  Positioned(top: 8, right: 8, child: Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(color: _orange, shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5)))),
-                ]),
+                GestureDetector(
+  onTap: () {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) =>  NotificationsPage()),
+    );
+  },
+  child: Stack(children: [
+    Container(width: 40, height: 40,
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: const Icon(Icons.notifications_outlined,
+          color: Color(0xFF64748B), size: 20)),
+    Positioned(top: 8, right: 8, child: Container(
+      width: 8, height: 8,
+      decoration: BoxDecoration(color: _orange, shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 1.5)))),
+  ]),
+),
               ]),
             ),
 

@@ -29,8 +29,9 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
-    sdk: flutter
+      sdk: flutter
   http: ^1.2.0      # ← ajouter cette ligne
+  image_picker: ^1.0.7
   shared_preferences: ^2.2.2
 
   # The following adds the Cupertino Icons font to your application.
@@ -43,7 +44,6 @@ dependencies:
   socket_io_client: ^3.1.5
   file_picker: ^8.0.0+1
   url_launcher: ^6.2.5
-  image_picker: ^1.2.2
 
 dev_dependencies:
   flutter_test:

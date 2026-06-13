@@ -22,31 +22,7 @@ class WeeklyProgramQuickWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppPalette.blue, width: 1.6),
-                backgroundColor: AppPalette.softYellow,
-                foregroundColor: AppPalette.blue,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProgramImagePage()),
-                );
-              },
-              icon: const Icon(Icons.calendar_view_week_outlined),
-              label: const Text(
-                'Mon programme',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
+        
           Text(
             'Progression annee academique: $percentLabel%',
             style: const TextStyle(

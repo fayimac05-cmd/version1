@@ -78,7 +78,7 @@ class _StudentShellState extends State<StudentShell> {
           NavigationDestination(
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month_rounded),
-            label: 'Planning',
+            label: 'Programme',
           ),
           NavigationDestination(
             icon: Icon(Icons.smart_toy_outlined),
