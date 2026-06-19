@@ -36,7 +36,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     
-    final success = await ProfessorService.updateProfile({
+    final result = await ProfessorService.updateProfile({
       'nom': _nomCtrl.text.trim(),
       'prenoms': _prenomsCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
@@ -47,11 +47,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     
     setState(() => _isSaving = false);
     
-    if (success && mounted) {
+    if (result['success'] == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil mis à jour')));
       Navigator.of(context).pop(true);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la mise à jour')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['error'] ?? 'Erreur lors de la mise à jour'), backgroundColor: Colors.red),
+      );
     }
   }
 

@@ -61,17 +61,26 @@ const marquerToutesLues = async (req, res) => {
 };
 
 // Utilitaire - Enregistrer une notification
+// Returns { success: true } or { success: false, error: string }
 const envoyerNotificationAuto = async (userId, titre, corps) => {
   try {
-    await supabase.from('notifications').insert({
+    const { error } = await supabase.from('notifications').insert({
       user_id: userId,
       titre,
       corps,
       lue: false,
       created_at: new Date(),
     });
+
+    if (error) {
+      console.error('[envoyerNotificationAuto]', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
   } catch (error) {
     console.error('[envoyerNotificationAuto]', error);
+    return { success: false, error: error.message };
   }
 };
 

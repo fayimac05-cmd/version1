@@ -83,13 +83,23 @@ const me = async (req, res) => {
 const changePassword = async (req, res) => {
   try {
     const { ancienMotDePasse, nouveauMotDePasse } = req.body;
+    if (!ancienMotDePasse || !nouveauMotDePasse) {
+      return res.status(400).json({ message: 'Ancien et nouveau mot de passe requis.' });
+    }
     const r = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    if (!r.rows[0]) {
+      return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    }
+    if (!r.rows[0].mot_de_passe) {
+      return res.status(400).json({ message: 'Aucun mot de passe configuré. Utilisez la configuration initiale.' });
+    }
     const isValid = await bcrypt.compare(ancienMotDePasse, r.rows[0].mot_de_passe);
     if (!isValid) return res.status(401).json({ message: 'Ancien mot de passe incorrect.' });
     const hashed = await bcrypt.hash(nouveauMotDePasse, 10);
     await pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [hashed, req.user.id]);
     return res.status(200).json({ message: 'Mot de passe mis a jour.' });
   } catch (err) {
+    console.error('Change password error:', err);
     return res.status(500).json({ message: 'Erreur serveur.' });
   }
 };

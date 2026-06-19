@@ -155,12 +155,17 @@ class _ClassesTabState extends State<_ClassesTab> {
   }
 
   Future<void> _fetchClasses() async {
-    final data = await ProfessorService.getAssignedClasses();
+    final result = await ProfessorService.getAssignedClasses();
     if (mounted) {
       setState(() {
-        _classes = data;
+        _classes = result['success'] == true ? (result['data'] as List<dynamic>) : [];
         _isLoading = false;
       });
+      if (result['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['error'] ?? 'Erreur inconnue'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -220,12 +225,17 @@ class _CoursesTabState extends State<_CoursesTab> {
   }
 
   Future<void> _fetchCours() async {
-    final data = await ProfessorService.getCours();
+    final result = await ProfessorService.getCours();
     if (mounted) {
       setState(() {
-        _cours = data;
+        _cours = result['success'] == true ? (result['data'] as List<dynamic>) : [];
         _isLoading = false;
       });
+      if (result['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['error'] ?? 'Erreur inconnue'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -290,12 +300,17 @@ class _GradesTabState extends State<_GradesTab> {
   }
 
   Future<void> _fetchSessions() async {
-    final data = await ProfessorService.getGradeSessions();
+    final result = await ProfessorService.getGradeSessions();
     if (mounted) {
       setState(() {
-        _sessions = data;
+        _sessions = result['success'] == true ? (result['data'] as List<dynamic>) : [];
         _isLoading = false;
       });
+      if (result['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['error'] ?? 'Erreur inconnue'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -332,8 +347,16 @@ class _GradesTabState extends State<_GradesTab> {
                 onTap: s['is_sent'] == true
                     ? () {}
                     : () async {
-                        final success = await ProfessorService.markSessionSent(s['id']);
-                        if (success) _fetchSessions();
+                        final result = await ProfessorService.markSessionSent(s['id'].toString());
+                        if (result['success'] == true) {
+                          _fetchSessions();
+                        } else {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(result['error'] ?? 'Erreur inconnue'), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
                       },
               )),
       ],
@@ -361,12 +384,17 @@ class _ProfessorProfileTabState extends State<_ProfessorProfileTab> {
   }
 
   Future<void> _fetchProfile() async {
-    final data = await ProfessorService.getProfile();
+    final result = await ProfessorService.getProfile();
     if (mounted) {
       setState(() {
-        _profile = data;
+        _profile = result['success'] == true ? (result['data'] as Map<String, dynamic>) : null;
         _isLoading = false;
       });
+      if (result['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['error'] ?? 'Erreur inconnue'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 

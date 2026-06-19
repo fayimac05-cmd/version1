@@ -121,10 +121,20 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
 
   Future<void> _chargerEtudiants() async {
     setState(() => _loading = true);
-    final data = await ApiService.getEtudiants();
-    adminEtudiants = data
-        .map((e) => _etudiantFromApi(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    final result = await ApiService.getEtudiants();
+    if (result['success'] == true) {
+      final data = result['data'] as List<dynamic>;
+      adminEtudiants = data
+          .map((e) => _etudiantFromApi(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } else {
+      adminEtudiants = [];
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['error'] ?? 'Erreur chargement étudiants'), backgroundColor: Colors.red),
+        );
+      }
+    }
     if (mounted) setState(() => _loading = false);
   }
 

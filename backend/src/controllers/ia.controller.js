@@ -6,6 +6,9 @@ const supabase = require('../config/supabase');
 const chat = async (req, res) => {
   try {
     const { message } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, message: 'Le message est requis.' });
+    }
     const userId = req.user.id;
 
     // Récupérer les N derniers échanges pour le contexte
@@ -25,6 +28,10 @@ const chat = async (req, res) => {
     messages.push({ role: 'user', content: message });
 
     // Appel API Claude
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ success: false, message: 'Clé API Anthropic non configurée.' });
+    }
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -42,7 +49,19 @@ const chat = async (req, res) => {
       }),
     });
 
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('Anthropic API error:', response.status, errorBody);
+      return res.status(502).json({ success: false, message: `Erreur API IA (${response.status}). Réessayez plus tard.` });
+    }
+
     const data = await response.json();
+
+    if (!data.content || !Array.isArray(data.content) || data.content.length === 0) {
+      console.error('Unexpected Anthropic response format:', JSON.stringify(data));
+      return res.status(502).json({ success: false, message: 'Réponse inattendue de l\'API IA.' });
+    }
+
     const reponseIA = data.content[0].text;
 
     // Sauvegarder l'échange en base
