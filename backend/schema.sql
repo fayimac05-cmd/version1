@@ -199,3 +199,102 @@ CREATE TABLE supports_cours (
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- =========================================================================
+-- ─── TABLES MESSAGERIE ──────────────────────────────────────────────────
+-- =========================================================================
+
+-- Table des canaux de discussion
+CREATE TABLE canaux (
+    id SERIAL PRIMARY KEY,
+    nom VARCHAR(255) NOT NULL,
+    description TEXT,
+    type VARCHAR(50) DEFAULT 'general',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table de liaison canaux - membres
+CREATE TABLE canal_membres (
+    canal_id INTEGER REFERENCES canaux(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) DEFAULT 'membre',
+    PRIMARY KEY (canal_id, user_id)
+);
+
+-- Table des messages dans les canaux
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    canal_id INTEGER REFERENCES canaux(id) ON DELETE CASCADE,
+    auteur_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    contenu TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'canal',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table des messages privés
+CREATE TABLE messages_prives (
+    id SERIAL PRIMARY KEY,
+    expediteur_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    destinataire_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    contenu TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table des messages de groupe filière
+CREATE TABLE messages_groupe (
+    id SERIAL PRIMARY KEY,
+    filiere_id INTEGER REFERENCES filieres(id) ON DELETE CASCADE,
+    auteur_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    contenu TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table des réactions
+CREATE TABLE reactions (
+    id SERIAL PRIMARY KEY,
+    message_id INTEGER NOT NULL,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    emoji VARCHAR(50) NOT NULL,
+    message_type VARCHAR(50) DEFAULT 'canal',
+    UNIQUE (message_id, user_id, emoji)
+);
+
+-- =========================================================================
+-- ─── TABLE CONVERSATIONS IA ─────────────────────────────────────────────
+-- =========================================================================
+
+-- Table pour l'historique des conversations IA
+CREATE TABLE ia_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL,
+    contenu TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================================================
+-- ─── TABLE RÉCLAMATIONS ─────────────────────────────────────────────────
+-- =========================================================================
+
+CREATE TABLE reclamations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    etudiant_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    module_id UUID,
+    type VARCHAR(255) NOT NULL,
+    statut VARCHAR(50) DEFAULT 'en_attente',
+    justification TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================================================
+-- ─── TABLE TICKETS SUPPORT ──────────────────────────────────────────────
+-- =========================================================================
+
+CREATE TABLE tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    etudiant_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    montant NUMERIC NOT NULL,
+    statut VARCHAR(50) DEFAULT 'en_attente',
+    qr_code TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+

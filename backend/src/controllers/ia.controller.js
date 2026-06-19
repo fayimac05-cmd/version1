@@ -1,11 +1,6 @@
 // backend/src/controllers/ia.controller.js
 
-const { createClient } = require('@supabase/supabase-js');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = require('../config/supabase');
 
 // POST /api/ia/chat - Envoyer un message à Claude
 const chat = async (req, res) => {
