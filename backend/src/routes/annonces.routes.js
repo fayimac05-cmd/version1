@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware, requireRole } = require('../middleware/auth.middleware');
+const { authMiddleware, requireRole, optionalAuth } = require('../middleware/auth.middleware');
 const { upload, uploadToCloudinary } = require('../middleware/upload.middleware');
 const annonceController = require('../controllers/annonces.controller');
 
@@ -9,11 +9,11 @@ const annonceController = require('../controllers/annonces.controller');
  * Authentification requise pour la plupart des opérations
  */
 
-// GET /api/annonces - Récupérer les annonces
-router.get('/', annonceController.getAllAnnonces);
+// GET /api/annonces - Récupérer les annonces (auth optionnelle pour filtrage par role)
+router.get('/', optionalAuth, annonceController.getAllAnnonces);
 
 // GET /api/annonces/:id - Récupérer une annonce spécifique
-router.get('/:id', annonceController.getAnnonceById);
+router.get('/:id', optionalAuth, annonceController.getAnnonceById);
 
 // POST /api/annonces - Créer une annonce
 router.post(

@@ -13,7 +13,7 @@ const getCanaux = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT c.id, c.nom, c.description, c.type,
               cm.role,
-              (SELECT COUNT(*) FROM messages_canal m WHERE m.canal_id = c.id) AS nb_messages
+              (SELECT COUNT(*) FROM messages m WHERE m.canal_id = c.id) AS nb_messages
        FROM canaux c
        JOIN canal_membres cm ON cm.canal_id = c.id
        WHERE cm.user_id = $1
@@ -193,12 +193,12 @@ const getMessagesGroupe = async (req, res) => {
   const limite = parseInt(req.query.limite) || 50;
 
   try {
-    // Vérifier que l'étudiant appartient à la filière
+    // Vérifier que l'utilisateur appartient à la filière
     const { rows: check } = await pool.query(
-      `SELECT 1 FROM users WHERE id = $1 AND filiere_id = $2`,
+      `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
       [req.user.id, filiereId]
     );
-    if (!check.length && req.user.role !== 'admin') {
+    if (!check.length && req.user.role !== 'admin' && req.user.role !== 'professeur') {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
@@ -231,10 +231,10 @@ const envoyerMessageGroupe = async (req, res) => {
 
   try {
     const { rows: check } = await pool.query(
-      `SELECT 1 FROM users WHERE id = $1 AND filiere_id = $2`,
+      `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
       [req.user.id, filiereId]
     );
-    if (!check.length && req.user.role !== 'admin') {
+    if (!check.length && req.user.role !== 'admin' && req.user.role !== 'professeur') {
       return res.status(403).json({ success: false, error: 'Vous n\'appartenez pas à cette filière' });
     }
 
