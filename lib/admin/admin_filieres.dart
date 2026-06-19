@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
+import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -176,7 +178,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
             const SizedBox(height: 16),
           ]),
         ),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
 
         // ── Grille filières ───────────────────────────────────────────
         Expanded(child: st.isEmpty
@@ -436,10 +438,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
         fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
   ]));
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

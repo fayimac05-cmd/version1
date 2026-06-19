@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
 import '../admin/admin_etudiants.dart';
+import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -578,10 +580,7 @@ class _AdminNotesState extends State<AdminNotes>
     Text(sub, style: const TextStyle(fontSize: 14, color: AdminTheme.textSecondary)),
   ]));
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

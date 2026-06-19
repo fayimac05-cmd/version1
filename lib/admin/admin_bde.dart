@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
+import '../utils/snackbar_helper.dart';
 
 class EvenementBDE {
   final String id, titre, date, lieu, description;
@@ -74,38 +76,24 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AdminTheme.background,
       body: Column(children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('BDE & Événements', style: TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.w800,
-                    color: Color(0xFF1A1A2E))),
-                const Text('Gestion du Bureau Des Étudiants',
-                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-              ])),
-              if (_nbEnAttentePub + _nbEnAttenteEv > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: AdminTheme.warningLight,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AdminTheme.warning.withOpacity(0.3))),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.notifications_active_rounded,
-                        color: AdminTheme.warning, size: 14),
-                    const SizedBox(width: 5),
-                    Text('${_nbEnAttentePub + _nbEnAttenteEv} en attente',
-                        style: const TextStyle(fontSize: 12,
-                            fontWeight: FontWeight.w700, color: AdminTheme.warning)),
-                  ])),
-            ]),
-            const SizedBox(height: 16),
-            // Stats rapides
+        AdminPageHeader(
+          title: 'BDE & Événements',
+          subtitle: 'Gestion du Bureau Des Étudiants',
+          bottomPadding: 0,
+          trailing: (_nbEnAttentePub + _nbEnAttenteEv > 0)
+              ? AdminKpiChip(
+                  icon: Icons.notifications_active_rounded,
+                  label: '${_nbEnAttentePub + _nbEnAttenteEv} en attente',
+                  foreground: AdminTheme.warning,
+                  background: AdminTheme.warningLight,
+                )
+              : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          child: Column(children: [
             Row(children: [
               _statCard('${adminEvenements.where((e) => e.statut == 'approuve').length}',
                   'Événements actifs', AdminTheme.primary, AdminTheme.primaryLight),
@@ -120,7 +108,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
             TabBar(
               controller: _tab,
               labelColor: AdminTheme.primary,
-              unselectedLabelColor: const Color(0xFF9CA3AF),
+              unselectedLabelColor: AdminTheme.textMuted,
               indicatorColor: AdminTheme.primary,
               labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               tabs: [
@@ -142,7 +130,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
             ),
           ]),
         ),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
         Expanded(child: TabBarView(controller: _tab, children: [
           _tabEvenements(),
           _tabPublications(),
@@ -244,7 +232,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
           ]),
         ),
         if (e.statut == 'en_attente') ...[
-          Container(height: 1, color: const Color(0xFFE5E7EB)),
+          adminDivider,
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(children: [
@@ -322,7 +310,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
                 maxLines: 2, overflow: TextOverflow.ellipsis),
           ])),
         if (p.statut == 'en_attente') ...[
-          Container(height: 1, color: const Color(0xFFE5E7EB)),
+          adminDivider,
           Padding(padding: const EdgeInsets.all(10),
             child: Row(children: [
               Expanded(child: _btn('❌ Rejeter', AdminTheme.danger, AdminTheme.dangerLight,
@@ -348,8 +336,5 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
           child: Center(child: Text(label, style: TextStyle(fontSize: 12,
               fontWeight: FontWeight.w700, color: fg)))));
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }

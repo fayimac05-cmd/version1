@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
 import '../admin/admin_filieres.dart';
+import '../utils/snackbar_helper.dart';
 
 class Professeur {
   final String id, nom, prenoms, email, telephone, specialite, typeContrat, dateArrivee;
@@ -59,70 +61,30 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AdminTheme.background,
       body: Column(children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Professeurs', style: TextStyle(fontSize: 22,
-                    fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-                Text('${adminProfesseurs.length} professeurs enregistrés',
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-              ])),
-              GestureDetector(
-                onTap: () => _ajouterProfesseur(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AdminTheme.primary,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(
-                        color: AdminTheme.primary.withOpacity(0.3),
-                        blurRadius: 6, offset: const Offset(0, 2))],
-                  ),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 6),
-                    Text('Ajouter', style: TextStyle(fontSize: 13,
-                        fontWeight: FontWeight.w700, color: Colors.white)),
-                  ]),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(child: Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: const InputDecoration(
-                    hintText: 'Rechercher un professeur...',
-                    hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                    prefixIcon: Icon(Icons.search_rounded,
-                        color: Color(0xFF9CA3AF), size: 16),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 10)),
-                ),
-              )),
-              const SizedBox(width: 10),
-              _chip('Tous', 'tous'),
-              const SizedBox(width: 6),
-              _chip('Permanents', 'permanent'),
-              const SizedBox(width: 6),
-              _chip('Vacataires', 'vacataire'),
-            ]),
+        AdminPageHeader(
+          title: 'Professeurs',
+          subtitle: '${adminProfesseurs.length} professeurs enregistrés',
+          trailing: AdminAddButton(label: 'Ajouter', onTap: () => _ajouterProfesseur()),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
+          child: Row(children: [
+            Expanded(child: AdminSearchBar(
+              controller: _searchCtrl,
+              hintText: 'Rechercher un professeur...',
+              onChanged: (v) => setState(() => _query = v),
+            )),
+            const SizedBox(width: 10),
+            AdminFilterChip(label: 'Tous', active: _filtre == 'tous', onTap: () => setState(() => _filtre = 'tous')),
+            const SizedBox(width: 6),
+            AdminFilterChip(label: 'Permanents', active: _filtre == 'permanent', onTap: () => setState(() => _filtre = 'permanent')),
+            const SizedBox(width: 6),
+            AdminFilterChip(label: 'Vacataires', active: _filtre == 'vacataire', onTap: () => setState(() => _filtre = 'vacataire')),
           ]),
         ),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
         Expanded(child: _filtered.isEmpty
             ? _vide()
             : ListView.separated(
@@ -135,24 +97,6 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     );
   }
 
-  Widget _chip(String label, String value) {
-    final active = _filtre == value;
-    return GestureDetector(
-      onTap: () => setState(() => _filtre = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? AdminTheme.primary : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: active ? AdminTheme.primary : const Color(0xFFE5E7EB)),
-        ),
-        child: Text(label, style: TextStyle(fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: active ? Colors.white : const Color(0xFF6B7280))),
-      ),
-    );
-  }
 
   Widget _carteProf(Professeur p) {
     final modules = adminFilieres.expand((f) => f.modules)
@@ -577,8 +521,5 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
         fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
   ]));
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }
