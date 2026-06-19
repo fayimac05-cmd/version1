@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
-import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import 'student_shell.dart';
 import 'splash_screen.dart';
@@ -97,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     // Try backend first
-    final result = await AuthService.login(matricule: mat, motDePasse: pass);
+    final result = await ApiService.login(matricule: mat, motDePasse: pass);
 
     if (result['success'] == true && result['user'] != null) {
       final u = result['user'];
