@@ -88,7 +88,7 @@ const listEtudiants = async (req, res) => {
 };
 
 const inscrireEtudiant = async (req, res) => {
-  const client = await pool.connect();
+  let client;
   try {
     const {
       nom,
@@ -114,6 +114,7 @@ const inscrireEtudiant = async (req, res) => {
       return res.status(400).json({ message: 'Filière requise.' });
     }
 
+    client = await pool.connect();
     await client.query('BEGIN');
     await ensureFilieres(client);
 
@@ -216,14 +217,16 @@ const inscrireEtudiant = async (req, res) => {
       },
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+    }
     console.error('[inscrireEtudiant]', err);
     if (err.code === '23505') {
       return res.status(409).json({ message: 'Matricule ou email déjà utilisé.' });
     }
     return res.status(500).json({ message: err.message || 'Erreur lors de l\'inscription.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 

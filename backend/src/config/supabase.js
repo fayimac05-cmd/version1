@@ -1,20 +1,45 @@
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
-// Récupération des variables d'environnement Supabase
-const supabaseUrl = process.env.SUPABASE_URL || 'https://votre-projet.supabase.co';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || 'votre-anon-key';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+let supabase = null;
+
+if (supabaseUrl && supabaseKey && supabaseKey !== 'placeholder') {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('[Supabase] Client configure avec succes');
+} else {
   console.warn(
-    "⚠️ [Warning] Les variables d'environnement SUPABASE_URL ou SUPABASE_ANON_KEY ne sont pas définies dans le fichier .env. " +
-    "Utilisation des valeurs par défaut pour le développement."
+    '[Supabase] Variables SUPABASE_URL ou SUPABASE_SERVICE_KEY manquantes. ' +
+    'Les fonctionnalites Supabase (annonces, EDT, notifications) seront indisponibles.'
   );
+
+  // Proxy qui renvoie des erreurs claires au lieu de crasher
+  const handler = {
+    get(_, prop) {
+      if (prop === 'from') {
+        return () => {
+          const chainError = {
+            select: () => chainError,
+            insert: () => chainError,
+            update: () => chainError,
+            delete: () => chainError,
+            eq: () => chainError,
+            ilike: () => chainError,
+            order: () => chainError,
+            limit: () => chainError,
+            offset: () => chainError,
+            single: () => Promise.resolve({ data: null, error: { message: 'Supabase non configure' } }),
+            then: (resolve) => resolve({ data: null, error: { message: 'Supabase non configure' } }),
+          };
+          return chainError;
+        };
+      }
+      return undefined;
+    },
+  };
+  supabase = new Proxy({}, handler);
 }
-
-// Initialisation du client Supabase
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-console.log('✅ Client Supabase configuré avec succès');
 
 module.exports = supabase;

@@ -46,9 +46,22 @@ app.use('/api/evaluations',   require('./src/routes/evaluations.routes'));
 
 app.get('/', (req, res) => res.json({ message: 'ScolarHub API — IST Ouaga 2000', status: 'OK' }));
 
+// Global error handler to prevent server crashes
+app.use((err, req, res, next) => {
+  console.error('[Global Error]', err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur.' });
+  }
+});
+
 require('./src/socket/socket')(io);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log('Serveur demarre sur http://localhost:' + PORT));
+
+// Prevent unhandled rejections from crashing the process
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UnhandledRejection]', reason);
+});
 
 module.exports = { app, io };
