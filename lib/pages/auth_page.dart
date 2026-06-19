@@ -8,7 +8,7 @@ import 'choose_school_page.dart';
 import 'bureau_des_etudiants.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
-import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import '../services/socket_service.dart';
 
 // Dans _goToDashboard(), avant Navigator.of(context).pushAndRemoveUntil(...)
@@ -210,7 +210,7 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
-    final result = await AuthService.login(
+    final result = await ApiService.login(
       matricule: _cleTrouvee,
       motDePasse: _passCtrl.text,
     );
