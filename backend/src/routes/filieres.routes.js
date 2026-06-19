@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { ensureFilieres } = require('../utils/filieres');
+const { authMiddleware } = require('../middleware/auth.middleware');
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   let client;
   try {
     client = await pool.connect();

@@ -194,72 +194,22 @@ Ton rôle :
     _scrollBas();
 
     try {
-      // ⚠️ À MODIFIER : Insérez votre clé API ici
-      // Pour des raisons de sécurité, en production, utilisez un backend ou un package comme flutter_dotenv
-      const String apiKey = 'VOTRE_CLE_API_ICI';
+      // Use the backend /api/ia/chat endpoint to avoid exposing API keys in the client
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
 
-      // Choisissez l'API à utiliser (true pour Claude, false pour OpenAI)
-      final bool useClaude = true;
-
-      final List<Map<String, String>> historique = [];
-      for (final msg in _messages.where((m) => !m.estErreur)) {
-        historique.add({
-          'role': msg.estIA ? 'assistant' : 'user',
-          'content': msg.texte,
-        });
-      }
-
-      http.Response response;
-
-      if (useClaude) {
-        // --- API CLAUDE (Anthropic) ---
-        response = await http.post(
-          Uri.parse('https://api.anthropic.com/v1/messages'),
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            // Optionnel selon la plateforme (ex: Flutter Web) :
-            // 'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: jsonEncode({
-            'model': 'claude-3-haiku-20240307', // Ou claude-3-5-sonnet-20241022
-            'max_tokens': 600,
-            'system': _contexteEtudiant,
-            'messages': historique,
-          }),
-        );
-      } else {
-        // --- API OPENAI ---
-        // Ajout du contexte système au début pour OpenAI
-        final List<Map<String, String>> messagesOpenAI = [
-          {'role': 'system', 'content': _contexteEtudiant},
-          ...historique,
-        ];
-
-        response = await http.post(
-          Uri.parse('https://api.openai.com/v1/chat/completions'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $apiKey',
-          },
-          body: jsonEncode({
-            'model': 'gpt-4o-mini', // Ou gpt-3.5-turbo, gpt-4
-            'messages': messagesOpenAI,
-            'max_tokens': 600,
-          }),
-        );
-      }
+      final response = await http.post(
+        Uri.parse('http://localhost:3000/api/ia/chat'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'message': messageUser}),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
-        String reponse = '';
-
-        if (useClaude) {
-          reponse = data['content'][0]['text'] as String;
-        } else {
-          reponse = data['choices'][0]['message']['content'] as String;
-        }
+        String reponse = data['reponse'] as String;
 
         setState(() {
           _messages.add(
