@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
+import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -616,7 +618,7 @@ class _AdminMessagesState extends State<AdminMessages>
       '✅','👏','💪','🤝','👌','🫶','🤞','✌️','⭐','🌟','🎯'];
     return Container(height: 210, color: Colors.white,
       child: Column(children: [
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
         Padding(padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
           child: Row(children: [
             const Text('Émojis', style: TextStyle(fontSize: 13,
@@ -648,7 +650,7 @@ class _AdminMessagesState extends State<AdminMessages>
       '💚','💙','⭐','🌟','🎯','🏆','🐱','🐶','🦁','🍕','🎮','🚀'];
     return Container(height: 210, color: Colors.white,
       child: Column(children: [
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
         Padding(padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
           child: Row(children: [
             const Text('Stickers', style: TextStyle(
@@ -892,11 +894,7 @@ class _AdminMessagesState extends State<AdminMessages>
     return '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}';
   }
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: AdminTheme.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

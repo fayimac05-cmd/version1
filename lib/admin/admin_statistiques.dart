@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
 import '../admin/admin_etudiants.dart';
+import '../utils/snackbar_helper.dart';
 
 class AdminStatistiques extends StatefulWidget {
   const AdminStatistiques({super.key});
@@ -51,33 +53,30 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AdminTheme.background,
       body: Column(children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Statistiques & Bilans', style: TextStyle(
-                fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-            const Text('Indicateurs clés de l\'établissement',
-                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-            const SizedBox(height: 16),
-            TabBar(
-              controller: _tab,
-              labelColor: AdminTheme.primary,
-              unselectedLabelColor: const Color(0xFF9CA3AF),
-              indicatorColor: AdminTheme.primary,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              isScrollable: true,
-              tabs: const [
-                Tab(text: 'Vue générale'),
-                Tab(text: 'Historique 5 ans'),
-                Tab(text: 'Listes'),
-              ],
-            ),
-          ]),
+        AdminPageHeader(
+          title: 'Statistiques & Bilans',
+          subtitle: 'Indicateurs clés de l\'établissement',
+          bottomPadding: 0,
         ),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: TabBar(
+            controller: _tab,
+            labelColor: AdminTheme.primary,
+            unselectedLabelColor: AdminTheme.textMuted,
+            indicatorColor: AdminTheme.primary,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            isScrollable: true,
+            tabs: const [
+              Tab(text: 'Vue générale'),
+              Tab(text: 'Historique 5 ans'),
+              Tab(text: 'Listes'),
+            ],
+          ),
+        ),
+        adminDivider,
         Expanded(child: TabBarView(controller: _tab, children: [
           _tabGeneral(),
           _tabHistorique(),
@@ -742,8 +741,5 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
     return total / coefs;
   }
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
+import '../utils/snackbar_helper.dart';
 import 'splash_screen.dart';
 
 enum NotifType { examen, note, cours, inscription, message }
@@ -695,13 +696,8 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     ]);
   }
 
-  void _snackbar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg), backgroundColor: AppPalette.blue,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
-  }
+  void _snackbar(String msg) => showAppSnackBar(context, msg,
+      backgroundColor: AppPalette.blue);
 
   void _confirmerDeconnexion() {
     showDialog(

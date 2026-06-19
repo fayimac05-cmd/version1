@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
+import '../utils/snackbar_helper.dart';
 import 'messages_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1485,14 +1486,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
   String _now() =>
       '${TimeOfDay.now().hour.toString().padLeft(2, '0')}:${TimeOfDay.now().minute.toString().padLeft(2, '0')}';
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(msg),
-      backgroundColor: const Color(0xFF00A884),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ),
-  );
+  void _snack(String msg) => showAppSnackBar(context, msg,
+      backgroundColor: const Color(0xFF00A884));
 
   // ── Émojis fréquents ──────────────────────────────────────────────────
   static const _emojisFrequents = [

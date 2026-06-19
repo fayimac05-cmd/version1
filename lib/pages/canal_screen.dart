@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../theme/app_palette.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../utils/snackbar_helper.dart';
 import 'messages_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -67,7 +69,6 @@ class CanalScreen extends StatefulWidget {
 }
 
 class _CanalScreenState extends State<CanalScreen> {
-  static const String _baseUrl = 'http://localhost:3000/api';
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +252,7 @@ class _CanalDetail extends StatefulWidget {
 }
 
 class _CanalDetailState extends State<_CanalDetail> {
-  static const String _baseUrl = 'http://localhost:3000/api';
+  static final String _baseUrl = ApiService.baseUrl;
   final List<_MessageCanal> _msgs = [];
   final _inputCtrl = TextEditingController();
   final _scroll = ScrollController();
@@ -571,10 +572,8 @@ class _CanalDetailState extends State<_CanalDetail> {
     );
   }
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(msg), backgroundColor: AppPalette.blue,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg,
+      backgroundColor: AppPalette.blue);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
 import '../admin/admin_filieres.dart';
+import '../utils/snackbar_helper.dart';
 
 class PeriodeEvaluation {
   final String id, filiere, dateDebut, dateFin;
@@ -39,50 +41,30 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AdminTheme.background,
       body: Column(children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Évaluation des Professeurs', style: TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.w800,
-                    color: Color(0xFF1A1A2E))),
-                const Text('Évaluations anonymes par les étudiants',
-                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-              ])),
-              GestureDetector(
-                onTap: () => _ouvrirPeriode(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(color: AdminTheme.primary,
-                      borderRadius: BorderRadius.circular(12)),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                    SizedBox(width: 6),
-                    Text('Ouvrir une période', style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-                  ])),
-              ),
+        AdminPageHeader(
+          title: 'Évaluation des Professeurs',
+          subtitle: 'Évaluations anonymes par les étudiants',
+          trailing: AdminAddButton(label: 'Ouvrir une période', onTap: () => _ouvrirPeriode()),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AdminTheme.infoLight,
+                borderRadius: BorderRadius.circular(10)),
+            child: const Row(children: [
+              Icon(Icons.shield_rounded, color: AdminTheme.info, size: 16),
+              SizedBox(width: 8),
+              Expanded(child: Text(
+                'Les évaluations sont 100% anonymes. Aucun étudiant n\'est identifié.',
+                style: TextStyle(fontSize: 12, color: AdminTheme.info,
+                    fontWeight: FontWeight.w600))),
             ]),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AdminTheme.infoLight,
-                  borderRadius: BorderRadius.circular(10)),
-              child: const Row(children: [
-                Icon(Icons.shield_rounded, color: AdminTheme.info, size: 16),
-                SizedBox(width: 8),
-                Expanded(child: Text(
-                  'Les évaluations sont 100% anonymes. Aucun étudiant n\'est identifié.',
-                  style: TextStyle(fontSize: 12, color: AdminTheme.info,
-                      fontWeight: FontWeight.w600))),
-              ])),
-          ])),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+          ),
+        ),
+        adminDivider,
         Expanded(child: ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: adminEvaluations.length,
@@ -186,7 +168,7 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
         ],
 
         // Actions
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
         Padding(padding: const EdgeInsets.all(12),
           child: Row(children: [
             if (ev.ouverte) ...[
@@ -317,8 +299,5 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))));
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }

@@ -48,6 +48,14 @@ const setupPassword = async (req, res) => {
   try {
     const { userId, email, motDePasse } = req.body;
     if (!userId || !motDePasse) return res.status(400).json({ message: 'Donnees manquantes.' });
+
+    // Only allow setting a password for accounts that have never set one (first login)
+    const check = await pool.query('SELECT id, mot_de_passe FROM users WHERE id = $1', [userId]);
+    if (!check.rows[0]) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    if (check.rows[0].mot_de_passe) {
+      return res.status(403).json({ message: 'Mot de passe deja defini. Utilisez /change-password.' });
+    }
+
     const hashed = await bcrypt.hash(motDePasse, 10);
     await pool.query('UPDATE users SET mot_de_passe = $1, email = $2 WHERE id = $3', [hashed, email || null, userId]);
     const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1', [userId]);

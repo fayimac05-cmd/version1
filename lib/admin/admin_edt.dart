@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -833,11 +834,7 @@ class _AdminEDTState extends State<AdminEDT>
           color: selected ? const Color(0xFF1D4ED8) : const Color(0xFF374151)),
           textAlign: TextAlign.center))));
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: AdminTheme.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 
   String _dateAujourdhui() {
     final n = DateTime.now();

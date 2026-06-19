@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
+import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -2174,14 +2175,8 @@ class _ConversationViewState extends State<_ConversationView> {
   String _now() =>
       '${TimeOfDay.now().hour.toString().padLeft(2, '0')}:${TimeOfDay.now().minute.toString().padLeft(2, '0')}';
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(msg),
-      backgroundColor: AppPalette.blue,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ),
-  );
+  void _snack(String msg) => showAppSnackBar(context, msg,
+      backgroundColor: AppPalette.blue);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

@@ -3,7 +3,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
 import '../services/api_service.dart';
+import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE ÉTUDIANT
@@ -217,7 +219,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
               ]),
           ]),
         ),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
         Expanded(child: TabBarView(controller: _tabs, children: [
           // ── Onglet 1 : Liste complète ──────────────────────────────
           Column(children: [
@@ -262,7 +264,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                         ])),
                     ]),
             ),
-            Container(height: 1, color: const Color(0xFFE5E7EB)),
+            adminDivider,
             Expanded(child: liste.isEmpty
                 ? _vide()
                 : ListView.separated(
@@ -1285,10 +1287,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
       ])));
   }
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
