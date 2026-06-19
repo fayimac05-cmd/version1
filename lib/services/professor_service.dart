@@ -5,7 +5,7 @@ import 'api_service.dart';
 class ProfessorService {
   static final String baseUrl = ApiService.baseUrl;
 
-  static Future<Map<String, dynamic>?> getProfile() async {
+  static Future<Map<String, dynamic>> getProfile() async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.get(
@@ -15,28 +15,20 @@ class ProfessorService {
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['success'] == true) {
-          return body['data'];
+          return {'success': true, 'data': body['data']};
         }
+        return {'success': false, 'error': body['message'] ?? 'Réponse inattendue du serveur.'};
       }
-      // If response not successful or body missing, fall back to mock
-      return _mockProfile();
+      if (response.statusCode == 401) {
+        return {'success': false, 'error': 'Session expirée. Veuillez vous reconnecter.'};
+      }
+      return {'success': false, 'error': 'Erreur lors de la récupération du profil.'};
     } catch (e) {
-      // Network or parsing error – also return mock
-      return _mockProfile();
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
-  static Map<String, dynamic> _mockProfile() {
-    return {
-      'prenoms': 'Mamadou',
-      'email': 'mamadou.ouedraogo@ist.bf',
-      'tel': '70123456',
-      'departement': 'Informatique',
-      'specialite': 'Algorithmes & Réseaux',
-    };
-  }
-
-  static Future<bool> updateProfile(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.put(
@@ -44,14 +36,18 @@ class ProfessorService {
         headers: headers,
         body: jsonEncode(data),
       );
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        return {'success': true};
+      }
+      final body = jsonDecode(response.body);
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour du profil.'};
     } catch (e) {
-      return false;
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
   // ── Classes & Modules ──────────────────────────────────────
-  static Future<List<dynamic>> getClasses() async {
+  static Future<Map<String, dynamic>> getClasses() async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.get(
@@ -60,23 +56,16 @@ class ProfessorService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body['success'] == true) return body['data'];
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+        return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return _mockClasses();
+      return {'success': false, 'error': 'Erreur lors du chargement des classes.'};
     } catch (e) {
-      return _mockClasses();
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
-  static List<dynamic> _mockClasses() {
-    return [
-      {'id': 1, 'nom': 'Licence 2 INFO', 'niveau': 'L2'},
-      {'id': 2, 'nom': 'Licence 3 INFO', 'niveau': 'L3'},
-      {'id': 3, 'nom': 'Master 1 Cyber', 'niveau': 'M1'},
-    ];
-  }
-
-  static Future<List<dynamic>> getModules() async {
+  static Future<Map<String, dynamic>> getModules() async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.get(
@@ -85,16 +74,17 @@ class ProfessorService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body['success'] == true) return body['data'];
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+        return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return _mockModules();
+      return {'success': false, 'error': 'Erreur lors du chargement des modules.'};
     } catch (e) {
-      return _mockModules();
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
   // ── Assigned Classes ──────────────────────────────────────
-  static Future<List<dynamic>> getAssignedClasses() async {
+  static Future<Map<String, dynamic>> getAssignedClasses() async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.get(
@@ -103,24 +93,16 @@ class ProfessorService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body['success'] == true) return body['data'];
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+        return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      // Fallback to mock assigned classes (same as all classes for now)
-      return _mockClasses();
+      return {'success': false, 'error': 'Erreur lors du chargement des classes assignées.'};
     } catch (e) {
-      return _mockClasses();
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
-  static List<dynamic> _mockModules() {
-    return [
-      {'id': 1, 'nom': 'Algorithmique & Structures'},
-      {'id': 2, 'nom': 'Réseaux Informatiques'},
-      {'id': 3, 'nom': 'Bases de Données'},
-    ];
-  }
-
-  static Future<List<dynamic>> getStudentsByFiliere(int filiereId) async {
+  static Future<Map<String, dynamic>> getStudentsByFiliere(int filiereId) async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.get(
@@ -129,16 +111,17 @@ class ProfessorService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body['success'] == true) return body['data'];
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+        return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return [];
+      return {'success': false, 'error': 'Erreur lors du chargement des étudiants.'};
     } catch (e) {
-      return [];
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
   // ── Cours (Upload & List) ──────────────────────────────────
-  static Future<List<dynamic>> getCours() async {
+  static Future<Map<String, dynamic>> getCours() async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.get(
@@ -147,25 +130,13 @@ class ProfessorService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body['success'] == true) return body['data'];
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+        return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return _mockCours();
+      return {'success': false, 'error': 'Erreur lors du chargement des cours.'};
     } catch (e) {
-      return _mockCours();
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
-  }
-
-  static List<dynamic> _mockCours() {
-    return [
-      {
-        'id': 1,
-        'titre': 'Introduction aux Algorithmes',
-        'description': 'Cours d\'introduction pour les L2',
-        'filiere_nom': 'Licence 2 INFO',
-        'module_nom': 'Algorithmique & Structures',
-        'date_upload': DateTime.now().toIso8601String(),
-      }
-    ];
   }
 
   static Future<Map<String, dynamic>> uploadCours({
@@ -198,15 +169,16 @@ class ProfessorService {
       if (response.statusCode == 201) {
         return {'success': true, 'data': jsonDecode(response.body)};
       } else {
-        return {'success': false, 'error': 'Erreur lors de l\'envoi'};
+        final body = jsonDecode(response.body);
+        return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi du cours.'};
       }
     } catch (e) {
-      return {'success': true, 'data': {'id': 999, 'titre': titre}}; // Mock success
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
   // ── Notes ──────────────────────────────────────────────────
-  static Future<List<dynamic>> getGradeSessions() async {
+  static Future<Map<String, dynamic>> getGradeSessions() async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.get(
@@ -215,31 +187,13 @@ class ProfessorService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body['success'] == true) return body['data'];
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+        return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return _mockSessions();
+      return {'success': false, 'error': 'Erreur lors du chargement des sessions de notes.'};
     } catch (e) {
-      return _mockSessions();
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
-  }
-
-  static List<dynamic> _mockSessions() {
-    return [
-      {
-        'id': 1,
-        'module_nom': 'Algorithmique & Structures',
-        'filiere_nom': 'Licence 2 INFO',
-        'is_sent': false,
-        'date_session': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(),
-      },
-      {
-        'id': 2,
-        'module_nom': 'Réseaux Informatiques',
-        'filiere_nom': 'Master 1 Cyber',
-        'is_sent': true,
-        'date_session': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(),
-      }
-    ];
   }
 
   static Future<Map<String, dynamic>> createGradeSession(Map<String, dynamic> data) async {
@@ -256,20 +210,24 @@ class ProfessorService {
       }
       return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création'};
     } catch (e) {
-      return {'success': true, 'session_id': 999}; // Mock success
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
-  static Future<bool> markSessionSent(String sessionId) async {
+  static Future<Map<String, dynamic>> markSessionSent(String sessionId) async {
     try {
       final headers = await ApiService.getHeaders();
       final response = await http.patch(
         Uri.parse('$baseUrl/notes/sessions/$sessionId/send'),
         headers: headers,
       );
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        return {'success': true};
+      }
+      final body = jsonDecode(response.body);
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi de la session.'};
     } catch (e) {
-      return false;
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 }

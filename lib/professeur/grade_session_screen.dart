@@ -31,13 +31,25 @@ class _GradeSessionScreenState extends State<GradeSessionScreen> {
   }
 
   Future<void> _fetchInitialData() async {
-    final classes = await ProfessorService.getClasses();
-    final modules = await ProfessorService.getModules();
+    final classesResult = await ProfessorService.getClasses();
+    final modulesResult = await ProfessorService.getModules();
     setState(() {
-      _classes = classes;
-      _modules = modules;
+      _classes = classesResult['success'] == true ? (classesResult['data'] as List<dynamic>) : [];
+      _modules = modulesResult['success'] == true ? (modulesResult['data'] as List<dynamic>) : [];
       _isLoading = false;
     });
+    if (mounted) {
+      if (classesResult['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(classesResult['error'] ?? 'Erreur chargement classes'), backgroundColor: Colors.red),
+        );
+      }
+      if (modulesResult['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(modulesResult['error'] ?? 'Erreur chargement modules'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _fetchStudents() async {
@@ -47,11 +59,16 @@ class _GradeSessionScreenState extends State<GradeSessionScreen> {
       _students = [];
       _notes.clear();
     });
-    final students = await ProfessorService.getStudentsByFiliere(int.parse(_selectedClassId!));
+    final result = await ProfessorService.getStudentsByFiliere(int.parse(_selectedClassId!));
     setState(() {
-      _students = students;
+      _students = result['success'] == true ? (result['data'] as List<dynamic>) : [];
       _isLoading = false;
     });
+    if (mounted && result['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['error'] ?? 'Erreur chargement étudiants'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   Future<void> _saveSession() async {

@@ -63,10 +63,10 @@ const marquerToutesLues = async (req, res) => {
 };
 
 // Fonction utilitaire - Enregistrer une notification dans Supabase
+// Returns { success: true } or { success: false, error: string }
 const envoyerNotificationAuto = async (userId, titre, corps, data = {}) => {
   try {
-    // Sauvegarder en base (Firebase retiré)
-    await supabase.from('notifications').insert({
+    const { error } = await supabase.from('notifications').insert({
       user_id: userId,
       titre,
       corps,
@@ -74,8 +74,15 @@ const envoyerNotificationAuto = async (userId, titre, corps, data = {}) => {
       created_at: new Date(),
     });
 
+    if (error) {
+      console.error('Erreur sauvegarde notification:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
   } catch (error) {
     console.error('Erreur sauvegarde notification:', error);
+    return { success: false, error: error.message };
   }
 };
 

@@ -60,7 +60,7 @@ class AuthService {
     }
   }
 
-  static Future<bool> setupPassword({
+  static Future<Map<String, dynamic>> setupPassword({
     required String userId,
     required String email,
     required String motDePasse,
@@ -71,13 +71,21 @@ class AuthService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'userId': userId, 'email': email, 'motDePasse': motDePasse}),
       );
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['token'] != null) {
+          await saveToken(data['token']);
+        }
+        return {'success': true, 'user': data['user']};
+      }
+      final data = jsonDecode(response.body);
+      return {'success': false, 'error': data['message'] ?? 'Erreur lors de la configuration du mot de passe.'};
     } catch (e) {
-      return false;
+      return {'success': false, 'error': 'Serveur injoignable. Verifiez votre connexion.'};
     }
   }
 
-  static Future<Map<String, dynamic>?> getMe() async {
+  static Future<Map<String, dynamic>> getMe() async {
     try {
       final headers = await getHeaders();
       final response = await http.get(
@@ -85,11 +93,14 @@ class AuthService {
         headers: headers,
       );
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return {'success': true, 'data': jsonDecode(response.body)};
       }
-      return null;
+      if (response.statusCode == 401) {
+        return {'success': false, 'error': 'Session expirée. Veuillez vous reconnecter.'};
+      }
+      return {'success': false, 'error': 'Erreur lors de la récupération du profil.'};
     } catch (e) {
-      return null;
+      return {'success': false, 'error': 'Serveur injoignable. Verifiez votre connexion.'};
     }
   }
 }
