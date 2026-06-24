@@ -43,7 +43,8 @@ class _NoteModule {
 
 // ════════════════════════════════════════════════════════════════════════════
 class NotesTab extends StatefulWidget {
-  const NotesTab({super.key});
+  final bool isSecondaryPage;
+  const NotesTab({super.key, this.isSecondaryPage = false});
   @override State<NotesTab> createState() => _NotesTabState();
 }
 
@@ -98,7 +99,14 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
         child: Column(children: [
 
-          Row(children: [
+           Row(children: [
+            if (widget.isSecondaryPage) ...[
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+              const SizedBox(width: 4),
+            ],
             Container(width: 32, height: 32,
                 decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8)),
