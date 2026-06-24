@@ -96,8 +96,8 @@ class _AdminMembresState extends State<AdminMembres> {
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isSuperAdmin
-              ? AdminTheme.primary.withOpacity(0.3) : const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+              ? AdminTheme.primary.withValues(alpha: 0.3) : const Color(0xFFE5E7EB)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(padding: const EdgeInsets.all(16),
@@ -108,7 +108,7 @@ class _AdminMembresState extends State<AdminMembres> {
                     : const Color(0xFFF5F7FA),
                 shape: BoxShape.circle,
                 border: Border.all(color: isSuperAdmin
-                    ? AdminTheme.primary.withOpacity(0.3) : const Color(0xFFE5E7EB))),
+                    ? AdminTheme.primary.withValues(alpha: 0.3) : const Color(0xFFE5E7EB))),
               child: Center(child: Text('${m.prenoms[0]}${m.nom[0]}',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
                       color: isSuperAdmin ? AdminTheme.primary : const Color(0xFF6B7280))))),
@@ -147,7 +147,7 @@ class _AdminMembresState extends State<AdminMembres> {
                   color: e.value ? AdminTheme.successLight : const Color(0xFFF5F7FA),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: e.value
-                      ? AdminTheme.success.withOpacity(0.3) : const Color(0xFFE5E7EB))),
+                      ? AdminTheme.success.withValues(alpha: 0.3) : const Color(0xFFE5E7EB))),
                 child: Text(label, style: TextStyle(fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: e.value ? AdminTheme.success : const Color(0xFF9CA3AF))));
@@ -198,7 +198,7 @@ class _AdminMembresState extends State<AdminMembres> {
                     title: Text(e.value, style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.w600)),
                     value: m.droits[e.key] ?? false,
-                    activeColor: AdminTheme.primary,
+                    activeThumbColor: AdminTheme.primary,
                     onChanged: (v) {
                       setS(() => m.droits[e.key] = v);
                       setState(() {});
@@ -273,7 +273,7 @@ class _AdminMembresState extends State<AdminMembres> {
                   contentPadding: EdgeInsets.zero, dense: true,
                   title: Text(_sectionsLabels[e.key] ?? e.key,
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  value: e.value, activeColor: AdminTheme.primary,
+                  value: e.value, activeThumbColor: AdminTheme.primary,
                   onChanged: (v) => setS(() => droits[e.key] = v))),
               ]))),
             Padding(padding: const EdgeInsets.all(16),

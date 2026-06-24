@@ -253,8 +253,10 @@ class _AdminMessagesState extends State<AdminMessages>
   Widget _listeGroupes(List<GroupeAdmin> groupes) {
     final f = _query.isEmpty ? groupes : groupes.where((g) =>
         g.nom.toLowerCase().contains(_query.toLowerCase())).toList();
-    if (f.isEmpty) return const Center(child: Text('Aucun groupe',
+    if (f.isEmpty) {
+      return const Center(child: Text('Aucun groupe',
         style: TextStyle(fontSize: 13, color: AdminTheme.textMuted)));
+    }
     return ListView.builder(
       itemCount: f.length,
       itemBuilder: (_, i) => _itemGroupe(f[i]));
@@ -278,7 +280,7 @@ class _AdminMessagesState extends State<AdminMessages>
         child: Row(children: [
           Container(width: 44, height: 44,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: isPrive ? null : BorderRadius.circular(12),
               shape: isPrive ? BoxShape.circle : BoxShape.rectangle),
             child: Center(child: isPrive
@@ -354,7 +356,7 @@ class _AdminMessagesState extends State<AdminMessages>
     title: Row(children: [
       Container(width: 34, height: 34,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
+          color: Colors.white.withValues(alpha: 0.2),
           borderRadius: g.type == 'prive' ? null : BorderRadius.circular(8),
           shape: g.type == 'prive' ? BoxShape.circle : BoxShape.rectangle),
         child: Center(child: Text(g.avatar, style: TextStyle(
@@ -377,7 +379,7 @@ class _AdminMessagesState extends State<AdminMessages>
     ],
     bottom: PreferredSize(
       preferredSize: const Size.fromHeight(1),
-      child: Container(height: 1, color: Colors.white.withOpacity(0.2))));
+      child: Container(height: 1, color: Colors.white.withValues(alpha: 0.2))));
 
   Widget _banniereBroadcast() => Container(
     color: AdminTheme.infoLight,
@@ -566,13 +568,15 @@ class _AdminMessagesState extends State<AdminMessages>
         decoration: BoxDecoration(color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [BoxShadow(
-                color: Colors.black.withOpacity(0.06), blurRadius: 4)]),
+                color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)]),
         child: KeyboardListener(
           focusNode: FocusNode(),
           onKeyEvent: (e) {
             if (e is KeyDownEvent &&
                 e.logicalKey == LogicalKeyboardKey.enter &&
-                !HardwareKeyboard.instance.isShiftPressed) _envoyer(g);
+                !HardwareKeyboard.instance.isShiftPressed) {
+              _envoyer(g);
+            }
           },
           child: TextField(
             controller: _msgCtrl, maxLines: null,
@@ -711,7 +715,7 @@ class _AdminMessagesState extends State<AdminMessages>
   Widget _mitem(IconData icon, String label, Color color,
       VoidCallback onTap) => ListTile(
     leading: Container(width: 38, height: 38,
-      decoration: BoxDecoration(color: color.withOpacity(0.12),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(10)),
       child: Icon(icon, color: color, size: 18)),
     title: Text(label, style: const TextStyle(
@@ -737,7 +741,7 @@ class _AdminMessagesState extends State<AdminMessages>
           ListTile(
             leading: Container(width: 40, height: 40,
               decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withOpacity(0.1),
+                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10)),
               child: const Center(child: Text('💬',
                   style: TextStyle(fontSize: 20)))),
@@ -956,10 +960,10 @@ class _BulleAdminState extends State<_BulleAdmin> {
                   child: Container(width: 20, height: 20,
                     margin: const EdgeInsets.only(right: 4, bottom: 6),
                     decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         shape: BoxShape.circle,
                         boxShadow: [BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
+                            color: Colors.black.withValues(alpha: 0.15),
                             blurRadius: 3)]),
                     child: const Icon(Icons.expand_more_rounded,
                         size: 14, color: Color(0xFF54656F))))
@@ -978,7 +982,7 @@ class _BulleAdminState extends State<_BulleAdmin> {
                       bottomLeft: Radius.circular(estMoi ? 8 : 0),
                       bottomRight: Radius.circular(estMoi ? 0 : 8)),
                     boxShadow: msg.type == 'sticker' ? null
-                        : [BoxShadow(color: Colors.black.withOpacity(0.07),
+                        : [BoxShadow(color: Colors.black.withValues(alpha: 0.07),
                             blurRadius: 3, offset: const Offset(0, 1))]),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -1002,7 +1006,7 @@ class _BulleAdminState extends State<_BulleAdmin> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 5, vertical: 1),
                               decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.06),
+                                  color: Colors.black.withValues(alpha: 0.06),
                                   borderRadius: BorderRadius.circular(10)),
                               child: Text(
                                 msg.reactions.entries.map((e) =>
@@ -1038,10 +1042,10 @@ class _BulleAdminState extends State<_BulleAdmin> {
                   child: Container(width: 20, height: 20,
                     margin: const EdgeInsets.only(left: 4, bottom: 6),
                     decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         shape: BoxShape.circle,
                         boxShadow: [BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
+                            color: Colors.black.withValues(alpha: 0.15),
                             blurRadius: 3)]),
                     child: const Icon(Icons.expand_more_rounded,
                         size: 14, color: Color(0xFF54656F))))
@@ -1059,7 +1063,7 @@ class _BulleAdminState extends State<_BulleAdmin> {
       return Row(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 34, height: 34,
           decoration: BoxDecoration(
-              color: const Color(0xFF7F66FF).withOpacity(0.15),
+              color: const Color(0xFF7F66FF).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8)),
           child: Icon(
             msg.type == 'image'

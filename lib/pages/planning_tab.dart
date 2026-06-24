@@ -1,58 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import '../widgets/emploi_du_temps_widget.dart';
 
 class PlanningTab extends StatelessWidget {
   const PlanningTab({super.key});
-
-  static const List<Map<String, dynamic>> _events = [
-    {
-      'titre': 'Rentrée académique 2024-2025',
-      'date': '15 septembre 2024',
-      'description': 'Début de l\'année académique 2024-2025.',
-      'type': 'Académique',
-    },
-    {
-      'titre': 'Début des examens S3',
-      'date': '4 nov. 2024 → 15 nov. 2024',
-      'description': 'Examens de fin du semestre 3.',
-      'type': 'Examens',
-    },
-    {
-      'titre': 'Délibérations S3',
-      'date': '25 novembre 2024',
-      'description': 'Publication des résultats du semestre 3.',
-      'type': 'Résultats',
-    },
-    {
-      'titre': 'Vacances académiques',
-      'date': '23 déc. 2024 → 5 jan. 2025',
-      'description': 'Vacances académiques de fin d\'année.',
-      'type': 'Vacances',
-    },
-    {
-      'titre': 'Reprise des cours S4',
-      'date': '6 janvier 2025',
-      'description': 'Début du semestre 4.',
-      'type': 'Académique',
-    },
-    {
-      'titre': 'Inscriptions pédagogiques S4',
-      'date': 'Avant le 05 Mai 2026',
-      'description': 'Tous les étudiants doivent se régulariser avant cette date.',
-      'type': 'Urgent',
-    },
-  ];
-
-  Color _typeCouleur(String type) {
-    switch (type) {
-      case 'Examens':   return const Color(0xFFC62828);
-      case 'Résultats': return const Color(0xFF15803D);
-      case 'Vacances':  return const Color(0xFF0891B2);
-      case 'Urgent':    return const Color(0xFFD97706);
-      default:          return AppPalette.blue;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +20,7 @@ class PlanningTab extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
         child: Row(children: [
           Container(width: 46, height: 46,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(13)),
             child: const Icon(Icons.calendar_month_outlined,
                 color: Colors.white, size: 24)),

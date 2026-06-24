@@ -94,7 +94,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
                   decoration: BoxDecoration(
                     color: AdminTheme.warningLight,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AdminTheme.warning.withOpacity(0.3))),
+                    border: Border.all(color: AdminTheme.warning.withValues(alpha: 0.3))),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.notifications_active_rounded,
                         color: AdminTheme.warning, size: 14),
@@ -164,7 +164,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(val, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: fg)),
         Text(label, style: TextStyle(fontSize: 11,
-            fontWeight: FontWeight.w600, color: fg.withOpacity(0.8))),
+            fontWeight: FontWeight.w600, color: fg.withValues(alpha: 0.8))),
       ])));
 
   // ── Onglet Événements ─────────────────────────────────────────────────
@@ -189,8 +189,8 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: e.statut == 'en_attente'
-              ? AdminTheme.warning.withOpacity(0.4) : const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+              ? AdminTheme.warning.withValues(alpha: 0.4) : const Color(0xFFE5E7EB)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
@@ -211,7 +211,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
               ])),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: sc.withOpacity(0.1),
+                decoration: BoxDecoration(color: sc.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8)),
                 child: Text(sl, style: TextStyle(fontSize: 11,
                     fontWeight: FontWeight.w700, color: sc))),
@@ -291,8 +291,8 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: p.statut == 'en_attente'
-              ? AdminTheme.warning.withOpacity(0.4) : const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+              ? AdminTheme.warning.withValues(alpha: 0.4) : const Color(0xFFE5E7EB)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 6, offset: const Offset(0, 2))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(padding: const EdgeInsets.all(14),
@@ -311,7 +311,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
               ])),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(color: sc.withOpacity(0.1),
+                decoration: BoxDecoration(color: sc.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8)),
                 child: Text(sl, style: TextStyle(fontSize: 10,
                     fontWeight: FontWeight.w700, color: sc))),
@@ -344,7 +344,7 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: fg.withOpacity(0.3))),
+              border: Border.all(color: fg.withValues(alpha: 0.3))),
           child: Center(child: Text(label, style: TextStyle(fontSize: 12,
               fontWeight: FontWeight.w700, color: fg)))));
 

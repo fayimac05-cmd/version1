@@ -151,7 +151,7 @@ class HomeTab extends StatelessWidget {
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 10, offset: const Offset(0, 4))],
               ),
               padding: const EdgeInsets.all(14),
@@ -186,7 +186,7 @@ class HomeTab extends StatelessWidget {
                               border: style == 'blanc'
                                   ? Border.all(color: const Color(0xFFE2E8F0)) : null,
                               boxShadow: style == 'blanc' ? [] : [BoxShadow(
-                                  color: bg.withOpacity(0.28),
+                                  color: bg.withValues(alpha: 0.28),
                                   blurRadius: 6, offset: const Offset(0, 3))],
                             ),
                             child: Column(
@@ -203,8 +203,8 @@ class HomeTab extends StatelessWidget {
                                         horizontal: 5, vertical: 1),
                                     decoration: BoxDecoration(
                                       color: style == 'blanc'
-                                          ? _orange.withOpacity(0.1)
-                                          : Colors.white.withOpacity(0.25),
+                                          ? _orange.withValues(alpha: 0.1)
+                                          : Colors.white.withValues(alpha: 0.25),
                                       borderRadius: BorderRadius.circular(5),
                                     ),
                                     child: Text(tag, style: TextStyle(fontSize: 8,
@@ -266,7 +266,7 @@ class HomeTab extends StatelessWidget {
                               border: style == 'blanc'
                                   ? Border.all(color: const Color(0xFFE2E8F0)) : null,
                               boxShadow: style == 'blanc' ? [] : [BoxShadow(
-                                  color: bg.withOpacity(0.28),
+                                  color: bg.withValues(alpha: 0.28),
                                   blurRadius: 6, offset: const Offset(0, 3))],
                             ),
                             child: Column(
@@ -287,7 +287,7 @@ class HomeTab extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(3),
                                     child: LinearProgressIndicator(
                                       value: p, minHeight: 4,
-                                      backgroundColor: barColor.withOpacity(0.2),
+                                      backgroundColor: barColor.withValues(alpha: 0.2),
                                       valueColor: AlwaysStoppedAnimation<Color>(barColor),
                                     ),
                                   ),
@@ -338,7 +338,7 @@ class HomeTab extends StatelessWidget {
                       style: TextStyle(color: Colors.white70, fontSize: 12)),
                 ])),
                 Container(width: 40, height: 40,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.auto_awesome_rounded,
                       color: Colors.white, size: 22)),
@@ -353,9 +353,9 @@ class HomeTab extends StatelessWidget {
   Widget _statCard(String val, String label, Color c) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
-      color: c.withOpacity(0.06),
+      color: c.withValues(alpha: 0.06),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: c.withOpacity(0.15)),
+      border: Border.all(color: c.withValues(alpha: 0.15)),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(val, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,

@@ -100,7 +100,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
 
           Row(children: [
             Container(width: 32, height: 32,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8)),
                 child: const Icon(Icons.grade_rounded, color: Colors.white, size: 18)),
             const SizedBox(width: 8),
@@ -116,9 +116,9 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
                   builder: (_) => _ReclamationMoyenneSheet(notes: _notes, moyenne: _moyenne)),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white.withOpacity(0.25))),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25))),
                 child: const Text('Contester', style: TextStyle(fontSize: 11,
                     color: Colors.white, fontWeight: FontWeight.w600)),
               ),
@@ -131,9 +131,9 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
+              color: Colors.white.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
             ),
             child: Row(children: [
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -235,7 +235,7 @@ class _NotesParStatut extends StatelessWidget {
                 fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
             const Spacer(),
             Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(color: (g['border'] as Color).withOpacity(0.3),
+                decoration: BoxDecoration(color: (g['border'] as Color).withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(20)),
                 child: Text('${filtered.length}', style: const TextStyle(fontSize: 12,
                     fontWeight: FontWeight.bold, color: Color(0xFF0F172A)))),
@@ -268,7 +268,7 @@ class _NoteCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: note.statut == 'blamable' ? const Color(0xFFEF9A9A) : const Color(0xFFE2E8F0),
             width: note.statut == 'blamable' ? 1.5 : 1),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,7 +279,7 @@ class _NoteCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: sc.withOpacity(0.12),
+                  color: sc.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -413,9 +413,9 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
                 style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4)),
             const SizedBox(height: 20),
             Container(padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: AppPalette.blue.withOpacity(0.06),
+              decoration: BoxDecoration(color: AppPalette.blue.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppPalette.blue.withOpacity(0.2))),
+                  border: Border.all(color: AppPalette.blue.withValues(alpha: 0.2))),
               child: Column(children: [
                 _infoLigne('Module',     widget.note.module),
                 const SizedBox(height: 8),
@@ -578,7 +578,7 @@ class _ReclamationMoyenneSheetState extends State<_ReclamationMoyenneSheet> {
                   Container(padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(color: AppPalette.lightBlue,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppPalette.blue.withOpacity(0.2))),
+                        border: Border.all(color: AppPalette.blue.withValues(alpha: 0.2))),
                     child: Row(children: [
                       const Icon(Icons.info_outline, color: AppPalette.blue, size: 20),
                       const SizedBox(width: 12),

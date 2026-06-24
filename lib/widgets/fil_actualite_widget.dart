@@ -50,15 +50,15 @@ class _CanalCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: nbNonLus > 0
-                ? color.withOpacity(0.35) : const Color(0xFFE2E8F0),
+                ? color.withValues(alpha: 0.35) : const Color(0xFFE2E8F0),
             width: nbNonLus > 0 ? 1.5 : 1,
           ),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Row(children: [
           Container(width: 46, height: 46,
-            decoration: BoxDecoration(color: color.withOpacity(0.1),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(13)),
             child: Icon(icon, color: color, size: 24)),
           const SizedBox(width: 14),

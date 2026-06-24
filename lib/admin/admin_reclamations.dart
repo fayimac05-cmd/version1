@@ -290,7 +290,7 @@ class _AdminReclamationsState extends State<AdminReclamations>
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AdminTheme.border),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
           ],
         ),
         child: Padding(
@@ -329,7 +329,7 @@ class _AdminReclamationsState extends State<AdminReclamations>
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: (cfgType['color'] as Color).withOpacity(0.1),
+                            color: (cfgType['color'] as Color).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(cfgType['label'] as String, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cfgType['color'] as Color)),
@@ -563,7 +563,7 @@ class _FicheReclamation extends StatelessWidget {
                       children: [
                         Container(
                           width: 52, height: 52,
-                          decoration: BoxDecoration(color: AdminTheme.primary.withOpacity(0.15), shape: BoxShape.circle),
+                          decoration: BoxDecoration(color: AdminTheme.primary.withValues(alpha: 0.15), shape: BoxShape.circle),
                           child: Center(child: Text(r.initiales, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primary))),
                         ),
                         const SizedBox(width: 14),
@@ -601,7 +601,7 @@ class _FicheReclamation extends StatelessWidget {
                             const SizedBox(width: 130, child: Text('Type', style: TextStyle(fontSize: 12, color: AdminTheme.textSecondary))),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: (cfgType['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                              decoration: BoxDecoration(color: (cfgType['color'] as Color).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                               child: Text(cfgType['label'] as String, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cfgType['color'] as Color)),
                             ),
                           ],
@@ -690,7 +690,7 @@ class _FicheReclamation extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: r.statut == 'rejete' ? AdminTheme.dangerLight : AdminTheme.successLight,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: r.statut == 'rejete' ? AdminTheme.danger.withOpacity(0.3) : AdminTheme.success.withOpacity(0.3)),
+                        border: Border.all(color: r.statut == 'rejete' ? AdminTheme.danger.withValues(alpha: 0.3) : AdminTheme.success.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -772,7 +772,7 @@ class _FicheReclamation extends StatelessWidget {
                   onTap: () => Navigator.pop(ctx),
                   child: Container(
                     width: 36, height: 36,
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
                     child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
                   ),
                 ),
@@ -938,7 +938,7 @@ class _FicheReclamation extends StatelessWidget {
       child: Container(
         width: fullWidth ? double.infinity : null,
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.3))),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

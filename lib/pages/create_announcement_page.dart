@@ -173,7 +173,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -185,7 +185,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textDark),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(fontSize: 14, color: textLight.withOpacity(0.5)),
+              hintStyle: TextStyle(fontSize: 14, color: textLight.withValues(alpha: 0.5)),
               prefixIcon: Padding(
                 padding: EdgeInsets.only(bottom: maxLines > 1 ? 100 : 0),
                 child: Icon(icon, color: primaryBlue, size: 20),
@@ -226,7 +226,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
               Switch(
                 value: value,
                 onChanged: (v) => setState(() => value = v),
-                activeColor: primaryBlue,
+                activeThumbColor: primaryBlue,
               ),
             ],
           ),

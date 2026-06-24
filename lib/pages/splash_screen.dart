@@ -199,7 +199,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   Widget _circle(double s, Color c, double op) => Container(
     width: s, height: s,
-    decoration: BoxDecoration(shape: BoxShape.circle, color: c.withOpacity(op)),
+    decoration: BoxDecoration(shape: BoxShape.circle, color: c.withValues(alpha: op)),
   );
 
   Widget _buildLogo(bool mobile) => Stack(
@@ -211,7 +211,7 @@ class _SplashScreenState extends State<SplashScreen>
         height: mobile ? 130 : 148,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _yellow.withOpacity(0.18),
+          color: _yellow.withValues(alpha: 0.18),
         ),
       ),
       // Cercle bleu principal
@@ -221,7 +221,7 @@ class _SplashScreenState extends State<SplashScreen>
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: _yellow,
-          boxShadow: [BoxShadow(color: _yellow.withOpacity(0.5),
+          boxShadow: [BoxShadow(color: _yellow.withValues(alpha: 0.5),
               blurRadius: 40, spreadRadius: 6)],
         ),
         child: Icon(Icons.school_rounded, color: _bg2,
@@ -248,14 +248,14 @@ class _SplashScreenState extends State<SplashScreen>
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
     decoration: BoxDecoration(
       border: const Border(left: BorderSide(color: _yellow, width: 3)),
-      color: Colors.white.withOpacity(0.05),
+      color: Colors.white.withValues(alpha: 0.05),
       borderRadius: const BorderRadius.only(
           topRight: Radius.circular(10), bottomRight: Radius.circular(10)),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('« Qui apprend quelque chose n\'est jamais perdu. »',
           style: TextStyle(fontSize: mobile ? 14 : 16,
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               fontStyle: FontStyle.italic, height: 1.65)),
       const SizedBox(height: 10),
       Text('— Proverbe burkinabè',
@@ -273,7 +273,7 @@ class _SplashScreenState extends State<SplashScreen>
         foregroundColor: _bg2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
-        shadowColor: _yellow.withOpacity(0.4),
+        shadowColor: _yellow.withValues(alpha: 0.4),
       ),
       child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text('Commencer', style: TextStyle(fontSize: 18,

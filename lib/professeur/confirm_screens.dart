@@ -111,7 +111,7 @@ class AttendanceConfirmScreen extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppPalette.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, -4))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4))],
             ),
             child: SizedBox(
               width: double.infinity,
@@ -318,7 +318,7 @@ class _GradeConfirmScreenState extends State<GradeConfirmScreen> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppPalette.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, -4))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4))],
             ),
             child: SizedBox(
               width: double.infinity,
@@ -424,7 +424,7 @@ class _SuccessScreenState extends State<_SuccessScreen> with SingleTickerProvide
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF22C55E).withOpacity(0.4),
+                        color: const Color(0xFF22C55E).withValues(alpha: 0.4),
                         blurRadius: 30,
                         offset: const Offset(0, 12),
                       ),

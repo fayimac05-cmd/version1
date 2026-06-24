@@ -121,7 +121,7 @@ class _AdminParentsState extends State<AdminParents> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -196,9 +196,9 @@ class _AdminParentsState extends State<AdminParents> {
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 9),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Center(child: Text(label, style: TextStyle(fontSize: 12,
           fontWeight: FontWeight.w700, color: color))),
@@ -286,7 +286,9 @@ class _AdminParentsState extends State<AdminParents> {
               child: GestureDetector(
                 onTap: () {
                   if (nomCtrl.text.isEmpty || prenomCtrl.text.isEmpty ||
-                      telCtrl.text.isEmpty) return;
+                      telCtrl.text.isEmpty) {
+                    return;
+                  }
                   setState(() => adminParents.add(Parent(
                     id: 'PAR${adminParents.length + 1}',
                     nom: nomCtrl.text.toUpperCase(),

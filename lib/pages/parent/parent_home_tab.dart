@@ -57,10 +57,10 @@ class ParentHomeTab extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: ParentStyles.primary.withOpacity(0.1),
+                        color: ParentStyles.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: ParentStyles.primary.withOpacity(0.2),
+                          color: ParentStyles.primary.withValues(alpha: 0.2),
                         ),
                       ),
                       child: Row(
@@ -98,7 +98,7 @@ class ParentHomeTab extends StatelessWidget {
                     borderRadius: BorderRadius.circular(ParentStyles.borderRadiusCards),
                     boxShadow: [
                       BoxShadow(
-                        color: ParentStyles.primary.withOpacity(0.3),
+                        color: ParentStyles.primary.withValues(alpha: 0.3),
                         blurRadius: 14,
                         offset: const Offset(0, 6),
                       ),
@@ -112,9 +112,9 @@ class ParentHomeTab extends StatelessWidget {
                         height: 58,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                             width: 1.5,
                           ),
                         ),
@@ -326,7 +326,7 @@ class ParentHomeTab extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: ParentStyles.cardDecoration(
             color: bgColor,
-            border: Border.all(color: color.withOpacity(0.2)),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,7 +400,7 @@ class ParentHomeTab extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: ParentStyles.cardDecoration(
         color: bgColor,
-        border: Border.all(color: primaryColor.withOpacity(0.25)),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,7 +455,7 @@ class ParentHomeTab extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color, size: 20),

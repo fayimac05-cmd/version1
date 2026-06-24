@@ -148,7 +148,7 @@ class _TicketPurchaseScreenState extends State<TicketPurchaseScreen> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                   elevation: 5,
-                  shadowColor: AppPalette.blue.withOpacity(0.5),
+                  shadowColor: AppPalette.blue.withValues(alpha: 0.5),
                 ),
                 child: const Text(
                   "Procéder au paiement",

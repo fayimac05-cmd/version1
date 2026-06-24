@@ -207,7 +207,7 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                 backgroundColor: AppPalette.white,
                 foregroundColor: AppPalette.black,
                 elevation: innerBoxIsScrolled ? 4 : 0,
-                shadowColor: Colors.black.withOpacity(0.3),
+                shadowColor: Colors.black.withValues(alpha: 0.3),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(
                     decoration: const BoxDecoration(
@@ -239,7 +239,7 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                                 borderRadius: BorderRadius.circular(18),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppPalette.blue.withOpacity(0.15),
+                                    color: AppPalette.blue.withValues(alpha: 0.15),
                                     blurRadius: 20,
                                     offset: const Offset(0, 10),
                                   ),
@@ -345,7 +345,7 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -382,7 +382,7 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                           ),
                           Switch(
                             value: isPresent,
-                            activeColor: AppPalette.blue,
+                            activeThumbColor: AppPalette.blue,
                             inactiveTrackColor: const Color(0xFFE2E8F0),
                             inactiveThumbColor: const Color(0xFF94A3B8),
                             onChanged: (val) {
@@ -460,7 +460,7 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -648,7 +648,7 @@ class _FloatingActionButton extends StatelessWidget {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: AppPalette.blue.withOpacity(0.3),
+            color: AppPalette.blue.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),

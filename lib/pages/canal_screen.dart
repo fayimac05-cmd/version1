@@ -75,7 +75,7 @@ class _CanalScreenState extends State<CanalScreen> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: AppPalette.blue.withOpacity(0.1),
+                      color: AppPalette.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -145,10 +145,10 @@ class _CanalScreenState extends State<CanalScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppPalette.blue.withOpacity(0.06),
+                      color: AppPalette.blue.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: AppPalette.blue.withOpacity(0.15),
+                        color: AppPalette.blue.withValues(alpha: 0.15),
                       ),
                     ),
                     child: const Row(
@@ -210,7 +210,7 @@ class _CanalScreenState extends State<CanalScreen> {
           border: Border.all(color: const Color(0xFFE2E8F0)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -222,7 +222,7 @@ class _CanalScreenState extends State<CanalScreen> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: couleur.withOpacity(0.1),
+                color: couleur.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Center(
@@ -252,7 +252,7 @@ class _CanalScreenState extends State<CanalScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: couleur.withOpacity(0.1),
+                            color: couleur.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -302,7 +302,7 @@ class _CanalScreenState extends State<CanalScreen> {
             else
               Icon(
                 Icons.chevron_right_rounded,
-                color: couleur.withOpacity(0.5),
+                color: couleur.withValues(alpha: 0.5),
               ),
           ],
         ),
@@ -543,7 +543,7 @@ class _CanalDetailState extends State<_CanalDetail> {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Center(
@@ -581,7 +581,7 @@ class _CanalDetailState extends State<_CanalDetail> {
             margin: const EdgeInsets.only(right: 12),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -596,14 +596,14 @@ class _CanalDetailState extends State<_CanalDetail> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.white.withOpacity(0.2)),
+          child: Container(height: 1, color: Colors.white.withValues(alpha: 0.2)),
         ),
       ),
       body: Column(
         children: [
           // Bannière dynamique selon le rôle
           Container(
-            color: widget.couleur.withOpacity(0.07),
+            color: widget.couleur.withValues(alpha: 0.07),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             child: Row(
               children: [
@@ -675,9 +675,9 @@ class _CanalDetailState extends State<_CanalDetail> {
               margin: const EdgeInsets.only(right: 6, bottom: 2),
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
               decoration: BoxDecoration(
-                color: widget.couleur.withOpacity(0.1),
+                color: widget.couleur.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: widget.couleur.withOpacity(0.3)),
+                border: Border.all(color: widget.couleur.withValues(alpha: 0.3)),
               ),
               child: Text(
                 widget.profile.roleBadgeEmoji,
@@ -692,7 +692,7 @@ class _CanalDetailState extends State<_CanalDetail> {
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
+                      color: Colors.black.withValues(alpha: 0.06),
                       blurRadius: 4,
                     ),
                   ],
@@ -1142,7 +1142,7 @@ class _CanalDetailState extends State<_CanalDetail> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withOpacity(0.1),
+                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Center(
@@ -1169,7 +1169,7 @@ class _CanalDetailState extends State<_CanalDetail> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: AppPalette.blue.withOpacity(0.1),
+                        color: AppPalette.blue.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -1310,7 +1310,7 @@ class _BulleCanalState extends State<_BulleCanal> {
                               vertical: 1,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF059669).withOpacity(0.1),
+                              color: const Color(0xFF059669).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(
@@ -1343,7 +1343,7 @@ class _BulleCanalState extends State<_BulleCanal> {
                           : const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: isReponse
-                            ? const Color(0xFF059669).withOpacity(0.06)
+                            ? const Color(0xFF059669).withValues(alpha: 0.06)
                             : Colors.white,
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(14),
@@ -1352,12 +1352,12 @@ class _BulleCanalState extends State<_BulleCanal> {
                         ),
                         border: isReponse
                             ? Border.all(
-                                color: const Color(0xFF059669).withOpacity(0.3),
+                                color: const Color(0xFF059669).withValues(alpha: 0.3),
                               )
                             : null,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 4,
                             offset: const Offset(0, 1),
                           ),
@@ -1370,7 +1370,7 @@ class _BulleCanalState extends State<_BulleCanal> {
                                   width: 42,
                                   height: 42,
                                   decoration: BoxDecoration(
-                                    color: msg.color.withOpacity(0.1),
+                                    color: msg.color.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
@@ -1449,7 +1449,7 @@ class _BulleCanalState extends State<_BulleCanal> {
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(
+                                              color: Colors.black.withValues(alpha: 
                                                 0.04,
                                               ),
                                               blurRadius: 3,
@@ -1484,7 +1484,7 @@ class _BulleCanalState extends State<_BulleCanal> {
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.06),
+                                      color: Colors.black.withValues(alpha: 0.06),
                                       blurRadius: 3,
                                     ),
                                   ],
@@ -1588,7 +1588,7 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
       body: Column(
         children: [
           Container(
-            color: const Color(0xFF059669).withOpacity(0.07),
+            color: const Color(0xFF059669).withValues(alpha: 0.07),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             child: const Row(
               children: [
@@ -1658,7 +1658,7 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 3,
                               ),
                             ],
@@ -1724,7 +1724,7 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
+                          color: Colors.black.withValues(alpha: 0.06),
                           blurRadius: 4,
                         ),
                       ],

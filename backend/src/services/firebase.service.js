@@ -1,5 +1,7 @@
 // backend/src/services/firebase.service.js
 
+const { createClient } = require('@supabase/supabase-js');
+
 let admin;
 let hasFirebase = false;
 
@@ -17,11 +19,11 @@ try {
   console.warn("⚠️ [Warning] Firebase Admin non configuré ou 'serviceAccountKey.json' introuvable. Les notifications push seront simulées.");
 }
 
-// Initialiser Supabase (clé service_role)
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Initialiser Supabase (clé service_role) si configuré
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+}
 
 /**
  * Envoyer une notification push
@@ -60,6 +62,7 @@ const sendNotification = async (userId, titre, corps, data = {}) => {
  * Récupérer le token FCM depuis Supabase
  */
 const getUserFCMToken = async (userId) => {
+  if (!supabase) return null;
   const { data, error } = await supabase
     .from('users')
     .select('fcm_token')

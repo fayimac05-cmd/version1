@@ -215,7 +215,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -227,7 +227,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textDark),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(fontSize: 14, color: textLight.withOpacity(0.5)),
+              hintStyle: TextStyle(fontSize: 14, color: textLight.withValues(alpha: 0.5)),
               prefixIcon: Icon(icon, color: primaryBlue, size: 20),
               suffixIcon: suffix != null ? Padding(
                 padding: const EdgeInsets.all(16),
@@ -271,7 +271,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withValues(alpha: 0.02),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

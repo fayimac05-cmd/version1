@@ -1,5 +1,9 @@
 const AnnonceModel = require('../models/annonceModel');
+const CanalModel = require('../models/canalModel');
+const MessageModel = require('../models/messageModel');
 const CloudinaryService = require('../services/cloudinary.service');
+const socketService = require('../services/socket.service');
+const { getUserById, formatAuteur } = require('../services/user.service');
 
 /**
  * Contrôleur pour les Annonces
@@ -264,6 +268,51 @@ exports.publishAnnonce = async (req, res) => {
     }
 
     const publishedAnnonce = await AnnonceModel.publish(id);
+
+    const auteur = await getUserById(userId);
+    const realtimePayload = {
+      type: 'annonce',
+      annonce: publishedAnnonce,
+      auteur: formatAuteur(auteur),
+    };
+
+    const etablissementId = req.user?.etablissement_id || 1;
+    socketService.emitToEtablissement(etablissementId, 'new_annonce', realtimePayload);
+    socketService.emitToEtablissement(etablissementId, 'notification', {
+      titre: publishedAnnonce.titre,
+      corps: publishedAnnonce.contenu?.substring(0, 120),
+      type: 'annonce',
+      annonceId: publishedAnnonce.id,
+    });
+
+    if (publishedAnnonce.filiere) {
+      socketService.emitToFiliere(publishedAnnonce.filiere, 'new_annonce', realtimePayload);
+    }
+
+    try {
+      const adminCanaux = await CanalModel.findAll({
+        type: 'administration',
+        etablissement_id: etablissementId,
+      });
+      if (adminCanaux.length > 0) {
+        const canal = adminCanaux[0];
+        const canalMessage = await MessageModel.create({
+          canal_id: canal.id,
+          auteur_id: userId,
+          contenu: `${publishedAnnonce.titre}\n\n${publishedAnnonce.contenu}`,
+          type: 'texte',
+        });
+        socketService.emitToCanal(canal.id, 'new_canal_message', {
+          ...canalMessage,
+          canal_id: canal.id,
+          canal_type: 'administration',
+          auteur: formatAuteur(auteur),
+          annonce_id: publishedAnnonce.id,
+        });
+      }
+    } catch (mirrorErr) {
+      console.warn('[publishAnnonce] Miroir canal administration ignoré:', mirrorErr.message);
+    }
 
     res.status(200).json({
       success: true,

@@ -72,11 +72,11 @@ Notes actuelles :
 - Mathématiques discrètes (MATH201) : 12.0/20 — Coeff 2 ✅ Validé
 - Anglais technique (ANG101) : 16.0/20 — Coeff 1 ✅ Validé
 - Programmation Orientée Objet (INFO104) : 9.5/20 — Coeff 3 ⚠️ En danger
-- Systèmes d\'exploitation (INFO105) : En attente — Coeff 2
+- Systèmes d'exploitation (INFO105) : En attente — Coeff 2
 Moyenne générale pondérée : ~10.6/20 (modules notés)
 
 Ton rôle :
-- Analyser la situation académique de l\'étudiant
+- Analyser la situation académique de l'étudiant
 - Proposer des plans de révision personnalisés
 - Féliciter les bons résultats
 - Alerter sur les modules critiques (Réseaux : 4.5/20 — urgence !)
@@ -229,6 +229,7 @@ Ton rôle :
             'messages': historique,
           }),
         );
+      // ignore: dead_code
       } else {
         // --- API OPENAI ---
         // Ajout du contexte système au début pour OpenAI
@@ -257,6 +258,7 @@ Ton rôle :
 
         if (useClaude) {
           reponse = data['content'][0]['text'] as String;
+        // ignore: dead_code
         } else {
           reponse = data['choices'][0]['message']['content'] as String;
         }
@@ -269,13 +271,13 @@ Ton rôle :
         });
         _sauvegarderHistorique();
       } else {
-        print("API Error: ${response.body}"); // Pour le debug
+        debugPrint("API Error: ${response.body}"); // Pour le debug
         _ajouterErreur(
           'Erreur ${response.statusCode}. Vérifiez votre clé API.',
         );
       }
     } catch (e) {
-      print("Exception: $e"); // Pour le debug
+      debugPrint("Exception: $e"); // Pour le debug
       _ajouterErreur('Connexion impossible. Vérifiez votre réseau.');
     }
 
@@ -332,7 +334,7 @@ Ton rôle :
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(
@@ -386,7 +388,7 @@ Ton rôle :
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -445,7 +447,7 @@ Ton rôle :
                                 border: Border.all(
                                   color: const Color(
                                     0xFF7C3AED,
-                                  ).withOpacity(0.3),
+                                  ).withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Text(
@@ -486,7 +488,7 @@ Ton rôle :
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
@@ -542,7 +544,7 @@ Ton rôle :
                           ? []
                           : [
                               BoxShadow(
-                                color: const Color(0xFF7C3AED).withOpacity(0.4),
+                                color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
                               ),
@@ -618,7 +620,7 @@ Ton rôle :
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
+                        color: Colors.black.withValues(alpha: 0.06),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -702,7 +704,7 @@ Ton rôle :
               border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

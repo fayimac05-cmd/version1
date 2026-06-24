@@ -117,7 +117,7 @@ class _ChooseSchoolPageState extends State<ChooseSchoolPage> {
                   decoration: BoxDecoration(color: Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 8, offset: const Offset(0, 2))]),
                   child: TextField(
                     controller: _searchCtrl,
@@ -214,7 +214,7 @@ class _ChooseSchoolPageState extends State<ChooseSchoolPage> {
             color: isSelected ? AppPalette.blue : const Color(0xFFE2E8F0),
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Row(children: [

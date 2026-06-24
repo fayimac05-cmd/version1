@@ -98,12 +98,12 @@ class _BannerWidgetState extends State<BannerWidget> {
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [e['color'] as Color, (e['color'] as Color).withOpacity(0.72)],
+                    colors: [e['color'] as Color, (e['color'] as Color).withValues(alpha: 0.72)],
                     begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [BoxShadow(
-                    color: (e['color'] as Color).withOpacity(0.3),
+                    color: (e['color'] as Color).withValues(alpha: 0.3),
                     blurRadius: 12, offset: const Offset(0, 4),
                   )],
                 ),
@@ -117,7 +117,7 @@ class _BannerWidgetState extends State<BannerWidget> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
+                        color: Colors.white.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(e['type'],

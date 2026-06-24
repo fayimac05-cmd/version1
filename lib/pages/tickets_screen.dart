@@ -82,7 +82,7 @@ class _TicketsScreenState extends State<TicketsScreen>
         child: Column(children: [
           Row(children: [
             Container(width: 46, height: 46,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(13)),
               child: const Icon(Icons.confirmation_number_outlined,
                   color: Colors.white, size: 24)),
@@ -136,7 +136,7 @@ class _TicketsScreenState extends State<TicketsScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(children: [
@@ -302,7 +302,7 @@ class _TicketsScreenState extends State<TicketsScreen>
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 8, offset: const Offset(0, 2))],
     ),
     child: Column(children: [
@@ -348,7 +348,7 @@ class _TicketsScreenState extends State<TicketsScreen>
             decoration: BoxDecoration(color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 10)]),
             child: CustomPaint(painter: _QRPainter())),
           const SizedBox(height: 12),

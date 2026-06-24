@@ -145,7 +145,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
         decoration: BoxDecoration(color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE5E7EB)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 6, offset: const Offset(0, 2))]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(width: 30, height: 30,
@@ -184,7 +184,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
           FlSpot(4,225), FlSpot(5,230), FlSpot(6,238), FlSpot(7,245), FlSpot(8,247)],
         isCurved: true, color: AdminTheme.primary, barWidth: 2.5,
         belowBarData: BarAreaData(show: true,
-            color: AdminTheme.primaryLight.withOpacity(0.4)),
+            color: AdminTheme.primaryLight.withValues(alpha: 0.4)),
         dotData: const FlDotData(show: false))],
       minX: 0, maxX: 8, minY: 150, maxY: 270,
     )));
@@ -531,7 +531,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isCurrent ? AdminTheme.primaryLight.withOpacity(0.3) : Colors.transparent,
+          color: isCurrent ? AdminTheme.primaryLight.withValues(alpha: 0.3) : Colors.transparent,
           border: const Border(top: BorderSide(color: Color(0xFFE5E7EB)))),
         child: Row(children: [
           Expanded(flex: 2, child: Row(children: [
@@ -592,7 +592,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
             spots: List.generate(stData.length, (i) => FlSpot(i.toDouble(), stData[i])),
             isCurved: true, color: AdminTheme.primary, barWidth: 2.5,
             belowBarData: BarAreaData(show: true,
-                color: AdminTheme.primaryLight.withOpacity(0.3)),
+                color: AdminTheme.primaryLight.withValues(alpha: 0.3)),
             dotData: FlDotData(show: true,
                 getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
                     radius: 3, color: AdminTheme.primary, strokeWidth: 0))),
@@ -600,7 +600,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
             spots: List.generate(sgData.length, (i) => FlSpot(i.toDouble(), sgData[i])),
             isCurved: true, color: AdminTheme.info, barWidth: 2.5,
             belowBarData: BarAreaData(show: true,
-                color: AdminTheme.infoLight.withOpacity(0.3)),
+                color: AdminTheme.infoLight.withValues(alpha: 0.3)),
             dotData: FlDotData(show: true,
                 getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
                     radius: 3, color: AdminTheme.info, strokeWidth: 0))),
@@ -700,7 +700,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
     decoration: BoxDecoration(color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8, offset: const Offset(0, 2))]),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
@@ -728,9 +728,9 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
       GestureDetector(onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(color: color.withOpacity(0.1),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: color.withOpacity(0.3))),
+              border: Border.all(color: color.withValues(alpha: 0.3))),
           child: Text(label, style: TextStyle(fontSize: 11,
               fontWeight: FontWeight.w700, color: color))));
 

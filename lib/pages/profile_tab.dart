@@ -102,7 +102,9 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
           _overlayEntry?.markNeedsBuild();
         },
         onToutLu: () {
-          setState(() { for (final n in _notifs) n.lu = true; });
+          setState(() { for (final n in _notifs) {
+            n.lu = true;
+          } });
           _overlayEntry?.markNeedsBuild();
         },
         onFermer: _fermerPanel,
@@ -230,10 +232,10 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                 duration: const Duration(milliseconds: 180),
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: _panelOuvert ? AppPalette.blue.withOpacity(0.08) : Colors.transparent,
+                  color: _panelOuvert ? AppPalette.blue.withValues(alpha: 0.08) : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: _panelOuvert ? AppPalette.blue.withOpacity(0.4) : const Color(0xFFE2E8F0),
+                    color: _panelOuvert ? AppPalette.blue.withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
                   ),
                 ),
                 child: Stack(alignment: Alignment.center, children: [
@@ -271,19 +273,19 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                       Positioned(top: -30, right: -30, child: Container(
                         width: 140, height: 140,
                         decoration: BoxDecoration(shape: BoxShape.circle,
-                            color: AppPalette.yellow.withOpacity(0.15)),
+                            color: AppPalette.yellow.withValues(alpha: 0.15)),
                       )),
                       Positioned(bottom: -20, left: 60, child: Container(
                         width: 100, height: 100,
                         decoration: BoxDecoration(shape: BoxShape.circle,
-                            color: Colors.white.withOpacity(0.06)),
+                            color: Colors.white.withValues(alpha: 0.06)),
                       )),
                       Positioned(bottom: 12, right: 12, child: GestureDetector(
                         onTap: () => _snackbar('Photo de couverture — Upload disponible en production'),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.45),
+                              color: Colors.black.withValues(alpha: 0.45),
                               borderRadius: BorderRadius.circular(20)),
                           child: const Row(children: [
                             Icon(Icons.camera_alt_outlined, color: Colors.white, size: 14),
@@ -305,7 +307,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 4),
                         color: AppPalette.yellow,
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12)],
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 12)],
                       ),
                       child: Center(child: Text(_initiales, style: TextStyle(
                           fontSize: 36, fontWeight: FontWeight.bold, color: AppPalette.blue))),
@@ -344,9 +346,9 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                       decoration: BoxDecoration(
-                        color: AppPalette.blue.withOpacity(0.1),
+                        color: AppPalette.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppPalette.blue.withOpacity(0.3)),
+                        border: Border.all(color: AppPalette.blue.withValues(alpha: 0.3)),
                       ),
                       child: Text(_roleLabel, style: const TextStyle(fontSize: 13,
                           fontWeight: FontWeight.bold, color: AppPalette.blue)),
@@ -362,7 +364,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                       decoration: BoxDecoration(
                         color: AppPalette.softYellow,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppPalette.yellow.withOpacity(0.4)),
+                        border: Border.all(color: AppPalette.yellow.withValues(alpha: 0.4)),
                       ),
                       child: Row(children: [
                         const Icon(Icons.school_outlined, color: AppPalette.blue, size: 18),
@@ -416,7 +418,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                     enfants: [
                       _ligneModifiable(icon: Icons.email_outlined, label: 'Email',
                           valeur: _emailVisible ? _email : '••••••@•••.••', hint: 'Ajouter',
-                          trailing: Switch(value: _emailVisible, activeColor: AppPalette.blue,
+                          trailing: Switch(value: _emailVisible, activeThumbColor: AppPalette.blue,
                               onChanged: (v) => setState(() => _emailVisible = v)),
                           onTap: () => _editer(titre: 'Email', valeur: _email,
                               hint: 'votre@email.com', onSave: (v) => setState(() => _email = v))),
@@ -424,7 +426,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                       _ligneModifiable(icon: Icons.phone_outlined, label: 'Téléphone',
                           valeur: _telVisible ? (_telephone.isNotEmpty ? _telephone : '') : '••• •• •• ••',
                           hint: 'Ajouter',
-                          trailing: Switch(value: _telVisible, activeColor: AppPalette.blue,
+                          trailing: Switch(value: _telVisible, activeThumbColor: AppPalette.blue,
                               onChanged: (v) => setState(() => _telVisible = v)),
                           onTap: () => _editer(titre: 'Téléphone', valeur: _telephone,
                               hint: '+226 XX XX XX XX', onSave: (v) => setState(() => _telephone = v))),
@@ -576,13 +578,13 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     return Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
           child: Row(children: [
             Container(width: 36, height: 36,
-                decoration: BoxDecoration(color: couleur.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: couleur.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                 child: Icon(icon, color: couleur, size: 18)),
             const SizedBox(width: 12),
             Expanded(child: Text(titre, style: const TextStyle(fontSize: 16,
@@ -614,7 +616,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
       onTap: onTap,
       child: Row(children: [
         Container(width: 40, height: 40,
-            decoration: BoxDecoration(color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: c.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: c, size: 20)),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -635,7 +637,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   Widget _ligneFixe(IconData icon, String label, String valeur) {
     return Row(children: [
       Container(width: 40, height: 40,
-          decoration: BoxDecoration(color: AppPalette.blue.withOpacity(0.08),
+          decoration: BoxDecoration(color: AppPalette.blue.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: AppPalette.blue, size: 20)),
       const SizedBox(width: 14),
@@ -657,7 +659,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     return Row(children: [
       Expanded(child: Text(label, style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)))),
       onChanged != null
-          ? Switch(value: value, activeColor: AppPalette.blue, onChanged: onChanged)
+          ? Switch(value: value, activeThumbColor: AppPalette.blue, onChanged: onChanged)
           : Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20)),
@@ -760,7 +762,7 @@ class _NotifPanel extends StatelessWidget {
           child: const ColoredBox(color: Colors.transparent))),
       Positioned(top: top, right: right, child: Material(
         elevation: 8, borderRadius: BorderRadius.circular(16),
-        shadowColor: Colors.black.withOpacity(0.12),
+        shadowColor: Colors.black.withValues(alpha: 0.12),
         child: Container(
           width: 320, constraints: const BoxConstraints(maxHeight: 480),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16),
@@ -771,7 +773,7 @@ class _NotifPanel extends StatelessWidget {
                   fontWeight: FontWeight.bold, color: Color(0xFF0F172A)))),
               if (nonLus > 0) Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.1),
+                decoration: BoxDecoration(color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20)),
                 child: Text('$nonLus nouvelle${nonLus > 1 ? 's' : ''}',
                     style: const TextStyle(fontSize: 11, color: Color(0xFFB91C1C), fontWeight: FontWeight.w600)),

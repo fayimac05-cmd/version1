@@ -238,7 +238,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                   decoration: BoxDecoration(
                     color: AdminTheme.primary,
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3),
+                    boxShadow: [BoxShadow(color: AdminTheme.primary.withValues(alpha: 0.3),
                         blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -401,7 +401,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
         decoration: BoxDecoration(color: Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFE5E7EB)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8, offset: const Offset(0, 2))]),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -421,7 +421,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                 Expanded(child: Text('${e.prenoms} ${e.nom}',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
                         color: Color(0xFF1A1A2E)))),
-                AdminTheme.badge(sl, sc, sc.withOpacity(0.1)),
+                AdminTheme.badge(sl, sc, sc.withValues(alpha: 0.1)),
               ]),
               const SizedBox(height: 3),
               Text(e.matricule, style: const TextStyle(fontSize: 11,
@@ -471,7 +471,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
   Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) =>
       GestureDetector(onTap: onTap,
         child: Container(width: 30, height: 30,
-          decoration: BoxDecoration(color: color.withOpacity(0.1),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6)),
           child: Icon(icon, color: color, size: 16)));
 
@@ -516,7 +516,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
               color: AdminTheme.primaryLight,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: AdminTheme.primary.withOpacity(0.2))),
+                  color: AdminTheme.primary.withValues(alpha: 0.2))),
           child: const Row(children: [
             Icon(Icons.info_outline_rounded,
                 color: AdminTheme.primary, size: 14),
@@ -552,7 +552,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
               color: const Color(0xFFF5F3FF),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: const Color(0xFF7C3AED).withOpacity(0.2))),
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.2))),
           child: const Row(children: [
             Icon(Icons.info_outline_rounded,
                 color: Color(0xFF7C3AED), size: 14),
@@ -615,7 +615,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
     decoration: BoxDecoration(color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 6, offset: const Offset(0, 1))]),
     child: Row(children: [
       Container(width: 42, height: 42,
@@ -692,9 +692,9 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 11),
       decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.25))),
+          border: Border.all(color: color.withValues(alpha: 0.25))),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(icon, color: color, size: 16),
         const SizedBox(width: 6),
@@ -866,7 +866,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                                 ),
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),
@@ -1109,7 +1109,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                   decoration: BoxDecoration(
                     color: AdminTheme.primary,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3),
+                    boxShadow: [BoxShadow(color: AdminTheme.primary.withValues(alpha: 0.3),
                         blurRadius: 8, offset: const Offset(0, 3))],
                   ),
                   child: const Center(child: Text('✅ Inscrire l\'étudiant',
@@ -1360,9 +1360,9 @@ class _FicheEtudiant extends StatelessWidget {
             boxShadow: AdminTheme.elevatedShadow),
           child: Row(children: [
             Container(width: 60, height: 60,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(0.4), width: 2)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2)),
               child: Center(child: Text('${e.prenoms[0]}${e.nom[0]}',
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold,
                       color: Colors.white)))),
@@ -1380,7 +1380,7 @@ class _FicheEtudiant extends StatelessWidget {
                 const SizedBox(height: 6),
                 Wrap(spacing: 6, children: e.badges.map((b) => Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(color: AdminTheme.accent.withOpacity(0.3),
+                  decoration: BoxDecoration(color: AdminTheme.accent.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(10)),
                   child: Text('🏅 $b', style: const TextStyle(
                       fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)))).toList()),

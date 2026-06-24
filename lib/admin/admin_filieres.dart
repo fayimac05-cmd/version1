@@ -112,7 +112,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
                   decoration: BoxDecoration(
                     color: AdminTheme.primary,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3),
+                    boxShadow: [BoxShadow(color: AdminTheme.primary.withValues(alpha: 0.3),
                         blurRadius: 8, offset: const Offset(0, 3))],
                   ),
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -221,7 +221,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
         Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: fg)),
         const SizedBox(width: 8),
         Expanded(child: Text(label, style: TextStyle(fontSize: 11,
-            fontWeight: FontWeight.w600, color: fg.withOpacity(0.8)))),
+            fontWeight: FontWeight.w600, color: fg.withValues(alpha: 0.8)))),
       ]),
     ),
   );
@@ -239,7 +239,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10, offset: const Offset(0, 2))],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -480,7 +480,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Container(width: 42, height: 42,
-                decoration: BoxDecoration(color: color.withOpacity(0.1),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10)),
                 child: Icon(isST ? Icons.computer_rounded : Icons.business_center_rounded,
                     color: color, size: 22)),
@@ -551,7 +551,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
         decoration: BoxDecoration(color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE5E7EB)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 6, offset: const Offset(0, 2))]),
         child: Row(children: [
           Container(width: 8, height: 8,
@@ -568,7 +568,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: color.withOpacity(0.1),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8)),
             child: Text('Coef ${m.coefficient}', style: TextStyle(fontSize: 12,
                 fontWeight: FontWeight.w800, color: color)),
@@ -623,7 +623,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
           border: Border.all(color: const Color(0xFFE5E7EB))),
       child: Row(children: [
         Container(width: 40, height: 40,
-          decoration: BoxDecoration(color: color.withOpacity(0.1),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: color, size: 20)),
         const SizedBox(width: 12),
@@ -639,7 +639,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
 
   Widget _chip(String label, IconData icon, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(color: color.withOpacity(0.1),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8)),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, color: color, size: 12),
@@ -822,7 +822,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
                 decoration: BoxDecoration(
                   color: AdminTheme.primary,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3),
+                  boxShadow: [BoxShadow(color: AdminTheme.primary.withValues(alpha: 0.3),
                       blurRadius: 8, offset: const Offset(0, 3))],
                 ),
                 child: Center(child: Text(
