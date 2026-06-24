@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
-import 'courses_tab.dart';
 import 'home_tab.dart';
 import 'profile_tab.dart';
 import 'notifications_page.dart';
@@ -25,6 +24,11 @@ class _StudentShellState extends State<StudentShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Détection de la largeur de l'écran
+    final double width = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = width >= 768; // Mode Tablette / PC
+
+    // Liste des pages principales
     final pages = [
       HomeTab(profile: widget.profile),
       NotificationsPage(),

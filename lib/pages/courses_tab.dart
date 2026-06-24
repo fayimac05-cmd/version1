@@ -131,9 +131,16 @@ class _CoursesTabState extends State<CoursesTab> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(children: _modules.map((mod) {
             final selected = _moduleSelectionne == mod;
-            final color = mod == 'Tous' ? AppPalette.blue
-                : (_cours.firstWhere((c) => c['module'] == mod,
-                    orElse: () => {'color': AppPalette.blue})['color'] as Color);
+            final Color color;
+            if (mod == 'Tous') {
+              color = AppPalette.blue;
+            } else {
+              final correspondant = _cours.firstWhere(
+                (c) => c['module'] == mod,
+                orElse: () => <String, dynamic>{'color': AppPalette.blue},
+              );
+              color = correspondant['color'] as Color;
+            }
             return GestureDetector(
               onTap: () => setState(() => _moduleSelectionne = mod),
               child: AnimatedContainer(

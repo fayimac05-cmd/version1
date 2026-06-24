@@ -38,6 +38,7 @@ class AdminEvaluations extends StatefulWidget {
 }
 
 class _AdminEvaluationsState extends State<AdminEvaluations> {
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -75,9 +76,23 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
     );
   }
 
-  Widget _cartePeriode(PeriodeEvaluation ev) {
-    final hasResultats = ev.resultats.isNotEmpty;
+  Widget _buildHeader() => Container(
+    color: Colors.white,
+    padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+    child: Row(children: [
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Évaluation des Professeurs', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        const Text('Évaluations anonymes', style: TextStyle(color: Color(0xFF6B7280))),
+      ])),
+      FilledButton.icon(
+        onPressed: _ouvrirPeriode,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Ouvrir une période'),
+      ),
+    ]),
+  );
 
+  Widget _cartePeriode(PeriodeEvaluation ev) {
     return Container(
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -190,91 +205,34 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
   }
 
   void _ouvrirPeriode() {
-    final filiere = adminFilieres.isNotEmpty ? adminFilieres.first.nom : '';
-    String filiereSelected = filiere;
-    final debutCtrl = TextEditingController(text: '01/05/2025');
-    final finCtrl   = TextEditingController(text: '10/05/2025');
+    final debutCtrl = TextEditingController();
+    final finCtrl = TextEditingController();
+    String filiereSelected = adminFilieres.isNotEmpty ? adminFilieres.first.nom : '';
 
-    showModalBottomSheet(context: context, isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) =>
-        Container(
-          height: MediaQuery.of(context).size.height * 0.65,
-          decoration: const BoxDecoration(color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          child: Column(children: [
-            const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2))),
-            Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: Row(children: [
-                const Expanded(child: Text('Ouvrir une période d\'évaluation',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
-                IconButton(icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx)),
-              ])),
-            const Divider(color: Color(0xFFE5E7EB)),
-            Expanded(child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _label('Filière'),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE5E7EB))),
-                  child: DropdownButtonHideUnderline(child: DropdownButton<String>(
-                    value: filiereSelected, isExpanded: true,
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
-                    items: adminFilieres.map((f) => DropdownMenuItem(
-                        value: f.nom, child: Text(f.nom,
-                            style: const TextStyle(fontSize: 13),
-                            overflow: TextOverflow.ellipsis))).toList(),
-                    onChanged: (v) => setS(() => filiereSelected = v!),
-                  ))),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                    _label('Date de début'),
-                    _inputField(debutCtrl, '01/05/2025'),
-                  ])),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                    _label('Date de fin'),
-                    _inputField(finCtrl, '10/05/2025'),
-                  ])),
-                ]),
-              ]))),
-            Padding(padding: const EdgeInsets.all(16),
-              child: GestureDetector(
-                onTap: () {
-                  setState(() => adminEvaluations.add(PeriodeEvaluation(
-                    id: 'EV${adminEvaluations.length + 1}',
-                    filiere: filiereSelected,
-                    dateDebut: debutCtrl.text, dateFin: finCtrl.text,
-                    ouverte: true, resultats: {})));
-                  Navigator.pop(ctx);
-                  _snack('✅ Période ouverte pour $filiereSelected !');
-                },
-                child: Container(width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(color: AdminTheme.primary,
-                      borderRadius: BorderRadius.circular(12)),
-                  child: const Center(child: Text('Ouvrir la période',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                          color: Colors.white)))))),
-          ]))));
-  }
-
-  void _ouvrirPeriodeFiliere(PeriodeEvaluation ev) {
-    setState(() {
-      ev.ouverte = true;
-      if (ev.dateDebut.isEmpty) {
-        // Pas possible de modifier final fields, juste changer ouverte
-      }
-    });
-    _snack('✅ Période ouverte pour ${ev.filiere} !');
+    showModalBottomSheet(context: context, builder: (ctx) => Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: debutCtrl, decoration: const InputDecoration(labelText: 'Date début')),
+        TextField(controller: finCtrl, decoration: const InputDecoration(labelText: 'Date fin')),
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: () {
+            if (debutCtrl.text.isNotEmpty && finCtrl.text.isNotEmpty) {
+              setState(() => adminEvaluations.add(PeriodeEvaluation(
+                id: 'EV${adminEvaluations.length + 1}',
+                filiere: filiereSelected,
+                dateDebut: debutCtrl.text,
+                dateFin: finCtrl.text,
+                ouverte: true,
+                resultats: {}
+              )));
+              Navigator.pop(ctx);
+            }
+          },
+          child: const Text('Valider'),
+        )
+      ]),
+    ));
   }
 
   Widget _btn(String label, Color fg, Color bg, VoidCallback onTap) =>

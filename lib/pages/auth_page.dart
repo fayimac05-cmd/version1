@@ -175,28 +175,63 @@ class _AuthPageState extends State<AuthPage> {
       _error = null;
     });
 
-    final mat = _matriculeCtrl.text.trim().toUpperCase();
-    if (mat.isEmpty) {
-      _setError('Veuillez saisir votre matricule.');
-      return;
-    }
+    // ─── CAS ONGLET 0 : MATRICULE (Étudiant, Admin, BDE) ───
+    if (_tab == 0) {
+      final mat = _matriculeCtrl.text.trim().toUpperCase();
+      if (mat.isEmpty) {
+        _setError('Veuillez saisir votre matricule.');
+        return;
+      }
 
-    // Simuler la vérification du matricule côté backend
-    // On vérifie juste que le matricule existe dans notre DB simulée
-    final user = _dbEtudiants[mat];
-    if (user == null) {
-      _setError('Matricule non reconnu.\nContactez l\'administration.');
-      return;
-    }
+      final user = _dbEtudiants[mat];
+      if (user == null) {
+        _setError('Matricule non reconnu.\nContactez l\'administration.');
+        return;
+      }
 
-    setState(() {
-      _userTrouve = user;
-      _cleTrouvee = mat;
-      _loading = false;
-      _etape = user['premiereFois'] == true
-          ? _Etape.premiereFois
-          : _Etape.motDePasse;
-    });
+      setState(() {
+        _userTrouve = user;
+        _cleTrouvee = mat;
+        _loading = false;
+        _etape = user['premiereFois'] == true ? _Etape.premiereFois : _Etape.motDePasse;
+      });
+    } 
+    // ─── CAS ONGLET 1 : NOM & PRÉNOM (Professeur, Parent) ───
+    else {
+      final nom = _nomCtrl.text.trim().toLowerCase();
+      final prenom = _prenomCtrl.text.trim().toLowerCase();
+      final tel = _numeroCtrl.text.trim();
+
+      if (nom.isEmpty || prenom.isEmpty || tel.isEmpty) {
+        _setError('Veuillez remplir tous les champs.');
+        return;
+      }
+
+      // Reconstitution de la clé comme dans tes Maps (ex: "ouedraogo mamadou 70123456")
+      final cleRecherche = '$nom $prenom $tel';
+      Map<String, dynamic>? user;
+      String? roleDetecte;
+
+      if (_dbProfs.containsKey(cleRecherche)) {
+        user = _dbProfs[cleRecherche];
+        roleDetecte = 'professeur';
+      } else if (_dbParents.containsKey(cleRecherche)) {
+        user = _dbParents[cleRecherche];
+        roleDetecte = 'parent';
+      }
+
+      if (user == null) {
+        _setError('Identifiants non reconnus.\nVérifiez vos informations.');
+        return;
+      }
+
+      setState(() {
+        _userTrouve = user;
+        _cleTrouvee = roleDetecte == 'professeur' ? 'PROF-$tel' : 'PARENT-$tel';
+        _loading = false;
+        _etape = user!['premiereFois'] == true ? _Etape.premiereFois : _Etape.motDePasse;
+      });
+    }
   }
 
   void _connecter() async {

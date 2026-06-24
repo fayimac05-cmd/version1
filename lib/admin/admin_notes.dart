@@ -593,9 +593,11 @@ class _SaisieDirecte extends StatefulWidget {
 }
 
 class _SaisieDirecteState extends State<_SaisieDirecte> {
+  final _service = _NotesServiceInterne();
   String _filiereSelected = 'Réseaux Informatiques et Télécom';
   String _moduleSelected  = 'Base de Données';
   final Map<String, TextEditingController> _controllers = {};
+  final Map<String, bool> _isValid = {};
 
   final _filieres = ['Réseaux Informatiques et Télécom', 'Électrotechnique',
       'Marketing & Communication', 'Gestion Comptable et Financière'];
@@ -607,155 +609,131 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
       .toList();
 
   @override
-  Widget build(BuildContext context) {
-    // Init controllers
-    for (final e in _etudiantsFiliere) {
-      _controllers.putIfAbsent(e.matricule, () => TextEditingController());
+  void initState() {
+    super.initState();
+    for (final e in adminEtudiants) {
+      final ctrl = TextEditingController();
+      ctrl.addListener(() {
+        final valide = _service.estNoteValide(ctrl.text);
+        if (_isValid[e.matricule] != valide) {
+          setState(() => _isValid[e.matricule] = valide);
+        }
+      });
+      _controllers[e.matricule] = ctrl;
+      _isValid[e.matricule] = true;
     }
+  }
 
+  @override
+  void dispose() {
+    for (var ctrl in _controllers.values) ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(children: [
-      // Filtres
       Container(
         color: AdminTheme.surface,
         padding: const EdgeInsets.all(16),
         child: Row(children: [
-          Expanded(child: _dropField('Filière', _filiereSelected, _filieres,
-              (v) => setState(() => _filiereSelected = v!))),
+          Expanded(child: _dropField('Filière', _filiereSelected, _filieres, (v) => setState(() => _filiereSelected = v!))),
           const SizedBox(width: 12),
-          Expanded(child: _dropField('Module', _moduleSelected, _modules,
-              (v) => setState(() => _moduleSelected = v!))),
+          Expanded(child: _dropField('Module', _moduleSelected, _modules, (v) => setState(() => _moduleSelected = v!))),
           const SizedBox(width: 12),
           ElevatedButton.icon(
             onPressed: _sauvegarder,
             icon: const Icon(Icons.save_rounded, size: 16),
             label: const Text('Sauvegarder'),
-            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
-                foregroundColor: Colors.white, elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AdminTheme.radiusButton))),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AdminTheme.radiusButton))),
           ),
         ]),
       ),
       const Divider(height: 1, color: AdminTheme.border),
-
-      // En-tête tableau
       Container(
         color: AdminTheme.surfaceAlt,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Row(children: [
-          const Expanded(flex: 2, child: Text('Étudiant', style: TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w700, color: AdminTheme.textSecondary))),
-          const Text('Matricule', style: TextStyle(fontSize: 12,
-              fontWeight: FontWeight.w700, color: AdminTheme.textSecondary)),
+          const Expanded(flex: 2, child: Text('Étudiant', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminTheme.textSecondary))),
+          const Text('Matricule', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminTheme.textSecondary)),
           const SizedBox(width: 60),
-          SizedBox(width: 100, child: Text(_moduleSelected,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                  color: AdminTheme.primary),
-              maxLines: 1, overflow: TextOverflow.ellipsis)),
+          SizedBox(width: 100, child: Text(_moduleSelected, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminTheme.primary), maxLines: 1, overflow: TextOverflow.ellipsis)),
         ]),
       ),
       const Divider(height: 1, color: AdminTheme.border),
-
-      // Lignes étudiants
-      Expanded(child: _etudiantsFiliere.isEmpty
-          ? _videFiliere()
-          : ListView.separated(
+      Expanded(child: _etudiantsFiliere.isEmpty ? _videFiliere() : ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               itemCount: _etudiantsFiliere.length,
               separatorBuilder: (_, __) => const Divider(height: 1, color: AdminTheme.border),
               itemBuilder: (_, i) {
-                final e   = _etudiantsFiliere[i];
-                final ctrl = _controllers[e.matricule]!;
+                final e = _etudiantsFiliere[i];
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Row(children: [
                     Expanded(flex: 2, child: Row(children: [
-                      Container(width: 34, height: 34,
-                        decoration: BoxDecoration(color: AdminTheme.primaryLight,
-                            shape: BoxShape.circle),
-                        child: Center(child: Text('${e.prenoms[0]}${e.nom[0]}',
-                            style: const TextStyle(fontSize: 11,
-                                fontWeight: FontWeight.bold, color: AdminTheme.primary)))),
+                      Container(width: 34, height: 34, decoration: BoxDecoration(color: AdminTheme.primaryLight, shape: BoxShape.circle), child: Center(child: Text('${e.prenoms[0]}${e.nom[0]}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AdminTheme.primary)))),
                       const SizedBox(width: 10),
-                      Expanded(child: Text('${e.prenoms} ${e.nom}',
-                          style: AdminTheme.headingSmall.copyWith(fontSize: 13))),
+                      Expanded(child: Text('${e.prenoms} ${e.nom}', style: AdminTheme.headingSmall.copyWith(fontSize: 13))),
                     ])),
-                    Text(e.matricule, style: AdminTheme.caption.copyWith(
-                        fontFamily: 'monospace')),
+                    Text(e.matricule, style: AdminTheme.caption.copyWith(fontFamily: 'monospace')),
                     const SizedBox(width: 16),
-                    SizedBox(width: 90, child: Container(
-                      decoration: BoxDecoration(
-                        color: AdminTheme.surfaceAlt,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AdminTheme.border),
-                      ),
-                      child: TextField(
-                        controller: ctrl,
+                    SizedBox(width: 90, child: TextField(
+                        controller: _controllers[e.matricule],
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textInputAction: TextInputAction.next,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
-                            color: AdminTheme.primary),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: '—',
-                          hintStyle: TextStyle(color: AdminTheme.textMuted),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 10),
-                          suffixText: '/20',
-                          suffixStyle: TextStyle(fontSize: 11, color: AdminTheme.textMuted),
-                        ),
-                      ),
-                    )),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _isValid[e.matricule]! ? AdminTheme.border : AdminTheme.danger)),
+                        ))),
                   ]),
                 );
-              },
-            )),
+              })),
     ]);
   }
 
-  Widget _dropField(String hint, String value, List<String> items,
-      ValueChanged<String?> onChanged) =>
+  Widget _dropField(String hint, String value, List<String> items, ValueChanged<String?> onChanged) =>
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(color: AdminTheme.surface,
-            borderRadius: BorderRadius.circular(AdminTheme.radiusButton),
-            border: Border.all(color: AdminTheme.border)),
+        decoration: BoxDecoration(color: AdminTheme.surface, borderRadius: BorderRadius.circular(AdminTheme.radiusButton), border: Border.all(color: AdminTheme.border)),
         child: DropdownButtonHideUnderline(child: DropdownButton<String>(
           value: value, isExpanded: true,
           style: AdminTheme.bodyLarge,
-          items: items.map((v) => DropdownMenuItem(value: v,
-              child: Text(v, style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis))).toList(),
+          items: items.map((v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 13)))).toList(),
           onChanged: onChanged,
         )),
       );
 
-  Widget _videFiliere() => Center(child: Text(
-      'Aucun étudiant actif dans cette filière.',
-      style: AdminTheme.bodyMedium));
+  Widget _videFiliere() => Center(child: Text('Aucun étudiant actif dans cette filière.', style: AdminTheme.bodyMedium));
 
   void _sauvegarder() {
     int count = 0;
     for (final e in _etudiantsFiliere) {
       final ctrl = _controllers[e.matricule];
       if (ctrl != null && ctrl.text.isNotEmpty) {
-        final val = double.tryParse(ctrl.text.replaceAll(',', '.'));
-        if (val != null && val >= 0 && val <= 20) count++;
+        if (!_service.estNoteValide(ctrl.text)) {
+          _snack('Erreur: Note invalide pour ${e.nom}', isError: true);
+          return;
+        }
+        count++;
       }
     }
-    if (count == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Aucune note saisie.'),
-        backgroundColor: AdminTheme.warning,
+    if (count == 0) { _snack('Aucune note saisie.', isError: true); return; }
+    widget.onSaved();
+    _snack('✅ $count note(s) sauvegardée(s) pour $_moduleSelected');
+  }
+
+  void _snack(String msg, {bool isError = false}) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg), backgroundColor: isError ? AdminTheme.danger : AdminTheme.primary,
         behavior: SnackBarBehavior.floating,
       ));
-      return;
-    }
-    widget.onSaved();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('✅ $count note(s) sauvegardée(s) pour $_moduleSelected'),
-      backgroundColor: AdminTheme.primary,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+}
+
+class _NotesServiceInterne {
+  bool estNoteValide(String saisie) {
+    if (saisie.isEmpty) return true;
+    final valeur = double.tryParse(saisie.replaceAll(',', '.'));
+    return valeur != null && valeur >= 0 && valeur <= 20;
   }
 }

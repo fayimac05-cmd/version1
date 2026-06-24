@@ -30,19 +30,30 @@ final List<Membre> adminMembres = [
           'professeurs': false, 'parents': false, 'messages': true, 'annonces': true,
           'stats': false, 'membres': false}),
 ];
-
+// Utilisation de titres simples, les icônes sont gérées dynamiquement si besoin
 const _sectionsLabels = {
-  'etudiants': '🎓 Étudiants',
-  'notes': '📊 Notes',
-  'reclamations': '⚠️ Réclamations',
-  'filieres': '🏫 Filières',
-  'professeurs': '👨‍🏫 Professeurs',
-  'parents': '👨‍👩‍👦 Parents',
-  'messages': '💬 Messages',
-  'annonces': '📢 Annonces',
-  'stats': '📈 Statistiques',
-  'membres': '🛡️ Membres',
+  'etudiants': 'Étudiants',
+  'notes': 'Notes',
+  'reclamations': 'Réclamations',
+  'filieres': 'Filières',
+  'professeurs': 'Professeurs',
+  'parents': 'Parents',
+  'messages': 'Messages',
+  'annonces': 'Annonces',
+  'stats': 'Statistiques',
+  'membres': 'Membres',
 };
+IconData _getIconForSection(String key) {
+  switch (key) {
+    case 'etudiants': return Icons.school_rounded;
+    case 'notes': return Icons.bar_chart_rounded;
+    case 'reclamations': return Icons.warning_amber_rounded;
+    case 'filieres': return Icons.apartment_rounded;
+    case 'professeurs': return Icons.person_outline_rounded;
+    // ... ajoute les autres ici
+    default: return Icons.widgets_rounded;
+  }
+}
 
 class AdminMembres extends StatefulWidget {
   const AdminMembres({super.key});
@@ -50,6 +61,12 @@ class AdminMembres extends StatefulWidget {
 }
 
 class _AdminMembresState extends State<AdminMembres> {
+  // Ajout d'une méthode pour supprimer un membre
+  void _supprimerMembre(Membre m) {
+    setState(() => adminMembres.remove(m));
+    _snack('🗑️ Membre supprimé');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,74 +88,110 @@ class _AdminMembresState extends State<AdminMembres> {
     );
   }
 
-  Widget _carteMembre(Membre m) {
+ Widget _carteMembre(Membre m) {
     final isSuperAdmin = m.role == 'Super Admin';
     final nbDroits = m.droits.values.where((v) => v).length;
 
     return Container(
-      decoration: BoxDecoration(color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSuperAdmin
-              ? AdminTheme.primary.withOpacity(0.3) : const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
-              blurRadius: 8, offset: const Offset(0, 2))]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            Container(width: 48, height: 48,
-              decoration: BoxDecoration(
-                color: isSuperAdmin ? AdminTheme.primaryLight
-                    : const Color(0xFFF5F7FA),
-                shape: BoxShape.circle,
-                border: Border.all(color: isSuperAdmin
-                    ? AdminTheme.primary.withOpacity(0.3) : const Color(0xFFE5E7EB))),
-              child: Center(child: Text('${m.prenoms[0]}${m.nom[0]}',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
-                      color: isSuperAdmin ? AdminTheme.primary : const Color(0xFF6B7280))))),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${m.prenoms} ${m.nom}', style: const TextStyle(fontSize: 15,
-                  fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-              Text(m.email, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-              const SizedBox(height: 4),
-              Row(children: [
-                _roleBadge(m.role),
-                const SizedBox(width: 8),
-                Text('$nbDroits/${m.droits.length} sections',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-              ]),
-            ])),
-            if (!isSuperAdmin)
-              GestureDetector(
-                onTap: () => _gererDroits(m),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: AdminTheme.primaryLight,
-                      borderRadius: BorderRadius.circular(8)),
-                  child: const Text('Droits', style: TextStyle(fontSize: 12,
-                      fontWeight: FontWeight.w700, color: AdminTheme.primary)))),
-          ])),
-
-        // Droits affichés
-        Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-          child: Wrap(spacing: 6, runSpacing: 6,
-            children: m.droits.entries.map((e) {
-              final label = _sectionsLabels[e.key] ?? e.key;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: e.value ? AdminTheme.successLight : const Color(0xFFF5F7FA),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: e.value
-                      ? AdminTheme.success.withOpacity(0.3) : const Color(0xFFE5E7EB))),
-                child: Text(label, style: TextStyle(fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: e.value ? AdminTheme.success : const Color(0xFF9CA3AF))));
-            }).toList())),
-      ]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSuperAdmin ? AdminTheme.primary.withOpacity(0.3) : const Color(0xFFE5E7EB),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Avatar
+                CircleAvatar(
+                  backgroundColor: isSuperAdmin ? AdminTheme.primaryLight : const Color(0xFFF5F7FA),
+                  child: Text(
+                    '${m.prenoms[0]}${m.nom[0]}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isSuperAdmin ? AdminTheme.primary : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${m.prenoms} ${m.nom}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text(m.email, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                    ],
+                  ),
+                ),
+                // Boutons d'action
+                if (!isSuperAdmin) ...[
+                  IconButton(
+                    icon: const Icon(Icons.edit_rounded, size: 20, color: AdminTheme.primary),
+                    onPressed: () => _gererDroits(m),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+                    onPressed: () => _supprimerMembre(m),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Droits affichés avec icônes
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: m.droits.entries.map((e) {
+                final label = _sectionsLabels[e.key] ?? e.key;
+                final icon = _getIconForSection(e.key); // Utilisation de ta fonction
+                
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: e.value ? AdminTheme.successLight : const Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: e.value ? AdminTheme.success.withOpacity(0.3) : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 12, color: e.value ? AdminTheme.success : const Color(0xFF9CA3AF)),
+                      const SizedBox(width: 4),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: e.value ? AdminTheme.success : const Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
     );
   }
-
   Widget _roleBadge(String role) {
     final isSA = role == 'Super Admin';
     return Container(
@@ -209,32 +262,21 @@ class _AdminMembresState extends State<AdminMembres> {
 
     showModalBottomSheet(context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(builder: (ctx, setS) =>
-        Container(
-          height: MediaQuery.of(context).size.height * 0.88,
-          decoration: const BoxDecoration(color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          child: Column(children: [
-            const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2))),
-            Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: Row(children: [
-                const Expanded(child: Text('Nouveau membre admin', style: TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w800))),
-                IconButton(icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx)),
-              ])),
-            Expanded(child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Infos
-                _label('Nom *'), _input(nomCtrl, 'Nom de famille'),
-                const SizedBox(height: 10),
-                _label('Prénom *'), _input(prenomCtrl, 'Prénom'),
-                const SizedBox(height: 10),
-                _label('Email *'), _input(emailCtrl, 'Email', type: TextInputType.emailAddress),
-                const SizedBox(height: 14),
+      builder: (_) => StatefulBuilder(builder: (ctx, setS) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: Column(children: [
+          // ... [Header du Modal] ...
+          Expanded(child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _label('Nom *'), _input(nomCtrl, 'Nom'),
+              const SizedBox(height: 10),
+              _label('Prénom *'), _input(prenomCtrl, 'Prénom'),
+              const SizedBox(height: 10),
+              _label('Email *'), _input(emailCtrl, 'exemple@ist.bf', type: TextInputType.emailAddress),
+              
+              const SizedBox(height: 14),
                 _label('Rôle'),
                 Wrap(spacing: 8, runSpacing: 8,
                   children: ['Scolarité', 'Secrétariat', 'BDE Admin', 'Rôle personnalisé']
@@ -258,30 +300,32 @@ class _AdminMembresState extends State<AdminMembres> {
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   value: e.value, activeColor: AdminTheme.primary,
                   onChanged: (v) => setS(() => droits[e.key] = v))),
-              ]))),
-            Padding(padding: const EdgeInsets.all(16),
-              child: GestureDetector(
-                onTap: () {
-                  if (nomCtrl.text.isEmpty || prenomCtrl.text.isEmpty) return;
-                  setState(() => adminMembres.add(Membre(
-                    id: 'M${adminMembres.length + 1}',
-                    nom: nomCtrl.text.toUpperCase(), prenoms: prenomCtrl.text,
-                    email: emailCtrl.text, role: role,
-                    droits: Map.from(droits), dateCreation: '01/05/2025',
-                  )));
-                  Navigator.pop(ctx);
-                  _snack('✅ Compte créé ! Identifiants envoyés par email.');
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(color: AdminTheme.primary,
-                      borderRadius: BorderRadius.circular(12)),
-                  child: const Center(child: Text('Créer le compte',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                          color: Colors.white)))))),
-          ]))));
+            ])
+          )),
+          Padding(padding: const EdgeInsets.all(16),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary, minimumSize: const Size(double.infinity, 50)),
+              onPressed: () {
+                if (nomCtrl.text.isEmpty || !emailCtrl.text.contains('@')) {
+                  _snack('⚠️ Veuillez remplir correctement les champs');
+                  return;
+                }
+                setState(() => adminMembres.add(Membre(
+                  id: 'M${DateTime.now().millisecondsSinceEpoch}',
+                  nom: nomCtrl.text.toUpperCase(), prenoms: prenomCtrl.text,
+                  email: emailCtrl.text, role: role,
+                  droits: Map.from(droits), dateCreation: DateTime.now().toString().split(' ')[0],
+                )));
+                Navigator.pop(ctx);
+              },
+              child: const Text('Créer le compte', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ]),
+      )),
+    );
   }
-
+  
   Widget _label(String t) => Padding(padding: const EdgeInsets.only(bottom: 6),
     child: Text(t, style: const TextStyle(fontSize: 13,
         fontWeight: FontWeight.w700, color: Color(0xFF374151))));

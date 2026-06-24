@@ -6,6 +6,8 @@ import '../widgets/weekly_program_quick_widget.dart';
 import 'groupe_filiere_screen.dart';
 import 'tickets_screen.dart';
 import 'notifications_page.dart';
+import 'chat_ia_screen.dart'; // Importation de l'écran IA
+import 'bulletin_screen.dart'; // Importation de l'écran Bulletins
 
 class HomeTab extends StatelessWidget {
   const HomeTab({super.key, required this.profile});
