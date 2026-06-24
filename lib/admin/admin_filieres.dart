@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
+import '../theme/app_palette.dart';
 import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -112,9 +113,9 @@ class _AdminFilieresState extends State<AdminFilieres> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                   decoration: BoxDecoration(
-                    color: AdminTheme.primary,
+                    color: AppPalette.blue,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3),
+                    boxShadow: [BoxShadow(color: AppPalette.blue.withOpacity(0.3),
                         blurRadius: 8, offset: const Offset(0, 3))],
                   ),
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -167,7 +168,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
             // Stats rapides
             Row(children: [
               _statCard('${adminFilieres.where((f) => f.domaine.contains('Technologies')).length}',
-                  'Sciences & Tech', const Color(0xFF1A3C34), const Color(0xFFD8F3DC)),
+                  'Sciences & Tech', AppPalette.blue, AppPalette.lightBlue),
               const SizedBox(width: 10),
               _statCard('${adminFilieres.where((f) => f.domaine.contains('Gestion')).length}',
                   'Sciences Gestion', const Color(0xFF0891B2), const Color(0xFFE0F7FA)),
@@ -205,9 +206,9 @@ class _AdminFilieresState extends State<AdminFilieres> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: active ? AdminTheme.primary : Colors.white,
+          color: active ? AppPalette.blue : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active ? AdminTheme.primary : const Color(0xFFE5E7EB)),
+          border: Border.all(color: active ? AppPalette.blue : const Color(0xFFE5E7EB)),
         ),
         child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
             color: active ? Colors.white : const Color(0xFF6B7280))),
@@ -231,8 +232,8 @@ class _AdminFilieresState extends State<AdminFilieres> {
   // ── Carte filière ─────────────────────────────────────────────────────
   Widget _carteFiliere(Filiere f) {
     final isST = f.domaine.contains('Technologies');
-    final color = isST ? AdminTheme.primary : AdminTheme.info;
-    final lightColor = isST ? AdminTheme.primaryLight : AdminTheme.infoLight;
+    final color = isST ? AppPalette.blue : AdminTheme.info;
+    final lightColor = isST ? AppPalette.lightBlue : AdminTheme.infoLight;
 
     return GestureDetector(
       onTap: () => _ouvrirDetail(f),
@@ -414,7 +415,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
         Text(f.nom, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         const Divider(height: 1),
-        ListTile(leading: Icon(Icons.visibility_rounded, color: AdminTheme.primary),
+        ListTile(leading: Icon(Icons.visibility_rounded, color: AppPalette.blue),
             title: const Text('Voir les détails'),
             onTap: () { Navigator.pop(context); _ouvrirDetail(f); }),
         ListTile(leading: const Icon(Icons.edit_rounded, color: Color(0xFF6B7280)),
@@ -430,9 +431,9 @@ class _AdminFilieresState extends State<AdminFilieres> {
 
   Widget _vide() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
     Container(width: 72, height: 72,
-      decoration: BoxDecoration(color: AdminTheme.primaryLight,
+      decoration: BoxDecoration(color: AppPalette.lightBlue,
           borderRadius: BorderRadius.circular(18)),
-      child: const Icon(Icons.school_outlined, color: AdminTheme.primary, size: 36)),
+      child: const Icon(Icons.school_outlined, color: AppPalette.blue, size: 36)),
     const SizedBox(height: 16),
     const Text('Aucune filière trouvée', style: TextStyle(fontSize: 17,
         fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
@@ -463,7 +464,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
   Widget build(BuildContext context) {
     final f = widget.filiere;
     final isST = f.domaine.contains('Technologies');
-    final color = isST ? AdminTheme.primary : AdminTheme.info;
+    final color = isST ? AppPalette.blue : AdminTheme.info;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
@@ -584,13 +585,13 @@ class _DetailFiliereState extends State<_DetailFiliere>
     const SizedBox(height: 16),
     Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(color: AdminTheme.primaryLight,
+      decoration: BoxDecoration(color: AppPalette.lightBlue,
           borderRadius: BorderRadius.circular(10)),
       child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.download_rounded, color: AdminTheme.primary, size: 16),
+        Icon(Icons.download_rounded, color: AppPalette.blue, size: 16),
         SizedBox(width: 6),
         Text('Exporter liste PDF', style: TextStyle(fontSize: 13,
-            fontWeight: FontWeight.w700, color: AdminTheme.primary)),
+            fontWeight: FontWeight.w700, color: AppPalette.blue)),
       ]),
     ),
   ]));
@@ -691,7 +692,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
             });
             Navigator.pop(context);
           },
-          style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
+          style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue,
               foregroundColor: Colors.white, elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
           child: const Text('Ajouter'),
@@ -765,8 +766,8 @@ class _CreationFiliereState extends State<_CreationFiliere> {
                 AnimatedContainer(duration: const Duration(milliseconds: 200),
                   width: 32, height: 32,
                   decoration: BoxDecoration(
-                    color: done ? AdminTheme.success
-                        : active ? AdminTheme.primary : const Color(0xFFE5E7EB),
+                    color: done ? AppPalette.blue
+                        : active ? AppPalette.blue : const Color(0xFFE5E7EB),
                     shape: BoxShape.circle,
                   ),
                   child: Center(child: done
@@ -777,10 +778,10 @@ class _CreationFiliereState extends State<_CreationFiliere> {
                 const SizedBox(height: 4),
                 Text(['Informations', 'Modules', 'Confirmation'][i],
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                        color: active ? AdminTheme.primary : const Color(0xFF9CA3AF))),
+                        color: active ? AppPalette.blue : const Color(0xFF9CA3AF))),
               ])),
               if (i < 2) Expanded(child: Container(height: 2, margin: const EdgeInsets.only(bottom: 20),
-                  color: done ? AdminTheme.success : const Color(0xFFE5E7EB))),
+                  color: done ? AppPalette.blue : const Color(0xFFE5E7EB))),
             ]));
           })),
         ),
@@ -819,9 +820,9 @@ class _CreationFiliereState extends State<_CreationFiliere> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                  color: AdminTheme.primary,
+                  color: AppPalette.blue,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3),
+                  boxShadow: [BoxShadow(color: AppPalette.blue.withOpacity(0.3),
                       blurRadius: 8, offset: const Offset(0, 3))],
                 ),
                 child: Center(child: Text(
@@ -871,7 +872,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
         onTap: _ajouterModuleForm,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: AdminTheme.primary,
+          decoration: BoxDecoration(color: AppPalette.blue,
               borderRadius: BorderRadius.circular(8)),
           child: const Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.add_rounded, color: Colors.white, size: 16),
@@ -903,7 +904,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
               border: Border.all(color: const Color(0xFFE5E7EB))),
           child: Row(children: [
             Container(width: 8, height: 8, decoration: BoxDecoration(
-                color: AdminTheme.primary, shape: BoxShape.circle)),
+                color: AppPalette.blue, shape: BoxShape.circle)),
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(m['nom'] as String, style: const TextStyle(
@@ -934,14 +935,14 @@ class _CreationFiliereState extends State<_CreationFiliere> {
     _resumeRow('Modules', '${_modules.length} module(s)'),
     const SizedBox(height: 16),
     Container(padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AdminTheme.successLight,
+      decoration: BoxDecoration(color: AppPalette.blueLight,
           borderRadius: BorderRadius.circular(12)),
       child: const Row(children: [
-        Icon(Icons.auto_awesome_rounded, color: AdminTheme.success, size: 18),
+        Icon(Icons.auto_awesome_rounded, color: AppPalette.blue, size: 18),
         SizedBox(width: 10),
         Expanded(child: Text(
           'Un groupe de messagerie privé sera créé automatiquement pour cette filière.',
-          style: TextStyle(fontSize: 12, color: AdminTheme.success,
+          style: TextStyle(fontSize: 12, color: AppPalette.blue,
               fontWeight: FontWeight.w600))),
       ])),
   ]);
@@ -1003,7 +1004,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
             }));
             Navigator.pop(context);
           },
-          style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
+          style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue,
               foregroundColor: Colors.white, elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
           child: const Text('Ajouter'),
@@ -1030,7 +1031,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('✅ Filière "${f.nom}" créée ! Groupe de messagerie généré.'),
-      backgroundColor: AdminTheme.success, behavior: SnackBarBehavior.floating,
+      backgroundColor: AppPalette.blue, behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
   }
 
