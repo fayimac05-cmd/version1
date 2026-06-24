@@ -68,7 +68,7 @@ class _CoursesTabState extends State<CoursesTab> {
         child: Column(children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(width: 48, height: 48,
-                decoration: BoxDecoration(color: AppPalette.blue.withValues(alpha: 0.1),
+                decoration: BoxDecoration(color: AppPalette.blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(14)),
                 child: const Icon(Icons.menu_book_rounded, color: AppPalette.blue, size: 26)),
             const SizedBox(width: 14),
@@ -83,9 +83,9 @@ class _CoursesTabState extends State<CoursesTab> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1DB954).withValues(alpha: 0.1),
+                  color: const Color(0xFF1DB954).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF1DB954).withValues(alpha: 0.3)),
+                  border: Border.all(color: const Color(0xFF1DB954).withOpacity(0.3)),
                 ),
                 child: Row(children: [
                   const Icon(Icons.fiber_new_rounded, color: Color(0xFF15803D), size: 18),
@@ -144,7 +144,7 @@ class _CoursesTabState extends State<CoursesTab> {
                   color: selected ? color : AppPalette.white,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: selected ? color : const Color(0xFFE2E8F0), width: 1.5),
-                  boxShadow: selected ? [BoxShadow(color: color.withValues(alpha: 0.25),
+                  boxShadow: selected ? [BoxShadow(color: color.withOpacity(0.25),
                       blurRadius: 8, offset: const Offset(0, 2))] : [],
                 ),
                 child: Text(
@@ -166,7 +166,7 @@ class _CoursesTabState extends State<CoursesTab> {
         child: filtered.isEmpty
             ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.search_off_rounded, size: 70,
-                    color: const Color(0xFF64748B).withValues(alpha: 0.35)),
+                    color: const Color(0xFF64748B).withOpacity(0.35)),
                 const SizedBox(height: 16),
                 const Text('Aucun cours trouvé', style: TextStyle(fontSize: 18,
                     fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
@@ -188,14 +188,14 @@ class _CoursesTabState extends State<CoursesTab> {
       decoration: BoxDecoration(
         color: AppPalette.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isNew ? color.withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
+        border: Border.all(color: isNew ? color.withOpacity(0.4) : const Color(0xFFE2E8F0),
             width: isNew ? 1.5 : 1),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
             blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [
         Container(width: 58, height: 58,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
+            decoration: BoxDecoration(color: color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(14)),
             child: Stack(children: [
               Center(child: Icon(Icons.picture_as_pdf_rounded, color: color, size: 32)),
@@ -207,7 +207,7 @@ class _CoursesTabState extends State<CoursesTab> {
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
+              decoration: BoxDecoration(color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6)),
               child: Text(cours['module'], style: TextStyle(fontSize: 11,
                   fontWeight: FontWeight.w700, color: color),
@@ -238,7 +238,7 @@ class _CoursesTabState extends State<CoursesTab> {
             child: Container(width: 46, height: 46,
                 decoration: BoxDecoration(color: color,
                     borderRadius: BorderRadius.circular(13),
-                    boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35),
+                    boxShadow: [BoxShadow(color: color.withOpacity(0.35),
                         blurRadius: 8, offset: const Offset(0, 3))]),
                 child: const Icon(Icons.download_rounded, color: Colors.white, size: 24)),
           ),
@@ -284,7 +284,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
                   decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1DB954)),
                   child: const Icon(Icons.check_rounded, color: Colors.white, size: 40))
               : Container(key: const ValueKey('l'), width: 72, height: 72,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: color.withValues(alpha: 0.1)),
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: color.withOpacity(0.1)),
                   child: Padding(padding: const EdgeInsets.all(12),
                       child: CircularProgressIndicator(value: _progress, color: color, strokeWidth: 4))),
         ),

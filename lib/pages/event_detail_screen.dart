@@ -27,9 +27,9 @@ class EventDetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: color.withValues(alpha: 0.35)),
+              border: Border.all(color: color.withOpacity(0.35)),
             ),
             child: Text(event['type'],
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
@@ -47,7 +47,7 @@ class EventDetailScreen extends StatelessWidget {
               color: AppPalette.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
                   blurRadius: 8, offset: const Offset(0, 2))],
             ),
             child: Column(children: [
@@ -91,7 +91,7 @@ class EventDetailScreen extends StatelessWidget {
                 Container(
                   width: 50, height: 50,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD97706).withValues(alpha: 0.12),
+                    color: const Color(0xFFD97706).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(13),
                   ),
                   child: const Icon(Icons.confirmation_number_outlined,
@@ -141,7 +141,7 @@ class EventDetailScreen extends StatelessWidget {
   Widget _infoRow(IconData icon, String label, String value, Color color) {
     return Row(children: [
       Container(width: 44, height: 44,
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
+          decoration: BoxDecoration(color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12)),
           child: Icon(icon, color: color, size: 22)),
       const SizedBox(width: 14),

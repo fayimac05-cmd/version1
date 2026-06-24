@@ -316,7 +316,7 @@ class ParentGradesTab extends StatelessWidget {
         decoration: ParentStyles.cardDecoration(
           border: Border.all(
             color: item.status == 'blamable'
-                ? ParentStyles.danger.withValues(alpha: 0.3)
+                ? ParentStyles.danger.withOpacity(0.3)
                 : ParentStyles.borderLight,
             width: item.status == 'blamable' ? 1.5 : 1,
           ),
@@ -329,7 +329,7 @@ class ParentGradesTab extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: ParentStyles.primary.withValues(alpha: 0.08),
+                    color: ParentStyles.primary.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -538,9 +538,9 @@ class ParentGradesTab extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: item.statusBgColor.withValues(alpha: 0.5),
+                  color: item.statusBgColor.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: item.statusColor.withValues(alpha: 0.15)),
+                  border: Border.all(color: item.statusColor.withOpacity(0.15)),
                 ),
                 child: Text(
                   item.remarks,

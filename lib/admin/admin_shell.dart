@@ -147,14 +147,14 @@ class _AdminShellState extends State<AdminShell> {
                       color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
               Container(margin: const EdgeInsets.only(top: 2),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(color: AdminTheme.accent.withValues(alpha: 0.2),
+                decoration: BoxDecoration(color: AdminTheme.accent.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(4)),
                 child: const Text('Super Admin', style: TextStyle(fontSize: 9,
                     fontWeight: FontWeight.w700, color: AdminTheme.accent, letterSpacing: 0.5))),
             ])),
           ]),
         ),
-        Container(height: 1, color: AdminTheme.primaryMid.withValues(alpha: 0.4)),
+        Container(height: 1, color: AdminTheme.primaryMid.withOpacity(0.4)),
         // Menu
         Expanded(child: ListView(padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
@@ -166,7 +166,7 @@ class _AdminShellState extends State<AdminShell> {
             ],
           ],
         )),
-        Container(height: 1, color: AdminTheme.primaryMid.withValues(alpha: 0.4)),
+        Container(height: 1, color: AdminTheme.primaryMid.withOpacity(0.4)),
         // Footer
         Padding(
           padding: EdgeInsets.symmetric(horizontal: c ? 8 : 12, vertical: 10),
@@ -187,7 +187,7 @@ class _AdminShellState extends State<AdminShell> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                    color: AdminTheme.danger.withValues(alpha: 0.15),
+                    color: AdminTheme.danger.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(AdminTheme.radiusButton)),
                 child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.logout_rounded, color: AdminTheme.danger, size: 16),
@@ -261,7 +261,7 @@ class _AdminShellState extends State<AdminShell> {
     height: AdminTheme.topbarHeight,
     decoration: BoxDecoration(color: AdminTheme.surface,
       border: const Border(bottom: BorderSide(color: AdminTheme.border)),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03),
+      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03),
           blurRadius: 4, offset: const Offset(0, 1))],
     ),
     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -451,7 +451,7 @@ class _NotifsPanel extends StatelessWidget {
         itemBuilder: (_, i) => ListTile(
           leading: Container(width: 38, height: 38,
               decoration: BoxDecoration(
-                  color: (_n[i]['c'] as Color).withValues(alpha: 0.1),
+                  color: (_n[i]['c'] as Color).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10)),
               child: Icon(_n[i]['icon'] as IconData,
                   color: _n[i]['c'] as Color, size: 18)),

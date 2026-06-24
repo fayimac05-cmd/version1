@@ -87,9 +87,9 @@ class ParentScheduleTab extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: ParentStyles.primary.withValues(alpha: 0.08),
+                              color: ParentStyles.primary.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: ParentStyles.primary.withValues(alpha: 0.15)),
+                              border: Border.all(color: ParentStyles.primary.withOpacity(0.15)),
                             ),
                             child: const Text(
                               'En cours',
@@ -178,7 +178,7 @@ class ParentScheduleTab extends StatelessWidget {
                                                 vertical: 2,
                                               ),
                                               decoration: BoxDecoration(
-                                                color: color.withValues(alpha: 0.08),
+                                                color: color.withOpacity(0.08),
                                                 borderRadius: BorderRadius.circular(12),
                                               ),
                                               child: Text(

@@ -1,11 +1,4 @@
 ﻿const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../middleware/auth.middleware');
-const messagesController = require('../controllers/messages.controller');
-
-router.get('/conversations', authMiddleware, messagesController.getConversations);
-router.post('/conversations', authMiddleware, messagesController.createConversation);
-router.get('/conversations/:id', authMiddleware, messagesController.getConversationMessages);
-router.post('/conversations/:id', authMiddleware, messagesController.postConversationMessage);
-
+router.get('/', (req, res) => res.json({ message: 'messages OK' }));
 module.exports = router;

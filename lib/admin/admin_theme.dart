@@ -40,12 +40,12 @@ class AdminTheme {
 
   // ── Ombres ────────────────────────────────────────────────────────────
   static List<BoxShadow> get cardShadow => [
-    BoxShadow(color: Colors.black.withValues(alpha: 0.06),
+    BoxShadow(color: Colors.black.withOpacity(0.06),
         blurRadius: 8, offset: const Offset(0, 2))
   ];
 
   static List<BoxShadow> get elevatedShadow => [
-    BoxShadow(color: Colors.black.withValues(alpha: 0.1),
+    BoxShadow(color: Colors.black.withOpacity(0.1),
         blurRadius: 16, offset: const Offset(0, 4))
   ];
 

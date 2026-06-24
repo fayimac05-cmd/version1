@@ -1,6 +1,15 @@
-const { sendNotification } = require('../services/firebase.service');
-const supabase = require('../config/supabase');
+<<<<<<< HEAD
+// backend/src/controllers/notifications.controller.js
 
+const { sendNotification } = require('../services/firebase.service');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+// GET /api/notifications - Liste des notifications de l'utilisateur
 const getNotifications = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -19,6 +28,7 @@ const getNotifications = async (req, res) => {
   }
 };
 
+// PATCH /api/notifications/:id/lue - Marquer une notification comme lue
 const marquerCommeLue = async (req, res) => {
   try {
     const { id } = req.params;
@@ -38,6 +48,7 @@ const marquerCommeLue = async (req, res) => {
   }
 };
 
+// DELETE /api/notifications/lire-tout - Marquer toutes comme lues
 const marquerToutesLues = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -55,17 +66,19 @@ const marquerToutesLues = async (req, res) => {
   }
 };
 
+// Fonction utilitaire - Envoyer notification automatique
 const envoyerNotificationAuto = async (userId, titre, corps, data = {}) => {
   try {
+    // Sauvegarder en base
     await supabase.from('notifications').insert({
       user_id: userId,
       titre,
       corps,
       lue: false,
-      data,
-      created_at: new Date().toISOString(),
+      created_at: new Date(),
     });
 
+    // Envoyer push FCM
     await sendNotification(userId, titre, corps, data);
   } catch (error) {
     console.error('Erreur notification auto:', error);
@@ -78,3 +91,8 @@ module.exports = {
   marquerToutesLues,
   envoyerNotificationAuto,
 };
+=======
+exports.getNotifications = (req, res) => res.json([]);
+exports.marquerCommeLue = (req, res) => res.json({ success: true });
+exports.marquerToutesLues = (req, res) => res.json({ success: true });
+>>>>>>> c8d01e3f044afae9e341821f613d675a29421b21

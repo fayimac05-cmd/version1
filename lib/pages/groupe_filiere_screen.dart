@@ -267,7 +267,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 24),
+            BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 24),
           ],
         ),
         child: Column(
@@ -416,7 +416,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: color.withOpacity(0.1),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Icon(icon, color: color, size: 28),
@@ -603,7 +603,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: AppPalette.yellow.withValues(alpha: 0.4),
+                        color: AppPalette.yellow.withOpacity(0.4),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -657,7 +657,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
+                              color: Colors.white.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Row(
@@ -690,7 +690,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
+                      color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -706,7 +706,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
           // ── Bandeau confidentialité ───────────────────────────────────
           Container(
-            color: AppPalette.blue.withValues(alpha: 0.07),
+            color: AppPalette.blue.withOpacity(0.07),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
@@ -756,7 +756,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
+                  color: Colors.black.withOpacity(0.06),
                   blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
@@ -843,7 +843,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                               (_enregistrement
                                       ? const Color(0xFFDC2626)
                                       : const Color(0xFF15803D))
-                                  .withValues(alpha: 0.35),
+                                  .withOpacity(0.35),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -868,7 +868,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: AppPalette.blue.withValues(alpha: 0.35),
+                          color: AppPalette.blue.withOpacity(0.35),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -938,7 +938,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
             if (!estMoi) ...[
               CircleAvatar(
                 radius: 18,
-                backgroundColor: AppPalette.blue.withValues(alpha: 0.15),
+                backgroundColor: AppPalette.blue.withOpacity(0.15),
                 child: Text(
                   msg.auteur.initiales,
                   style: const TextStyle(
@@ -985,7 +985,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
+                          color: Colors.black.withOpacity(0.06),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -1017,7 +1017,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
+                                  color: Colors.black.withOpacity(0.04),
                                   blurRadius: 4,
                                 ),
                               ],
@@ -1078,8 +1078,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               width: double.infinity,
               decoration: BoxDecoration(
                 color: estMoi
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : AppPalette.blue.withValues(alpha: 0.08),
+                    ? Colors.white.withOpacity(0.2)
+                    : AppPalette.blue.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
@@ -1113,8 +1113,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               height: 48,
               decoration: BoxDecoration(
                 color: estMoi
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : const Color(0xFFDC2626).withValues(alpha: 0.1),
+                    ? Colors.white.withOpacity(0.2)
+                    : const Color(0xFFDC2626).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -1154,8 +1154,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               height: 48,
               decoration: BoxDecoration(
                 color: estMoi
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : AppPalette.blue.withValues(alpha: 0.1),
+                    ? Colors.white.withOpacity(0.2)
+                    : AppPalette.blue.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -1209,8 +1209,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: estMoi
-                      ? Colors.white.withValues(alpha: 0.4)
-                      : const Color(0xFF15803D).withValues(alpha: 0.3),
+                      ? Colors.white.withOpacity(0.4)
+                      : const Color(0xFF15803D).withOpacity(0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

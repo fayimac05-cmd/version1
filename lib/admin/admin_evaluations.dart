@@ -100,8 +100,8 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: ev.ouverte
-              ? AdminTheme.success.withValues(alpha: 0.3) : const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
+              ? AdminTheme.success.withOpacity(0.3) : const Color(0xFFE5E7EB)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
               blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(padding: const EdgeInsets.all(16),
@@ -149,7 +149,7 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
                   child: Row(children: [
                     Container(width: 34, height: 34,
                       decoration: BoxDecoration(
-                          color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                          color: const Color(0xFF7C3AED).withOpacity(0.1),
                           shape: BoxShape.circle),
                       child: Center(child: Text(prof[0],
                           style: const TextStyle(fontSize: 13,
@@ -299,7 +299,7 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
       GestureDetector(onTap: onTap,
         child: Container(padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: fg.withValues(alpha: 0.3))),
+              border: Border.all(color: fg.withOpacity(0.3))),
           child: Center(child: Text(label, style: TextStyle(fontSize: 12,
               fontWeight: FontWeight.w700, color: fg)))));
 

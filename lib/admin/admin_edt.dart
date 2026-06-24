@@ -159,7 +159,7 @@ class _AdminEDTState extends State<AdminEDT>
                 color: AdminTheme.primary,
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [BoxShadow(
-                    color: AdminTheme.primary.withValues(alpha: 0.3),
+                    color: AdminTheme.primary.withOpacity(0.3),
                     blurRadius: 6, offset: const Offset(0, 2))],
               ),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -180,7 +180,7 @@ class _AdminEDTState extends State<AdminEDT>
           decoration: BoxDecoration(
               color: AdminTheme.infoLight,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AdminTheme.info.withValues(alpha: 0.2))),
+              border: Border.all(color: AdminTheme.info.withOpacity(0.2))),
           child: const Row(children: [
             Icon(Icons.info_outline_rounded, color: AdminTheme.info, size: 14),
             SizedBox(width: 8),
@@ -312,7 +312,7 @@ class _AdminEDTState extends State<AdminEDT>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
+                      color: color.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8)),
                   child: Text('${fichiers.length} EDT', style: TextStyle(
                       fontSize: 10, fontWeight: FontWeight.w700, color: color))),
@@ -338,7 +338,7 @@ class _AdminEDTState extends State<AdminEDT>
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: actif ? AdminTheme.border : const Color(0xFFE5E7EB)),
-        boxShadow: actif ? [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
+        boxShadow: actif ? [BoxShadow(color: Colors.black.withOpacity(0.04),
             blurRadius: 6, offset: const Offset(0, 2))] : null,
       ),
       child: Padding(
@@ -347,7 +347,7 @@ class _AdminEDTState extends State<AdminEDT>
           // Icône PDF
           Container(width: 48, height: 48,
             decoration: BoxDecoration(
-                color: const Color(0xFFDC2626).withValues(alpha: 0.1),
+                color: const Color(0xFFDC2626).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12)),
             child: const Icon(Icons.picture_as_pdf_rounded,
                 color: Color(0xFFDC2626), size: 26)),
@@ -374,7 +374,7 @@ class _AdminEDTState extends State<AdminEDT>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
+                    color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6)),
                 child: Text(f.niveau, style: TextStyle(
                     fontSize: 10, fontWeight: FontWeight.w700, color: color))),
@@ -496,7 +496,7 @@ class _AdminEDTState extends State<AdminEDT>
                               color: AdminTheme.infoLight,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                  color: AdminTheme.info.withValues(alpha: 0.2))),
+                                  color: AdminTheme.info.withOpacity(0.2))),
                           child: const Row(children: [
                             Icon(Icons.info_outline_rounded,
                                 color: AdminTheme.info, size: 14),

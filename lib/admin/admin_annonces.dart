@@ -182,7 +182,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces>
       decoration: BoxDecoration(color: AdminTheme.primary,
           borderRadius: BorderRadius.circular(10),
           boxShadow: [BoxShadow(
-              color: AdminTheme.primary.withValues(alpha: 0.3),
+              color: AdminTheme.primary.withOpacity(0.3),
               blurRadius: 6, offset: const Offset(0, 2))]),
       child: const Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.add_rounded, color: Colors.white, size: 18),
@@ -222,20 +222,20 @@ class _AdminAnnoncesState extends State<AdminAnnonces>
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AdminTheme.border),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
               blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(children: [
         // Header carte
         Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
           decoration: BoxDecoration(
-              color: config['color'].withValues(alpha: 0.06),
+              color: config['color'].withOpacity(0.06),
               borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(14))),
           child: Row(children: [
             Container(width: 36, height: 36,
               decoration: BoxDecoration(
-                  color: config['color'].withValues(alpha: 0.15),
+                  color: config['color'].withOpacity(0.15),
                   borderRadius: BorderRadius.circular(10)),
               child: Center(child: Text(config['emoji'],
                   style: const TextStyle(fontSize: 18)))),
@@ -250,7 +250,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces>
                   padding: const EdgeInsets.symmetric(
                       horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                      color: config['color'].withValues(alpha: 0.12),
+                      color: config['color'].withOpacity(0.12),
                       borderRadius: BorderRadius.circular(5)),
                   child: Text(config['label'], style: TextStyle(
                       fontSize: 9, fontWeight: FontWeight.w700,
@@ -366,10 +366,10 @@ class _AdminAnnoncesState extends State<AdminAnnonces>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-          color: (cfg['color'] as Color).withValues(alpha: 0.08),
+          color: (cfg['color'] as Color).withOpacity(0.08),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color: (cfg['color'] as Color).withValues(alpha: 0.2))),
+              color: (cfg['color'] as Color).withOpacity(0.2))),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(cfg['icon'] as IconData,
             size: 12, color: cfg['color'] as Color),
@@ -678,7 +678,7 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
                     color: AdminTheme.primary,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [BoxShadow(
-                        color: AdminTheme.primary.withValues(alpha: 0.3),
+                        color: AdminTheme.primary.withOpacity(0.3),
                         blurRadius: 6, offset: const Offset(0, 2))]),
                 child: const Row(mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -761,7 +761,7 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
                 boxShadow: [BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03), blurRadius: 4)]),
+                    color: Colors.black.withOpacity(0.03), blurRadius: 4)]),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(t['emoji'] as String,
                   style: const TextStyle(fontSize: 14)),
@@ -778,10 +778,10 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-          color: (cfg['color'] as Color).withValues(alpha: 0.06),
+          color: (cfg['color'] as Color).withOpacity(0.06),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color: (cfg['color'] as Color).withValues(alpha: 0.2))),
+              color: (cfg['color'] as Color).withOpacity(0.2))),
       child: Row(children: [
         Icon(cfg['icon'] as IconData,
             size: 16, color: cfg['color'] as Color),

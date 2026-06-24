@@ -4,7 +4,7 @@ import '../theme/app_palette.dart';
 import 'pdf_viewer_screen.dart';
 
 class BulletinScreen extends StatelessWidget {
-  const BulletinScreen({super.key});
+  const BulletinScreen();
 
   static const List<Map<String, dynamic>> bulletins = [
     {

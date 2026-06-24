@@ -50,7 +50,7 @@ class _StudentShellState extends State<StudentShell> {
       ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: AppPalette.white,
-        indicatorColor: AppPalette.yellow.withValues(alpha: 0.45),
+        indicatorColor: AppPalette.yellow.withOpacity(0.45),
         selectedIndex: _currentTab,
         onDestinationSelected: (index) => setState(() => _currentTab = index),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
