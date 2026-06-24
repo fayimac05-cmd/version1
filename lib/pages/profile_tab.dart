@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
+import '../utils/snackbar_helper.dart';
 import 'splash_screen.dart';
 
 enum NotifType { examen, note, cours, inscription, message }
@@ -443,7 +444,8 @@ _bentoCard(
     );
   }
 
-  Widget _customDivider() => const Divider(height: 12, thickness: 1, color: Color(0xFFF1F5F9));
+  void _snackbar(String msg) => showAppSnackBar(context, msg,
+      backgroundColor: AppPalette.blue);
 
   void _confirmerDeconnexion() {
     showDialog(

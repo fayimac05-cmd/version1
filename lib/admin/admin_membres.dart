@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
+import '../utils/snackbar_helper.dart';
 
 class Membre {
   final String id, nom, prenoms, email, role;
@@ -68,34 +70,14 @@ class _AdminMembresState extends State<AdminMembres> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AdminTheme.background,
       body: Column(children: [
-        
-        Container(color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Membres & Rôles', style: TextStyle(fontSize: 22,
-                  fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-              Text('${adminMembres.length} membres · Gérez les accès au panel admin',
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-            ])),
-            GestureDetector(
-              onTap: () => _creerMembre(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(color: AdminTheme.primary,
-                    borderRadius: BorderRadius.circular(12)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                  SizedBox(width: 6),
-                  Text('Nouveau membre', style: TextStyle(fontSize: 13,
-                      fontWeight: FontWeight.w700, color: Colors.white)),
-                ]),
-              ),
-            ),
-          ])),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        AdminPageHeader(
+          title: 'Membres & Rôles',
+          subtitle: '${adminMembres.length} membres · Gérez les accès au panel admin',
+          trailing: AdminAddButton(label: 'Nouveau membre', onTap: () => _creerMembre()),
+        ),
+        adminDivider,
         Expanded(child: ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: adminMembres.length,
@@ -361,8 +343,5 @@ class _AdminMembresState extends State<AdminMembres> {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12))));
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), backgroundColor: AdminTheme.primary,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }

@@ -104,6 +104,10 @@ const createGradeSession = async (req, res) => {
     try {
         const { filiere_id, filiere_nom, niveau, module_id, notes } = req.body;
         const professeur_id = req.user.id;
+
+        if (!filiere_id || !module_id) {
+            return res.status(400).json({ success: false, message: 'filiere_id et module_id sont requis.' });
+        }
         
         const sessionResult = await pool.query(`
             INSERT INTO sessions_notes (filiere_id, filiere_nom, niveau, module_id, professeur_id) 
@@ -111,9 +115,14 @@ const createGradeSession = async (req, res) => {
         `, [filiere_id, filiere_nom || '', niveau || 'Tous', module_id, professeur_id]);
         
         const session_id = sessionResult.rows[0].id;
+        const skippedStudents = [];
         
         if (notes && notes.length > 0) {
             for (const note of notes) {
+                if (!note.matricule || note.valeur === undefined || note.valeur === null) {
+                    skippedStudents.push({ matricule: note.matricule || 'inconnu', reason: 'matricule ou valeur manquant' });
+                    continue;
+                }
                 const etudiantResult = await pool.query(`SELECT id FROM etudiants WHERE matricule = $1`, [note.matricule]);
                 if (etudiantResult.rows.length > 0) {
                     const e_id = etudiantResult.rows[0].id;
@@ -121,13 +130,21 @@ const createGradeSession = async (req, res) => {
                         INSERT INTO notes (etudiant_id, module_id, valeur) 
                         VALUES ($1, $2, $3)
                     `, [e_id, module_id, note.valeur]);
+                } else {
+                    skippedStudents.push({ matricule: note.matricule, reason: 'étudiant introuvable' });
                 }
             }
         }
         
-        res.status(201).json({ success: true, message: 'Session de notes créée avec succès', session_id });
+        const response = { success: true, message: 'Session de notes créée avec succès', session_id };
+        if (skippedStudents.length > 0) {
+            response.warnings = skippedStudents;
+            response.message = `Session créée avec ${skippedStudents.length} note(s) non enregistrée(s).`;
+        }
+        res.status(201).json(response);
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error('[createGradeSession]', error);
+        res.status(500).json({ success: false, message: 'Erreur lors de la création de la session de notes.' });
     }
 };
 

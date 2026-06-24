@@ -32,13 +32,25 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final filieres = await ProfessorService.getClasses();
-    final modules = await ProfessorService.getModules();
+    final filieresResult = await ProfessorService.getClasses();
+    final modulesResult = await ProfessorService.getModules();
     setState(() {
-      _filieres = filieres;
-      _modules = modules;
+      _filieres = filieresResult['success'] == true ? (filieresResult['data'] as List<dynamic>) : [];
+      _modules = modulesResult['success'] == true ? (modulesResult['data'] as List<dynamic>) : [];
       _isLoading = false;
     });
+    if (mounted) {
+      if (filieresResult['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(filieresResult['error'] ?? 'Erreur chargement filières'), backgroundColor: Colors.red),
+        );
+      }
+      if (modulesResult['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(modulesResult['error'] ?? 'Erreur chargement modules'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _pickFile() async {

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
 import '../admin/admin_etudiants.dart';
-import '../models/etudiant_model.dart';
+import '../utils/snackbar_helper.dart';
 
 class Parent {
   final String id, nom, prenoms, email, telephone, relation, matriculeEnfant;
@@ -52,63 +53,32 @@ class _AdminParentsState extends State<AdminParents> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AdminTheme.background,
       body: Column(children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Parents', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-                Text('${adminParents.length} parents enregistrés', style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-              ])),
-              GestureDetector(
-                onTap: () => _ajouterParent(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(color: AdminTheme.primary, borderRadius: BorderRadius.circular(12)),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 6),
-                    Text('Ajouter', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
-                  ]),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 14),
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F7FA),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (v) => setState(() => _query = v),
-                decoration: const InputDecoration(
-                  hintText: 'Rechercher un parent...',
-                  hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                  prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF9CA3AF), size: 16),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
-                ),
-              ),
-            ),
-          ]),
+        AdminPageHeader(
+          title: 'Parents',
+          subtitle: '${adminParents.length} parents enregistrés',
+          trailing: AdminAddButton(label: 'Ajouter', onTap: () => _ajouterParent()),
         ),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
-        Expanded(
-            child: _filtered.isEmpty
-                ? _vide()
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _carteParent(_filtered[i]),
-                  )),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: AdminSearchBar(
+            controller: _searchCtrl,
+            hintText: 'Rechercher un parent...',
+            onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        const SizedBox(height: 16),
+        adminDivider,
+        Expanded(child: _filtered.isEmpty
+            ? _vide()
+            : ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: _filtered.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => _carteParent(_filtered[i]),
+              )),
       ]),
     );
   }
@@ -334,18 +304,5 @@ class _AdminParentsState extends State<AdminParents> {
         child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
       );
 
-  Widget _input(TextEditingController ctrl, String hint, {TextInputType? type}) => TextField(
-        controller: ctrl,
-        keyboardType: type,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-          filled: true,
-          fillColor: const Color(0xFFF9FAFB),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primary, width: 1.5)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        ),
-      );
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }

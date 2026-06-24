@@ -30,7 +30,7 @@ exports.loginEtudiant = async (req, res) => {
 
     const token = jwt.sign(
       { id: student.id, role: 'etudiant' },
-      process.env.JWT_SECRET || 'scolarhub_secret_key',
+      process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
 

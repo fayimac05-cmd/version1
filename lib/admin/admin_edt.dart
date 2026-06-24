@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES

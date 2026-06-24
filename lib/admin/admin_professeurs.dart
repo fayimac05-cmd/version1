@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../admin/admin_widgets.dart';
 import '../admin/admin_filieres.dart';
+import '../utils/snackbar_helper.dart';
 
 class Professeur {
   final String id, nom, prenoms, email, telephone, specialite, typeContrat, dateArrivee;
@@ -51,51 +53,30 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AdminTheme.background,
       body: Column(children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Professeurs', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-                Text('${adminProfesseurs.length} professeurs enregistrés', style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-              ])),
-              GestureDetector(
-                onTap: () => _ajouterProfesseur(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(color: AdminTheme.primary, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: AdminTheme.primary.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))]),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 6),
-                    Text('Ajouter', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
-                  ]),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(child: Container(
-                height: 40,
-                decoration: BoxDecoration(color: const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE5E7EB))),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: const InputDecoration(hintText: 'Rechercher un professeur...', hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)), prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF9CA3AF), size: 16), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 10)),
-                ),
-              )),
-              const SizedBox(width: 10),
-              _chip('Tous', 'tous'),
-              const SizedBox(width: 6),
-              _chip('Permanents', 'permanent'),
-              const SizedBox(width: 6),
-              _chip('Vacataires', 'vacataire'),
-            ]),
+        AdminPageHeader(
+          title: 'Professeurs',
+          subtitle: '${adminProfesseurs.length} professeurs enregistrés',
+          trailing: AdminAddButton(label: 'Ajouter', onTap: () => _ajouterProfesseur()),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
+          child: Row(children: [
+            Expanded(child: AdminSearchBar(
+              controller: _searchCtrl,
+              hintText: 'Rechercher un professeur...',
+              onChanged: (v) => setState(() => _query = v),
+            )),
+            const SizedBox(width: 10),
+            AdminFilterChip(label: 'Tous', active: _filtre == 'tous', onTap: () => setState(() => _filtre = 'tous')),
+            const SizedBox(width: 6),
+            AdminFilterChip(label: 'Permanents', active: _filtre == 'permanent', onTap: () => setState(() => _filtre = 'permanent')),
+            const SizedBox(width: 6),
+            AdminFilterChip(label: 'Vacataires', active: _filtre == 'vacataire', onTap: () => setState(() => _filtre = 'vacataire')),
           ]),
         ),
-        Container(height: 1, color: const Color(0xFFE5E7EB)),
+        adminDivider,
         Expanded(child: _filtered.isEmpty
             ? _vide()
             : ListView.separated(
@@ -108,17 +89,6 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     );
   }
 
-  Widget _chip(String label, String value) {
-    final active = _filtre == value;
-    return GestureDetector(
-      onTap: () => setState(() => _filtre = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: active ? AdminTheme.primary : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? AdminTheme.primary : const Color(0xFFE5E7EB))),
-        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? Colors.white : const Color(0xFF6B7280))),
-      ),
-    );
-  }
 
   Widget _carteProf(Professeur p) {
     final modules = adminFilieres.expand((f) => f.modules).where((m) => m.professeur.contains(p.nom)).toList();
@@ -238,12 +208,81 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     ])));
   }
 
-  Widget _section(String titre, List<Widget> children) => Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(titre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))), const SizedBox(height: 8), ...children]));
-  Widget _infoRow(IconData icon, String val) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(children: [Icon(icon, size: 14, color: const Color(0xFF9CA3AF)), const SizedBox(width: 8), Expanded(child: Text(val, style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))))]));
-  Widget _sectionHeader(String titre) => Container(padding: const EdgeInsets.only(bottom: 6), decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB)))), child: Text(titre, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))));
-  Widget _fieldCol(String label, TextEditingController ctrl, String hint, {TextInputType type = TextInputType.text}) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [_label(label), _inputField(ctrl, hint, type: type)]);
-  Widget _label(String t) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Text(t, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF374151))));
-  Widget _inputField(TextEditingController ctrl, String hint, {TextInputType type = TextInputType.text}) => Container(decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE5E7EB))), child: TextField(controller: ctrl, keyboardType: type, style: const TextStyle(fontSize: 13), decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12), border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))));
-  Widget _vide() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Container(width: 72, height: 72, decoration: BoxDecoration(color: const Color(0xFFF5F3FF), borderRadius: BorderRadius.circular(18)), child: const Icon(Icons.person_pin_outlined, color: Color(0xFF7C3AED), size: 36)), const SizedBox(height: 16), const Text('Aucun professeur trouvé', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))), const SizedBox(height: 12), TextButton.icon(onPressed: _ajouterProfesseur, icon: const Icon(Icons.add), label: const Text('Ajouter le premier'))]));
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AdminTheme.primary, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  Widget _section(String titre, List<Widget> children) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE5E7EB)),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(titre, style: const TextStyle(fontSize: 13,
+          fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+      const SizedBox(height: 8),
+      ...children,
+    ]),
+  );
+
+  Widget _infoRow(IconData icon, String val) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(children: [
+      Icon(icon, size: 14, color: const Color(0xFF9CA3AF)),
+      const SizedBox(width: 8),
+      Expanded(child: Text(val, style: const TextStyle(
+          fontSize: 13, color: Color(0xFF4B5563)))),
+    ]),
+  );
+
+  Widget _sectionHeader(String titre) => Container(
+    padding: const EdgeInsets.only(bottom: 6),
+    decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB)))),
+    child: Text(titre, style: const TextStyle(fontSize: 14,
+        fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))));
+
+  Widget _fieldCol(String label, TextEditingController ctrl, String hint,
+      {TextInputType type = TextInputType.text}) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _label(label),
+        _inputField(ctrl, hint, type: type),
+      ]);
+
+  Widget _label(String t) => Padding(
+    padding: const EdgeInsets.only(bottom: 5),
+    child: Text(t, style: const TextStyle(fontSize: 12,
+        fontWeight: FontWeight.w700, color: Color(0xFF374151))));
+
+  Widget _inputField(TextEditingController ctrl, String hint,
+      {TextInputType type = TextInputType.text}) =>
+      Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: TextField(
+          controller: ctrl,
+          keyboardType: type,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 10)),
+        ),
+      );
+
+  Widget _vide() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+    Container(width: 72, height: 72,
+      decoration: BoxDecoration(color: const Color(0xFFF5F3FF),
+          borderRadius: BorderRadius.circular(18)),
+      child: const Icon(Icons.person_pin_outlined,
+          color: Color(0xFF7C3AED), size: 36)),
+    const SizedBox(height: 16),
+    const Text('Aucun professeur trouvé', style: TextStyle(fontSize: 17,
+        fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+  ]));
+
+  void _snack(String msg) => showAppSnackBar(context, msg);
 }
