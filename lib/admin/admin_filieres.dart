@@ -13,52 +13,88 @@ class Module {
       required this.professeur});
 }
 
+
 class Filiere {
-  final String id, nom, niveau, domaine, anneeAcademique;
+  final String id, nom, abreviation, niveau, domaine, anneeAcademique; // Ajout abreviation
   final List<Module> modules;
   int nbEtudiants;
   bool active;
-  Filiere({required this.id, required this.nom, required this.niveau,
+  Filiere({required this.id, required this.nom, required this.abreviation, required this.niveau,
       required this.domaine, required this.anneeAcademique,
       required this.modules, this.nbEtudiants = 0, this.active = true});
 }
 
 final List<Filiere> adminFilieres = [
-  Filiere(id: 'F001', nom: 'Réseaux Informatiques et Télécom', niveau: 'Licence 2',
-    domaine: 'Sciences & Technologies', anneeAcademique: '2024-2025', nbEtudiants: 38,
+  Filiere(
+    id: 'F001', 
+    nom: 'Réseaux Informatiques et Télécom', 
+    abreviation: 'RIT', 
+    niveau: 'Licence 2',
+    domaine: 'Sciences & Technologies', 
+    anneeAcademique: '2024-2025', 
+    nbEtudiants: 38,
     modules: [
       Module(id: 'M001', nom: 'Réseaux & Protocoles', code: 'RES301', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Mamadou'),
       Module(id: 'M002', nom: 'Programmation Web', code: 'WEB302', coefficient: 2, volumeHoraire: 30, professeur: 'SAWADOGO Issa'),
       Module(id: 'M003', nom: 'Base de Données', code: 'BDD303', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Mamadou'),
       Module(id: 'M004', nom: 'Sécurité Informatique', code: 'SEC304', coefficient: 2, volumeHoraire: 30, professeur: 'TRAORÉ Alassane'),
       Module(id: 'M005', nom: 'Algorithmique Avancée', code: 'ALG305', coefficient: 4, volumeHoraire: 60, professeur: 'SAWADOGO Issa'),
-    ]),
-  Filiere(id: 'F002', nom: 'Électrotechnique', niveau: 'Licence 2',
-    domaine: 'Sciences & Technologies', anneeAcademique: '2024-2025', nbEtudiants: 24,
+    ],
+  ),
+  Filiere(
+    id: 'F002', 
+    nom: 'Électrotechnique', 
+    abreviation: 'ELT', 
+    niveau: 'Licence 2',
+    domaine: 'Sciences & Technologies', 
+    anneeAcademique: '2024-2025', 
+    nbEtudiants: 24,
     modules: [
       Module(id: 'M006', nom: 'Électronique de Puissance', code: 'EP301', coefficient: 3, volumeHoraire: 45, professeur: 'COMPAORÉ Brahima'),
       Module(id: 'M007', nom: 'Machines Électriques', code: 'ME302', coefficient: 3, volumeHoraire: 45, professeur: 'COMPAORÉ Brahima'),
       Module(id: 'M008', nom: 'Automatisme', code: 'AUT303', coefficient: 2, volumeHoraire: 30, professeur: 'KABORÉ Jean'),
-    ]),
-  Filiere(id: 'F003', nom: 'Marketing & Communication', niveau: 'Licence 2',
-    domaine: 'Sciences de Gestion', anneeAcademique: '2024-2025', nbEtudiants: 31,
+    ],
+  ),
+  Filiere(
+    id: 'F003', 
+    nom: 'Marketing & Communication', 
+    abreviation: 'MKC', 
+    niveau: 'Licence 2',
+    domaine: 'Sciences de Gestion', 
+    anneeAcademique: '2024-2025', 
+    nbEtudiants: 31,
     modules: [
       Module(id: 'M009', nom: 'Marketing Digital', code: 'MKD301', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Aïcha'),
       Module(id: 'M010', nom: 'Communication Visuelle', code: 'COM302', coefficient: 2, volumeHoraire: 30, professeur: 'ZONGO Marie'),
       Module(id: 'M011', nom: 'Stratégie Commerciale', code: 'STR303', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Aïcha'),
-    ]),
-  Filiere(id: 'F004', nom: 'Gestion Comptable et Financière', niveau: 'Licence 3',
-    domaine: 'Sciences de Gestion', anneeAcademique: '2024-2025', nbEtudiants: 19,
+    ],
+  ),
+  Filiere(
+    id: 'F004', 
+    nom: 'Gestion Comptable et Financière', 
+    abreviation: 'GCF', 
+    niveau: 'Licence 3',
+    domaine: 'Sciences de Gestion', 
+    anneeAcademique: '2024-2025', 
+    nbEtudiants: 19,
     modules: [
       Module(id: 'M012', nom: 'Comptabilité Générale', code: 'CPT301', coefficient: 4, volumeHoraire: 60, professeur: 'TRAORÉ Boubacar'),
       Module(id: 'M013', nom: 'Fiscalité', code: 'FSC302', coefficient: 3, volumeHoraire: 45, professeur: 'TRAORÉ Boubacar'),
-    ]),
-  Filiere(id: 'F005', nom: 'Génie Civil', niveau: 'Licence 2',
-    domaine: 'Sciences & Technologies', anneeAcademique: '2024-2025', nbEtudiants: 15,
+    ],
+  ),
+  Filiere(
+    id: 'F005', 
+    nom: 'Génie Civil', 
+    abreviation: 'GNC', 
+    niveau: 'Licence 2',
+    domaine: 'Sciences & Technologies', 
+    anneeAcademique: '2024-2025', 
+    nbEtudiants: 15,
     modules: [
       Module(id: 'M014', nom: 'Résistance des Matériaux', code: 'RDM301', coefficient: 4, volumeHoraire: 60, professeur: 'SANKARA Paul'),
       Module(id: 'M015', nom: 'Topographie', code: 'TOP302', coefficient: 2, volumeHoraire: 30, professeur: 'SANKARA Paul'),
-    ]),
+    ],
+  ),
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -228,138 +264,39 @@ class _AdminFilieresState extends State<AdminFilieres> {
 
   // ── Carte filière ─────────────────────────────────────────────────────
   Widget _carteFiliere(Filiere f) {
-    final isST = f.domaine.contains('Technologies');
-    final color = isST ? AdminTheme.primary : AdminTheme.info;
-    final lightColor = isST ? AdminTheme.primaryLight : AdminTheme.infoLight;
+  final isST = f.domaine.contains('Technologies');
+  final color = isST ? AdminTheme.primary : AdminTheme.info;
+  final lightColor = isST ? AdminTheme.primaryLight : AdminTheme.infoLight;
 
-    return GestureDetector(
-      onTap: () => _ouvrirDetail(f),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
-              blurRadius: 10, offset: const Offset(0, 2))],
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header coloré
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: lightColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(children: [
-              Container(width: 38, height: 38,
-                decoration: BoxDecoration(color: color,
-                    borderRadius: BorderRadius.circular(10)),
-                child: Icon(isST ? Icons.computer_rounded : Icons.business_center_rounded,
-                    color: Colors.white, size: 20)),
-              const SizedBox(width: 10),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(f.nom, style: const TextStyle(fontSize: 14,
-                    fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text('${f.niveau} · ${f.anneeAcademique}',
-                    style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
-              ])),
-            ]),
-          ),
-
-          // Infos
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                _infoChip(Icons.people_rounded, '${f.nbEtudiants} étudiants',
-                    const Color(0xFF6B7280)),
-                const SizedBox(width: 8),
-                _infoChip(Icons.book_rounded, '${f.modules.length} modules',
-                    const Color(0xFF6B7280)),
-              ]),
-              const SizedBox(height: 10),
-              // Modules preview
-              ...f.modules.take(3).map((m) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(children: [
-                  Container(width: 6, height: 6,
-                      decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(m.nom, style: const TextStyle(fontSize: 11,
-                      color: Color(0xFF6B7280)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  Text('Coef ${m.coefficient}', style: TextStyle(fontSize: 10,
-                      fontWeight: FontWeight.w700, color: color)),
-                ]),
-              )),
-              if (f.modules.length > 3)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text('+${f.modules.length - 3} autres modules',
-                      style: TextStyle(fontSize: 11, color: color,
-                          fontWeight: FontWeight.w600)),
-                ),
-            ]),
-          ),
-
-          const Spacer(),
-
-          // Footer actions
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
-            ),
-            child: Row(children: [
-              Expanded(child: GestureDetector(
-                onTap: () => _ouvrirDetail(f),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: lightColor,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(child: Text('Voir détails',
-                      style: TextStyle(fontSize: 12,
-                          fontWeight: FontWeight.w700, color: color))),
-                ),
-              )),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => _ouvrirEdition(f),
-                child: Container(
-                  width: 34, height: 34,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F7FA),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: const Icon(Icons.edit_rounded,
-                      color: Color(0xFF6B7280), size: 16),
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () => _menuFiliere(f),
-                child: Container(
-                  width: 34, height: 34,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F7FA),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: const Icon(Icons.more_vert_rounded,
-                      color: Color(0xFF6B7280), size: 16),
-                ),
-              ),
-            ]),
-          ),
-        ]),
+  return GestureDetector(
+    onTap: () => _ouvrirDetail(f),
+    child: Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-    );
-  }
-
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header coloré avec l'abréviation
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: lightColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: Row(children: [
+            Container(width: 38, height: 38, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(f.abreviation, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E))),
+              Text(f.nom, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ])),
+          ]),
+        ),
+      ]),
+    ),
+  );
+}
   Widget _infoChip(IconData icon, String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(color: const Color(0xFFF5F7FA),
@@ -729,10 +666,18 @@ class _CreationFiliere extends StatefulWidget {
 class _CreationFiliereState extends State<_CreationFiliere> {
   int _step = 0;
   final _nomCtrl    = TextEditingController();
+  final _abbrCtrl   = TextEditingController(); // Nouveau contrôleur ajouté
   final _anneeCtrl  = TextEditingController(text: '2024-2025');
   String _niveau    = 'Licence 2';
   String _domaine   = 'Sciences & Technologies';
   final List<Map<String, dynamic>> _modules = [];
+
+  // Méthode snack ajoutée pour éviter l'erreur de compilation
+  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: AdminTheme.danger,
+        behavior: SnackBarBehavior.floating,
+      ));
 
   @override
   Widget build(BuildContext context) {
@@ -786,6 +731,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
           })),
         ),
         const Divider(height: 1, color: Color(0xFFE5E7EB)),
+        
 
         // Contenu étape
         Expanded(child: SingleChildScrollView(
@@ -846,6 +792,9 @@ class _CreationFiliereState extends State<_CreationFiliere> {
     const SizedBox(height: 20),
     _label('Nom de la filière *'),
     _input(_nomCtrl, 'Ex: Réseaux Informatiques et Télécom', Icons.school_rounded),
+    const SizedBox(height: 14),
+    _label('Abréviation (ex:RIT)*'),
+    _input(_abbrCtrl, 'Ex: RIT', Icons.short_text_rounded),
     const SizedBox(height: 14),
     _label('Niveau'),
     _select(_niveau, ['Licence 1', 'Licence 2', 'Licence 3', 'BTS 1', 'BTS 2'],
@@ -1013,27 +962,30 @@ class _CreationFiliereState extends State<_CreationFiliere> {
     ));
   }
 
-  void _creer() {
-    if (_nomCtrl.text.isEmpty) return;
-    final f = Filiere(
-      id: 'F${adminFilieres.length + 1}',
-      nom: _nomCtrl.text, niveau: _niveau,
-      domaine: _domaine, anneeAcademique: _anneeCtrl.text,
-      modules: _modules.map((m) => Module(
-        id: 'M${DateTime.now().millisecondsSinceEpoch}',
-        nom: m['nom'] as String, code: '',
-        coefficient: int.tryParse(m['coef'] as String) ?? 2,
-        volumeHoraire: int.tryParse(m['vh'] as String) ?? 30,
-        professeur: m['prof'] as String,
-      )).toList(),
-    );
-    widget.onCreated(f);
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('✅ Filière "${f.nom}" créée ! Groupe de messagerie généré.'),
-      backgroundColor: AdminTheme.success, behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+ 
+void _creer() {
+  if (_nomCtrl.text.isEmpty || _abbrCtrl.text.isEmpty) {
+    _snack('Erreur : Nom et Abréviation requis !');
+    return;
   }
+  final f = Filiere(
+    id: 'F${DateTime.now().millisecondsSinceEpoch}',
+    nom: _nomCtrl.text,
+    abreviation: _abbrCtrl.text, // Ajouté ici
+    niveau: _niveau,
+    domaine: _domaine,
+    anneeAcademique: _anneeCtrl.text,
+    modules: _modules.map((m) => Module(
+      id: 'M${DateTime.now().millisecondsSinceEpoch}',
+      nom: m['nom'] as String, code: '',
+      coefficient: int.tryParse(m['coef'] as String) ?? 2,
+      volumeHoraire: int.tryParse(m['vh'] as String) ?? 30,
+      professeur: m['prof'] as String,
+    )).toList(),
+  );
+  widget.onCreated(f);
+  Navigator.pop(context);
+}
 
   Widget _label(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 6),

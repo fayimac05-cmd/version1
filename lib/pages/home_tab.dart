@@ -7,16 +7,20 @@ import '../widgets/weekly_program_quick_widget.dart';
 import 'groupe_filiere_screen.dart';
 import 'tickets_screen.dart';
 import 'notifications_page.dart';
+import 'chat_ia_screen.dart'; // Importation de l'écran IA
+import 'bulletin_screen.dart'; // Importation de l'écran Bulletins
 
 class HomeTab extends StatelessWidget {
   const HomeTab({super.key, required this.profile});
   final StudentProfile profile;
 
-  static const Color _orange = Color(0xFFF97316);
-
-  // Taille fixe des cartes — identique pour agenda et modules
-  static const double _cardW = 140.0;
-  static const double _cardH = 120.0;
+  // Nouvelle Palette "Premium Academic"
+  static const Color _brandBlue = Color(0xFF1E40AF); // Bleu Institutionnel Royal
+  static const Color _accentOrange = Color(0xFFF97316); // Orange d'alerte/action
+  static const Color _textMain = Color(0xFF0F172A); // Ardoise Foncé
+  static const Color _textMuted = Color(0xFF64748B); // Gris de soutien
+  static const Color _bgComponent = Color(0xFFF8FAFC); // Fond de carte ultra clean
+  static const Color _border = Color(0xFFE2E8F0); 
 
   String get _salutation {
     final h = DateTime.now().hour;
@@ -26,43 +30,28 @@ class HomeTab extends StatelessWidget {
   }
 
   String _dateAujourdhui() {
-    const jours = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
-    const mois  = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    const jours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    const mois  = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
     final now = DateTime.now();
-    return '${jours[now.weekday - 1]} ${now.day} ${mois[now.month - 1]}';
+    return '${jours[now.weekday % 7]}, ${now.day} ${mois[now.month - 1]}';
   }
 
-  // Agenda : bleu = cours normal, orange = exam/spécial, blanc = pause
   static const _agendaItems = [
-    {'heure': '08:00', 'titre': 'Algorithmique',     'lieu': 'Salle B204',   'style': 'bleu',   'tag': ''},
-    {'heure': '09:55', 'titre': 'Réseaux Info',       'lieu': 'Amphi A',      'style': 'bleu',   'tag': 'En cours'},
-    {'heure': '12:30', 'titre': 'Pause déjeuner',     'lieu': 'Cafétéria',    'style': 'blanc',  'tag': ''},
-    {'heure': '14:00', 'titre': 'Examen mi-parcours', 'lieu': 'Salle C101',   'style': 'orange', 'tag': 'Exam'},
-    {'heure': '15:15', 'titre': 'TP Base données',    'lieu': 'Salle Info 1', 'style': 'bleu',   'tag': ''},
-    {'heure': '',      'titre': '+2 cours demain',    'lieu': 'Voir planning', 'style': 'orange', 'tag': ''},
+    {'heure': '08:00', 'titre': 'Algorithmique', 'lieu': 'Salle B204', 'type': 'cours'},
+    {'heure': '09:55', 'titre': 'Réseaux Info', 'lieu': 'Amphi A', 'type': 'en_cours'},
+    {'heure': '12:30', 'titre': 'Pause déjeuner', 'lieu': 'Cafétéria', 'type': 'pause'},
+    {'heure': '14:00', 'titre': 'Examen mi-parcours', 'lieu': 'Salle C101', 'type': 'exam'},
+    {'heure': '15:15', 'titre': 'TP Base données', 'lieu': 'Salle Info 1', 'type': 'cours'},
   ];
 
-  // Modules : alternance bleu / blanc / orange
   static const _modulesItems = [
-    {'nom': 'Algorithmique',   'note': '15.5', 'progress': 0.78, 'style': 'blanc'},
-    {'nom': 'Réseaux',         'note': '13.0', 'progress': 0.65, 'style': 'blanc'},
-    {'nom': 'Base de données', 'note': '18.0', 'progress': 0.90, 'style': 'blanc'},
-    {'nom': 'Systèmes',        'note': '9.0',  'progress': 0.45, 'style': 'blanc'},
-    {'nom': 'Maths',           'note': '14.5', 'progress': 0.72, 'style': 'blanc'},
-    {'nom': 'Anglais',         'note': '16.0', 'progress': 0.80, 'style': 'blanc'},
+    {'nom': 'Algorithmique', 'note': '15.5', 'progress': 0.78},
+    {'nom': 'Réseaux', 'note': '13.0', 'progress': 0.65},
+    {'nom': 'Base de données', 'note': '18.0', 'progress': 0.90},
+    {'nom': 'Systèmes', 'note': '9.0', 'progress': 0.45},
+    {'nom': 'Maths', 'note': '14.5', 'progress': 0.72},
+    {'nom': 'Anglais', 'note': '16.0', 'progress': 0.80},
   ];
-
-  Color _bg(String style) {
-    if (style == 'bleu')   return AppPalette.blue;
-    if (style == 'orange') return _orange;
-    return Colors.white;
-  }
-
-  Color _textColor(String style) =>
-      style == 'blanc' ? const Color(0xFF0F172A) : Colors.white;
-
-  Color _subColor(String style) =>
-      style == 'blanc' ? const Color(0xFF94A3B8) : Colors.white70;
 
   @override
   Widget build(BuildContext context) {
@@ -74,314 +63,428 @@ class HomeTab extends StatelessWidget {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-            // ── Header ───────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Row(children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: const BoxDecoration(
-                      color: AppPalette.blue, shape: BoxShape.circle),
-                  child: Center(child: Text(initiales, style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
+            // ── HEADER HAUT DE GAMME ─────────────────────────────────
+            Row(children: [
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_brandBlue, Color(0xFF3B82F6)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: _brandBlue.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))]
                 ),
-                const SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('$_salutation, ${profile.prenoms} ',
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A))),
-                  Text(profile.filiere.isNotEmpty ? profile.filiere : 'IST Ouaga 2000',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                ])),
-                GestureDetector(
-  onTap: () {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) =>  NotificationsPage()),
-    );
-  },
-  child: Stack(children: [
-    Container(width: 40, height: 40,
-      decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0))),
-      child: const Icon(Icons.notifications_outlined,
-          color: Color(0xFF64748B), size: 20)),
-    Positioned(top: 8, right: 8, child: Container(
-      width: 8, height: 8,
-      decoration: BoxDecoration(color: _orange, shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 1.5)))),
-  ]),
-),
-              ]),
-            ),
-
-            // ── Stats ────────────────────────────────────────────────
-            Row(children: [
-              Expanded(child: _statCard('14.5', 'Moyenne', AppPalette.blue)),
-              const SizedBox(width: 8),
-              Expanded(child: _statCard('146',  'Crédits', _orange)),
-              const SizedBox(width: 8),
-              Expanded(child: _statCard('L2',   'Niveau',  AppPalette.blue)),
-            ]),
-
-            const SizedBox(height: 14),
-
-            // ── Accès rapide ─────────────────────────────────────────
-            const Text('Accès rapide', style: TextStyle(fontSize: 14,
-                fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => GroupeFiliere(profile: profile))),
-                child: _carteAction(Icons.groups_rounded, AppPalette.blue, 'Groupe Filière', '🔒 Privé'))),
-              const SizedBox(width: 8),
-              Expanded(child: GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => TicketsScreen(profile: profile))),
-                child: _carteAction(Icons.confirmation_number_outlined, _orange, 'Tickets', '🟠 Orange Money'))),
-              const SizedBox(width: 8),
-              Expanded(child: GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => CanalScreen(profile: profile))),
-                child: _carteAction(Icons.forum_rounded, AppPalette.blue, 'Canaux', '5 non lus'))),
-            ]),
-
-            const SizedBox(height: 16),
-
-            // ── Conteneur Agenda + Modules ───────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10, offset: const Offset(0, 4))],
+                child: Center(child: Text(initiales, style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5))),
               ),
-              padding: const EdgeInsets.all(14),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-                // ── AGENDA ─────────────────────────────────────────
-                SizedBox(
-                  width: _cardW * 2 + 8,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text('Agenda', style: TextStyle(fontSize: 14,
-                          fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                      Text(_dateAujourdhui(), style: const TextStyle(
-                          fontSize: 10, color: Color(0xFF94A3B8))),
-                    ]),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8, runSpacing: 8,
-                      children: _agendaItems.map((item) {
-                        final style = item['style'] as String;
-                        final tag   = item['tag'] as String;
-                        final bg    = _bg(style);
-                        final tc    = _textColor(style);
-                        final sc    = _subColor(style);
-                        return SizedBox(
-                          width: _cardW, height: _cardH,
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: bg,
-                              borderRadius: BorderRadius.circular(14),
-                              border: style == 'blanc'
-                                  ? Border.all(color: const Color(0xFFE2E8F0)) : null,
-                              boxShadow: style == 'blanc' ? [] : [BoxShadow(
-                                  color: bg.withOpacity(0.28),
-                                  blurRadius: 6, offset: const Offset(0, 3))],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(children: [
-                                  Text(item['heure'] as String,
-                                      style: TextStyle(fontSize: 9,
-                                          color: sc, fontWeight: FontWeight.w500)),
-                                  const Spacer(),
-                                  if (tag.isNotEmpty) Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 5, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: style == 'blanc'
-                                          ? _orange.withOpacity(0.1)
-                                          : Colors.white.withOpacity(0.25),
-                                      borderRadius: BorderRadius.circular(5),
-                                    ),
-                                    child: Text(tag, style: TextStyle(fontSize: 8,
-                                        color: style == 'blanc' ? _orange : Colors.white,
-                                        fontWeight: FontWeight.bold))),
-                                ]),
-                                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  Text(item['titre'] as String,
-                                      style: TextStyle(fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: tc, height: 1.2),
-                                      maxLines: 2, overflow: TextOverflow.ellipsis),
-                                  const SizedBox(height: 3),
-                                  Row(children: [
-                                    Icon(Icons.location_on_outlined, size: 9, color: sc),
-                                    const SizedBox(width: 2),
-                                    Expanded(child: Text(item['lieu'] as String,
-                                        style: TextStyle(fontSize: 9, color: sc),
-                                        maxLines: 1, overflow: TextOverflow.ellipsis)),
-                                  ]),
-                                ]),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('$_salutation,', style: const TextStyle(fontSize: 13, color: _textMuted)),
+                Text('${profile.prenoms} ${profile.nom}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _textMain, letterSpacing: -0.5)),
+              ])),
+              
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NotificationsPage())),
+                child: Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _border),
+                  ),
+                  child: Stack(alignment: Alignment.center, children: [
+                    const Icon(Icons.notifications_none_rounded, color: _textMain, size: 22),
+                    Positioned(top: 11, right: 12, child: Container(
+                      width: 7, height: 7,
+                      decoration: const BoxDecoration(color: _accentOrange, shape: BoxShape.circle))),
                   ]),
                 ),
-
-                const SizedBox(width: 12),
-                Container(width: 1, height: _cardH * 3 + 8 * 2 + 30,
-                    color: const Color(0xFFE2E8F0)),
-                const SizedBox(width: 12),
-
-                // ── MODULES ────────────────────────────────────────
-                SizedBox(
-                  width: _cardW * 2 + 8,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Modules', style: TextStyle(fontSize: 14,
-                        fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8, runSpacing: 8,
-                      children: _modulesItems.map((m) {
-                        final style = m['style'] as String;
-                        final bg    = _bg(style);
-                        final tc    = _textColor(style);
-                        final sc    = _subColor(style);
-                        final p     = m['progress'] as double;
-                        final barColor = style == 'blanc' ? AppPalette.blue : Colors.white;
-                        return SizedBox(
-                          width: _cardW, height: _cardH,
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: bg,
-                              borderRadius: BorderRadius.circular(14),
-                              border: style == 'blanc'
-                                  ? Border.all(color: const Color(0xFFE2E8F0)) : null,
-                              boxShadow: style == 'blanc' ? [] : [BoxShadow(
-                                  color: bg.withOpacity(0.28),
-                                  blurRadius: 6, offset: const Offset(0, 3))],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(m['nom'] as String,
-                                    style: TextStyle(fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: tc, height: 1.2),
-                                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  Text('${m['note']}/20',
-                                      style: TextStyle(fontSize: 14,
-                                          fontWeight: FontWeight.bold, color: tc)),
-                                  const SizedBox(height: 6),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(3),
-                                    child: LinearProgressIndicator(
-                                      value: p, minHeight: 4,
-                                      backgroundColor: barColor.withOpacity(0.2),
-                                      valueColor: AlwaysStoppedAnimation<Color>(barColor),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text('${(p * 100).toInt()}%',
-                                      style: TextStyle(fontSize: 9, color: sc)),
-                                ]),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ]),
-                ),
-
-              ]),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── Événements ───────────────────────────────────────────
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Événements', style: TextStyle(fontSize: 14,
-                  fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-              const Text('Voir tout', style: TextStyle(fontSize: 11,
-                  fontWeight: FontWeight.w600, color: _orange)),
+              ),
             ]),
-            const SizedBox(height: 8),
-            const BannerWidget(),
-            const SizedBox(height: 10),
-            const WeeklyProgramQuickWidget(),
-            const SizedBox(height: 16),
 
-            // ── Bannière motivation ──────────────────────────────────
+            const SizedBox(height: 24),
+
+            // ── CARTE ACADÉMIQUE AVEC DÉGRADÉ PREMIUM NOBLE ──
             Container(
-              padding: const EdgeInsets.all(16),
+              width: double.infinity,
+              padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                  color: AppPalette.blue,
-                  borderRadius: BorderRadius.circular(14)),
-              child: Row(children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Continuez comme ça ! 💪',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
-                          color: Colors.white)),
-                  const SizedBox(height: 4),
-                  const Text('Top 10% de votre filière.',
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                ])),
-                Container(width: 40, height: 40,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.auto_awesome_rounded,
-                      color: Colors.white, size: 22)),
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF1E40AF), 
+                    Color(0xFF0F172A), 
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1E40AF).withOpacity(0.25), 
+                    blurRadius: 20, 
+                    offset: const Offset(0, 8)
+                  )
+                ],
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Expanded(
+                    child: Text(profile.filiere.isNotEmpty ? profile.filiere.toUpperCase() : 'INGÉNIERIE LOGICIELLE', 
+                      style: TextStyle(color: Colors.white.withOpacity(0.93), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Niveau L2', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ]),
+                const SizedBox(height: 22),
+                Text('Moyenne Générale', style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                Row(
+                  textBaseline: TextBaseline.alphabetic, 
+                  crossAxisAlignment: CrossAxisAlignment.baseline, 
+                  children: [
+                    const Text('14.52', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                    const SizedBox(width: 4),
+                    Text('/20', style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 15, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Container(width: double.infinity, height: 1, color: Colors.white.withOpacity(0.12)),
+                const SizedBox(height: 14),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  _badgeInfoCible('146', 'Crédits ECTS'),
+                  _badgeInfoCible('0', 'Absences'),
+                  _badgeInfoCible('Top 10%', 'Rang'),
+                ])
               ]),
             ),
+
+            const SizedBox(height: 26),
+
+            // ── SERVICES ACADÉMIQUES STYLE PREMIUM BENTO GRID ──
+            const Text('Services Académiques', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textMain)),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GroupeFiliere(profile: profile))),
+                child: _serviceButton(Icons.diversity_3_rounded, 'Ma Classe', 'Filière'))),
+              const SizedBox(width: 12),
+              Expanded(child: GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TicketsScreen(profile: profile))),
+                child: _serviceButton(Icons.receipt_long_rounded, 'Scolarité', 'Finances'))),
+              const SizedBox(width: 12),
+              Expanded(child: GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CanalScreen(profile: profile))),
+                child: _serviceButton(Icons.chat_bubble_outline_rounded, 'Canaux', 'Discussions', badge: '5'))),
+            ]),
+
+            const SizedBox(height: 16),
+
+            // ── NOUVEAU : OUTILS ET APPRENTISSAGE DE L'ÉTUDIANT (IA & BULLETINS) ──
+            Row(children: [
+              // ─── CARTE ASSISTANT IA ───
+              Expanded(
+                child: _buildExtendedServiceCard(
+                  context,
+                  title: 'Assistant IA',
+                  subtitle: 'Discuter avec l\'IA',
+                  icon: Icons.smart_toy_rounded,
+                  color: const Color(0xFF6366F1), // Joli Violet Technologique
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => ChatIAScreen(profile: profile)),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              // ─── CARTE BULLETINS ───
+              Expanded(
+                child: _buildExtendedServiceCard(
+                  context,
+                  title: 'Bulletins',
+                  subtitle: 'Notes semestrielles',
+                  icon: Icons.assignment_rounded,
+                  color: const Color(0xFF0EA5E9), // Bleu Océan Lumineux
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const BulletinScreen()),
+                    );
+                  },
+                ),
+              ),
+            ]),
+
+            const SizedBox(height: 28),
+
+            // ── AGENDA DESIGN FRAGMENTÉ ─────────────────────────────────
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Emploi du temps', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textMain)),
+                SizedBox(height: 2),
+                Text('Votre journée chronologique', style: TextStyle(fontSize: 12, color: _textMuted)),
+              ]),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: _bgComponent, borderRadius: BorderRadius.circular(10), border: Border.all(color: _border)),
+                child: Text(_dateAujourdhui(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _textMain)),
+              ),
+            ]),
+            const SizedBox(height: 20),
+            
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _agendaItems.length,
+              itemBuilder: (context, index) {
+                final item = _agendaItems[index];
+                final type = item['type'];
+                final isCurrent = type == 'en_cours';
+                
+                if (type == 'pause') {
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 60, bottom: 20, top: 4),
+                    child: Row(children: [
+                      const Icon(Icons.coffee_rounded, size: 16, color: _textMuted),
+                      const SizedBox(width: 8),
+                      Text('${item['titre']} — ${item['lieu']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _textMuted, fontStyle: FontStyle.italic)),
+                    ]),
+                  );
+                }
+
+                return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(
+                    width: 48,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(item['heure']!, style: TextStyle(fontSize: 13, fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500, color: isCurrent ? _brandBlue : _textMuted)),
+                    ),
+                  ),
+                  Column(children: [
+                    const SizedBox(height: 16),
+                    Container(
+                      width: isCurrent ? 12 : 8, height: isCurrent ? 12 : 8,
+                      decoration: BoxDecoration(
+                        color: isCurrent ? _brandBlue : (type == 'exam' ? _accentOrange : Colors.white),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: type == 'exam' ? _accentOrange : _brandBlue, width: isCurrent ? 3 : 2),
+                      ),
+                    ),
+                    Container(width: 2, height: 55, color: _border),
+                  ]),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isCurrent ? _brandBlue.withOpacity(0.04) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: isCurrent ? _brandBlue.withOpacity(0.3) : _border, width: isCurrent ? 1.5 : 1),
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(item['titre']!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textMain)),
+                          const SizedBox(height: 4),
+                          Row(children: [
+                            const Icon(Icons.meeting_room_outlined, size: 13, color: _textMuted),
+                            const SizedBox(width: 4),
+                            Text(item['lieu']!, style: const TextStyle(fontSize: 12, color: _textMuted)),
+                          ]),
+                        ])),
+                        if (isCurrent)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: _brandBlue, borderRadius: BorderRadius.circular(8)),
+                            child: const Text('En cours', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                        if (type == 'exam')
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: _accentOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                            child: const Text('EXAMEN', style: TextStyle(color: _accentOrange, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                      ]),
+                    ),
+                  )
+                ]);
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── SUIVI DES MODULES ───────────────────────────────────────
+            const Text('Suivi des Modules', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textMain)),
+            const SizedBox(height: 14),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, mainAxisExtent: 90,
+              ),
+              itemCount: _modulesItems.length,
+              itemBuilder: (context, index) {
+                final m = _modulesItems[index];
+                final noteVal = double.tryParse(m['note'] as String) ?? 0.0;
+                final isWarning = noteVal < 10.0;
+
+                return Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _bgComponent,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _border),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(m['nom'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textMain), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('${m['note']}/20', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isWarning ? _accentOrange : _textMain)),
+                        Text('${((m['progress'] as double) * 100).toInt()}% validé', style: const TextStyle(fontSize: 10, color: _textMuted)),
+                      ]),
+                      SizedBox(
+                        width: 24, height: 24,
+                        child: CircularProgressIndicator(
+                          value: m['progress'] as double,
+                          strokeWidth: 3,
+                          backgroundColor: _border,
+                          valueColor: AlwaysStoppedAnimation<Color>(isWarning ? _accentOrange : _brandBlue),
+                        ),
+                      )
+                    ]),
+                  ]),
+                );
+              },
+            ),
+
+            const SizedBox(height: 28),
+
+            // ── ÉVÉNEMENTS & BANNER EXTÉRIEURS ───────────────────────
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('Événements du campus', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textMain)),
+              Text('Voir tout', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _brandBlue)),
+            ]),
+            const SizedBox(height: 12),
+            const BannerWidget(),
+            const SizedBox(height: 12),
+            const WeeklyProgramQuickWidget(),
           ]),
         ),
       ),
     );
   }
 
-  Widget _statCard(String val, String label, Color c) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  Widget _badgeInfoCible(String valeur, String libelle) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(valeur, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 1),
+      Text(libelle, style: TextStyle(color: Colors.white.withOpacity(0.73), fontSize: 10)),
+    ],
+  );
+
+  Widget _serviceButton(IconData icon, String titre, String sousTitre, {String? badge}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
     decoration: BoxDecoration(
-      color: c.withOpacity(0.06),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: c.withOpacity(0.15)),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20), 
+      border: Border.all(color: _border),
+      boxShadow: [
+        BoxShadow(
+          color: _textMain.withOpacity(0.03),
+          blurRadius: 10,
+          offset: const Offset(0, 4), 
+        )
+      ]
     ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(val, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,
-          color: c, letterSpacing: -0.5)),
-      Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+    child: Stack(children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: _brandBlue.withOpacity(0.08), 
+            borderRadius: BorderRadius.circular(12)
+          ),
+          child: Icon(icon, color: _brandBlue, size: 21),
+        ),
+        const SizedBox(height: 14),
+        Text(titre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textMain), maxLines: 1),
+        const SizedBox(height: 1),
+        Text(sousTitre, style: const TextStyle(fontSize: 10, color: _textMuted, fontWeight: FontWeight.w500)),
+      ]),
+      if (badge != null)
+        Positioned(top: 0, right: 0, child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(color: _accentOrange, borderRadius: BorderRadius.circular(8)),
+          child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+        ))
     ]),
   );
 
-  Widget _carteAction(IconData icon, Color c, String titre, String sub) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-    decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(12)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(icon, color: Colors.white, size: 20),
-      const SizedBox(height: 8),
-      Text(titre, style: const TextStyle(fontSize: 11,
-          fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1),
-      const SizedBox(height: 2),
-      Text(sub, style: const TextStyle(fontSize: 9, color: Colors.white70)),
-    ]),
-  );
+  // Widget personnalisé pour dessiner le duo de cartes (IA et Bulletins)
+  Widget _buildExtendedServiceCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _border),
+          boxShadow: [
+            BoxShadow(
+              color: _textMain.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textMain),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 10, color: _textMuted, fontWeight: FontWeight.w500),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

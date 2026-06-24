@@ -30,9 +30,38 @@ class Reclamation {
 
   String get initiales => '${prenoms[0]}${nomEtudiant[0]}'.toUpperCase();
   String get nomComplet => '$prenoms $nomEtudiant';
+
+  // ── DRY : configs centralisées dans le modèle ─────────────────────────
+  Map<String, dynamic> get configStatut {
+    switch (statut) {
+      case 'en_attente':
+        return {'label': 'En attente', 'fg': AdminTheme.warning, 'bg': AdminTheme.warningLight};
+      case 'en_cours':
+        return {'label': 'En cours', 'fg': AdminTheme.info, 'bg': AdminTheme.infoLight};
+      case 'resolu':
+        return {'label': 'Résolue', 'fg': AdminTheme.success, 'bg': AdminTheme.successLight};
+      case 'rejete':
+        return {'label': 'Rejetée', 'fg': AdminTheme.danger, 'bg': AdminTheme.dangerLight};
+      default:
+        return {'label': statut, 'fg': AdminTheme.textMuted, 'bg': AdminTheme.surfaceAlt};
+    }
+  }
+
+  Map<String, dynamic> get configType {
+    switch (type) {
+      case 'note':    return {'label': 'Note',    'color': AdminTheme.info};
+      case 'moyenne': return {'label': 'Moyenne', 'color': AdminTheme.warning};
+      case 'absence': return {'label': 'Absence', 'color': AdminTheme.danger};
+      default:        return {'label': type,      'color': AdminTheme.textMuted};
+    }
+  }
+
+  bool get peutAgir => statut == 'en_attente' || statut == 'en_cours';
 }
 
-// ── Données mock ─────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// DONNÉES MOCK
+// ════════════════════════════════════════════════════════════════════════════
 final List<Reclamation> adminReclamations = [
   Reclamation(
     id: 'R001', matricule: '24IST-O2/1851',
@@ -85,7 +114,7 @@ final List<Reclamation> adminReclamations = [
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
-// PAGE
+// PAGE PRINCIPALE
 // ════════════════════════════════════════════════════════════════════════════
 class AdminReclamations extends StatefulWidget {
   const AdminReclamations({super.key});
@@ -99,6 +128,7 @@ class _AdminReclamationsState extends State<AdminReclamations>
   late TabController _tabCtrl;
   String _filtreType = 'tous';
   String _query = '';
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -109,32 +139,72 @@ class _AdminReclamationsState extends State<AdminReclamations>
   @override
   void dispose() {
     _tabCtrl.dispose();
+    _searchCtrl.dispose(); // ✅ dispose propre
     super.dispose();
   }
 
+  // ── Filtres ───────────────────────────────────────────────────────────
   List<Reclamation> _byStatut(String statut) {
     return adminReclamations.where((r) {
       final matchStatut = r.statut == statut;
-      final matchType = _filtreType == 'tous' || r.type == _filtreType;
-      final matchQuery = _query.isEmpty ||
-          r.nomComplet.toLowerCase().contains(_query.toLowerCase()) ||
-          r.matricule.toLowerCase().contains(_query.toLowerCase()) ||
-          r.module.toLowerCase().contains(_query.toLowerCase());
+      final matchType   = _filtreType == 'tous' || r.type == _filtreType;
+      final q           = _query.toLowerCase();
+      final matchQuery  = q.isEmpty ||
+          r.nomComplet.toLowerCase().contains(q) ||
+          r.matricule.toLowerCase().contains(q) ||
+          r.module.toLowerCase().contains(q);
       return matchStatut && matchType && matchQuery;
     }).toList();
   }
 
-  List<Reclamation> get _historique {
-    return adminReclamations.where((r) {
-      return (r.statut == 'resolu' || r.statut == 'rejete') &&
-          (_filtreType == 'tous' || r.type == _filtreType);
-    }).toList();
-  }
+  List<Reclamation> get _historique => adminReclamations.where((r) =>
+      (r.statut == 'resolu' || r.statut == 'rejete') &&
+      (_filtreType == 'tous' || r.type == _filtreType)).toList();
 
   int get _nbAttente => adminReclamations.where((r) => r.statut == 'en_attente').length;
   int get _nbEnCours => adminReclamations.where((r) => r.statut == 'en_cours').length;
   int get _nbResolus => adminReclamations.where((r) => r.statut == 'resolu').length;
 
+  // ── Actions ───────────────────────────────────────────────────────────
+  void _onTransferer(Reclamation r, String prof) {
+    setState(() {
+      r.statut       = 'en_cours';
+      r.profTransfere = prof;
+    });
+    _snack('✅ Transféré à $prof', AdminTheme.info);
+  }
+
+  void _onRepondre(Reclamation r, String reponse) {
+    setState(() {
+      r.statut         = 'resolu';
+      r.reponse        = reponse;
+      r.dateTraitement = _dateAujourdhui();
+    });
+    _snack('✅ Réclamation résolue', AdminTheme.success);
+  }
+
+  void _onRejeter(Reclamation r, String motif) {
+    setState(() {
+      r.statut         = 'rejete';
+      r.reponse        = motif.isNotEmpty ? motif : 'Réclamation rejetée par l\'administration.';
+      r.dateTraitement = _dateAujourdhui();
+    });
+    _snack('Réclamation rejetée', AdminTheme.danger);
+  }
+
+  void _snack(String msg, Color bg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: bg, behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  String _dateAujourdhui() {
+    final n = DateTime.now();
+    return '${n.day.toString().padLeft(2, '0')}/${n.month.toString().padLeft(2, '0')}/${n.year}';
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -172,32 +242,22 @@ class _AdminReclamationsState extends State<AdminReclamations>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Réclamations',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1A1A2E),
-                      ),
-                    ),
-                    Text(
-                      '${adminReclamations.length} réclamation(s)',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AdminTheme.textSecondary,
-                      ),
-                    ),
+                    const Text('Réclamations',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+                    Text('${adminReclamations.length} réclamation(s)',
+                        style: const TextStyle(fontSize: 13, color: AdminTheme.textSecondary)),
                   ],
                 ),
               ),
-              _statBadge('$_nbAttente En attente', AdminTheme.warning, AdminTheme.warningLight),
+              _statBadge('$_nbAttente En attente', AdminTheme.warning,  AdminTheme.warningLight),
               const SizedBox(width: 6),
-              _statBadge('$_nbEnCours En cours', AdminTheme.info, AdminTheme.infoLight),
+              _statBadge('$_nbEnCours En cours',   AdminTheme.info,     AdminTheme.infoLight),
               const SizedBox(width: 6),
-              _statBadge('$_nbResolus Résolues', AdminTheme.success, AdminTheme.successLight),
+              _statBadge('$_nbResolus Résolues',   AdminTheme.success,  AdminTheme.successLight),
             ],
           ),
           const SizedBox(height: 12),
+          // ── Barre de recherche ────────────────────────────────────────
           Container(
             height: 38,
             decoration: BoxDecoration(
@@ -206,26 +266,40 @@ class _AdminReclamationsState extends State<AdminReclamations>
               border: Border.all(color: AdminTheme.border),
             ),
             child: TextField(
+              controller: _searchCtrl,
               onChanged: (v) => setState(() => _query = v),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Rechercher étudiant, matricule, module...',
-                hintStyle: TextStyle(fontSize: 13, color: AdminTheme.textMuted),
-                prefixIcon: Icon(Icons.search_rounded, color: AdminTheme.textMuted, size: 18),
+                hintStyle: const TextStyle(fontSize: 13, color: AdminTheme.textMuted),
+                prefixIcon: const Icon(Icons.search_rounded, color: AdminTheme.textMuted, size: 18),
+                suffixIcon: _query.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        },
+                        child: const Icon(Icons.close_rounded, color: AdminTheme.textMuted, size: 16),
+                      )
+                    : null,
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),
           const SizedBox(height: 10),
+          // ── Filtres type ──────────────────────────────────────────────
           Row(
             children: [
-              const Text('Type : ', style: TextStyle(fontSize: 13, color: AdminTheme.textSecondary, fontWeight: FontWeight.w600)),
+              const Text('Type : ',
+                  style: TextStyle(fontSize: 13, color: AdminTheme.textSecondary, fontWeight: FontWeight.w600)),
               const SizedBox(width: 6),
-              _filtreChip('Tous', _filtreType == 'tous', () => setState(() => _filtreType = 'tous')),
+              _filtreChip('Tous',     _filtreType == 'tous',    () => setState(() => _filtreType = 'tous')),
               const SizedBox(width: 6),
-              _filtreChip('Notes', _filtreType == 'note', () => setState(() => _filtreType = 'note')),
+              _filtreChip('Notes',    _filtreType == 'note',    () => setState(() => _filtreType = 'note')),
               const SizedBox(width: 6),
               _filtreChip('Moyennes', _filtreType == 'moyenne', () => setState(() => _filtreType = 'moyenne')),
+              const SizedBox(width: 6),
+              _filtreChip('Absences', _filtreType == 'absence', () => setState(() => _filtreType = 'absence')),
             ],
           ),
           const SizedBox(height: 10),
@@ -255,16 +329,15 @@ class _AdminReclamationsState extends State<AdminReclamations>
           children: [
             Container(
               width: 64, height: 64,
-              decoration: BoxDecoration(
-                color: AdminTheme.primaryLight,
-                borderRadius: BorderRadius.circular(16),
-              ),
+              decoration: BoxDecoration(color: AdminTheme.primaryLight, borderRadius: BorderRadius.circular(16)),
               child: const Icon(Icons.inbox_rounded, color: AdminTheme.primary, size: 30),
             ),
             const SizedBox(height: 12),
-            const Text('Aucune réclamation', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const Text('Aucune réclamation',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
-            const Text('La file est vide.', style: TextStyle(fontSize: 13, color: AdminTheme.textSecondary)),
+            const Text('La file est vide.',
+                style: TextStyle(fontSize: 13, color: AdminTheme.textSecondary)),
           ],
         ),
       );
@@ -273,161 +346,25 @@ class _AdminReclamationsState extends State<AdminReclamations>
       padding: const EdgeInsets.all(16),
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _buildCarte(items[i]),
-    );
-  }
-
-  // ── Carte compacte ────────────────────────────────────────────────────
-  Widget _buildCarte(Reclamation r) {
-    final cfg = _cfgStatut(r.statut);
-    final cfgType = _cfgType(r.type);
-
-    return GestureDetector(
-      onTap: () => _ouvrirFiche(r),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AdminTheme.border),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 46, height: 46,
-                decoration: const BoxDecoration(color: AdminTheme.primaryLight, shape: BoxShape.circle),
-                child: Center(
-                  child: Text(r.initiales, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AdminTheme.primary)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(r.nomComplet, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: cfg['bg'] as Color, borderRadius: BorderRadius.circular(8)),
-                          child: Text(cfg['label'] as String, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cfg['fg'] as Color)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(r.matricule, style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: AdminTheme.primary)),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: (cfgType['color'] as Color).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(cfgType['label'] as String, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cfgType['color'] as Color)),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text('${r.module} · ${r.filiere}', style: const TextStyle(fontSize: 11, color: AdminTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(r.texte, style: const TextStyle(fontSize: 12, color: AdminTheme.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined, size: 11, color: AdminTheme.textMuted),
-                        const SizedBox(width: 3),
-                        Text('Soumis le ${r.date}', style: const TextStyle(fontSize: 10, color: AdminTheme.textMuted)),
-                        if (r.photoUrl != null) ...[
-                          const SizedBox(width: 10),
-                          const Icon(Icons.attach_file_rounded, size: 11, color: AdminTheme.info),
-                          const SizedBox(width: 3),
-                          const Text('Pièce jointe', style: TextStyle(fontSize: 10, color: AdminTheme.info, fontWeight: FontWeight.w600)),
-                        ],
-                        if (r.profTransfere != null) ...[
-                          const SizedBox(width: 10),
-                          const Icon(Icons.forward_rounded, size: 11, color: AdminTheme.warning),
-                          const SizedBox(width: 3),
-                          Expanded(
-                            child: Text('→ ${r.profTransfere}', style: const TextStyle(fontSize: 10, color: AdminTheme.warning, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded, color: AdminTheme.textMuted, size: 20),
-            ],
-          ),
-        ),
+      itemBuilder: (_, i) => ReclamationCard(
+        reclamation: items[i],
+        onTap: () => _ouvrirFiche(items[i]),
       ),
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // FICHE DÉTAILLÉE
-  // ════════════════════════════════════════════════════════════════════════
+  // ── Ouvrir fiche ──────────────────────────────────────────────────────
   void _ouvrirFiche(Reclamation r) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (bsCtx) {
-        return StatefulBuilder(
-          builder: (ctx, setS) {
-            return _FicheReclamation(
-              reclamation: r,
-              onTransferer: (prof) {
-                setS(() {
-                  r.statut = 'en_cours';
-                  r.profTransfere = prof;
-                });
-                setState(() {});
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('✅ Transféré à $prof'), backgroundColor: AdminTheme.info, behavior: SnackBarBehavior.floating),
-                );
-              },
-              onRepondre: (reponse) {
-                setS(() {
-                  r.statut = 'resolu';
-                  r.reponse = reponse;
-                  r.dateTraitement = _dateAujourdhui();
-                });
-                setState(() {});
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('✅ Réclamation résolue'), backgroundColor: AdminTheme.success, behavior: SnackBarBehavior.floating),
-                );
-              },
-              onRejeter: (motif) {
-                setS(() {
-                  r.statut = 'rejete';
-                  r.reponse = motif;
-                  r.dateTraitement = _dateAujourdhui();
-                });
-                setState(() {});
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Réclamation rejetée'), backgroundColor: AdminTheme.danger, behavior: SnackBarBehavior.floating),
-                );
-              },
-            );
-          },
-        );
-      },
+      builder: (_) => _FicheReclamation(
+        reclamation: r,
+        onTransferer: (prof)    { Navigator.pop(context); _onTransferer(r, prof); },
+        onRepondre:  (reponse)  { Navigator.pop(context); _onRepondre(r, reponse); },
+        onRejeter:   (motif)    { Navigator.pop(context); _onRejeter(r, motif); },
+      ),
     );
   }
 
@@ -451,43 +388,144 @@ class _AdminReclamationsState extends State<AdminReclamations>
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: active ? AdminTheme.primary : AdminTheme.border),
         ),
-        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? Colors.white : AdminTheme.textSecondary)),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: active ? Colors.white : AdminTheme.textSecondary)),
       ),
     );
-  }
-
-  Map<String, dynamic> _cfgStatut(String statut) {
-    switch (statut) {
-      case 'en_attente': return {'label': 'En attente', 'fg': AdminTheme.warning, 'bg': AdminTheme.warningLight};
-      case 'en_cours':   return {'label': 'En cours',   'fg': AdminTheme.info,    'bg': AdminTheme.infoLight};
-      case 'resolu':     return {'label': 'Résolue',    'fg': AdminTheme.success, 'bg': AdminTheme.successLight};
-      case 'rejete':     return {'label': 'Rejetée',    'fg': AdminTheme.danger,  'bg': AdminTheme.dangerLight};
-      default:           return {'label': statut,       'fg': AdminTheme.textMuted, 'bg': AdminTheme.surfaceAlt};
-    }
-  }
-
-  Map<String, dynamic> _cfgType(String type) {
-    switch (type) {
-      case 'note':    return {'label': 'Note',    'color': AdminTheme.info};
-      case 'moyenne': return {'label': 'Moyenne', 'color': AdminTheme.warning};
-      default:        return {'label': type,      'color': AdminTheme.textMuted};
-    }
-  }
-
-  String _dateAujourdhui() {
-    final n = DateTime.now();
-    return '${n.day.toString().padLeft(2, '0')}/${n.month.toString().padLeft(2, '0')}/${n.year}';
   }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// WIDGET FICHE DÉTAILLÉE — séparé pour éviter les problèmes de parenthèses
+// CARTE RÉCLAMATION — widget extrait (SRP)
+// ════════════════════════════════════════════════════════════════════════════
+class ReclamationCard extends StatelessWidget {
+  final Reclamation reclamation;
+  final VoidCallback onTap;
+
+  const ReclamationCard({super.key, required this.reclamation, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final r      = reclamation;
+    final cfg    = r.configStatut;
+    final cfgT   = r.configType;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AdminTheme.border),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              // Avatar initiales
+              Container(
+                width: 46, height: 46,
+                decoration: const BoxDecoration(color: AdminTheme.primaryLight, shape: BoxShape.circle),
+                child: Center(
+                  child: Text(r.initiales,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AdminTheme.primary)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nom + badge statut
+                    Row(children: [
+                      Expanded(
+                        child: Text(r.nomComplet,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: cfg['bg'] as Color, borderRadius: BorderRadius.circular(8)),
+                        child: Text(cfg['label'] as String,
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cfg['fg'] as Color)),
+                      ),
+                    ]),
+                    const SizedBox(height: 2),
+                    Text(r.matricule,
+                        style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: AdminTheme.primary)),
+                    const SizedBox(height: 4),
+                    // Badge type + module
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (cfgT['color'] as Color).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(cfgT['label'] as String,
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: cfgT['color'] as Color)),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text('${r.module} · ${r.filiere}',
+                            style: const TextStyle(fontSize: 11, color: AdminTheme.textSecondary),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                    ]),
+                    const SizedBox(height: 4),
+                    // Aperçu texte
+                    Text(r.texte,
+                        style: const TextStyle(fontSize: 12, color: AdminTheme.textMuted),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    // Méta : date, pièce jointe, prof
+                    Row(children: [
+                      const Icon(Icons.calendar_today_outlined, size: 11, color: AdminTheme.textMuted),
+                      const SizedBox(width: 3),
+                      Text('Soumis le ${r.date}',
+                          style: const TextStyle(fontSize: 10, color: AdminTheme.textMuted)),
+                      if (r.photoUrl != null) ...[
+                        const SizedBox(width: 10),
+                        const Icon(Icons.attach_file_rounded, size: 11, color: AdminTheme.info),
+                        const SizedBox(width: 3),
+                        const Text('Pièce jointe',
+                            style: TextStyle(fontSize: 10, color: AdminTheme.info, fontWeight: FontWeight.w600)),
+                      ],
+                      if (r.profTransfere != null) ...[
+                        const SizedBox(width: 10),
+                        const Icon(Icons.forward_rounded, size: 11, color: AdminTheme.warning),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text('→ ${r.profTransfere}',
+                              style: const TextStyle(fontSize: 10, color: AdminTheme.warning, fontWeight: FontWeight.w600),
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ]),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded, color: AdminTheme.textMuted, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FICHE DÉTAILLÉE
 // ════════════════════════════════════════════════════════════════════════════
 class _FicheReclamation extends StatelessWidget {
   final Reclamation reclamation;
-  final void Function(String prof) onTransferer;
+  final void Function(String prof)    onTransferer;
   final void Function(String reponse) onRepondre;
-  final void Function(String motif) onRejeter;
+  final void Function(String motif)   onRejeter;
 
   const _FicheReclamation({
     required this.reclamation,
@@ -500,9 +538,8 @@ class _FicheReclamation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cfg = _cfgStatut(r.statut);
-    final cfgType = _cfgType(r.type);
-    final peutAgir = r.statut == 'en_attente' || r.statut == 'en_cours';
+    final cfg    = r.configStatut;
+    final cfgT   = r.configType;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.92,
@@ -514,41 +551,40 @@ class _FicheReclamation extends StatelessWidget {
         children: [
           // Handle
           const SizedBox(height: 10),
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: AdminTheme.border, borderRadius: BorderRadius.circular(2))),
+          Container(width: 40, height: 4,
+              decoration: BoxDecoration(color: AdminTheme.border, borderRadius: BorderRadius.circular(2))),
           // Titre
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Réclamation', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                      Text('Réf. ${r.id}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: AdminTheme.textMuted)),
-                    ],
-                  ),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Réclamation',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  Text('Réf. ${r.id}',
+                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: AdminTheme.textMuted)),
+                ]),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: cfg['bg'] as Color, borderRadius: BorderRadius.circular(8)),
+                child: Text(cfg['label'] as String,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cfg['fg'] as Color)),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 30, height: 30,
+                  decoration: BoxDecoration(color: AdminTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.close_rounded, size: 16, color: AdminTheme.textSecondary),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(color: cfg['bg'] as Color, borderRadius: BorderRadius.circular(8)),
-                  child: Text(cfg['label'] as String, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cfg['fg'] as Color)),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 30, height: 30,
-                    decoration: BoxDecoration(color: AdminTheme.surfaceAlt, borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.close_rounded, size: 16, color: AdminTheme.textSecondary),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ]),
           ),
           const SizedBox(height: 12),
           Container(height: 1, color: AdminTheme.border),
-          // Corps scrollable
+          // Corps
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -559,70 +595,78 @@ class _FicheReclamation extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(color: AdminTheme.primaryLight, borderRadius: BorderRadius.circular(12)),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 52, height: 52,
-                          decoration: BoxDecoration(color: AdminTheme.primary.withOpacity(0.15), shape: BoxShape.circle),
-                          child: Center(child: Text(r.initiales, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primary))),
+                    child: Row(children: [
+                      Container(
+                        width: 52, height: 52,
+                        decoration: BoxDecoration(
+                            color: AdminTheme.primary.withOpacity(0.15), shape: BoxShape.circle),
+                        child: Center(
+                          child: Text(r.initiales,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primary)),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(r.nomComplet, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-                              const SizedBox(height: 2),
-                              Text(r.matricule, style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: AdminTheme.primary)),
-                              Text(r.filiere, style: const TextStyle(fontSize: 11, color: AdminTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(r.nomComplet,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+                          const SizedBox(height: 2),
+                          Text(r.matricule,
+                              style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: AdminTheme.primary)),
+                          Text(r.filiere,
+                              style: const TextStyle(fontSize: 11, color: AdminTheme.textSecondary),
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ]),
+                      ),
+                    ]),
                   ),
                   const SizedBox(height: 16),
 
                   // Détails
-                  const Text('Détails', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+                  const Text('Détails',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: AdminTheme.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: AdminTheme.border)),
-                    child: Column(
-                      children: [
-                        _ligne('Module', r.module),
-                        const Divider(height: 14, color: Color(0xFFE5E7EB)),
-                        _ligne('Filière', r.filiere),
-                        const Divider(height: 14, color: Color(0xFFE5E7EB)),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(width: 130, child: Text('Type', style: TextStyle(fontSize: 12, color: AdminTheme.textSecondary))),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: (cfgType['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                              child: Text(cfgType['label'] as String, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cfgType['color'] as Color)),
-                            ),
-                          ],
+                    decoration: BoxDecoration(
+                        color: AdminTheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AdminTheme.border)),
+                    child: Column(children: [
+                      _ligne('Module', r.module),
+                      const Divider(height: 14, color: Color(0xFFE5E7EB)),
+                      _ligne('Filière', r.filiere),
+                      const Divider(height: 14, color: Color(0xFFE5E7EB)),
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const SizedBox(width: 130,
+                            child: Text('Type', style: TextStyle(fontSize: 12, color: AdminTheme.textSecondary))),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: (cfgT['color'] as Color).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6)),
+                          child: Text(cfgT['label'] as String,
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                                  color: cfgT['color'] as Color)),
                         ),
+                      ]),
+                      const Divider(height: 14, color: Color(0xFFE5E7EB)),
+                      _ligne('Date de soumission', r.date),
+                      if (r.dateTraitement != null) ...[
                         const Divider(height: 14, color: Color(0xFFE5E7EB)),
-                        _ligne('Date de soumission', r.date),
-                        if (r.dateTraitement != null) ...[
-                          const Divider(height: 14, color: Color(0xFFE5E7EB)),
-                          _ligne('Date de traitement', r.dateTraitement!),
-                        ],
-                        if (r.profTransfere != null) ...[
-                          const Divider(height: 14, color: Color(0xFFE5E7EB)),
-                          _ligne('Transféré à', r.profTransfere!),
-                        ],
+                        _ligne('Date de traitement', r.dateTraitement!),
                       ],
-                    ),
+                      if (r.profTransfere != null) ...[
+                        const Divider(height: 14, color: Color(0xFFE5E7EB)),
+                        _ligne('Transféré à', r.profTransfere!),
+                      ],
+                    ]),
                   ),
                   const SizedBox(height: 16),
 
                   // Motif
-                  const Text('Motif de la réclamation', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+                  const Text('Motif de la réclamation',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -632,57 +676,55 @@ class _FicheReclamation extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFFDE68A)),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.format_quote_rounded, color: Color(0xFFD97706), size: 18),
-                            SizedBox(width: 6),
-                            Text('Déclaration de l\'étudiant', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(r.texte, style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A2E), height: 1.6)),
-                      ],
-                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Row(children: [
+                        Icon(Icons.format_quote_rounded, color: Color(0xFFD97706), size: 18),
+                        SizedBox(width: 6),
+                        Text('Déclaration de l\'étudiant',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
+                      ]),
+                      const SizedBox(height: 10),
+                      Text(r.texte,
+                          style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A2E), height: 1.6)),
+                    ]),
                   ),
                   const SizedBox(height: 16),
 
-                  // Photo copie
+                  // Pièce jointe
                   if (r.photoUrl != null) ...[
-                    const Text('Pièce jointe — Photo de la copie', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+                    const Text('Pièce jointe — Photo de la copie',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
                     const SizedBox(height: 8),
                     GestureDetector(
-                      onTap: () => _voirPhoto(context, r),
+                      onTap: () => _voirPhoto(context),
                       child: Container(
                         width: double.infinity, height: 160,
-                        decoration: BoxDecoration(color: AdminTheme.surfaceAlt, borderRadius: BorderRadius.circular(12), border: Border.all(color: AdminTheme.border)),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 52, height: 52,
-                              decoration: BoxDecoration(color: AdminTheme.infoLight, borderRadius: BorderRadius.circular(12)),
-                              child: const Icon(Icons.image_rounded, color: AdminTheme.info, size: 26),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(r.photoUrl!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.info)),
-                            const SizedBox(height: 4),
-                            const Text('Appuyer pour agrandir', style: TextStyle(fontSize: 11, color: AdminTheme.textMuted)),
-                          ],
-                        ),
+                        decoration: BoxDecoration(
+                            color: AdminTheme.surfaceAlt,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AdminTheme.border)),
+                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Container(
+                            width: 52, height: 52,
+                            decoration: BoxDecoration(color: AdminTheme.infoLight, borderRadius: BorderRadius.circular(12)),
+                            child: const Icon(Icons.image_rounded, color: AdminTheme.info, size: 26),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(r.photoUrl!,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.info)),
+                          const SizedBox(height: 4),
+                          const Text('Appuyer pour agrandir',
+                              style: TextStyle(fontSize: 11, color: AdminTheme.textMuted)),
+                        ]),
                       ),
                     ),
                     const SizedBox(height: 16),
                   ],
 
-                  // Réponse si déjà traitée
+                  // Réponse existante
                   if (r.reponse != null) ...[
-                    Text(
-                      r.statut == 'rejete' ? 'Motif du rejet' : 'Réponse apportée',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151)),
-                    ),
+                    Text(r.statut == 'rejete' ? 'Motif du rejet' : 'Réponse apportée',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
                     const SizedBox(height: 8),
                     Container(
                       width: double.infinity,
@@ -690,25 +732,27 @@ class _FicheReclamation extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: r.statut == 'rejete' ? AdminTheme.dangerLight : AdminTheme.successLight,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: r.statut == 'rejete' ? AdminTheme.danger.withOpacity(0.3) : AdminTheme.success.withOpacity(0.3)),
+                        border: Border.all(
+                            color: r.statut == 'rejete'
+                                ? AdminTheme.danger.withOpacity(0.3)
+                                : AdminTheme.success.withOpacity(0.3)),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            r.statut == 'rejete' ? Icons.cancel_outlined : Icons.check_circle_outline_rounded,
-                            color: r.statut == 'rejete' ? AdminTheme.danger : AdminTheme.success,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              r.reponse!,
-                              style: TextStyle(fontSize: 13, height: 1.5, color: r.statut == 'rejete' ? AdminTheme.danger : AdminTheme.success),
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(
+                          r.statut == 'rejete'
+                              ? Icons.cancel_outlined
+                              : Icons.check_circle_outline_rounded,
+                          color: r.statut == 'rejete' ? AdminTheme.danger : AdminTheme.success,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(r.reponse!,
+                              style: TextStyle(
+                                  fontSize: 13, height: 1.5,
+                                  color: r.statut == 'rejete' ? AdminTheme.danger : AdminTheme.success)),
+                        ),
+                      ]),
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -717,24 +761,33 @@ class _FicheReclamation extends StatelessWidget {
             ),
           ),
 
-          // Boutons d'action
-          if (peutAgir)
+          // Boutons d'action (seulement si réclamation traitable)
+          if (r.peutAgir)
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
               decoration: const BoxDecoration(border: Border(top: BorderSide(color: AdminTheme.border))),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: _btnAction(context, icon: Icons.send_rounded, label: 'Transférer au prof', color: AdminTheme.info, bg: AdminTheme.infoLight, onTap: () => _dialogTransferer(context))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _btnAction(context, icon: Icons.reply_rounded, label: 'Répondre', color: AdminTheme.success, bg: AdminTheme.successLight, onTap: () => _dialogRepondre(context))),
-                    ],
+              child: Column(children: [
+                Row(children: [
+                  Expanded(
+                    child: _btnAction(context,
+                        icon: Icons.send_rounded, label: 'Transférer au prof',
+                        color: AdminTheme.info, bg: AdminTheme.infoLight,
+                        onTap: () => _dialogTransferer(context)),
                   ),
-                  const SizedBox(height: 8),
-                  _btnAction(context, icon: Icons.close_rounded, label: 'Rejeter la réclamation', color: AdminTheme.danger, bg: AdminTheme.dangerLight, fullWidth: true, onTap: () => _dialogRejeter(context)),
-                ],
-              ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _btnAction(context,
+                        icon: Icons.reply_rounded, label: 'Répondre',
+                        color: AdminTheme.success, bg: AdminTheme.successLight,
+                        onTap: () => _dialogRepondre(context)),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                _btnAction(context,
+                    icon: Icons.close_rounded, label: 'Rejeter la réclamation',
+                    color: AdminTheme.danger, bg: AdminTheme.dangerLight,
+                    fullWidth: true, onTap: () => _dialogRejeter(context)),
+              ]),
             ),
         ],
       ),
@@ -742,230 +795,250 @@ class _FicheReclamation extends StatelessWidget {
   }
 
   // ── Vue photo plein écran ─────────────────────────────────────────────
-  void _voirPhoto(BuildContext context, Reclamation r) {
+  void _voirPhoto(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) {
-        return Dialog(
-          backgroundColor: Colors.black,
-          insetPadding: EdgeInsets.zero,
-          child: Stack(
-            children: [
-              Center(
-                child: Container(
-                  color: const Color(0xFF1A1A2E),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.image_rounded, color: Colors.white54, size: 80),
-                      const SizedBox(height: 16),
-                      Text(r.photoUrl ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                      const SizedBox(height: 8),
-                      const Text('Photo de la copie (simulation)', style: TextStyle(color: Colors.white38, fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 16, right: 16,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(ctx),
-                  child: Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
-                  ),
-                ),
-              ),
-            ],
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(children: [
+          Center(
+            child: Container(
+              color: const Color(0xFF1A1A2E),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.image_rounded, color: Colors.white54, size: 80),
+                const SizedBox(height: 16),
+                Text(r.photoUrl ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                const SizedBox(height: 8),
+                const Text('Photo de la copie (simulation)',
+                    style: TextStyle(color: Colors.white38, fontSize: 12)),
+              ]),
+            ),
           ),
-        );
-      },
+          Positioned(
+            top: 16, right: 16,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              child: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+              ),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 
-  // ── Dialogs actions ───────────────────────────────────────────────────
+  // ── Dialog : Transférer ───────────────────────────────────────────────
   void _dialogTransferer(BuildContext context) {
-    final profs = ['Prof. OUÉDRAOGO Mamadou', 'Prof. SAWADOGO Issa', 'Prof. KABORÉ Jean-Louis', 'Prof. TRAORÉ Aminata'];
+    // Liste idéalement chargée depuis la DB
+    const profs = [
+      'Prof. OUÉDRAOGO Mamadou',
+      'Prof. SAWADOGO Issa',
+      'Prof. KABORÉ Jean-Louis',
+      'Prof. TRAORÉ Aminata',
+    ];
     String? profChoisi;
 
     showDialog(
       context: context,
-      builder: (dCtx) {
-        return StatefulBuilder(
-          builder: (ctx2, setS2) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Transférer au professeur'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${r.nomComplet} — ${r.module}', style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary)),
-                  const SizedBox(height: 14),
-                  const Text('Choisir le professeur :', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  ...profs.map((p) {
-                    return GestureDetector(
-                      onTap: () => setS2(() => profChoisi = p),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: profChoisi == p ? const Color(0xFFEFF6FF) : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: profChoisi == p ? const Color(0xFF1D4ED8) : AdminTheme.border),
-                        ),
-                        child: Text(p, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: profChoisi == p ? const Color(0xFF1D4ED8) : const Color(0xFF374151))),
+      builder: (dCtx) => StatefulBuilder(
+        builder: (ctx2, setS) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Transférer au professeur'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${r.nomComplet} — ${r.module}',
+                  style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary)),
+              const SizedBox(height: 14),
+              const Text('Choisir le professeur :',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              ...profs.map((p) => GestureDetector(
+                    onTap: () => setS(() => profChoisi = p),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: profChoisi == p ? const Color(0xFFEFF6FF) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: profChoisi == p ? const Color(0xFF1D4ED8) : AdminTheme.border),
                       ),
-                    );
-                  }),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('Annuler')),
-                ElevatedButton(
-                  onPressed: profChoisi == null ? null : () {
-                    Navigator.pop(ctx2);
-                    onTransferer(profChoisi!);
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.info, foregroundColor: Colors.white),
-                  child: const Text('Confirmer le transfert'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _dialogRepondre(BuildContext context) {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dCtx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Répondre à la réclamation'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${r.nomComplet} — ${r.module}', style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary)),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(color: AdminTheme.surfaceAlt, borderRadius: BorderRadius.circular(10), border: Border.all(color: AdminTheme.border)),
-                child: TextField(
-                  controller: ctrl, maxLines: 4,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(hintText: 'Rédigez votre réponse...', hintStyle: TextStyle(fontSize: 13, color: AdminTheme.textMuted), border: InputBorder.none, contentPadding: EdgeInsets.all(12)),
-                ),
-              ),
+                      child: Text(p,
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600,
+                              color: profChoisi == p ? const Color(0xFF1D4ED8) : const Color(0xFF374151))),
+                    ),
+                  )),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Annuler')),
+            TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('Annuler')),
             ElevatedButton(
-              onPressed: () {
-                if (ctrl.text.trim().isEmpty) return;
-                Navigator.pop(dCtx);
-                onRepondre(ctrl.text.trim());
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.success, foregroundColor: Colors.white),
-              child: const Text('Envoyer la réponse'),
+              onPressed: profChoisi == null
+                  ? null
+                  : () { Navigator.pop(ctx2); onTransferer(profChoisi!); },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminTheme.info, foregroundColor: Colors.white),
+              child: const Text('Confirmer le transfert'),
             ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _dialogRejeter(BuildContext context) {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dCtx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Rejeter la réclamation'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${r.nomComplet} — ${r.module}', style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary)),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(color: AdminTheme.surfaceAlt, borderRadius: BorderRadius.circular(10), border: Border.all(color: AdminTheme.border)),
-                child: TextField(
-                  controller: ctrl, maxLines: 3,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(hintText: 'Motif du rejet (optionnel)...', hintStyle: TextStyle(fontSize: 13, color: AdminTheme.textMuted), border: InputBorder.none, contentPadding: EdgeInsets.all(12)),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Annuler')),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dCtx);
-                onRejeter(ctrl.text.trim().isNotEmpty ? ctrl.text.trim() : 'Réclamation rejetée par l\'administration.');
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.danger, foregroundColor: Colors.white),
-              child: const Text('Confirmer le rejet'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // ── Widgets ───────────────────────────────────────────────────────────
-  Widget _ligne(String label, String valeur) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(width: 130, child: Text(label, style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary))),
-        Expanded(child: Text(valeur, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E)))),
-      ],
-    );
-  }
-
-  Widget _btnAction(BuildContext context, {required IconData icon, required String label, required Color color, required Color bg, required VoidCallback onTap, bool fullWidth = false}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: fullWidth ? double.infinity : null,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
           ],
         ),
       ),
     );
   }
 
-  Map<String, dynamic> _cfgStatut(String statut) {
-    switch (statut) {
-      case 'en_attente': return {'label': 'En attente', 'fg': AdminTheme.warning, 'bg': AdminTheme.warningLight};
-      case 'en_cours':   return {'label': 'En cours',   'fg': AdminTheme.info,    'bg': AdminTheme.infoLight};
-      case 'resolu':     return {'label': 'Résolue',    'fg': AdminTheme.success, 'bg': AdminTheme.successLight};
-      case 'rejete':     return {'label': 'Rejetée',    'fg': AdminTheme.danger,  'bg': AdminTheme.dangerLight};
-      default:           return {'label': statut, 'fg': AdminTheme.textMuted, 'bg': AdminTheme.surfaceAlt};
-    }
+  // ── Dialog : Répondre ─────────────────────────────────────────────────
+  void _dialogRepondre(BuildContext context) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Répondre à la réclamation'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${r.nomComplet} — ${r.module}',
+                style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary)),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                  color: AdminTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AdminTheme.border)),
+              child: TextField(
+                controller: ctrl,
+                maxLines: 5,
+                style: const TextStyle(fontSize: 13),
+                decoration: const InputDecoration(
+                  hintText: 'Rédigez votre réponse...',
+                  hintStyle: TextStyle(fontSize: 13, color: AdminTheme.textMuted),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () { ctrl.dispose(); Navigator.pop(dCtx); }, child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () {
+              if (ctrl.text.trim().isEmpty) return;
+              final txt = ctrl.text.trim();
+              ctrl.dispose();
+              Navigator.pop(dCtx);
+              onRepondre(txt);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AdminTheme.success, foregroundColor: Colors.white),
+            child: const Text('Envoyer la réponse'),
+          ),
+        ],
+      ),
+    );
   }
 
-  Map<String, dynamic> _cfgType(String type) {
-    switch (type) {
-      case 'note':    return {'label': 'Note',    'color': AdminTheme.info};
-      case 'moyenne': return {'label': 'Moyenne', 'color': AdminTheme.warning};
-      default:        return {'label': type, 'color': AdminTheme.textMuted};
-    }
+  // ── Dialog : Rejeter ─────────────────────────────────────────────────
+  void _dialogRejeter(BuildContext context) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [
+          Icon(Icons.warning_amber_rounded, color: AdminTheme.danger, size: 20),
+          SizedBox(width: 8),
+          Text('Rejeter la réclamation'),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${r.nomComplet} — ${r.module}',
+                style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary)),
+            const SizedBox(height: 4),
+            const Text('Cette action est irréversible.',
+                style: TextStyle(fontSize: 11, color: AdminTheme.danger, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                  color: AdminTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AdminTheme.border)),
+              child: TextField(
+                controller: ctrl,
+                maxLines: 3,
+                style: const TextStyle(fontSize: 13),
+                decoration: const InputDecoration(
+                  hintText: 'Motif du rejet (optionnel)...',
+                  hintStyle: TextStyle(fontSize: 13, color: AdminTheme.textMuted),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () { ctrl.dispose(); Navigator.pop(dCtx); }, child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () {
+              final motif = ctrl.text.trim();
+              ctrl.dispose();
+              Navigator.pop(dCtx);
+              onRejeter(motif);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AdminTheme.danger, foregroundColor: Colors.white),
+            child: const Text('Confirmer le rejet'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  Widget _ligne(String label, String valeur) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(width: 130,
+          child: Text(label, style: const TextStyle(fontSize: 12, color: AdminTheme.textSecondary))),
+      Expanded(
+          child: Text(valeur,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E)))),
+    ]);
+  }
+
+  Widget _btnAction(BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color color,
+    required Color bg,
+    required VoidCallback onTap,
+    bool fullWidth = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: fullWidth ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.3))),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+        ]),
+      ),
+    );
   }
 }
