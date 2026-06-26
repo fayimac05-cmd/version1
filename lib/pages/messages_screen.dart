@@ -351,9 +351,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 9),
             decoration: BoxDecoration(
-              color: AppPalette.blue.withOpacity(0.06),
+              color: AppPalette.blue.withValues(alpha:0.06),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppPalette.blue.withOpacity(0.15)),
+              border: Border.all(color: AppPalette.blue.withValues(alpha:0.15)),
             ),
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -399,7 +399,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       onLongPress: () => _menuConv(c),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        color: active ? AppPalette.blue.withOpacity(0.07) : Colors.transparent,
+        color: active ? AppPalette.blue.withValues(alpha:0.07) : Colors.transparent,
         child: Row(
           children: [
             Stack(
@@ -408,7 +408,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   width: 46,
                   height: 46,
                   decoration: BoxDecoration(
-                    color: AppPalette.blue.withOpacity(0.12),
+                    color: AppPalette.blue.withValues(alpha:0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -556,7 +556,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: AppPalette.blue.withOpacity(0.1),
+              color: AppPalette.blue.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(18),
             ),
             child: const Icon(
@@ -693,7 +693,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: AppPalette.blue.withOpacity(0.1),
+                                color: AppPalette.blue.withValues(alpha:0.1),
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
@@ -749,10 +749,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppPalette.blue.withOpacity(0.05),
+                        color: AppPalette.blue.withValues(alpha:0.05),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: AppPalette.blue.withOpacity(0.15),
+                          color: AppPalette.blue.withValues(alpha:0.15),
                         ),
                       ),
                       child: const Row(
@@ -993,7 +993,7 @@ class _ConversationViewState extends State<_ConversationView> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha:0.2),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -1088,7 +1088,7 @@ class _ConversationViewState extends State<_ConversationView> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4),
+                BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 4),
               ],
             ),
             child: KeyboardListener(
@@ -1343,7 +1343,7 @@ class _ConversationViewState extends State<_ConversationView> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: AppPalette.blue.withOpacity(0.1),
+                      color: AppPalette.blue.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Row(
@@ -1872,7 +1872,7 @@ class _ConversationViewState extends State<_ConversationView> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha:0.12),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: color, size: 20),
@@ -1919,7 +1919,7 @@ class _ConversationViewState extends State<_ConversationView> {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withOpacity(0.1),
+                  color: const Color(0xFF25D366).withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Center(
@@ -1947,7 +1947,7 @@ class _ConversationViewState extends State<_ConversationView> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: AppPalette.blue.withOpacity(0.1),
+                        color: AppPalette.blue.withValues(alpha:0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -2062,7 +2062,7 @@ class _ConversationViewState extends State<_ConversationView> {
               width: 68,
               height: 68,
               decoration: BoxDecoration(
-                color: AppPalette.blue.withOpacity(0.1),
+                color: AppPalette.blue.withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -2231,7 +2231,7 @@ class _BulleMessageState extends State<_BulleMessage> {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: AppPalette.blue.withOpacity(0.15),
+                      color: AppPalette.blue.withValues(alpha:0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Center(
@@ -2257,11 +2257,11 @@ class _BulleMessageState extends State<_BulleMessage> {
                     height: 20,
                     margin: const EdgeInsets.only(right: 4, bottom: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha:0.9),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
+                          color: Colors.black.withValues(alpha:0.15),
                           blurRadius: 3,
                         ),
                       ],
@@ -2296,7 +2296,7 @@ class _BulleMessageState extends State<_BulleMessage> {
                         ? null
                         : [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.07),
+                              color: Colors.black.withValues(alpha:0.07),
                               blurRadius: 3,
                               offset: const Offset(0, 1),
                             ),
@@ -2323,7 +2323,7 @@ class _BulleMessageState extends State<_BulleMessage> {
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.06),
+                                  color: Colors.black.withValues(alpha:0.06),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -2392,11 +2392,11 @@ class _BulleMessageState extends State<_BulleMessage> {
                     height: 20,
                     margin: const EdgeInsets.only(left: 4, bottom: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha:0.9),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
+                          color: Colors.black.withValues(alpha:0.15),
                           blurRadius: 3,
                         ),
                       ],
@@ -2447,7 +2447,7 @@ class _BulleMessageState extends State<_BulleMessage> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: const Color(0xFF7F66FF).withOpacity(0.15),
+                color: const Color(0xFF7F66FF).withValues(alpha:0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
@@ -2505,7 +2505,7 @@ class _BulleMessageState extends State<_BulleMessage> {
                     height: 2,
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF8696A0).withOpacity(0.3),
+                      color: const Color(0xFF8696A0).withValues(alpha:0.3),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),

@@ -97,9 +97,9 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
       onTap: () => _ouvrirFiche(p),
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE5E7EB)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE5E7EB)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))]),
         child: Row(children: [
-          Container(width: 52, height: 52, decoration: BoxDecoration(color: avatarColor.withOpacity(0.1), shape: BoxShape.circle), child: Center(child: Text('${p.prenoms[0]}${p.nom[0]}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: avatarColor)))),
+          Container(width: 52, height: 52, decoration: BoxDecoration(color: avatarColor.withValues(alpha:0.1), shape: BoxShape.circle), child: Center(child: Text('${p.prenoms[0]}${p.nom[0]}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: avatarColor)))),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [Expanded(child: Text('${p.prenoms} ${p.nom}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)))), _contratBadge(p.typeContrat)]),
@@ -196,7 +196,7 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => Container(height: MediaQuery.of(context).size.height * 0.85, decoration: const BoxDecoration(color: Color(0xFFF5F7FA), borderRadius: BorderRadius.vertical(top: Radius.circular(20))), child: Column(children: [
       const SizedBox(height: 8), Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2))),
       Container(color: Colors.white, padding: const EdgeInsets.all(20), child: Row(children: [
-        Container(width: 56, height: 56, decoration: BoxDecoration(color: _getAvatarColor(p.nom).withOpacity(0.1), shape: BoxShape.circle), child: Center(child: Text('${p.prenoms[0]}${p.nom[0]}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _getAvatarColor(p.nom))))),
+        Container(width: 56, height: 56, decoration: BoxDecoration(color: _getAvatarColor(p.nom).withValues(alpha:0.1), shape: BoxShape.circle), child: Center(child: Text('${p.prenoms[0]}${p.nom[0]}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _getAvatarColor(p.nom))))),
         const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${p.prenoms} ${p.nom}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))), Text(p.specialite, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)))])),
         IconButton(icon: const Icon(Icons.close_rounded, color: Color(0xFF6B7280)), onPressed: () => Navigator.pop(context)),
       ])),

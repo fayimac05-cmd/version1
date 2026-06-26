@@ -23,6 +23,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../admin/admin_etudiants.dart';
+import '../models/etudiant_model.dart';
 import '../utils/snackbar_helper.dart';
 
 // ═══════════════════════════════════════════════════════════════
@@ -749,6 +750,27 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
 
   // ── Barres par filière ────────────────────────────────────────────────────
 
+  FlTitlesData _barTitles(List<String> labels) => FlTitlesData(
+    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    bottomTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 24,
+        getTitlesWidget: (value, _) {
+          final i = value.toInt();
+          if (i < 0 || i >= labels.length) return const SizedBox();
+          return Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(labels[i],
+                style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
+          );
+        },
+      ),
+    ),
+  );
+
   Widget _inscriptionsHistoFiliere() {
     final annees = _StatsMock.inscriptionsParFiliere.keys.toList();
 
@@ -1190,7 +1212,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   // TAB 3 — LISTES & EXPORT [ARCH-2] [ARCH-3]
   // ════════════════════════════════════════════════════════════════════════
 
-  static final _exports = <_ExportItem>[
+  List<_ExportItem> get _exports => [
     _ExportItem('Liste complète des étudiants',
         '${adminEtudiants.length} étudiants', Icons.people_rounded),
     _ExportItem('Étudiants actifs',

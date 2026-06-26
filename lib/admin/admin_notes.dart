@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../admin/admin_etudiants.dart';
+import '../models/etudiant_model.dart';
 import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -109,7 +110,7 @@ class _AdminNotesState extends State<AdminNotes>
               decoration: BoxDecoration(
                 color: AdminTheme.infoLight,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AdminTheme.info.withOpacity(0.3)),
+                border: Border.all(color: AdminTheme.info.withValues(alpha:0.3)),
               ),
               child: Row(children: [
                 const Icon(Icons.security_rounded, color: AdminTheme.info, size: 16),
@@ -165,7 +166,7 @@ class _AdminNotesState extends State<AdminNotes>
   Widget _kpiChip(IconData icon, String label, Color fg, Color bg) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: fg.withOpacity(0.3))),
+        border: Border.all(color: fg.withValues(alpha:0.3))),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, color: fg, size: 14),
       const SizedBox(width: 6),
@@ -422,11 +423,11 @@ class _AdminNotesState extends State<AdminNotes>
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: rank <= 3 ? AdminTheme.primaryLight.withOpacity(0.5)
+              color: rank <= 3 ? AdminTheme.primaryLight.withValues(alpha:0.5)
                   : AdminTheme.surface,
               borderRadius: BorderRadius.circular(AdminTheme.radiusCard),
               border: Border.all(color: rank <= 3
-                  ? AdminTheme.primary.withOpacity(0.2) : AdminTheme.border),
+                  ? AdminTheme.primary.withValues(alpha:0.2) : AdminTheme.border),
               boxShadow: AdminTheme.cardShadow,
             ),
             child: Row(children: [
@@ -549,7 +550,7 @@ class _AdminNotesState extends State<AdminNotes>
       case 'rejetee':  fg = AdminTheme.danger;  label = 'Rejetée'; break;
       default:         fg = AdminTheme.warning; label = 'En attente';
     }
-    return AdminTheme.badge(label, fg, fg.withOpacity(0.1));
+    return AdminTheme.badge(label, fg, fg.withValues(alpha:0.1));
   }
 
   Widget _btn(String label, IconData icon, Color fg, Color bg,
@@ -558,7 +559,7 @@ class _AdminNotesState extends State<AdminNotes>
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: fg.withOpacity(0.3))),
+          border: Border.all(color: fg.withValues(alpha:0.3))),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(icon, color: fg, size: 16),
         const SizedBox(width: 6),

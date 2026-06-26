@@ -42,7 +42,7 @@ class CourseDetailScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: AppPalette.blue.withOpacity(0.1),
+                    color: AppPalette.blue.withValues(alpha:0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   )
@@ -68,7 +68,7 @@ class CourseDetailScreen extends StatelessWidget {
                         professorName,
                         style: TextStyle(
                           fontSize: 16,
-                          color: AppPalette.black.withOpacity(0.7),
+                          color: AppPalette.black.withValues(alpha:0.7),
                         ),
                       ),
                     ],
@@ -132,7 +132,7 @@ class CourseDetailScreen extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),
@@ -163,7 +163,7 @@ class CourseDetailScreen extends StatelessWidget {
               ),
             ),
           ),
-          Icon(Icons.play_circle_fill, color: AppPalette.blue.withOpacity(0.8)),
+          Icon(Icons.play_circle_fill, color: AppPalette.blue.withValues(alpha:0.8)),
         ],
       ),
     );

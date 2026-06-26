@@ -123,7 +123,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha:0.15),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -206,7 +206,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   // ── Bannière épinglé ──────────────────────────────────────────────────
   Widget _banniereEpingle() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-    color: const Color(0xFF1F2C34).withOpacity(0.95),
+    color: const Color(0xFF1F2C34).withValues(alpha:0.95),
     child: Row(
       children: [
         Container(
@@ -304,7 +304,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 width: 26,
                 height: 26,
                 decoration: BoxDecoration(
-                  color: AppPalette.blue.withOpacity(0.2),
+                  color: AppPalette.blue.withValues(alpha:0.2),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -343,7 +343,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     ? null
                     : [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
+                          color: Colors.black.withValues(alpha:0.08),
                           blurRadius: 3,
                           offset: const Offset(0, 1),
                         ),
@@ -358,7 +358,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       margin: const EdgeInsets.fromLTRB(4, 4, 4, 0),
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha:0.05),
                         borderRadius: BorderRadius.circular(6),
                         border: const Border(
                           left: BorderSide(color: Color(0xFF00A884), width: 3),
@@ -389,7 +389,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                               vertical: 1,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.06),
+                              color: Colors.black.withValues(alpha:0.06),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -493,7 +493,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFF7F66FF).withOpacity(0.15),
+                color: const Color(0xFF7F66FF).withValues(alpha:0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
@@ -549,7 +549,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     height: 2,
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF8696A0).withOpacity(0.3),
+                      color: const Color(0xFF8696A0).withValues(alpha:0.3),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -888,7 +888,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00A884).withOpacity(0.2),
+                      color: const Color(0xFF00A884).withValues(alpha:0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Row(
@@ -1081,7 +1081,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       width: 42,
       height: 42,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha:0.15),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Icon(icon, color: color, size: 22),
@@ -1215,7 +1215,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withValues(alpha:0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
@@ -1283,7 +1283,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withOpacity(0.15),
+                  color: const Color(0xFF25D366).withValues(alpha:0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Center(
@@ -1319,7 +1319,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: AppPalette.blue.withOpacity(0.15),
+                        color: AppPalette.blue.withValues(alpha:0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -1681,7 +1681,7 @@ class _ProfilEtudiant extends StatelessWidget {
           width: 80,
           height: 80,
           decoration: BoxDecoration(
-            color: AppPalette.blue.withOpacity(0.2),
+            color: AppPalette.blue.withValues(alpha:0.2),
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -1717,7 +1717,7 @@ class _ProfilEtudiant extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withValues(alpha:0.05),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(

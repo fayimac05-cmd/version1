@@ -42,7 +42,8 @@ class _Message {
 // ════════════════════════════════════════════════════════════════════════════
 class ChatIAScreen extends StatefulWidget {
   final StudentProfile profile;
-  const ChatIAScreen({super.key, required this.profile});
+  final bool showBack;
+  const ChatIAScreen({super.key, required this.profile, this.showBack = true});
 
   @override
   State<ChatIAScreen> createState() => _ChatIAScreenState();
@@ -272,23 +273,45 @@ Ton rôle :
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                colors: [Color(0xFF0A3D91), Color(0xFF1565C0)],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
               ),
             ),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
+            child: Stack(children: [
+              Positioned(top: -20, right: -20,
+                child: Container(width: 100, height: 100,
+                  decoration: BoxDecoration(shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.06)))),
+              Row(
               children: [
+                if (widget.showBack)
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 38, height: 38,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white, size: 16),
+                    ),
+                  ),
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(14),
+                    color: Colors.white.withValues(alpha:0.2),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
                     Icons.smart_toy_rounded,
                     color: Colors.white,
-                    size: 28,
+                    size: 24,
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -336,7 +359,7 @@ Ton rôle :
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha:0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -358,6 +381,7 @@ Ton rôle :
                 ),
               ],
             ),
+            ]),
           ),
 
           // ── Suggestions rapides (seulement si 1 message) ──────────────
@@ -395,7 +419,7 @@ Ton rôle :
                                 border: Border.all(
                                   color: const Color(
                                     0xFF7C3AED,
-                                  ).withOpacity(0.3),
+                                  ).withValues(alpha:0.3),
                                 ),
                               ),
                               child: Text(
@@ -436,7 +460,7 @@ Ton rôle :
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha:0.06),
                   blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
@@ -492,7 +516,7 @@ Ton rôle :
                           ? []
                           : [
                               BoxShadow(
-                                color: const Color(0xFF7C3AED).withOpacity(0.4),
+                                color: const Color(0xFF7C3AED).withValues(alpha:0.4),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
                               ),
@@ -568,7 +592,7 @@ Ton rôle :
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
+                        color: Colors.black.withValues(alpha:0.06),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -652,7 +676,7 @@ Ton rôle :
               border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha:0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

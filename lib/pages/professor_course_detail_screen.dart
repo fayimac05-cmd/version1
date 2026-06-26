@@ -95,9 +95,9 @@ class _ProfessorCourseDetailScreenState extends State<ProfessorCourseDetailScree
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppPalette.blue.withOpacity(0.08),
+                color: AppPalette.blue.withValues(alpha:0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppPalette.blue.withOpacity(0.2)),
+                border: Border.all(color: AppPalette.blue.withValues(alpha:0.2)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,7 +161,7 @@ class _ProfessorCourseDetailScreenState extends State<ProfessorCourseDetailScree
                     decoration: BoxDecoration(
                       color: AppPalette.lightBlue,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppPalette.blue.withOpacity(0.18)),
+                      border: Border.all(color: AppPalette.blue.withValues(alpha:0.18)),
                     ),
                     child: const Row(
                       children: [

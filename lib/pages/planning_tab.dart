@@ -140,7 +140,7 @@ class _PlanningTabState extends State<PlanningTab> with SingleTickerProviderStat
               Row(children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: _brandBlue.withOpacity(0.08), borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(color: _brandBlue.withValues(alpha:0.08), borderRadius: BorderRadius.circular(14)),
                   child: const Icon(Icons.date_range_rounded, color: _brandBlue, size: 22),
                 ),
                 const SizedBox(width: 14),
@@ -248,7 +248,7 @@ class _PlanningTabState extends State<PlanningTab> with SingleTickerProviderStat
                                             ]),
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                              decoration: BoxDecoration(color: typeColor.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),
+                                              decoration: BoxDecoration(color: typeColor.withValues(alpha:0.08), borderRadius: BorderRadius.circular(6)),
                                               child: Text(cours['type']!, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: typeColor)),
                                             ),
                                           ]),

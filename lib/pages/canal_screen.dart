@@ -142,9 +142,9 @@ class _CanalScreenState extends State<CanalScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: _brandBlue.withOpacity(0.05),
+                color: _brandBlue.withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _brandBlue.withOpacity(0.12)),
+                border: Border.all(color: _brandBlue.withValues(alpha:0.12)),
               ),
               child: const Row(children: [
                 Icon(Icons.info_outline_rounded, color: _brandBlue, size: 16),
@@ -180,7 +180,7 @@ class _CanalScreenState extends State<CanalScreen> {
         child: Row(children: [
           Container(width: 46, height: 46,
             decoration: BoxDecoration(
-              color: couleur.withOpacity(0.08),
+              color: couleur.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: couleur, size: 22)),
           const SizedBox(width: 14),
@@ -192,7 +192,7 @@ class _CanalScreenState extends State<CanalScreen> {
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(color: couleur.withOpacity(0.08),
+                  decoration: BoxDecoration(color: couleur.withValues(alpha:0.08),
                       borderRadius: BorderRadius.circular(6)),
                   child: Text(tag, style: TextStyle(fontSize: 9,
                       fontWeight: FontWeight.w700, color: couleur))),
@@ -210,7 +210,7 @@ class _CanalScreenState extends State<CanalScreen> {
               child: Text(badge, style: const TextStyle(
                   fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)))
           else
-            Icon(Icons.arrow_forward_ios_rounded, color: _textMuted.withOpacity(0.4), size: 14),
+            Icon(Icons.arrow_forward_ios_rounded, color: _textMuted.withValues(alpha:0.4), size: 14),
         ]),
       ),
     );
@@ -395,7 +395,7 @@ class _CanalDetailState extends State<_CanalDetail> {
         titleSpacing: 0,
         title: Row(children: [
           Container(width: 36, height: 36,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15),
                 borderRadius: BorderRadius.circular(10)),
             child: Icon(widget.icon, color: Colors.white, size: 18)),
           const SizedBox(width: 12),
@@ -410,7 +410,7 @@ class _CanalDetailState extends State<_CanalDetail> {
             child: Container(
               margin: const EdgeInsets.only(right: 16),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.15),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15),
                   borderRadius: BorderRadius.circular(8)),
               child: Text('${_msgs.length} messages',
                   style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600))),
@@ -588,7 +588,7 @@ class _BulleCanal extends StatelessWidget {
               child: isPDF
                   ? Row(children: [
                       Container(width: 40, height: 40,
-                        decoration: BoxDecoration(color: message.color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: message.color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
                         child: Icon(Icons.picture_as_pdf_rounded, color: message.color, size: 22)),
                       const SizedBox(width: 12),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

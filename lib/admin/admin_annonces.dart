@@ -225,7 +225,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppPalette.blue.withOpacity(0.08), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.campaign_outlined, color: AppPalette.blue, size: 26)),
+            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppPalette.blue.withValues(alpha:0.08), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.campaign_outlined, color: AppPalette.blue, size: 26)),
             const SizedBox(height: 16),
             const Text('Flux vide', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
             const SizedBox(height: 4),
@@ -251,7 +251,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.01), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,7 +263,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
               children: [
                 Container(
                   width: 38, height: 38,
-                  decoration: BoxDecoration(color: typeConfig.color.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: typeConfig.color.withValues(alpha:0.08), borderRadius: BorderRadius.circular(8)),
                   child: Icon(typeConfig.icon, color: typeConfig.color, size: 18),
                 ),
                 const SizedBox(width: 14),
@@ -288,7 +288,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(color: statusColor.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
                       child: Row(
                         children: [
                           Container(width: 5, height: 5, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
@@ -341,7 +341,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                 IconButton(
                   onPressed: () => _showDeleteConfirmation(a),
                   icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
-                  style: IconButton.styleFrom(hoverColor: Colors.red.withOpacity(0.05)),
+                  style: IconButton.styleFrom(hoverColor: Colors.red.withValues(alpha:0.05)),
                 ),
               ],
             ),
@@ -354,9 +354,9 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
   Widget _buildCardTag(String text, Color color, {bool isFilled = true}) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: isFilled ? color.withOpacity(0.08) : Colors.transparent,
+          color: isFilled ? color.withValues(alpha:0.08) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          border: isFilled ? null : Border.all(color: color.withOpacity(0.3)),
+          border: isFilled ? null : Border.all(color: color.withValues(alpha:0.3)),
         ),
         child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
       );
@@ -698,7 +698,7 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: cfg.color.withOpacity(0.04), borderRadius: BorderRadius.circular(8), border: Border.all(color: cfg.color.withOpacity(0.15))),
+      decoration: BoxDecoration(color: cfg.color.withValues(alpha:0.04), borderRadius: BorderRadius.circular(8), border: Border.all(color: cfg.color.withValues(alpha:0.15))),
       child: Row(
         children: [
           Icon(cfg.icon, size: 16, color: cfg.color),

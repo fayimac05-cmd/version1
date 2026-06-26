@@ -103,7 +103,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         Color(0xFFFFF8E1), Color(0xFFFFF3E0)],
           begin: Alignment.topLeft, end: Alignment.bottomRight),
       borderRadius: BorderRadius.circular(AdminTheme.radiusCard),
-      border: Border.all(color: AdminTheme.accent.withOpacity(0.3)),
+      border: Border.all(color: AdminTheme.accent.withValues(alpha:0.3)),
     ),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Container(width: 36, height: 36,
@@ -132,8 +132,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white, borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AdminTheme.accent.withOpacity(0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+        border: Border.all(color: AdminTheme.accent.withValues(alpha:0.3)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04),
             blurRadius: 4, offset: const Offset(0, 1))],
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -251,7 +251,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Text(module, style: AdminTheme.caption),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          AdminTheme.badge(sl, sc, sc.withOpacity(0.1)),
+          AdminTheme.badge(sl, sc, sc.withValues(alpha:0.1)),
           const SizedBox(height: 3),
           Text(date, style: AdminTheme.caption),
         ]),
@@ -326,7 +326,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             isCurved: true, color: AdminTheme.primary,
             barWidth: 2.5,
             belowBarData: BarAreaData(show: true,
-                color: AdminTheme.primaryLight.withOpacity(0.5)),
+                color: AdminTheme.primaryLight.withValues(alpha:0.5)),
             dotData: const FlDotData(show: false),
           ),
         ],
@@ -413,7 +413,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: bg,
           borderRadius: BorderRadius.circular(AdminTheme.radiusSmall),
-          border: Border.all(color: fg.withOpacity(0.3))),
+          border: Border.all(color: fg.withValues(alpha:0.3))),
       child: Text(label, style: TextStyle(fontSize: 11,
           fontWeight: FontWeight.w700, color: fg)),
     ),

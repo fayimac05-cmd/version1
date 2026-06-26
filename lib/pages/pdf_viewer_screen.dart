@@ -50,7 +50,7 @@ class PdfViewerScreen extends StatelessWidget {
         children: [
           // Bandeau fichier
           Container(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha:0.12),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Row(
               children: [
@@ -73,7 +73,7 @@ class PdfViewerScreen extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha:0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -173,7 +173,7 @@ class _Tableau extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha:0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -228,7 +228,7 @@ class _Tableau extends StatelessWidget {
               children: [
                 // En-tête jours
                 TableRow(
-                  decoration: BoxDecoration(color: color.withOpacity(0.12)),
+                  decoration: BoxDecoration(color: color.withValues(alpha:0.12)),
                   children: ['HORAIRES', ...jours]
                       .map(
                         (j) => TableCell(
@@ -284,7 +284,7 @@ class _Tableau extends StatelessWidget {
                             vertical: 6,
                             horizontal: 4,
                           ),
-                          color: color.withOpacity(0.06),
+                          color: color.withValues(alpha:0.06),
                           child: Text(
                             h,
                             style: TextStyle(
@@ -304,7 +304,7 @@ class _Tableau extends StatelessWidget {
                             height: 85,
                             padding: const EdgeInsets.all(5),
                             color: content != null
-                                ? const Color(0xFFFBBF24).withOpacity(0.28)
+                                ? const Color(0xFFFBBF24).withValues(alpha:0.28)
                                 : Colors.white,
                             child: content != null
                                 ? Text(
@@ -398,7 +398,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
                       height: 72,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: color.withOpacity(0.1),
+                        color: color.withValues(alpha:0.1),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
@@ -490,7 +490,7 @@ class _AttestationMock extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha:0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -533,7 +533,7 @@ class _AttestationMock extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha:0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.school_rounded, color: color, size: 24),
@@ -543,7 +543,7 @@ class _AttestationMock extends StatelessWidget {
           const SizedBox(height: 12),
           Container(
             height: 1,
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha:0.3),
           ),
           const SizedBox(height: 24),
 
@@ -653,7 +653,7 @@ class _AttestationMock extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: const Color(0xFF1D4ED8).withOpacity(0.6),
+                          color: const Color(0xFF1D4ED8).withValues(alpha:0.6),
                           width: 2.5,
                         ),
                       ),
@@ -663,7 +663,7 @@ class _AttestationMock extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: const Color(0xFF1D4ED8).withOpacity(0.6),
+                            color: const Color(0xFF1D4ED8).withValues(alpha:0.6),
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -679,7 +679,7 @@ class _AttestationMock extends StatelessWidget {
                         decoration: BoxDecoration(
                           border: Border.all(color: const Color(0xFF1D4ED8)),
                           borderRadius: BorderRadius.circular(4),
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha:0.9),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,

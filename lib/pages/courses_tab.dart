@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
+import '../widgets/app_bubble_bg.dart';
 
 class CoursesTab extends StatefulWidget {
   const CoursesTab({super.key});
@@ -62,64 +63,45 @@ class _CoursesTabState extends State<CoursesTab> {
     return Column(children: [
 
       // ── Header ─────────────────────────────────────────────────────
-      Container(
-        color: AppPalette.white,
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-        child: Column(children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(width: 48, height: 48,
-                decoration: BoxDecoration(color: AppPalette.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.menu_book_rounded, color: AppPalette.blue, size: 26)),
-            const SizedBox(width: 14),
-            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Mes Cours', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold,
-                  color: Color(0xFF121212), letterSpacing: -0.3)),
-              SizedBox(height: 2),
-              Text('Licence Informatique L2',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
-            ])),
-            if (_nbNouveaux > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      AppPageHeader(
+        title: 'Mes Cours',
+        subtitle: 'Licence Informatique L2',
+        trailing: _nbNouveaux > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1DB954).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF1DB954).withOpacity(0.3)),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.fiber_new_rounded, color: Color(0xFF15803D), size: 18),
-                  const SizedBox(width: 5),
-                  Text('$_nbNouveaux nouveau${_nbNouveaux > 1 ? 'x' : ''}',
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF15803D),
-                          fontWeight: FontWeight.w700)),
-                ]),
-              ),
-          ]),
-          const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0))),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _recherche = v),
-              style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
-              decoration: InputDecoration(
-                hintText: 'Rechercher un cours, module, prof...',
-                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B), size: 22),
-                suffixIcon: _recherche.isNotEmpty
-                    ? IconButton(icon: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
-                        onPressed: () { _searchCtrl.clear(); setState(() => _recherche = ''); })
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
+                    color: AppPalette.yellow,
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text('$_nbNouveaux nouveau${_nbNouveaux > 1 ? 'x' : ''}',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF3A2A00))),
+              )
+            : null,
+        bottomWidget: Container(
+          decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (v) => setState(() => _recherche = v),
+            style: const TextStyle(fontSize: 14, color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Rechercher un cours, module, prof...',
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 14),
+              prefixIcon: Icon(Icons.search, color: Colors.white.withValues(alpha: 0.7), size: 20),
+              suffixIcon: _recherche.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.close, size: 18, color: Colors.white.withValues(alpha: 0.7)),
+                      onPressed: () { _searchCtrl.clear(); setState(() => _recherche = ''); })
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
-          const SizedBox(height: 16),
-        ]),
+        ),
       ),
 
       // ── Filtres ─────────────────────────────────────────────────────
@@ -151,7 +133,7 @@ class _CoursesTabState extends State<CoursesTab> {
                   color: selected ? color : AppPalette.white,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: selected ? color : const Color(0xFFE2E8F0), width: 1.5),
-                  boxShadow: selected ? [BoxShadow(color: color.withOpacity(0.25),
+                  boxShadow: selected ? [BoxShadow(color: color.withValues(alpha:0.25),
                       blurRadius: 8, offset: const Offset(0, 2))] : [],
                 ),
                 child: Text(
@@ -173,7 +155,7 @@ class _CoursesTabState extends State<CoursesTab> {
         child: filtered.isEmpty
             ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.search_off_rounded, size: 70,
-                    color: const Color(0xFF64748B).withOpacity(0.35)),
+                    color: const Color(0xFF64748B).withValues(alpha:0.35)),
                 const SizedBox(height: 16),
                 const Text('Aucun cours trouvé', style: TextStyle(fontSize: 18,
                     fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
@@ -195,14 +177,14 @@ class _CoursesTabState extends State<CoursesTab> {
       decoration: BoxDecoration(
         color: AppPalette.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isNew ? color.withOpacity(0.4) : const Color(0xFFE2E8F0),
+        border: Border.all(color: isNew ? color.withValues(alpha:0.4) : const Color(0xFFE2E8F0),
             width: isNew ? 1.5 : 1),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05),
             blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [
         Container(width: 58, height: 58,
-            decoration: BoxDecoration(color: color.withOpacity(0.1),
+            decoration: BoxDecoration(color: color.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(14)),
             child: Stack(children: [
               Center(child: Icon(Icons.picture_as_pdf_rounded, color: color, size: 32)),
@@ -214,7 +196,7 @@ class _CoursesTabState extends State<CoursesTab> {
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(color: color.withOpacity(0.1),
+              decoration: BoxDecoration(color: color.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(6)),
               child: Text(cours['module'], style: TextStyle(fontSize: 11,
                   fontWeight: FontWeight.w700, color: color),
@@ -245,7 +227,7 @@ class _CoursesTabState extends State<CoursesTab> {
             child: Container(width: 46, height: 46,
                 decoration: BoxDecoration(color: color,
                     borderRadius: BorderRadius.circular(13),
-                    boxShadow: [BoxShadow(color: color.withOpacity(0.35),
+                    boxShadow: [BoxShadow(color: color.withValues(alpha:0.35),
                         blurRadius: 8, offset: const Offset(0, 3))]),
                 child: const Icon(Icons.download_rounded, color: Colors.white, size: 24)),
           ),
@@ -291,7 +273,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
                   decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1DB954)),
                   child: const Icon(Icons.check_rounded, color: Colors.white, size: 40))
               : Container(key: const ValueKey('l'), width: 72, height: 72,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: color.withOpacity(0.1)),
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: color.withValues(alpha:0.1)),
                   child: Padding(padding: const EdgeInsets.all(12),
                       child: CircularProgressIndicator(value: _progress, color: color, strokeWidth: 4))),
         ),
