@@ -212,7 +212,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                 width: 40, height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white, borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _panelOuvert ? _brandBlue.withOpacity(0.3) : _border),
+                  border: Border.all(color: _panelOuvert ? _brandBlue.withValues(alpha:0.3) : _border),
                 ),
                 child: Stack(alignment: Alignment.center, children: [
                   Icon(_panelOuvert ? Icons.notifications_rounded : Icons.notifications_none_rounded, color: _panelOuvert ? _brandBlue : _textMain, size: 20),
@@ -242,7 +242,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
                   width: 96, height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle, border: Border.all(color: _bgGlobal, width: 4),
-                    color: _brandBlue.withOpacity(0.08),
+                    color: _brandBlue.withValues(alpha:0.08),
                   ),
                   child: _photoFile != null
                       ? ClipOval(child: Image.file(_photoFile!, width: 96, height: 96, fit: BoxFit.cover))
@@ -381,7 +381,7 @@ _bentoCard(
         Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: color.withValues(alpha:0.08), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 12),
@@ -433,6 +433,8 @@ _bentoCard(
       ]),
     );
   }
+
+  Widget _customDivider() => const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0));
 
   Widget _switchRow(String label, bool value, ValueChanged<bool> onChanged) {
     return Padding(
@@ -507,7 +509,7 @@ class _NotifPanel extends StatelessWidget {
     return Stack(children: [
       Positioned.fill(child: GestureDetector(onTap: onFermer, behavior: HitTestBehavior.opaque, child: const ColoredBox(color: Colors.transparent))),
       Positioned(top: top, right: right, child: Material(
-        elevation: 16, borderRadius: BorderRadius.circular(20), shadowColor: Colors.black.withOpacity(0.08),
+        elevation: 16, borderRadius: BorderRadius.circular(20), shadowColor: Colors.black.withValues(alpha:0.08),
         child: Container(
           width: 320, constraints: const BoxConstraints(maxHeight: 400),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE2E8F0))),
@@ -564,7 +566,7 @@ class _NotifItem extends StatelessWidget {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
             padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: _color.withOpacity(0.08), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: _color.withValues(alpha:0.08), shape: BoxShape.circle),
             child: Icon(_icone, color: _color, size: 16),
           ),
           const SizedBox(width: 12),

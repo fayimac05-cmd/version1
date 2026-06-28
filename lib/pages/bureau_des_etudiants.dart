@@ -42,7 +42,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
               borderRadius: BorderRadius.circular(40),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha:0.08),
                   blurRadius: 24,
                   offset: const Offset(0, 10),
                 ),
@@ -252,7 +252,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha:0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -419,7 +419,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha:0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -602,7 +602,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha:0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -802,7 +802,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
+                              color: Colors.black.withValues(alpha:0.03),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),

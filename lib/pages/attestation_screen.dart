@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'pdf_viewer_screen.dart';
+import '../widgets/app_bubble_bg.dart';
 
 class AttestationScreen extends StatefulWidget {
   final StudentProfile profile;
@@ -67,26 +68,14 @@ class _AttestationScreenState extends State<AttestationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text(
-          'Attestations d\'inscription',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: AppPalette.blue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
+      appBar: blueAppBar('Attestations', context: context),
       body: Column(
         children: [
           // Banner Info
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: AppPalette.blue.withOpacity(0.06),
+            color: AppPalette.blue.withValues(alpha:0.06),
             child: Row(
               children: [
                 const Icon(Icons.info_outline, color: AppPalette.blue, size: 22),
@@ -96,7 +85,7 @@ class _AttestationScreenState extends State<AttestationScreen> {
                     'Vos documents officiels signés numériquement par l\'IST. Prêts à être téléchargés ou partagés.',
                     style: TextStyle(
                       fontSize: 13,
-                      color: AppPalette.blue.withOpacity(0.9),
+                      color: AppPalette.blue.withValues(alpha:0.9),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -127,7 +116,7 @@ class _AttestationScreenState extends State<AttestationScreen> {
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha:0.02),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -145,7 +134,7 @@ class _AttestationScreenState extends State<AttestationScreen> {
                                 color: (isReady
                                         ? AppPalette.blue
                                         : AppPalette.yellow)
-                                    .withOpacity(0.1),
+                                    .withValues(alpha:0.1),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
@@ -180,8 +169,8 @@ class _AttestationScreenState extends State<AttestationScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: isReady
-                                    ? const Color(0xFF15803D).withOpacity(0.1)
-                                    : const Color(0xFFD97706).withOpacity(0.1),
+                                    ? const Color(0xFF15803D).withValues(alpha:0.1)
+                                    : const Color(0xFFD97706).withValues(alpha:0.1),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
@@ -273,7 +262,7 @@ class _AttestationScreenState extends State<AttestationScreen> {
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: const Color(0xFFD97706)
-                                                  .withOpacity(0.9),
+                                                  .withValues(alpha:0.9),
                                               fontWeight: FontWeight.w500,
                                               fontStyle: FontStyle.italic,
                                             ),

@@ -97,11 +97,11 @@ class _AdminMembresState extends State<AdminMembres> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSuperAdmin ? AdminTheme.primary.withOpacity(0.3) : const Color(0xFFE5E7EB),
+          color: isSuperAdmin ? AdminTheme.primary.withValues(alpha:0.3) : const Color(0xFFE5E7EB),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha:0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           )
@@ -166,7 +166,7 @@ class _AdminMembresState extends State<AdminMembres> {
                     color: e.value ? AdminTheme.successLight : const Color(0xFFF5F7FA),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: e.value ? AdminTheme.success.withOpacity(0.3) : const Color(0xFFE5E7EB),
+                      color: e.value ? AdminTheme.success.withValues(alpha:0.3) : const Color(0xFFE5E7EB),
                     ),
                   ),
                   child: Row(

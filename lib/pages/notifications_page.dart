@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../theme/app_palette.dart';
+import '../widgets/app_bubble_bg.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -49,40 +51,31 @@ class NotificationsPage extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        shadowColor: const Color(0xFFE2E8F0),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF64748B)),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Notifications',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {},
-            child: const Text(
-              'Tout lire',
-              style: TextStyle(
-                fontSize: 13,
-                color: Color(0xFF0A4DA2),
-                fontWeight: FontWeight.w600,
+      backgroundColor: const Color(0xFFEEF4FB),
+      body: Column(
+        children: [
+          AppPageHeader(
+            title: 'Notifications',
+            subtitle: '${notifications.length} non lues',
+            onBack: () => Navigator.of(context).pop(),
+            trailing: GestureDetector(
+              onTap: () {},
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(20)),
+                child: const Text('Tout lire',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600)),
               ),
             ),
           ),
-        ],
-      ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
         itemCount: notifications.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
@@ -94,7 +87,7 @@ class NotificationsPage extends StatelessWidget {
               border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
+                  color: Colors.black.withValues(alpha:0.03),
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
@@ -150,6 +143,9 @@ class NotificationsPage extends StatelessWidget {
             ),
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }

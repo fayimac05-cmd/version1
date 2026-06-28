@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'home_tab.dart';
+import 'planning_tab.dart';
 import 'profile_tab.dart';
 import 'notifications_page.dart';
+import 'chat_ia_screen.dart';
 
 class StudentShell extends StatefulWidget {
   const StudentShell({
@@ -24,135 +26,203 @@ class _StudentShellState extends State<StudentShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Détection de la largeur de l'écran
-    final double width = MediaQuery.of(context).size.width;
-    final bool isLargeScreen = width >= 768; // Mode Tablette / PC
-
-    // Liste des pages principales
     final pages = [
       HomeTab(profile: widget.profile),
       NotificationsPage(),
-      const CoursesTab(),
+      const PlanningTab(),
+      ChatIAScreen(profile: widget.profile, showBack: false),
       ProfileTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
         child: KeyedSubtree(
           key: ValueKey(_currentTab),
           child: pages[_currentTab],
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.home_outlined, Icons.home_rounded,
-                    'Accueil', 0),
-                _buildNavItem(
-                    Icons.notifications_outlined,
-                    Icons.notifications_rounded,
-                    'Notifications',
-                    1,
-                    badge: 3),
-                // Center home button (elevated)
-                _buildCenterButton(),
-                _buildNavItem(Icons.person_outline, Icons.person_rounded,
-                    'Profil', 3),
-              ],
-            ),
+      bottomNavigationBar: _buildNavBar(),
+    );
+  }
+
+  Widget _buildNavBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _navItem(
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
+                label: 'Accueil',
+                index: 0,
+                activeColor: AppPalette.blue,
+              ),
+              _navItem(
+                icon: Icons.notifications_outlined,
+                activeIcon: Icons.notifications_rounded,
+                label: 'Notifs',
+                index: 1,
+                activeColor: AppPalette.yellow,
+                badge: 3,
+              ),
+              _centerBtn(),
+              _navItem(
+                icon: Icons.smart_toy_outlined,
+                activeIcon: Icons.smart_toy_rounded,
+                label: 'Chat IA',
+                index: 3,
+                activeColor: AppPalette.blue,
+              ),
+              _navItem(
+                icon: Icons.person_outline_rounded,
+                activeIcon: Icons.person_rounded,
+                label: 'Profil',
+                index: 4,
+                activeColor: const Color(0xFF42A5F5),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(
-      IconData icon, IconData activeIcon, String label, int index,
-      {int? badge}) {
-    final isSelected = _currentTab == index;
+  Widget _navItem({
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    required int index,
+    required Color activeColor,
+    int? badge,
+  }) {
+    final isActive = _currentTab == index;
+    final bgColor = isActive
+        ? activeColor.withValues(alpha: 0.13)
+        : const Color(0xFFF4F5F7);
+
     return GestureDetector(
       onTap: () => setState(() => _currentTab = index),
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: SizedBox(
+        width: 56,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Stack(
+              clipBehavior: Clip.none,
               children: [
-                Icon(
-                  isSelected ? activeIcon : icon,
-                  color: isSelected ? AppPalette.blue : AppPalette.grey,
-                  size: 24,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 42,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      isActive ? activeIcon : icon,
+                      size: 22,
+                      color: isActive ? activeColor : const Color(0xFF9CA3AF),
+                    ),
+                  ),
                 ),
                 if (badge != null)
                   Positioned(
-                    top: -2,
+                    top: -4,
                     right: -4,
                     child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: AppPalette.yellow,
                         shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
                       ),
                       child: Center(
                         child: Text('$badge',
                             style: const TextStyle(
-                                color: Colors.white,
+                                color: Color(0xFF3A2A00),
                                 fontSize: 8,
-                                fontWeight: FontWeight.bold)),
+                                fontWeight: FontWeight.w800)),
                       ),
                     ),
                   ),
               ],
             ),
             const SizedBox(height: 4),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10,
-                    color: isSelected ? AppPalette.blue : AppPalette.grey,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal)),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? activeColor : const Color(0xFF9CA3AF),
+              ),
+              child: Text(label),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCenterButton() {
+  Widget _centerBtn() {
+    final isActive = _currentTab == 2;
     return GestureDetector(
-      onTap: () => setState(() => _currentTab = 0),
-      child: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          color: AppPalette.blue,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppPalette.blue.withValues(alpha: 0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+      onTap: () => setState(() => _currentTab = 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: isActive ? AppPalette.darkBlue : const Color(0xFF1A3F6F),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppPalette.blue.withValues(alpha: 0.40),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: const Icon(Icons.home_rounded, color: Colors.white, size: 26),
+            child: const Icon(Icons.calendar_month_rounded,
+                color: Colors.white, size: 24),
+          ),
+          const SizedBox(height: 4),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 200),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: _currentTab == 2
+                  ? const Color(0xFF1A3F6F)
+                  : const Color(0xFF9CA3AF),
+            ),
+            child: const Text('Planning'),
+          ),
+        ],
       ),
     );
   }

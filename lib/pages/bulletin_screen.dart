@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_bubble_bg.dart';
 
 class BulletinScreen extends StatelessWidget {
   const BulletinScreen({super.key});
@@ -52,20 +53,7 @@ class BulletinScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bgSlate,
-      appBar: AppBar(
-        title: const Text(
-          'Relevés de Notes & Transcripts',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.5),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: textMain,
-        elevation: 0,
-        centerTitle: true,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
-        ),
-      ),
+      appBar: blueAppBar('Relevés de Notes', context: context),
       // CORRECTION 2 : Le Padding enveloppe maintenant le PageView.builder
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -82,7 +70,7 @@ class BulletinScreen extends StatelessWidget {
                 border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0F172A).withOpacity(0.04),
+                    color: const Color(0xFF0F172A).withValues(alpha:0.04),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   )
@@ -101,7 +89,7 @@ class BulletinScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: brandBlue.withOpacity(0.08),
+                            color: brandBlue.withValues(alpha:0.08),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: const Icon(Icons.school_rounded, color: brandBlue, size: 28),
@@ -226,21 +214,21 @@ class BulletinScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            border: Border.all(color: brandBlue.withOpacity(0.4), width: 2),
+                            border: Border.all(color: brandBlue.withValues(alpha:0.4), width: 2),
                             borderRadius: BorderRadius.circular(12),
-                            color: brandBlue.withOpacity(0.02),
+                            color: brandBlue.withValues(alpha:0.02),
                           ),
                           child: Column(
                             children: [
-                              Icon(Icons.verified_user_rounded, color: brandBlue.withOpacity(0.6), size: 24),
+                              Icon(Icons.verified_user_rounded, color: brandBlue.withValues(alpha:0.6), size: 24),
                               const SizedBox(height: 2),
                               Text(
                                 'CERTIFIÉ ${b['sigle']}',
-                                style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: brandBlue.withOpacity(0.7), letterSpacing: 0.5),
+                                style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: brandBlue.withValues(alpha:0.7), letterSpacing: 0.5),
                               ),
                               Text(
                                 'SECURE RECORD',
-                                style: TextStyle(fontSize: 7, fontWeight: FontWeight.w500, color: brandBlue.withOpacity(0.5)),
+                                style: TextStyle(fontSize: 7, fontWeight: FontWeight.w500, color: brandBlue.withValues(alpha:0.5)),
                               ),
                             ],
                           ),

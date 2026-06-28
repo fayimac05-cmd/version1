@@ -70,6 +70,24 @@ class _LoginPageState extends State<LoginPage> {
       'role': 'bde',
       'motDePasse': 'bde123',
     },
+    '24IST-PROF/001': {
+      'nom': 'KABORÉ',
+      'prenoms': 'Serge',
+      'filiere': 'Réseaux et Télécommunications',
+      'domaine': 'Sciences & Technologies',
+      'niveau': '',
+      'role': 'professeur',
+      'motDePasse': 'prof123',
+    },
+    '24IST-PROF/002': {
+      'nom': 'TRAORÉ',
+      'prenoms': 'Aminata',
+      'filiere': 'Informatique & Gestion',
+      'domaine': 'Sciences & Technologies',
+      'niveau': '',
+      'role': 'professeur',
+      'motDePasse': 'prof456',
+    },
   };
 
   @override
@@ -191,29 +209,57 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: AppPalette.white,
       body: Stack(
         children: [
-          // Blue decorative header
+          // Grande bulle bleue haut-gauche
           Positioned(
-            top: -40,
-            left: -60,
+            top: -80,
+            left: -80,
             child: Container(
-              width: 220,
-              height: 220,
+              width: 280,
+              height: 280,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xFF0A4DA2),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF0A3D91), Color(0xFF1565C0)],
+                ),
               ),
             ),
           ),
+          // Bulle bleue haut-droit
           Positioned(
-            top: -20,
-            right: -30,
+            top: -50,
+            right: -50,
             child: Container(
-              width: 140,
-              height: 140,
+              width: 200,
+              height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF1565C0).withValues(alpha: 0.6),
+                color: const Color(0xFF1565C0).withValues(alpha: 0.55),
               ),
+            ),
+          ),
+          // Petite bulle jaune
+          Positioned(
+            top: 85,
+            right: 85,
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: const BoxDecoration(
+                  shape: BoxShape.circle, color: AppPalette.yellow),
+            ),
+          ),
+          // Bulle bleue claire bas-gauche
+          Positioned(
+            bottom: 180,
+            left: -30,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppPalette.blue.withValues(alpha: 0.06)),
             ),
           ),
 
@@ -234,19 +280,45 @@ class _LoginPageState extends State<LoginPage> {
 
                   const SizedBox(height: 40),
 
-                  // Title
+                  // Logo + Title
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          color: AppPalette.yellow,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.school_rounded,
+                            color: AppPalette.blue, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'ScolarHub',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 32),
+
                   const Text(
-                    'Se connecter',
+                    'Bon retour !',
                     style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
                       color: AppPalette.black,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
+                  const SizedBox(height: 6),
+                  Text(
                     'Connectez-vous avec votre matricule',
-                    style: TextStyle(fontSize: 14, color: AppPalette.grey),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   ),
 
                   const SizedBox(height: 40),

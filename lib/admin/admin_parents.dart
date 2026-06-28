@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../admin/admin_etudiants.dart';
+import '../models/etudiant_model.dart';
 import '../utils/snackbar_helper.dart';
 
 class Parent {
@@ -91,7 +92,7 @@ class _AdminParentsState extends State<AdminParents> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -162,9 +163,9 @@ class _AdminParentsState extends State<AdminParents> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
+            color: color.withValues(alpha:0.08),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withOpacity(0.2)),
+            border: Border.all(color: color.withValues(alpha:0.2)),
           ),
           child: Center(child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color))),
         ),
@@ -304,5 +305,17 @@ class _AdminParentsState extends State<AdminParents> {
         child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
       );
 
-  void _snack(String msg) => showAppSnackBar(context, msg);
+  Widget _input(TextEditingController ctrl, String hint,
+      {TextInputType type = TextInputType.text}) =>
+      Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE5E7EB))),
+        child: TextField(controller: ctrl, keyboardType: type,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(hintText: hint,
+                hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))));
 }

@@ -97,8 +97,8 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
       decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: ev.ouverte
-              ? AdminTheme.success.withOpacity(0.3) : const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+              ? AdminTheme.success.withValues(alpha:0.3) : const Color(0xFFE5E7EB)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04),
               blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(padding: const EdgeInsets.all(16),
@@ -129,7 +129,7 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
           ])),
 
         // Résultats par prof
-        if (hasResultats) ...[
+        if (ev.resultats.isNotEmpty) ...[
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           Padding(padding: const EdgeInsets.all(14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -146,7 +146,7 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
                   child: Row(children: [
                     Container(width: 34, height: 34,
                       decoration: BoxDecoration(
-                          color: const Color(0xFF7C3AED).withOpacity(0.1),
+                          color: const Color(0xFF7C3AED).withValues(alpha:0.1),
                           shape: BoxShape.circle),
                       child: Center(child: Text(prof[0],
                           style: const TextStyle(fontSize: 13,
@@ -192,14 +192,19 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
                   _snack('Période d\'évaluation clôturée.'); })),
               const SizedBox(width: 8),
             ],
-            if (hasResultats)
+            if (ev.resultats.isNotEmpty)
               Expanded(child: _btn('📊 Voir rapport complet',
                   AdminTheme.primary, AdminTheme.primaryLight,
                 () => _snack('📊 Rapport en cours de génération...'))),
             if (!ev.ouverte && ev.dateDebut.isEmpty)
               Expanded(child: _btn('🟢 Ouvrir la période',
                   AdminTheme.success, AdminTheme.successLight,
-                () => _ouvrirPeriodeFiliere(ev))),
+                () {
+                  setState(() {
+                    ev.ouverte = true;
+                  });
+                  _snack('Période d\'évaluation ouverte pour ${ev.filiere}.');
+                })),
           ])),
       ]));
   }
@@ -239,7 +244,7 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
       GestureDetector(onTap: onTap,
         child: Container(padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: fg.withOpacity(0.3))),
+              border: Border.all(color: fg.withValues(alpha:0.3))),
           child: Center(child: Text(label, style: TextStyle(fontSize: 12,
               fontWeight: FontWeight.w700, color: fg)))));
 

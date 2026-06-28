@@ -546,7 +546,7 @@ class _AuthPageState extends State<AuthPage> {
                 decoration: BoxDecoration(
                   color: AppPalette.lightBlue,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppPalette.blue.withOpacity(0.2)),
+                  border: Border.all(color: AppPalette.blue.withValues(alpha:0.2)),
                 ),
                 child: Text(
                   e.campus.isNotEmpty
@@ -971,14 +971,14 @@ class _AuthPageState extends State<AuthPage> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [rc, rc.withOpacity(0.78)],
+          colors: [rc, rc.withValues(alpha:0.78)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: rc.withOpacity(0.3),
+            color: rc.withValues(alpha:0.3),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -991,7 +991,7 @@ class _AuthPageState extends State<AuthPage> {
             height: 58,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha:0.2),
             ),
             child: Center(
               child: Text(
@@ -1040,7 +1040,7 @@ class _AuthPageState extends State<AuthPage> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.22),
+                      color: Colors.white.withValues(alpha:0.22),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -1062,7 +1062,7 @@ class _AuthPageState extends State<AuthPage> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha:0.18),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -1082,7 +1082,7 @@ class _AuthPageState extends State<AuthPage> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.3),
+                          color: Colors.orange.withValues(alpha:0.3),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text(
@@ -1145,7 +1145,7 @@ class _AuthPageState extends State<AuthPage> {
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
+                      color: Colors.black.withValues(alpha:0.06),
                       blurRadius: 4,
                       offset: const Offset(0, 1),
                     ),
@@ -1200,7 +1200,7 @@ class _AuthPageState extends State<AuthPage> {
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.03),
+          color: Colors.black.withValues(alpha:0.03),
           blurRadius: 6,
           offset: const Offset(0, 2),
         ),
@@ -1233,7 +1233,7 @@ class _AuthPageState extends State<AuthPage> {
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.03),
+          color: Colors.black.withValues(alpha:0.03),
           blurRadius: 6,
           offset: const Offset(0, 2),
         ),
@@ -1297,7 +1297,7 @@ class _AuthPageState extends State<AuthPage> {
     decoration: BoxDecoration(
       color: AppPalette.lightBlue,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppPalette.blue.withOpacity(0.2)),
+      border: Border.all(color: AppPalette.blue.withValues(alpha:0.2)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1347,7 +1347,7 @@ class _AuthPageState extends State<AuthPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: AppPalette.blue.withOpacity(0.1),
+            color: AppPalette.blue.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
@@ -1452,3 +1452,4 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 }
+   

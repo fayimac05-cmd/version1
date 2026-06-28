@@ -45,7 +45,7 @@ class ParentProfileTab extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(18),
                         decoration: ParentStyles.cardDecoration(
-                          border: Border.all(color: ParentStyles.primary.withOpacity(0.15)),
+                          border: Border.all(color: ParentStyles.primary.withValues(alpha:0.15)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +63,7 @@ class ParentProfileTab extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    color: ParentStyles.primary.withOpacity(0.8),
+                                    color: ParentStyles.primary.withValues(alpha:0.8),
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -179,7 +179,7 @@ class ParentProfileTab extends StatelessWidget {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            backgroundColor: ParentStyles.danger.withOpacity(0.02),
+                            backgroundColor: ParentStyles.danger.withValues(alpha:0.02),
                           ),
                         ),
                       ),
@@ -241,7 +241,7 @@ class ParentProfileTab extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 22),

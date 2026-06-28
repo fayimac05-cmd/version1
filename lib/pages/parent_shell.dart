@@ -56,7 +56,7 @@ class _ParentShellState extends State<ParentShell> {
       ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: AppPalette.white,
-        indicatorColor: AppPalette.yellow.withOpacity(0.45),
+        indicatorColor: AppPalette.yellow.withValues(alpha:0.45),
         selectedIndex: _currentTab,
         onDestinationSelected: (index) => setState(() => _currentTab = index),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
@@ -126,9 +126,9 @@ class _ParentAccueilTab extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppPalette.yellow.withOpacity(0.12),
+              color: AppPalette.yellow.withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppPalette.yellow.withOpacity(0.35)),
+              border: Border.all(color: AppPalette.yellow.withValues(alpha:0.35)),
             ),
             child: Row(
               children: [
@@ -234,9 +234,9 @@ class _AlerteItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: couleur.withOpacity(0.05),
+        color: couleur.withValues(alpha:0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: couleur.withOpacity(0.2)),
+        border: Border.all(color: couleur.withValues(alpha:0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,9 +283,9 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha:0.3)),
         ),
         child: Column(
           children: [
@@ -391,9 +391,9 @@ class _NoteCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha:0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha:0.25)),
       ),
       child: Row(
         children: [
@@ -411,7 +411,7 @@ class _NoteCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
+                    color: color.withValues(alpha:0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -500,7 +500,7 @@ class _ParentPlanningTab extends StatelessWidget {
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
+                        color: Colors.black.withValues(alpha:0.02),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -512,7 +512,7 @@ class _ParentPlanningTab extends StatelessWidget {
                         width: 90,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppPalette.blue.withOpacity(0.1),
+                          color: AppPalette.blue.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
