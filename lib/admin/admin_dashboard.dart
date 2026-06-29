@@ -149,17 +149,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _kpiRow(bool isDesktop) {
     final kpis = [
       {'label': 'Étudiants actifs', 'value': '247', 'sub': '+12 ce mois',
-       'icon': Icons.school_rounded, 'color': AdminTheme.primary,
-       'bg': AdminTheme.primaryLight, 'trend': true},
+       'icon': Icons.school_rounded, 'color': AdminTheme.iconFg,
+       'bg': AdminTheme.iconBg, 'trend': true},
       {'label': 'Professeurs actifs', 'value': '18', 'sub': 'Stable',
-       'icon': Icons.person_pin_rounded, 'color': AdminTheme.info,
-       'bg': AdminTheme.infoLight, 'trend': true},
+       'icon': Icons.person_pin_rounded, 'color': AdminTheme.iconFgAlt,
+       'bg': AdminTheme.iconBgAlt, 'trend': true},
       {'label': 'Filières ouvertes', 'value': '8', 'sub': '2024-2025',
-       'icon': Icons.school_rounded, 'color': Color(0xFF7C3AED),
-       'bg': Color(0xFFF5F3FF), 'trend': false},
+       'icon': Icons.school_rounded, 'color': AdminTheme.iconFg,
+       'bg': AdminTheme.iconBg, 'trend': false},
       {'label': 'Tickets vendus', 'value': '340/500', 'sub': '68% vendus',
-       'icon': Icons.confirmation_number_rounded, 'color': AdminTheme.warning,
-       'bg': AdminTheme.warningLight, 'trend': true},
+       'icon': Icons.confirmation_number_rounded, 'color': AdminTheme.iconFgAlt,
+       'bg': AdminTheme.iconBgAlt, 'trend': true},
     ];
 
     if (isDesktop) {
@@ -239,12 +239,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(children: [
         Container(width: 34, height: 34,
-          decoration: BoxDecoration(color: AdminTheme.primaryLight,
+          decoration: BoxDecoration(color: AdminTheme.iconBg,
               shape: BoxShape.circle),
           child: Center(child: Text(
             '${nom.split(' ')[0][0]}${nom.split(' ').length > 1 ? nom.split(' ')[1][0] : ''}',
             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
-                color: AdminTheme.primary)))),
+                color: AdminTheme.iconFg)))),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(nom, style: AdminTheme.headingSmall.copyWith(fontSize: 13)),
@@ -389,10 +389,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Row(children: [
       Container(width: 36, height: 36,
-        decoration: BoxDecoration(color: AdminTheme.warningLight,
+        decoration: BoxDecoration(color: AdminTheme.iconBgAlt,
             borderRadius: BorderRadius.circular(8)),
         child: const Icon(Icons.celebration_outlined,
-            color: AdminTheme.warning, size: 18)),
+            color: AdminTheme.iconFgAlt, size: 18)),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(titre, style: AdminTheme.headingSmall.copyWith(fontSize: 13)),
@@ -440,10 +440,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             Text(filiere, style: AdminTheme.caption),
           ])),
           Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: AdminTheme.primaryLight,
+            decoration: BoxDecoration(color: AdminTheme.iconBgAlt,
                 borderRadius: BorderRadius.circular(20)),
             child: Text(moy, style: const TextStyle(fontSize: 12,
-                fontWeight: FontWeight.w800, color: AdminTheme.primary))),
+                fontWeight: FontWeight.w800, color: AdminTheme.iconFgAlt))),
         ]));
 
   // ── Card template ─────────────────────────────────────────────────────
@@ -458,9 +458,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(width: 32, height: 32,
-              decoration: BoxDecoration(color: AdminTheme.primaryLight,
+              decoration: BoxDecoration(color: AdminTheme.iconBg,
                   borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: AdminTheme.primary, size: 17)),
+              child: Icon(icon, color: AdminTheme.iconFg, size: 17)),
             const SizedBox(width: 10),
             Expanded(child: Text(title, style: AdminTheme.headingSmall)),
             if (action != null)

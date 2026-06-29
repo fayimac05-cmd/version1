@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/app_palette.dart'; 
+import '../theme/app_palette.dart';
 import '../admin/admin_theme.dart';
-import '../admin/admin_widgets.dart';
-import '../utils/snackbar_helper.dart';
 
 // Déclaration globale de la couleur émeraude
 const Color emeraldColor = Color(0xFF10B981);

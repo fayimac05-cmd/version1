@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const ws = require('ws');
 require('dotenv').config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -7,7 +8,9 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANO
 let supabase = null;
 
 if (supabaseUrl && supabaseKey && supabaseKey !== 'placeholder') {
-  supabase = createClient(supabaseUrl, supabaseKey);
+  supabase = createClient(supabaseUrl, supabaseKey, {
+    realtime: { transport: ws },
+  });
   console.log('[Supabase] Client configure avec succes');
 } else {
   console.warn(

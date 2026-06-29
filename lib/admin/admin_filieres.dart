@@ -148,13 +148,13 @@ class _AdminFilieresState extends State<AdminFilieres> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                   decoration: BoxDecoration(
-                    color: AdminTheme.primary,
+                    color: AdminTheme.iconBgAlt,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: AdminTheme.primary.withValues(alpha:0.3),
+                    boxShadow: [BoxShadow(color: AdminTheme.iconBgAlt.withValues(alpha:0.3),
                         blurRadius: 8, offset: const Offset(0, 3))],
                   ),
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                    Icon(Icons.add_rounded, color: AdminTheme.iconFgAlt, size: 18),
                     SizedBox(width: 6),
                     Text('Nouvelle filière', style: TextStyle(fontSize: 14,
                         fontWeight: FontWeight.w700, color: Colors.white)),
@@ -241,9 +241,9 @@ class _AdminFilieresState extends State<AdminFilieres> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: active ? AdminTheme.primary : Colors.white,
+          color: active ? AdminTheme.iconBg : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active ? AdminTheme.primary : const Color(0xFFE5E7EB)),
+          border: Border.all(color: active ? AdminTheme.iconBg : const Color(0xFFE5E7EB)),
         ),
         child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
             color: active ? Colors.white : const Color(0xFF6B7280))),
@@ -351,7 +351,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
         Text(f.nom, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         const Divider(height: 1),
-        ListTile(leading: Icon(Icons.visibility_rounded, color: AdminTheme.primary),
+        ListTile(leading: Icon(Icons.visibility_rounded, color: AdminTheme.iconBg),
             title: const Text('Voir les détails'),
             onTap: () { Navigator.pop(context); _ouvrirDetail(f); }),
         ListTile(leading: const Icon(Icons.edit_rounded, color: Color(0xFF6B7280)),
@@ -367,9 +367,9 @@ class _AdminFilieresState extends State<AdminFilieres> {
 
   Widget _vide() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
     Container(width: 72, height: 72,
-      decoration: BoxDecoration(color: AdminTheme.primaryLight,
+      decoration: BoxDecoration(color: AdminTheme.iconBg,
           borderRadius: BorderRadius.circular(18)),
-      child: const Icon(Icons.school_outlined, color: AdminTheme.primary, size: 36)),
+      child: const Icon(Icons.school_outlined, color: AdminTheme.iconFg, size: 36)),
     const SizedBox(height: 16),
     const Text('Aucune filière trouvée', style: TextStyle(fontSize: 17,
         fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),

@@ -126,8 +126,8 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     final isPerm = type == 'Permanent';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: isPerm ? AdminTheme.primaryLight : AdminTheme.warningLight, borderRadius: BorderRadius.circular(8)),
-      child: Text(type, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isPerm ? AdminTheme.primary : AdminTheme.warning)),
+      decoration: BoxDecoration(color: isPerm ? AdminTheme.iconBg : AdminTheme.iconBgAlt, borderRadius: BorderRadius.circular(8)),
+      child: Text(type, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isPerm ? AdminTheme.iconFg : AdminTheme.iconFgAlt)),
     );
   }
 
@@ -172,7 +172,7 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
               _label('Type de contrat'),
               Row(children: ['Permanent', 'Vacataire', 'Invité'].map((c) {
                 final active = contrat == c;
-                return GestureDetector(onTap: () => setS(() => contrat = c), child: Container(margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), decoration: BoxDecoration(color: active ? AdminTheme.primary : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? AdminTheme.primary : const Color(0xFFE5E7EB))), child: Text(c, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? Colors.white : const Color(0xFF6B7280)))));
+                return GestureDetector(onTap: () => setS(() => contrat = c), child: Container(margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), decoration: BoxDecoration(color: active ? AdminTheme.iconBg : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? AdminTheme.iconBg : const Color(0xFFE5E7EB))), child: Text(c, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? Colors.white : const Color(0xFF6B7280)))));
               }).toList()),
             ]))),
             Padding(padding: const EdgeInsets.all(16), child: GestureDetector(
@@ -182,7 +182,7 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
                 Navigator.pop(ctx);
                 _snack('✅ ${prenomCtrl.text} ${nomCtrl.text} ajouté(e) !');
               },
-              child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 14), decoration: BoxDecoration(color: AdminTheme.primary, borderRadius: BorderRadius.circular(12)), child: const Center(child: Text('Enregistrer le professeur', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)))),
+              child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 14), decoration: BoxDecoration(color: AdminTheme.iconBgAlt, borderRadius: BorderRadius.circular(12)), child: const Center(child: Text('Enregistrer le professeur', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AdminTheme.iconFgAlt)))),
             )),
           ]),
         ),

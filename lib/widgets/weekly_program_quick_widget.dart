@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../pages/program_image_page.dart';
 import '../theme/app_palette.dart';
 
 class WeeklyProgramQuickWidget extends StatelessWidget {

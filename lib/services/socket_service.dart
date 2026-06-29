@@ -1,5 +1,3 @@
-import 'dart:async';
-
 class SocketService {
   static final SocketService _instance = SocketService._internal();
 

@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import '../pages/canal_screen.dart';
@@ -26,9 +29,14 @@ class _HomeTabState extends State<HomeTab> {
   Timer? _autoScroll;
   Timer? _quoteScroll;
 
+  // Annonces du backend
+  List<Map<String, dynamic>> _annonces = [];
+  bool _annoncesLoading = true;
+
   @override
   void initState() {
     super.initState();
+    _fetchAnnonces();
     _autoScroll = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
       final next = (_eventPage + 1) % _events.length;
@@ -41,6 +49,31 @@ class _HomeTabState extends State<HomeTab> {
       _quotesCtrl.animateToPage(next,
           duration: const Duration(milliseconds: 600), curve: Curves.easeInOut);
     });
+  }
+
+  Future<void> _fetchAnnonces() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      final response = await http.get(
+        Uri.parse('http://localhost:3000/api/admin/annonces'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _annonces = List<Map<String, dynamic>>.from(data['data'] ?? []);
+            _annoncesLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _annoncesLoading = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _annoncesLoading = false);
+    }
   }
 
   @override
@@ -727,89 +760,125 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  // ── Actualités carousel ───────────────────────────────────────────────────
+  // ── Actualités carousel (depuis le backend) ──────────────────────────────
+
+  static const _typeConfig = {
+    'urgent': (Icons.warning_amber_rounded, Color(0xFFEF4444), Color(0xFFFEF2F2), 'Urgent'),
+    'event':  (Icons.event_rounded,         Color(0xFF8B5CF6), Color(0xFFF5F3FF), 'Événement'),
+    'info':   (Icons.info_outline_rounded,  Color(0xFF0A4DA2), Color(0xFFEFF6FF), 'Info'),
+  };
 
   Widget _buildActualitesCarousel() {
+    final items = _annonces.isNotEmpty ? _annonces : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Actualités du campus', 'Voir tout'),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 130,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _news.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (_, i) => _newsCard(_news[i]),
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Annonces du campus',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A2A3A))),
+            GestureDetector(
+              onTap: _fetchAnnonces,
+              child: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF1A3F6F)),
+            ),
+          ],
         ),
+        const SizedBox(height: 10),
+        if (_annoncesLoading)
+          const SizedBox(height: 130,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+        else if (items == null || items.isEmpty)
+          _annonceVide()
+        else
+          SizedBox(
+            height: 130,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) => _annonceCard(items[i]),
+            ),
+          ),
       ],
     );
   }
 
-  Widget _newsCard(_NewsData n) {
+  Widget _annonceCard(Map<String, dynamic> a) {
+    final type = a['type'] as String? ?? 'info';
+    final cfg = _typeConfig[type] ?? _typeConfig['info']!;
+    final (icon, color, bgColor, label) = cfg;
+
+    // Formatage de la date
+    String dateStr = '';
+    try {
+      final dt = DateTime.parse(a['created_at'] as String);
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 60) {
+        dateStr = 'Il y a ${diff.inMinutes} min';
+      } else if (diff.inHours < 24) {
+        dateStr = 'Il y a ${diff.inHours}h';
+      } else {
+        dateStr = 'Il y a ${diff.inDays}j';
+      }
+    } catch (_) {}
+
     return Container(
       width: 260,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-            color: const Color(0xFF1A3F6F).withValues(alpha: 0.12), width: 0.5),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 0.8),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-                color: AppPalette.lightBlue,
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(n.icon, color: AppPalette.blue, size: 18),
+            width: 42, height: 42,
+            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(n.titre,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A2A3A),
-                        height: 1.3)),
+                Text(a['titre'] as String? ?? '',
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A2A3A), height: 1.3)),
                 const Spacer(),
                 Row(children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                        color: AppPalette.lightBlue,
-                        borderRadius: BorderRadius.circular(5)),
-                    child: Text(n.tag,
-                        style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: AppPalette.blue)),
+                    decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(5)),
+                    child: Text(label,
+                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
                   ),
                   const SizedBox(width: 6),
-                  Text(n.date,
-                      style: const TextStyle(
-                          fontSize: 9, color: Color(0xFFAABBCC))),
+                  Text(dateStr, style: const TextStyle(fontSize: 9, color: Color(0xFFAABBCC))),
                 ]),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _annonceVide() {
+    return SizedBox(
+      height: 100,
+      child: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.campaign_outlined, size: 32, color: Color(0xFFCBD5E1)),
+          const SizedBox(height: 6),
+          Text('Aucune annonce pour l\'instant',
+              style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+        ]),
       ),
     );
   }

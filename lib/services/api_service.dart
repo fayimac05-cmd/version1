@@ -6,9 +6,10 @@ class ApiService {
   static const String baseUrl = 'http://localhost:3000/api';
 
   // ── Sauvegarder le token ─────────────────────────────────
-  static Future<void> saveToken(String token) async {
+  static Future<void> saveToken(String token, {int? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
+    if (userId != null) await prefs.setString('user_id', userId.toString());
   }
 
   // ── Récupérer le token ───────────────────────────────────
@@ -53,7 +54,7 @@ class ApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['token'] != null) {
-        await saveToken(data['token']);
+        await saveToken(data['token'], userId: data['user']?['id']);
         return {'success': true, 'user': data['user']};
       } else if (data['premierLogin'] == true) {
         return {'success': true, 'premierLogin': true, 'userId': data['userId']};
