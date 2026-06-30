@@ -26,27 +26,27 @@ import 'package:flutter/material.dart';
 class AdminColors {
   AdminColors._();
 
-  // ── Vert principal (brand) ────────────────────────────────────────────
-  static const green900 = Color(0xFF0D2218); // Le plus foncé
-  static const green800 = Color(0xFF1A3C34); // primary — sidebar, accents
-  static const green700 = Color(0xFF234D3F); // hover sidebar
-  static const green600 = Color(0xFF2D6A4F); // primaryMid — boutons
-  static const green400 = Color(0xFF52B788); // icônes actives
-  static const green200 = Color(0xFF95D5B2); // textes sidebar
-  static const green100 = Color(0xFFD8F3DC); // primaryLight — fond chips
-  static const green50  = Color(0xFFF0FDF4); // fond cards légères
+  // ── Bleu principal (brand — identique à AppPalette) ──────────────────
+  static const green900 = Color(0xFF041A4D); // darkBlue
+  static const green800 = Color(0xFF0A4DA2); // blue — primary — sidebar, accents
+  static const green700 = Color(0xFF0D3E85); // hover sidebar
+  static const green600 = Color(0xFF1565C0); // midBlue — boutons
+  static const green400 = Color(0xFF4D8FD6); // icônes actives
+  static const green200 = Color(0xFFADD1F5); // textes sidebar
+  static const green100 = Color(0xFFEAF2FF); // lightBlue — fond chips
+  static const green50  = Color(0xFFE8F0FE); // bgBlue — fond cards légères
 
-  // ── Or / Ambre (accent) ───────────────────────────────────────────────
-  static const amber700 = Color(0xFF92650A);
-  static const amber600 = Color(0xFFB7950B); // accent principal
-  static const amber100 = Color(0xFFFFF3C4);
-  static const amber50  = Color(0xFFFFF8DC); // accentLight
+  // ── Or / Jaune (accent — identique à AppPalette) ─────────────────────
+  static const amber700 = Color(0xFFB89200);
+  static const amber600 = Color(0xFFF8C400); // yellow — accent principal
+  static const amber100 = Color(0xFFFFF5CC); // softYellow
+  static const amber50  = Color(0xFFFFFBE6); // accentLight
 
   // ── Statuts ───────────────────────────────────────────────────────────
   static const red600   = Color(0xFFDC2626);
   static const red50    = Color(0xFFFFEBEB);
-  static const blue600  = Color(0xFF0891B2);
-  static const blue50   = Color(0xFFE0F7FA);
+  static const blue600  = Color(0xFF1565C0);
+  static const blue50   = Color(0xFFEAF2FF);
 
   // ── [UX-3] Échelle de gris neutres (Slate) ───────────────────────────
   // S'accordent parfaitement avec le vert foncé du brand.
@@ -238,6 +238,20 @@ class AdminTheme {
       size: 10, weight: FontWeight.w800,
       color: AdminColors.green200, letterSpacing: 1.0);
 
+  // Alias vers AppPalette pour cohérence
+  static const Color appBlue     = AdminColors.green800;
+  static const Color appDarkBlue = AdminColors.green900;
+  static const Color appYellow   = AdminColors.amber600;
+
+  // ── Styles d'icônes standardisés ─────────────────────────────────────
+  /// Fond bleu mid (#1565C0) + icône blanche — usage général
+  static const Color iconBg    = AdminColors.green600;  // #1565C0
+  static const Color iconFg    = AdminColors.white;
+
+  /// Fond bleu (#0A4DA2) + icône jaune (#F8C400) — boutons d'action principaux
+  static const Color iconBgAlt = AdminColors.green800;  // #0A4DA2
+  static const Color iconFgAlt = AdminColors.amber600;  // #F8C400
+
   // ── Widget helpers ────────────────────────────────────────────────────
 
   /// Badge pill coloré. [SEC-2] plus de hardcode sidebarText.
@@ -281,7 +295,7 @@ class AdminTheme {
 
   /// Bouton primaire standard.
   static ButtonStyle get primaryButtonStyle => ElevatedButton.styleFrom(
-    backgroundColor: primary,
+    backgroundColor: AdminColors.green800,
     foregroundColor: Colors.white,
     elevation: 0,
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -293,8 +307,8 @@ class AdminTheme {
 
   /// Bouton secondaire (outline).
   static ButtonStyle get secondaryButtonStyle => OutlinedButton.styleFrom(
-    foregroundColor: primary,
-    side: const BorderSide(color: primary, width: 1.5),
+    foregroundColor: AdminColors.green800,
+    side: const BorderSide(color: AdminColors.green800, width: 1.5),
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
     shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusButton)),
@@ -336,13 +350,13 @@ class AdminTheme {
 
     final colorScheme = ColorScheme(
       brightness:       brightness,
-      primary:          AdminColors.green600,
+      primary:          AdminColors.green800,   // blue 0xFF0A4DA2
       onPrimary:        AdminColors.white,
-      primaryContainer: AdminColors.green100,
-      onPrimaryContainer: AdminColors.green800,
-      secondary:        AdminColors.amber600,
-      onSecondary:      AdminColors.white,
-      secondaryContainer: AdminColors.amber100,
+      primaryContainer: AdminColors.green100,   // lightBlue
+      onPrimaryContainer: AdminColors.green900, // darkBlue
+      secondary:        AdminColors.amber600,   // yellow 0xFFF8C400
+      onSecondary:      AdminColors.slate900,
+      secondaryContainer: AdminColors.amber100, // softYellow
       onSecondaryContainer: AdminColors.amber700,
       error:            AdminColors.red600,
       onError:          AdminColors.white,
@@ -397,7 +411,7 @@ class AdminTheme {
       // ── ElevatedButton ──────────────────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AdminColors.green600,
+          backgroundColor: AdminColors.green800,
           foregroundColor: Colors.white,
           elevation:       0,
           shape: RoundedRectangleBorder(
@@ -412,8 +426,8 @@ class AdminTheme {
       // ── OutlinedButton ──────────────────────────────────────────────────
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AdminColors.green600,
-          side: const BorderSide(color: AdminColors.green600, width: 1.5),
+          foregroundColor: AdminColors.green800,
+          side: const BorderSide(color: AdminColors.green800, width: 1.5),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(radiusButton)),
           textStyle: const TextStyle(
@@ -426,7 +440,7 @@ class AdminTheme {
       // ── TextButton ──────────────────────────────────────────────────────
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AdminColors.green600,
+          foregroundColor: AdminColors.green800,
           textStyle: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w600),
         ),
@@ -449,7 +463,7 @@ class AdminTheme {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusButton),
           borderSide: const BorderSide(
-              color: AdminColors.green600, width: 1.5),
+              color: AdminColors.green800, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusButton),
@@ -495,9 +509,9 @@ class AdminTheme {
 
       // ── TabBar ──────────────────────────────────────────────────────────
       tabBarTheme: TabBarThemeData(
-        labelColor:          AdminColors.green600,
+        labelColor:          AdminColors.green800,
         unselectedLabelColor: onSurfSub,
-        indicatorColor:      AdminColors.green600,
+        indicatorColor:      AdminColors.amber600,
         indicatorSize:       TabBarIndicatorSize.tab,
         labelStyle: const TextStyle(
             fontWeight: FontWeight.w700, fontSize: 13),
@@ -546,7 +560,7 @@ class AdminTheme {
                 : AdminColors.slate400),
         trackColor: WidgetStateProperty.resolveWith((states) =>
             states.contains(WidgetState.selected)
-                ? AdminColors.green600
+                ? AdminColors.green800
                 : (dark ? AdminColors.slate700 : AdminColors.slate300)),
       ),
 

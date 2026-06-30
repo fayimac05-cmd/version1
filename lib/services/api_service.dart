@@ -3,12 +3,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:3000/api';
+  static const String baseUrl = 'http://localhost:5000/api';
 
   // ── Sauvegarder le token ─────────────────────────────────
-  static Future<void> saveToken(String token) async {
+  static Future<void> saveToken(String token, {int? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
+    if (userId != null) await prefs.setString('user_id', userId.toString());
   }
 
   // ── Récupérer le token ───────────────────────────────────
@@ -53,7 +54,7 @@ class ApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['token'] != null) {
-        await saveToken(data['token']);
+        await saveToken(data['token'], userId: data['user']?['id']);
         return {'success': true, 'user': data['user']};
       } else if (data['premierLogin'] == true) {
         return {'success': true, 'premierLogin': true, 'userId': data['userId']};

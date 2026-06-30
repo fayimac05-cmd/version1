@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
-import '../widgets/app_bubble_bg.dart';
 
 // ── Données mock ───────────────────────────────────────────────────────────
 
@@ -455,7 +454,7 @@ class _CoursTabState extends State<_CoursTab> {
             _input(matiereCtrl, 'Matière', Icons.school_outlined),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: classeId,
+              initialValue: classeId,
               decoration: InputDecoration(
                 labelText: 'Classe',
                 prefixIcon: const Icon(Icons.groups_outlined, color: AppPalette.blue),
@@ -645,7 +644,7 @@ class _NotesTabState extends State<_NotesTab> {
       ),
       child: Column(children: [
         DropdownButtonFormField<_Classe>(
-          value: _classe,
+          initialValue: _classe,
           hint: const Text('Sélectionner une classe'),
           decoration: InputDecoration(
             labelText: 'Classe',
@@ -658,7 +657,7 @@ class _NotesTabState extends State<_NotesTab> {
         ),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
-          value: _matiere,
+          initialValue: _matiere,
           decoration: InputDecoration(
             labelText: 'Matière',
             prefixIcon: const Icon(Icons.school_outlined, color: AppPalette.blue),
@@ -670,7 +669,7 @@ class _NotesTabState extends State<_NotesTab> {
         ),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
-          value: _type,
+          initialValue: _type,
           decoration: InputDecoration(
             labelText: 'Type d\'évaluation',
             prefixIcon: const Icon(Icons.fact_check_outlined, color: AppPalette.blue),

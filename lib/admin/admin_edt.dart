@@ -68,7 +68,12 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
       Row(children: [
         const Text('Emplois du temps', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
         const Spacer(),
-        FilledButton.icon(onPressed: _dialogAjouter, icon: const Icon(Icons.add), label: const Text('Publier')),
+        FilledButton.icon(
+          onPressed: _dialogAjouter,
+          icon: const Icon(Icons.add, color: AdminTheme.iconFgAlt),
+          label: const Text('Publier', style: TextStyle(color: AdminTheme.iconFgAlt)),
+          style: FilledButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt),
+        ),
       ]),
       const SizedBox(height: 16),
       TabBar(controller: _tabs, tabs: const [Tab(text: 'Actifs'), Tab(text: 'Archives')]),

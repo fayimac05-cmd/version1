@@ -100,13 +100,13 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
                   margin: const EdgeInsets.only(left: 6),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
-                    color: AdminTheme.primary,
+                    color: AdminTheme.iconBgAlt,
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: [BoxShadow(color: AdminTheme.primary.withValues(alpha:0.3),
+                    boxShadow: [BoxShadow(color: AdminTheme.iconBgAlt.withValues(alpha:0.3),
                         blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.person_add_rounded, color: Colors.white, size: 16),
+                    Icon(Icons.person_add_rounded, color: AdminTheme.iconFgAlt, size: 16),
                     SizedBox(width: 6),
                     Text('Inscrire', style: TextStyle(fontSize: 13,
                         fontWeight: FontWeight.w700, color: Colors.white)),
@@ -266,10 +266,10 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
         Container(
           width: 44, height: 44,
           decoration: BoxDecoration(
-            color: AdminTheme.primaryLight, shape: BoxShape.circle),
+            color: AdminTheme.iconBg, shape: BoxShape.circle),
           child: Center(child: Text('${e.prenoms[0]}${e.nom[0]}',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
-                  color: AdminTheme.primary))),
+                  color: AdminTheme.iconFg))),
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -475,7 +475,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
             color: Color(0xFF9CA3AF), fontFamily: 'monospace')),
         const SizedBox(height: 12),
         const Divider(height: 1),
-        ListTile(leading: const Icon(Icons.visibility_rounded, color: AdminTheme.primary),
+        ListTile(leading: const Icon(Icons.visibility_rounded, color: AdminTheme.iconBg),
             title: const Text('Voir la fiche'),
             onTap: () { Navigator.pop(context); _ouvrirFiche(e); }),
         ListTile(leading: const Icon(Icons.picture_as_pdf_rounded, color: AdminTheme.warning),

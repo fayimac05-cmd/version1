@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -78,21 +79,15 @@ class NotesTab extends StatefulWidget {
 class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
 
-  final List<_NoteModule> _notes = [
-    _NoteModule(module: 'Algorithmique & Structures', code: 'INFO101',
-        prof: 'Prof Ouédraogo', td: 14.0, exam: 16.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
-    _NoteModule(module: 'Bases de Données', code: 'INFO102',
-        prof: 'Prof Traoré', td: 12.0, exam: 14.0, coefTd: 1, coefExam: 2, coefficient: 3, color: const Color(0xFF7C3AED)),
-    _NoteModule(module: 'Réseaux informatiques', code: 'INFO103',
-        prof: 'Prof Sawadogo', td: 5.0, exam: 4.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF0891B2)),
-    _NoteModule(module: 'Maths Discrètes', code: 'MATH201',
-        prof: 'Prof Kaboré', td: 11.0, exam: 13.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF15803D)),
-    _NoteModule(module: 'Anglais Technique', code: 'ANG101',
-        prof: 'Prof Johnson', td: 16.0, exam: 17.0, coefTd: 1, coefExam: 2, coefficient: 1, color: const Color(0xFFD97706)),
-    _NoteModule(module: 'Programmation OO', code: 'INFO104',
-        prof: 'Prof Ouédraogo', td: 10.0, exam: 9.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
-    _NoteModule(module: 'Systèmes d\'exploitation', code: 'INFO105',
-        prof: 'Prof Traoré', td: null, exam: null, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF7C3AED)),
+  List<_NoteModule> _notes = [];
+  bool _loading = true;
+  bool _fromBackend = false;
+
+  // Couleurs par index pour les modules backend
+  static const _colors = [
+    AppPalette.blue, Color(0xFF7C3AED), Color(0xFF0891B2),
+    Color(0xFF15803D), Color(0xFFD97706), Color(0xFFE11D48),
+    Color(0xFF0369A1),
   ];
 
   double get _moyenne {
@@ -109,9 +104,89 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
   int get _nbAttente  => _notes.where((n) => n.statut == 'en_attente').length;
 
   @override
-  void initState() { super.initState(); _tabCtrl = TabController(length: 2, vsync: this); }
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+    _fetchNotesBackend();
+  }
+
   @override
   void dispose() { _tabCtrl.dispose(); super.dispose(); }
+
+  Future<void> _fetchNotesBackend() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      final response = await http.get(
+        Uri.parse('http://localhost:5000/api/notes/etudiant'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List list = data['data'] ?? [];
+
+        if (list.isNotEmpty) {
+          // Grouper par module_nom et calculer la note moyenne
+          final Map<String, List<double>> grouped = {};
+          final Map<String, String> typeMap = {};
+          for (final n in list) {
+            final mod = n['module_nom'] as String? ?? 'Module';
+            final note = (n['note'] as num?)?.toDouble();
+            final type = n['type_eval'] as String? ?? 'DS';
+            if (note != null) {
+              grouped.putIfAbsent(mod, () => []).add(note);
+              typeMap[mod] = type;
+            }
+          }
+
+          final modules = grouped.entries.toList();
+          setState(() {
+            _notes = List.generate(modules.length, (i) {
+              final entry = modules[i];
+              final notes = entry.value;
+              final avg = notes.reduce((a, b) => a + b) / notes.length;
+              final type = typeMap[entry.key] ?? 'DS';
+              return _NoteModule(
+                module: entry.key,
+                code: 'MOD${(i + 1).toString().padLeft(3, '0')}',
+                prof: 'Professeur assigné',
+                td: type == 'TP' || type == 'Contrôle Continu' ? avg : null,
+                exam: type == 'DS' || type == 'Examen Final' ? avg : avg,
+                coefTd: 1, coefExam: 2, coefficient: 3,
+                color: _colors[i % _colors.length],
+              );
+            });
+            _loading = false;
+            _fromBackend = true;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // Fallback : données de démonstration
+    setState(() {
+      _notes = [
+        _NoteModule(module: 'Algorithmique & Structures', code: 'INFO101',
+            prof: 'Prof Ouédraogo', td: 14.0, exam: 16.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
+        _NoteModule(module: 'Bases de Données', code: 'INFO102',
+            prof: 'Prof Traoré', td: 12.0, exam: 14.0, coefTd: 1, coefExam: 2, coefficient: 3, color: const Color(0xFF7C3AED)),
+        _NoteModule(module: 'Réseaux informatiques', code: 'INFO103',
+            prof: 'Prof Sawadogo', td: 5.0, exam: 4.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF0891B2)),
+        _NoteModule(module: 'Maths Discrètes', code: 'MATH201',
+            prof: 'Prof Kaboré', td: 11.0, exam: 13.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF15803D)),
+        _NoteModule(module: 'Anglais Technique', code: 'ANG101',
+            prof: 'Prof Johnson', td: 16.0, exam: 17.0, coefTd: 1, coefExam: 2, coefficient: 1, color: const Color(0xFFD97706)),
+        _NoteModule(module: 'Programmation OO', code: 'INFO104',
+            prof: 'Prof Ouédraogo', td: 10.0, exam: 9.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
+        _NoteModule(module: 'Systèmes d\'exploitation', code: 'INFO105',
+            prof: 'Prof Traoré', td: null, exam: null, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF7C3AED)),
+      ];
+      _loading = false;
+      _fromBackend = false;
+    });
+  }
 
   bool _isDownloading = false;
 
@@ -119,12 +194,9 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
     setState(() => _isDownloading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token') ?? '';
-      // ID étudiant de test ou récupéré depuis les préférences
-      final etudiantId = prefs.getString('user_id') ?? '123';
-      
-      // Remplacez l'URL par l'URL de votre backend (ex: http://10.0.2.2:3000 pour émulateur Android)
-      final url = Uri.parse('http://10.0.2.2:3000/api/notes/bulletin/$etudiantId');
+      final token = prefs.getString('token') ?? '';
+      final etudiantId = prefs.getString('user_id') ?? '1';
+      final url = Uri.parse('http://localhost:5000/api/notes/bulletin/$etudiantId');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
       });
@@ -157,6 +229,9 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return Column(children: [
 
       // ── Header gradient bleu ──────────────────────────────────────
@@ -195,11 +270,22 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
                     borderRadius: BorderRadius.circular(8)),
                 child: const Icon(Icons.grade_rounded, color: Colors.white, size: 18)),
             const SizedBox(width: 8),
-            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Mes Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Mes Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
                   color: Colors.white, letterSpacing: -0.3)),
-              Text('Semestre 3 — 2024/2025',
+              const Text('Semestre 3 — 2024/2025',
                   style: TextStyle(fontSize: 11, color: Colors.white70)),
+              if (!_fromBackend)
+                Container(
+                  margin: const EdgeInsets.only(top: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppPalette.yellow.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('Données de démonstration',
+                      style: TextStyle(fontSize: 9, color: AppPalette.yellow, fontWeight: FontWeight.w700)),
+                ),
             ])),
             if (_isDownloading)
               const Padding(

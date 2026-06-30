@@ -62,11 +62,11 @@ class AdminAddButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: AdminTheme.primary,
+          color: AdminTheme.iconBgAlt,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+          const Icon(Icons.add_rounded, color: AdminTheme.iconFgAlt, size: 18),
           const SizedBox(width: 6),
           Text(label, style: const TextStyle(
             fontSize: 13,
@@ -193,6 +193,42 @@ class AdminFilterChip extends StatelessWidget {
   }
 }
 
+/// Boîte d'icône standardisée — deux variantes :
+/// - [alt] = false : fond bleu mid (#1565C0) + icône blanche
+/// - [alt] = true  : fond bleu (#0A4DA2) + icône jaune (#F8C400)
+class AdminIconBox extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final double iconSize;
+  final double radius;
+  final bool alt;
+
+  const AdminIconBox({
+    super.key,
+    required this.icon,
+    this.size = 40,
+    this.iconSize = 20,
+    this.radius = 10,
+    this.alt = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: alt ? AdminTheme.iconBgAlt : AdminTheme.iconBg,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Icon(icon,
+        color: alt ? AdminTheme.iconFgAlt : AdminTheme.iconFg,
+        size: iconSize,
+      ),
+    );
+  }
+}
+
 /// Standard empty-state placeholder for admin pages.
 class AdminEmptyState extends StatelessWidget {
   final IconData icon;
@@ -208,7 +244,7 @@ class AdminEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 48, color: AdminTheme.textMuted),
+        Icon(icon, size: 48, color: AdminTheme.iconBg),
         const SizedBox(height: 12),
         Text(message, style: const TextStyle(
           fontSize: 14,

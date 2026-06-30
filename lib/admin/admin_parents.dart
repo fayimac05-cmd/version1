@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
-import '../admin/admin_etudiants.dart';
 import '../models/etudiant_model.dart';
 import '../utils/snackbar_helper.dart';
 

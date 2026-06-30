@@ -139,7 +139,7 @@ class _AdminMembresState extends State<AdminMembres> {
                 // Boutons d'action
                 if (!isSuperAdmin) ...[
                   IconButton(
-                    icon: const Icon(Icons.edit_rounded, size: 20, color: AdminTheme.primary),
+                    icon: const Icon(Icons.edit_rounded, size: 20, color: AdminTheme.iconBgAlt),
                     onPressed: () => _gererDroits(m),
                   ),
                   IconButton(
@@ -197,10 +197,10 @@ class _AdminMembresState extends State<AdminMembres> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isSA ? AdminTheme.accentLight : AdminTheme.primaryLight,
+        color: isSA ? AdminTheme.iconBgAlt : AdminTheme.iconBg,
         borderRadius: BorderRadius.circular(8)),
       child: Text(role, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-          color: isSA ? AdminTheme.accent : AdminTheme.primary)));
+          color: isSA ? AdminTheme.iconFgAlt : AdminTheme.iconFg)));
   }
 
   void _gererDroits(Membre m) {
@@ -234,7 +234,8 @@ class _AdminMembresState extends State<AdminMembres> {
                     title: Text(e.value, style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.w600)),
                     value: m.droits[e.key] ?? false,
-                    activeColor: AdminTheme.primary,
+                    activeThumbColor: AdminTheme.iconFg,
+                    activeTrackColor: AdminTheme.iconBg,
                     onChanged: (v) {
                       setS(() => m.droits[e.key] = v);
                       setState(() {});
@@ -245,11 +246,11 @@ class _AdminMembresState extends State<AdminMembres> {
                 onTap: () { Navigator.pop(ctx); _snack('✅ Droits mis à jour !'); },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(color: AdminTheme.primary,
+                  decoration: BoxDecoration(color: AdminTheme.iconBgAlt,
                       borderRadius: BorderRadius.circular(12)),
                   child: const Center(child: Text('Enregistrer les droits',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                          color: Colors.white)))))),
+                          color: AdminTheme.iconFgAlt)))))),
           ]))));
   }
 
@@ -286,9 +287,9 @@ class _AdminMembresState extends State<AdminMembres> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: active ? AdminTheme.primary : Colors.white,
+                          color: active ? AdminTheme.iconBg : Colors.white,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: active ? AdminTheme.primary : const Color(0xFFE5E7EB))),
+                          border: Border.all(color: active ? AdminTheme.iconBg : const Color(0xFFE5E7EB))),
                         child: Text(r, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
                             color: active ? Colors.white : const Color(0xFF6B7280)))));
                   }).toList()),
@@ -298,13 +299,15 @@ class _AdminMembresState extends State<AdminMembres> {
                   contentPadding: EdgeInsets.zero, dense: true,
                   title: Text(_sectionsLabels[e.key] ?? e.key,
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  value: e.value, activeColor: AdminTheme.primary,
+                  value: e.value,
+                  activeThumbColor: AdminTheme.iconFg,
+                  activeTrackColor: AdminTheme.iconBg,
                   onChanged: (v) => setS(() => droits[e.key] = v))),
             ])
           )),
           Padding(padding: const EdgeInsets.all(16),
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary, minimumSize: const Size(double.infinity, 50)),
+              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt, foregroundColor: AdminTheme.iconFgAlt, minimumSize: const Size(double.infinity, 50)),
               onPressed: () {
                 if (nomCtrl.text.isEmpty || !emailCtrl.text.contains('@')) {
                   _snack('⚠️ Veuillez remplir correctement les champs');

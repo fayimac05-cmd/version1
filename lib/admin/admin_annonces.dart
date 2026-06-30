@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/app_palette.dart'; 
 import '../admin/admin_theme.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -47,7 +46,7 @@ class AnnonceUiConfig {
       case TypeAnnonce.urgent:
         return const AnnonceUiConfig(label: 'Crucial / Alerte', icon: Icons.gpp_maybe_rounded, color: Colors.redAccent);
       case TypeAnnonce.academique:
-        return const AnnonceUiConfig(label: 'Note Académique', icon: Icons.assignment_outlined, color: AppPalette.blue);
+        return const AnnonceUiConfig(label: 'Note Académique', icon: Icons.assignment_outlined, color: AdminTheme.iconBg);
       case TypeAnnonce.evenement:
         return const AnnonceUiConfig(label: 'Événement campus', icon: Icons.local_activity_outlined, color: Colors.purple);
       case TypeAnnonce.horaire:
@@ -177,9 +176,9 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                 const SizedBox(height: 14),
                 TabBar(
                   controller: _tabs,
-                  labelColor: AppPalette.blue,
+                  labelColor: AdminTheme.iconBg,
                   unselectedLabelColor: const Color(0xFF64748B),
-                  indicatorColor: AppPalette.blue,
+                  indicatorColor: AdminTheme.iconFgAlt,
                   indicatorWeight: 3,
                   labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   tabs: [
@@ -209,10 +208,10 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
 
   Widget _buildCreateButton() => ElevatedButton.icon(
         onPressed: () => _openFormModal(),
-        icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-        label: const Text('Nouvelle annonce', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+        icon: const Icon(Icons.add_rounded, size: 18, color: AdminTheme.iconFgAlt),
+        label: const Text('Nouvelle annonce', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.iconFgAlt)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppPalette.blue,
+          backgroundColor: AdminTheme.iconBgAlt,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           elevation: 0,
@@ -225,7 +224,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 56, height: 56, decoration: BoxDecoration(color: AppPalette.blue.withValues(alpha:0.08), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.campaign_outlined, color: AppPalette.blue, size: 26)),
+            Container(width: 56, height: 56, decoration: BoxDecoration(color: AdminTheme.iconBg, borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.campaign_outlined, color: AdminTheme.iconFg, size: 26)),
             const SizedBox(height: 16),
             const Text('Flux vide', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
             const SizedBox(height: 4),
@@ -321,8 +320,8 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
               children: [
                 TextButton.icon(
                   onPressed: () => _openFormModal(annonce: a),
-                  icon: const Icon(Icons.edit_outlined, size: 15, color: AppPalette.blue),
-                  label: const Text('Éditer l\'annonce', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppPalette.blue)),
+                  icon: const Icon(Icons.edit_outlined, size: 15, color: AdminTheme.iconBg),
+                  label: const Text('Éditer l\'annonce', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AdminTheme.iconBg)),
                 ),
                 const SizedBox(width: 8),
                 if (a.statut == StatutAnnonce.brouillon)
@@ -592,9 +591,9 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: isSelected ? AppPalette.blue : const Color(0xFFF8FAFC),
+                color: isSelected ? AdminTheme.iconBg : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isSelected ? AppPalette.blue : const Color(0xFFE2E8F0)),
+                border: Border.all(color: isSelected ? AdminTheme.iconBg : const Color(0xFFE2E8F0)),
               ),
               child: Column(
                 children: [
@@ -631,12 +630,12 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
               decoration: BoxDecoration(
                 color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isSelected ? AppPalette.blue : const Color(0xFFD1D5DB), width: isSelected ? 1.5 : 1),
+                border: Border.all(color: isSelected ? AdminTheme.iconBg : const Color(0xFFD1D5DB), width: isSelected ? 1.5 : 1),
               ),
               child: Center(
                 child: Text(
-                  o['label'] as String, 
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? AppPalette.blue : const Color(0xFF475569)),
+                  o['label'] as String,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? AdminTheme.iconBg : const Color(0xFF475569)),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -729,8 +728,8 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
                 }
                 Navigator.pop(context);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue),
-              child: const Text('Lier la ressource', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt, foregroundColor: AdminTheme.iconFgAlt),
+              child: const Text('Lier la ressource', style: TextStyle(color: AdminTheme.iconFgAlt)),
             ),
           ],
         ),
@@ -758,8 +757,8 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
             Expanded(
               child: ElevatedButton(
                 onPressed: () => _executeSavingProcedure(StatutAnnonce.publie),
-                style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
-                child: const Text('Publier immédiatement', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
+                child: const Text('Publier immédiatement', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.iconFgAlt)),
               ),
             ),
           ],

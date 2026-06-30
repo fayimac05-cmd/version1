@@ -1,3 +1,6 @@
+import '../admin/admin_parents.dart';
+import '../models/etudiant_model.dart';
+
 class ParentsService {
   // Liste interne (remplacée plus tard par un appel API)
   final List<Parent> _parents = List.from(adminParents);

@@ -1,6 +1,25 @@
 const PDFDocument = require('pdfkit');
 const pool = require('../config/db');
 
+const getNotesEtudiant = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const result = await pool.query(`
+            SELECT n.id, n.valeur AS note, m.nom AS module_nom, m.coefficient
+            FROM notes n
+            JOIN modules m ON n.module_id = m.id
+            JOIN etudiants e ON n.etudiant_id = e.id
+            WHERE e.user_id = $1
+            ORDER BY m.nom
+        `, [userId]);
+
+        res.json({ success: true, data: result.rows });
+    } catch (error) {
+        console.error('[getNotesEtudiant]', error);
+        res.status(500).json({ success: false, message: 'Erreur lors du chargement des notes.' });
+    }
+};
+
 const generateBulletinPdf = async (req, res) => {
     try {
         const etudiantId = req.params.etudiantId;
@@ -182,6 +201,7 @@ const markSessionSent = async (req, res) => {
 };
 
 module.exports = {
+    getNotesEtudiant,
     generateBulletinPdf,
     createGradeSession,
     getGradeSessions,

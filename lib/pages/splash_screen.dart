@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import 'login_page.dart';
+import 'auth_choice_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -132,8 +132,8 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  void _goLogin() {
-    Navigator.of(context).push(_slideRoute(const LoginPage()));
+  void _goAuthChoice() {
+    Navigator.of(context).push(_slideRoute(const AuthChoicePage()));
   }
 
   Route _slideRoute(Widget page) => PageRouteBuilder(
@@ -323,8 +323,6 @@ class _SplashScreenState extends State<SplashScreen>
                         children: [
                           _buildPrimaryBtn(),
                           const SizedBox(height: 12),
-                          _buildSecondaryBtn(),
-                          const SizedBox(height: 12),
                           const Text('Version 1.0.0',
                               style: TextStyle(
                                   fontSize: 12,
@@ -446,7 +444,7 @@ class _SplashScreenState extends State<SplashScreen>
       width: double.infinity,
       height: 54,
       child: ElevatedButton(
-        onPressed: _goLogin,
+        onPressed: _goAuthChoice,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppPalette.blue,
           foregroundColor: Colors.white,
@@ -457,33 +455,7 @@ class _SplashScreenState extends State<SplashScreen>
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Se connecter',
-                style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            SizedBox(width: 10),
-            Icon(Icons.arrow_forward_rounded, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSecondaryBtn() {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: OutlinedButton(
-        onPressed: _goLogin,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppPalette.blue,
-          side: const BorderSide(color: AppPalette.blue, width: 1.5),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text("S'inscrire",
+            Text('Commencer',
                 style:
                     TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             SizedBox(width: 10),
