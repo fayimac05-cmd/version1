@@ -200,7 +200,7 @@ Ton rôle :
       final token = prefs.getString('token') ?? '';
 
       final response = await http.post(
-        Uri.parse('http://localhost:3000/api/ia/chat'),
+        Uri.parse('http://localhost:5000/api/ia/chat'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',

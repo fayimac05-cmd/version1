@@ -3,7 +3,8 @@ const router = express.Router();
 const notesController = require('../controllers/notes.controller');
 const { authMiddleware } = require('../middleware/auth.middleware');
 
-router.get('/', (req, res) => res.json({ message: 'notes OK' }));
+// Notes de l'étudiant connecté
+router.get('/etudiant', authMiddleware, notesController.getNotesEtudiant);
 
 // Export PDF des bulletins
 router.get('/bulletin/:etudiantId', authMiddleware, notesController.generateBulletinPdf);

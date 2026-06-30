@@ -118,7 +118,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
       final response = await http.get(
-        Uri.parse('http://localhost:3000/api/notes/etudiant'),
+        Uri.parse('http://localhost:5000/api/notes/etudiant'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 5));
 
@@ -196,7 +196,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
       final etudiantId = prefs.getString('user_id') ?? '1';
-      final url = Uri.parse('http://localhost:3000/api/notes/bulletin/$etudiantId');
+      final url = Uri.parse('http://localhost:5000/api/notes/bulletin/$etudiantId');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
       });

@@ -56,7 +56,7 @@ class _HomeTabState extends State<HomeTab> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
       final response = await http.get(
-        Uri.parse('http://localhost:3000/api/admin/annonces'),
+        Uri.parse('http://localhost:5000/api/annonces'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 5));
 
