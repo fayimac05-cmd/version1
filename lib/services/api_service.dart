@@ -6,7 +6,7 @@ class ApiService {
   static const String baseUrl = 'http://localhost:5000/api';
 
   // ── Sauvegarder le token ─────────────────────────────────
-  static Future<void> saveToken(String token, {int? userId}) async {
+  static Future<void> saveToken(String token, {dynamic userId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
     if (userId != null) await prefs.setString('user_id', userId.toString());
@@ -112,7 +112,46 @@ class ApiService {
     }
   }
 
-  // ── Inscrire un étudiant ─────────────────────────────────
+  // ── Inscription publique (auto-inscription étudiant) ─────
+  static Future<Map<String, dynamic>> register({
+    required String nom,
+    required String prenoms,
+    required String email,
+    required String telephone,
+    required String motDePasse,
+    String? matricule,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'nom': nom,
+          'prenoms': prenoms,
+          'email': email,
+          'telephone': telephone,
+          'motDePasse': motDePasse,
+          if (matricule != null && matricule.isNotEmpty) 'matricule': matricule,
+        }),
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 201 && body['token'] != null) {
+        await saveToken(body['token'], userId: body['user']?['id']);
+        return {'success': true, 'user': body['user']};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'inscription.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Inscrire un étudiant (admin) ─────────────────────────
   static Future<Map<String, dynamic>> inscrireEtudiant(
       Map<String, dynamic> data) async {
     try {
