@@ -4,7 +4,7 @@ import '../theme/app_palette.dart';
 import 'home_tab.dart';
 import 'planning_tab.dart';
 import 'profile_tab.dart';
-import 'notifications_page.dart';
+import 'canal_screen.dart';
 import 'chat_ia_screen.dart';
 
 class StudentShell extends StatefulWidget {
@@ -28,7 +28,7 @@ class _StudentShellState extends State<StudentShell> {
   Widget build(BuildContext context) {
     final pages = [
       HomeTab(profile: widget.profile),
-      NotificationsPage(),
+      CanalScreen(profile: widget.profile),
       const PlanningTab(),
       ChatIAScreen(profile: widget.profile, showBack: false),
       ProfileTab(profile: widget.profile, onLogout: widget.onLogout),
@@ -77,12 +77,11 @@ class _StudentShellState extends State<StudentShell> {
                 activeColor: AppPalette.blue,
               ),
               _navItem(
-                icon: Icons.notifications_outlined,
-                activeIcon: Icons.notifications_rounded,
-                label: 'Notifs',
+                icon: Icons.forum_outlined,
+                activeIcon: Icons.forum_rounded,
+                label: 'Canaux',
                 index: 1,
                 activeColor: AppPalette.yellow,
-                badge: 3,
               ),
               _centerBtn(),
               _navItem(

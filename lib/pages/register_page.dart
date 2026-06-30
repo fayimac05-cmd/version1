@@ -81,14 +81,14 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     // Try backend registration
-    final result = await ApiService.inscrireEtudiant({
-      'nom': nom,
-      'prenoms': prenoms,
-      'matricule': matricule,
-      'email': email,
-      'telephone': telephone,
-      'motDePasse': pass,
-    });
+    final result = await ApiService.register(
+      nom: nom,
+      prenoms: prenoms,
+      email: email,
+      telephone: telephone,
+      motDePasse: pass,
+      matricule: matricule,
+    );
 
     if (result['success'] == true) {
       setState(() {
