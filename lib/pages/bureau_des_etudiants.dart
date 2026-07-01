@@ -1,5 +1,10 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
+import '../models/event.dart';
 import 'create_event_page.dart';
 import 'create_announcement_page.dart';
 
@@ -13,6 +18,7 @@ class BureauDesEtudiantsScreen extends StatefulWidget {
 
 class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   int _currentIndex = 0;
+  List<EventModel> _customEvents = [];
 
   static const primaryBlue = AppPalette.blue;
   static const textDark = Color(0xFF0F172A);
@@ -159,13 +165,18 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const CreateEventPage(),
                   ),
                 );
+                if (result != null && result is EventModel) {
+                  setState(() {
+                    _customEvents.insert(0, result);
+                  });
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
@@ -444,6 +455,18 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           ),
           const SizedBox(height: 20),
           if (!isUpcoming) ...[
+            for (final event in _customEvents) ...[
+              _buildEventItem(
+                title: event.name,
+                subtitle: '${DateFormat('dd MMM yyyy').format(event.date)} · ${event.location}',
+                count: '0 / 100', // Mock
+                status: event.status,
+                statusBg: const Color(0xFFFEF3C7),
+                statusColor: const Color(0xFF92400E),
+                image: event.image,
+              ),
+              const Divider(height: 24, color: Color(0xFFF1F5F9)),
+            ],
             _buildEventItem(
               title: 'Soirée Culturelle',
               subtitle: '12 Jan 2025 · Salle polyvalente',
@@ -501,13 +524,18 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           if (withButton) ...[
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const CreateEventPage(),
                   ),
                 );
+                if (result != null && result is EventModel) {
+                  setState(() {
+                    _customEvents.insert(0, result);
+                  });
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
@@ -539,28 +567,56 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     required String status,
     required Color statusBg,
     required Color statusColor,
+    XFile? image,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: textDark,
+        Expanded(
+          child: Row(
+            children: [
+              if (image != null)
+                Container(
+                  width: 48,
+                  height: 48,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: const Color(0xFFF1F5F9),
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: kIsWeb
+                      ? Image.network(image.path, fit: BoxFit.cover)
+                      : Image.file(File(image.path), fit: BoxFit.cover),
+                ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textDark,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 12, color: textLight),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(fontSize: 12, color: textLight),
-            ),
-          ],
+            ],
+          ),
         ),
+        const SizedBox(width: 8),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [

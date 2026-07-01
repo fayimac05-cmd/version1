@@ -73,51 +73,68 @@ class _TicketsScreenState extends State<TicketsScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(children: [
 
-      // ── Header simple ─────────────────────────────────────────────
-      Container(
-        color: AppPalette.blue,
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-        child: Column(children: [
-          Row(children: [
-            Container(width: 46, height: 46,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15),
-                  borderRadius: BorderRadius.circular(13)),
-              child: const Icon(Icons.confirmation_number_outlined,
-                  color: Colors.white, size: 24)),
-            const SizedBox(width: 14),
-            const Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Tickets & Événements',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,
-                      color: Colors.white, letterSpacing: -0.3)),
-              SizedBox(height: 2),
-              Text('Paiement sécurisé via Orange Money',
-                  style: TextStyle(fontSize: 13, color: Colors.white70)),
-            ])),
+        // ── Header simple ─────────────────────────────────────────────
+        Container(
+          color: AppPalette.blue,
+          padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 12, 20, 0),
+          child: Column(children: [
+            Row(children: [
+              // Bouton retour
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white, size: 18),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(width: 46, height: 46,
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15),
+                    borderRadius: BorderRadius.circular(13)),
+                child: const Icon(Icons.confirmation_number_outlined,
+                    color: Colors.white, size: 24)),
+              const SizedBox(width: 14),
+              const Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Tickets & Événements',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,
+                        color: Colors.white, letterSpacing: -0.3)),
+                SizedBox(height: 2),
+                Text('Paiement sécurisé via Orange Money',
+                    style: TextStyle(fontSize: 13, color: Colors.white70)),
+              ])),
+            ]),
+            const SizedBox(height: 16),
+            TabBar(
+              controller: _tabCtrl,
+              indicatorColor: AppPalette.yellow,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white54,
+              labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              tabs: [
+                const Tab(text: 'Événements'),
+                Tab(text: 'Mes tickets (${_mesTickets.length})'),
+              ],
+            ),
           ]),
-          const SizedBox(height: 16),
-          TabBar(
-            controller: _tabCtrl,
-            indicatorColor: AppPalette.yellow,
-            indicatorWeight: 3,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white54,
-            labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            tabs: [
-              const Tab(text: 'Événements'),
-              Tab(text: 'Mes tickets (${_mesTickets.length})'),
-            ],
-          ),
-        ]),
-      ),
+        ),
 
-      Expanded(child: TabBarView(controller: _tabCtrl, children: [
-        _listeEvenements(),
-        _mesTicketsView(),
-      ])),
-    ]);
+        Expanded(child: TabBarView(controller: _tabCtrl, children: [
+          _listeEvenements(),
+          _mesTicketsView(),
+        ])),
+      ]),
+    );
   }
 
   // ── Liste événements ──────────────────────────────────────────────────
