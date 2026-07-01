@@ -2,8 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
-import '../theme/app_palette.dart';
-import '../utils/snackbar_helper.dart';
 import 'splash_screen.dart';
 
 enum NotifType { examen, note, cours, inscription, message }
@@ -103,7 +101,11 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
           _overlayEntry?.markNeedsBuild();
         },
         onToutLu: () {
-          setState(() { for (final n in _notifs) n.lu = true; });
+          setState(() {
+            for (final n in _notifs) {
+              n.lu = true;
+            }
+          });
           _overlayEntry?.markNeedsBuild();
         },
         onFermer: _fermerPanel,
@@ -441,13 +443,10 @@ _bentoCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _textMain)),
-        Switch(value: value, onChanged: onChanged, activeColor: _brandBlue, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+        Switch(value: value, onChanged: onChanged, activeThumbColor: _brandBlue, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
       ]),
     );
   }
-
-  void _snackbar(String msg) => showAppSnackBar(context, msg,
-      backgroundColor: AppPalette.blue);
 
   void _confirmerDeconnexion() {
     showDialog(

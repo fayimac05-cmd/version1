@@ -4,7 +4,7 @@ import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 
 class UploadCourseScreen extends StatefulWidget {
-  const UploadCourseScreen({Key? key}) : super(key: key);
+  const UploadCourseScreen({super.key});
 
   @override
   State<UploadCourseScreen> createState() => _UploadCourseScreenState();

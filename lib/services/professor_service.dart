@@ -230,4 +230,92 @@ class ProfessorService {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
+
+  static Future<Map<String, dynamic>> getSessionDetail(String sessionId) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/notes/sessions/$sessionId'),
+        headers: headers,
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement de la session.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateGradeSession(String sessionId, Map<String, dynamic> data) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/notes/sessions/$sessionId'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour de la session.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  // ── Appels (présences) ─────────────────────────────────────
+  static Future<Map<String, dynamic>> getAppels() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/appels'),
+        headers: headers,
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des appels.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> createAppel(Map<String, dynamic> data) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/appels'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 201) {
+        return {'success': true, 'appel_id': body['appel_id']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'enregistrement de l\'appel.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getAppelDetail(String appelId) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/appels/$appelId'),
+        headers: headers,
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement de l\'appel.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
 }

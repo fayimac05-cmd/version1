@@ -90,7 +90,6 @@ class _AdminMembresState extends State<AdminMembres> {
 
  Widget _carteMembre(Membre m) {
     final isSuperAdmin = m.role == 'Super Admin';
-    final nbDroits = m.droits.values.where((v) => v).length;
 
     return Container(
       decoration: BoxDecoration(
@@ -192,17 +191,6 @@ class _AdminMembresState extends State<AdminMembres> {
       ),
     );
   }
-  Widget _roleBadge(String role) {
-    final isSA = role == 'Super Admin';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: isSA ? AdminTheme.iconBgAlt : AdminTheme.iconBg,
-        borderRadius: BorderRadius.circular(8)),
-      child: Text(role, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-          color: isSA ? AdminTheme.iconFgAlt : AdminTheme.iconFg)));
-  }
-
   void _gererDroits(Membre m) {
     showModalBottomSheet(context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,

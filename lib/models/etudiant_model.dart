@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 class Etudiant {
   final String matricule, nom, prenoms, filiere, domaine, niveau;
   String email, telephone, dateNaissance, nationalite, adresse;

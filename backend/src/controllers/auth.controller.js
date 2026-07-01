@@ -107,13 +107,19 @@ const changePassword = async (req, res) => {
 const register = async (req, res) => {
   let client;
   try {
-    const { nom, prenoms, email, telephone, motDePasse, matricule: matriculeBody } = req.body;
+    const { nom, prenoms, email, telephone, motDePasse, matricule: matriculeBody, filiere, niveau } = req.body;
 
     if (!nom?.trim() || !prenoms?.trim()) {
       return res.status(400).json({ message: 'Nom et prenom requis.' });
     }
     if (!motDePasse || motDePasse.length < 4) {
       return res.status(400).json({ message: 'Mot de passe requis (4 caracteres minimum).' });
+    }
+    if (!filiere?.trim()) {
+      return res.status(400).json({ message: 'Filiere requise.' });
+    }
+    if (!niveau?.trim()) {
+      return res.status(400).json({ message: 'Niveau requis.' });
     }
 
     client = await pool.connect();
@@ -152,6 +158,9 @@ const register = async (req, res) => {
 
     const hashed = await bcrypt.hash(motDePasse, 10);
 
+    const filiereRes = await client.query('SELECT id FROM filieres WHERE nom = $1', [filiere.trim()]);
+    const filiereId = filiereRes.rows[0]?.id || null;
+
     const userRes = await client.query(
       `INSERT INTO users (matricule, nom, prenoms, email, tel, role, statut, mot_de_passe)
        VALUES ($1, $2, $3, $4, $5, 'etudiant', 'actif', $6) RETURNING *`,
@@ -161,16 +170,25 @@ const register = async (req, res) => {
 
     // Create etudiants record
     await client.query(
-      `INSERT INTO etudiants (user_id, premierefois, matricule, nom, prenoms, email, tel, statut)
-       VALUES ($1, false, $2, $3, $4, $5, $6, 'actif')`,
-      [user.id, matricule, nom.trim().toUpperCase(), prenoms.trim(), email?.trim() || null, telephone?.trim() || null]
+      `INSERT INTO etudiants (user_id, filiere_id, premierefois, matricule, nom, prenoms, email, tel, filiere_nom, niveau, statut)
+       VALUES ($1, $2, false, $3, $4, $5, $6, $7, $8, $9, 'actif')`,
+      [user.id, filiereId, matricule, nom.trim().toUpperCase(), prenoms.trim(), email?.trim() || null, telephone?.trim() || null, filiere.trim(), niveau.trim()]
     );
 
     await client.query('COMMIT');
 
     return res.status(201).json({
       token: genToken(user),
-      user: { id: user.id, nom: user.nom, prenoms: user.prenoms, matricule: user.matricule, role: user.role, statut: user.statut },
+      user: {
+        id: user.id,
+        nom: user.nom,
+        prenoms: user.prenoms,
+        matricule: user.matricule,
+        role: user.role,
+        statut: user.statut,
+        filiere: filiere.trim(),
+        niveau: niveau.trim(),
+      },
     });
   } catch (err) {
     if (client) {

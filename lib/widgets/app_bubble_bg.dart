@@ -240,7 +240,7 @@ class AppPageHeader extends StatelessWidget {
                   ),
                   if (bottomWidget != null) ...[
                     const SizedBox(height: 14),
-                    bottomWidget!,
+                    Material(color: Colors.transparent, child: bottomWidget!),
                   ],
                 ],
               ),

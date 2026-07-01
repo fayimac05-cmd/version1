@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
+import '../services/api_service.dart';
 import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -13,6 +14,15 @@ class Module {
   Module({required this.id, required this.nom, required this.code,
       required this.coefficient, required this.volumeHoraire,
       required this.professeur});
+
+  factory Module.fromApi(Map<String, dynamic> json) => Module(
+        id: json['id'].toString(),
+        nom: json['nom'] as String? ?? '',
+        code: '',
+        coefficient: ((json['coefficient'] as num?) ?? 1).round(),
+        volumeHoraire: (json['volume_horaire'] as num?)?.round() ?? 0,
+        professeur: '',
+      );
 }
 
 
@@ -21,9 +31,11 @@ class Filiere {
   final List<Module> modules;
   int nbEtudiants;
   bool active;
+  // id réel de la filière côté backend (utilisé pour persister les modules)
+  String? backendId;
   Filiere({required this.id, required this.nom, required this.abreviation, required this.niveau,
       required this.domaine, required this.anneeAcademique,
-      required this.modules, this.nbEtudiants = 0, this.active = true});
+      required this.modules, this.nbEtudiants = 0, this.active = true, this.backendId});
 }
 
 final List<Filiere> adminFilieres = [
@@ -111,6 +123,39 @@ class _AdminFilieresState extends State<AdminFilieres> {
   String _domaine = 'tous';
   String _query   = '';
   final _searchCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerModulesReels();
+  }
+
+  // Rattache chaque filière (mock) à son id réel côté backend et charge ses
+  // modules réels, afin que les modules ajoutés ici soient persistés et
+  // utilisables par les professeurs (saisie de notes, appel...).
+  Future<void> _chargerModulesReels() async {
+    final result = await ApiService.getFilieres();
+    if (result['success'] != true) return;
+    final backendFilieres = result['data'] as List<dynamic>;
+
+    for (final f in adminFilieres) {
+      final match = backendFilieres.firstWhere(
+        (bf) => (bf['nom'] as String).trim().toLowerCase() == f.nom.trim().toLowerCase(),
+        orElse: () => null,
+      );
+      if (match == null) continue;
+      f.backendId = match['id'].toString();
+
+      final modulesResult = await ApiService.getModules(filiereId: f.backendId);
+      if (modulesResult['success'] == true) {
+        final data = modulesResult['data'] as List<dynamic>;
+        f.modules
+          ..clear()
+          ..addAll(data.map((m) => Module.fromApi(m as Map<String, dynamic>)));
+      }
+    }
+    if (mounted) setState(() {});
+  }
 
   List<Filiere> get _filtered => adminFilieres.where((f) {
     final matchD = _domaine == 'tous' || f.domaine == _domaine;
@@ -299,17 +344,6 @@ class _AdminFilieresState extends State<AdminFilieres> {
     ),
   );
 }
-  Widget _infoChip(IconData icon, String label, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(6)),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, color: color, size: 12),
-      const SizedBox(width: 4),
-      Text(label, style: TextStyle(fontSize: 11,
-          fontWeight: FontWeight.w600, color: color)),
-    ]),
-  );
 
   // ════════════════════════════════════════════════════════════════════════
   // DÉTAIL FILIÈRE
@@ -333,36 +367,6 @@ class _AdminFilieresState extends State<AdminFilieres> {
       builder: (_) => _CreationFiliere(
         onCreated: (f) => setState(() => adminFilieres.add(f))),
     );
-  }
-
-  void _ouvrirEdition(Filiere f) {
-    _snack('✏️ Modification de ${f.nom}');
-  }
-
-  void _menuFiliere(Filiere f) {
-    showModalBottomSheet(context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const SizedBox(height: 8),
-        Container(width: 40, height: 4, decoration: BoxDecoration(
-            color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 16),
-        Text(f.nom, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        const Divider(height: 1),
-        ListTile(leading: Icon(Icons.visibility_rounded, color: AdminTheme.iconBg),
-            title: const Text('Voir les détails'),
-            onTap: () { Navigator.pop(context); _ouvrirDetail(f); }),
-        ListTile(leading: const Icon(Icons.edit_rounded, color: Color(0xFF6B7280)),
-            title: const Text('Modifier la filière'),
-            onTap: () { Navigator.pop(context); _ouvrirEdition(f); }),
-        ListTile(
-            leading: Icon(Icons.archive_rounded, color: AdminTheme.warning),
-            title: Text('Archiver', style: TextStyle(color: AdminTheme.warning)),
-            onTap: () { Navigator.pop(context); _snack('Filière archivée.'); }),
-        const SizedBox(height: 8),
-      ])));
   }
 
   Widget _vide() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -497,8 +501,6 @@ class _DetailFiliereState extends State<_DetailFiliere>
             Text(m.nom, style: const TextStyle(fontSize: 14,
                 fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
             const SizedBox(height: 3),
-            Text('${m.code} · ${m.professeur}', style: const TextStyle(
-                fontSize: 12, color: Color(0xFF6B7280))),
             Text('${m.volumeHoraire}h · Coefficient ${m.coefficient}',
                 style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
           ])),
@@ -508,6 +510,10 @@ class _DetailFiliereState extends State<_DetailFiliere>
                 borderRadius: BorderRadius.circular(8)),
             child: Text('Coef ${m.coefficient}', style: TextStyle(fontSize: 12,
                 fontWeight: FontWeight.w800, color: color)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+            onPressed: () => _supprimerModule(f, m),
           ),
         ]),
       )),
@@ -587,54 +593,86 @@ class _DetailFiliereState extends State<_DetailFiliere>
 
   void _ajouterModule(Filiere f) {
     final nomCtrl  = TextEditingController();
-    final codeCtrl = TextEditingController();
-    final coefCtrl = TextEditingController();
-    final vhCtrl   = TextEditingController();
-    final profCtrl = TextEditingController();
+    final coefCtrl = TextEditingController(text: '2');
+    final vhCtrl   = TextEditingController(text: '30');
+    bool envoi = false;
 
-    showDialog(context: context, builder: (_) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Ajouter un module',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        _field(nomCtrl, 'Nom du module', Icons.book_rounded),
-        const SizedBox(height: 10),
-        _field(codeCtrl, 'Code (ex: RES301)', Icons.tag_rounded),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _field(coefCtrl, 'Coefficient', Icons.numbers_rounded,
-              type: TextInputType.number)),
-          const SizedBox(width: 10),
-          Expanded(child: _field(vhCtrl, 'Volume horaire (h)', Icons.schedule_rounded,
-              type: TextInputType.number)),
-        ]),
-        const SizedBox(height: 10),
-        _field(profCtrl, 'Professeur assigné', Icons.person_rounded),
-      ])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280)))),
-        ElevatedButton(
-          onPressed: () {
-            if (nomCtrl.text.isEmpty) return;
-            setState(() {
-              f.modules.add(Module(
-                id: 'M${f.modules.length + 100}',
-                nom: nomCtrl.text, code: codeCtrl.text,
-                coefficient: int.tryParse(coefCtrl.text) ?? 2,
-                volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
-                professeur: profCtrl.text,
-              ));
-            });
-            Navigator.pop(context);
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
-              foregroundColor: Colors.white, elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-          child: const Text('Ajouter'),
-        ),
-      ],
+    showDialog(context: context, builder: (dialogCtx) => StatefulBuilder(
+      builder: (dialogCtx, setDialogState) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Ajouter un module',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          _field(nomCtrl, 'Nom du module', Icons.book_rounded),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _field(coefCtrl, 'Coefficient', Icons.numbers_rounded,
+                type: TextInputType.number)),
+            const SizedBox(width: 10),
+            Expanded(child: _field(vhCtrl, 'Volume horaire (h)', Icons.schedule_rounded,
+                type: TextInputType.number)),
+          ]),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280)))),
+          ElevatedButton(
+            onPressed: envoi ? null : () async {
+              if (nomCtrl.text.trim().isEmpty) return;
+              setDialogState(() => envoi = true);
+
+              if (f.backendId != null) {
+                final result = await ApiService.createModule(
+                  nom: nomCtrl.text.trim(),
+                  coefficient: int.tryParse(coefCtrl.text) ?? 2,
+                  volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
+                  filiereId: int.tryParse(f.backendId!),
+                  filiereNom: f.nom,
+                );
+                if (!mounted) return;
+                if (result['success'] == true) {
+                  setState(() => f.modules.add(Module.fromApi(result['data'] as Map<String, dynamic>)));
+                  Navigator.pop(dialogCtx);
+                } else {
+                  setDialogState(() => envoi = false);
+                  showAppSnackBar(context, result['error'] as String? ?? 'Erreur lors de l\'ajout du module.', backgroundColor: AdminTheme.danger);
+                }
+              } else {
+                // Filière non synchronisée avec le backend (ex: créée hors ligne) : ajout local uniquement.
+                setState(() {
+                  f.modules.add(Module(
+                    id: 'M${f.modules.length + 100}',
+                    nom: nomCtrl.text.trim(), code: '',
+                    coefficient: int.tryParse(coefCtrl.text) ?? 2,
+                    volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
+                    professeur: '',
+                  ));
+                });
+                Navigator.pop(dialogCtx);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
+                foregroundColor: Colors.white, elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            child: envoi
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Ajouter'),
+          ),
+        ],
+      ),
     ));
+  }
+
+  Future<void> _supprimerModule(Filiere f, Module m) async {
+    if (f.backendId != null) {
+      final result = await ApiService.deleteModule(m.id);
+      if (!mounted) return;
+      if (result['success'] != true) {
+        showAppSnackBar(context, result['error'] as String? ?? 'Erreur lors de la suppression.', backgroundColor: AdminTheme.danger);
+        return;
+      }
+    }
+    setState(() => f.modules.removeWhere((mod) => mod.id == m.id));
   }
 
   Widget _field(TextEditingController ctrl, String hint, IconData icon,

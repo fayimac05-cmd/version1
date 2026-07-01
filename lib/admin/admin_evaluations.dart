@@ -76,22 +76,6 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
     );
   }
 
-  Widget _buildHeader() => Container(
-    color: Colors.white,
-    padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-    child: Row(children: [
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Évaluation des Professeurs', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-        const Text('Évaluations anonymes', style: TextStyle(color: Color(0xFF6B7280))),
-      ])),
-      FilledButton.icon(
-        onPressed: _ouvrirPeriode,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Ouvrir une période'),
-      ),
-    ]),
-  );
-
   Widget _cartePeriode(PeriodeEvaluation ev) {
     return Container(
       decoration: BoxDecoration(color: Colors.white,
@@ -247,20 +231,6 @@ class _AdminEvaluationsState extends State<AdminEvaluations> {
               border: Border.all(color: fg.withValues(alpha:0.3))),
           child: Center(child: Text(label, style: TextStyle(fontSize: 12,
               fontWeight: FontWeight.w700, color: fg)))));
-
-  Widget _label(String t) => Padding(padding: const EdgeInsets.only(bottom: 5),
-    child: Text(t, style: const TextStyle(fontSize: 12,
-        fontWeight: FontWeight.w700, color: Color(0xFF374151))));
-
-  Widget _inputField(TextEditingController ctrl, String hint) =>
-      Container(decoration: BoxDecoration(color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE5E7EB))),
-        child: TextField(controller: ctrl, style: const TextStyle(fontSize: 13),
-          decoration: InputDecoration(hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))));
 
   void _snack(String msg) => showAppSnackBar(context, msg);
 }

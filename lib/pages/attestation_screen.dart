@@ -388,7 +388,7 @@ class _NewRequestSheetState extends State<_NewRequestSheet> {
             ),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _selectedType,
+              initialValue: _selectedType,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
@@ -425,7 +425,7 @@ class _NewRequestSheetState extends State<_NewRequestSheet> {
             ),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _selectedAnnee,
+              initialValue: _selectedAnnee,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
@@ -462,7 +462,7 @@ class _NewRequestSheetState extends State<_NewRequestSheet> {
             ),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _selectedMotif,
+              initialValue: _selectedMotif,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
@@ -530,8 +530,10 @@ class _NewRequestSheetState extends State<_NewRequestSheet> {
                             };
 
                             widget.onSuccess(newRequest);
+                            if (!context.mounted) return;
                             Navigator.pop(context);
 
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Row(

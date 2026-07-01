@@ -852,9 +852,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   .where((e) => e.telephone == ctrl.text.trim())
                   .firstOrNull;
               Navigator.pop(context);
-              if (f != null)
+              if (f != null) {
                 _ouvrirOuCreer(f);
-              else
+              } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Aucun compte trouvé.'),
@@ -862,6 +862,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppPalette.blue,
@@ -1096,8 +1097,9 @@ class _ConversationViewState extends State<_ConversationView> {
               onKeyEvent: (e) {
                 if (e is KeyDownEvent &&
                     e.logicalKey == LogicalKeyboardKey.enter &&
-                    !HardwareKeyboard.instance.isShiftPressed)
+                    !HardwareKeyboard.instance.isShiftPressed) {
                   _envoyer();
+                }
               },
               child: TextField(
                 controller: _msgCtrl,

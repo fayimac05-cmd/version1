@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../models/etudiant_model.dart';
-import '../utils/snackbar_helper.dart';
 
 class Parent {
   final String id, nom, prenoms, email, telephone, relation, matriculeEnfant;
@@ -257,7 +256,9 @@ class _AdminParentsState extends State<AdminParents> {
                         relation: relation,
                         matriculeEnfant: mat,
                       )));
-                  for (var c in controllers.values) c.dispose();
+                  for (var c in controllers.values) {
+                    c.dispose();
+                  }
                   Navigator.pop(ctx);
                   _snack('✅ Parent ajouté !');
                 },

@@ -2,12 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import '../theme/app_palette.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
-import '../utils/snackbar_helper.dart';
-import 'messages_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE MESSAGE CANAL
@@ -539,8 +536,6 @@ Widget _zoneSaisie() => Container(
     );
   }
 
-  void _snack(String msg) => showAppSnackBar(context, msg,
-      backgroundColor: AppPalette.blue);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -650,8 +645,10 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
 
   void _scrollBas() {
     Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scroll.hasClients) _scroll.animateTo(_scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      if (_scroll.hasClients) {
+        _scroll.animateTo(_scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      }
     });
   }
 

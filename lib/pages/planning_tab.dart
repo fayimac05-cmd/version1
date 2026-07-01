@@ -271,7 +271,7 @@ class _PlanningTabState extends State<PlanningTab> with SingleTickerProviderStat
                                 ]),
                               ),
                             );
-                          }).toList(),
+                          }),
                       ],
                     );
                   },

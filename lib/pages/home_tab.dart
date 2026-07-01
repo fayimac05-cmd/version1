@@ -5,12 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
-import '../pages/canal_screen.dart';
 import 'tickets_screen.dart';
 import 'notifications_page.dart';
 import 'chat_ia_screen.dart';
 import 'bulletin_screen.dart';
-import 'notes_tab.dart';
 import 'courses_tab.dart';
 
 class HomeTab extends StatefulWidget {
@@ -25,7 +23,7 @@ class _HomeTabState extends State<HomeTab> {
   final PageController _quotesCtrl = PageController(viewportFraction: 0.90);
   final PageController _newsCtrl   = PageController(viewportFraction: 0.92);
   int _eventPage = 0;
-  int _quotePage = 0;
+  final int _quotePage = 0;
   Timer? _autoScroll;
   Timer? _quoteScroll;
 
@@ -136,21 +134,6 @@ class _HomeTabState extends State<HomeTab> {
     _EventData('🏆', '12 Fév', 'Remise des diplômes',
         'Cérémonie de remise des diplômes de la promotion 2024.',
         'Grand Amphi · 15h00'),
-  ];
-
-  static const _news = [
-    _NewsData(Icons.star_rounded, 'Résultats du semestre 2 disponibles',
-        'Consultez vos notes et relevés de notes sur la plateforme.',
-        'Résultats', 'Il y a 1h'),
-    _NewsData(Icons.calendar_today_rounded, 'Journée portes ouvertes — 15 juillet',
-        'Venez découvrir nos filières et rencontrer les enseignants.',
-        'Événement', 'Il y a 3h'),
-    _NewsData(Icons.upload_file_rounded, 'Nouvelle plateforme dépôt de mémoires',
-        'Les étudiants en master peuvent désormais soumettre en ligne.',
-        'Admin', 'Hier'),
-    _NewsData(Icons.celebration_rounded, 'Soirée BDE — Vendredi 28 juin',
-        'Grande soirée de fin d\'année au campus, entrée libre.',
-        'BDE', 'Hier'),
   ];
 
   // ── Build ────────────────────────────────────────────────────────────────────
@@ -414,122 +397,6 @@ class _HomeTabState extends State<HomeTab> {
           ),
         );
       }),
-    );
-  }
-
-  // ── Citations carousel ────────────────────────────────────────────────────
-
-  Widget _buildQuotesCarousel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Container(
-            width: 4, height: 18,
-            decoration: BoxDecoration(
-                color: AppPalette.yellow,
-                borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(width: 8),
-          const Text('Citations & Sagesses',
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A2A3A))),
-        ]),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 150,
-          child: PageView.builder(
-            controller: _quotesCtrl,
-            itemCount: _quotes.length,
-            onPageChanged: (i) => setState(() => _quotePage = i),
-            itemBuilder: (_, i) => _quoteCard(_quotes[i]),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_quotes.length, (i) => AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: _quotePage == i ? 16 : 5,
-            height: 5,
-            decoration: BoxDecoration(
-              color: _quotePage == i
-                  ? AppPalette.yellow
-                  : AppPalette.yellow.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(3),
-            ),
-          )),
-        ),
-      ],
-    );
-  }
-
-  Widget _quoteCard(_QuoteData q) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 5),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppPalette.lightBlue),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 28, height: 28,
-              decoration: const BoxDecoration(
-                  color: AppPalette.yellow, shape: BoxShape.circle),
-              child: const Center(
-                child: Text('"',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF3A2A00),
-                        height: 1.4)),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(q.citation,
-                  maxLines: 3, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 11, color: Color(0xFF374151),
-                      height: 1.5, fontStyle: FontStyle.italic)),
-            ),
-          ]),
-          Row(children: [
-            Container(
-              width: 28, height: 28,
-              decoration: const BoxDecoration(
-                  color: AppPalette.lightBlue, shape: BoxShape.circle),
-              child: const Center(child: Icon(Icons.person_rounded,
-                  color: AppPalette.blue, size: 14)),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(q.auteur,
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppPalette.blue)),
-                Text(q.titre,
-                    style: const TextStyle(fontSize: 9, color: AppPalette.grey)),
-              ],
-            )),
-          ]),
-        ],
-      ),
     );
   }
 
@@ -1074,8 +941,3 @@ class _EventData {
   const _EventData(this.emoji, this.date, this.titre, this.desc, this.lieu);
 }
 
-class _NewsData {
-  final IconData icon;
-  final String titre, tag, date;
-  const _NewsData(this.icon, this.titre, _, this.tag, this.date);
-}

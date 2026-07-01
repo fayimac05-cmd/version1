@@ -151,6 +151,95 @@ exports.createEdt = async (req, res) => {
   }
 };
 
+// POST /api/edt/grille - Créer un EDT au format grille (jours/heures/salle), sans fichier PDF
+exports.createEdtGrille = async (req, res) => {
+  try {
+    const { filiere, niveau, anneeAcademique, creneaux } = req.body;
+
+    if (!filiere || !niveau) {
+      return res.status(400).json({
+        success: false,
+        message: 'Filière et niveau sont obligatoires.',
+      });
+    }
+
+    if (!Array.isArray(creneaux) || creneaux.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Au moins un créneau est requis.',
+      });
+    }
+
+    const filiereInfo = await resolveFiliere(pool, filiere);
+
+    const edtData = {
+      filiere: filiereInfo.id || filiere,
+      filiere_nom: filiereInfo.nom,
+      niveau,
+      anneeAcademique: anneeAcademique || new Date().getFullYear().toString(),
+      pdfUrl: null,
+      creneaux,
+      archive: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const newEdt = await EdtModel.create(edtData);
+
+    res.status(201).json({
+      success: true,
+      message: 'Emploi du temps créé avec succès.',
+      data: newEdt,
+    });
+  } catch (error) {
+    console.error('[createEdtGrille] Erreur :', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de l\'EDT.',
+      error: error.message,
+    });
+  }
+};
+
+// PUT /api/edt/grille/:id - Modifier les créneaux d'un EDT existant
+exports.updateEdtGrille = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { niveau, anneeAcademique, creneaux, archive } = req.body;
+
+    const edt = await EdtModel.findById(id);
+    if (!edt) {
+      return res.status(404).json({
+        success: false,
+        message: 'EDT non trouvé.',
+      });
+    }
+
+    const updateData = {
+      ...(niveau && { niveau }),
+      ...(anneeAcademique && { anneeAcademique }),
+      ...(Array.isArray(creneaux) && { creneaux }),
+      ...(typeof archive === 'boolean' && { archive }),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedEdt = await EdtModel.update(id, updateData);
+
+    res.status(200).json({
+      success: true,
+      message: 'EDT mis à jour avec succès.',
+      data: updatedEdt,
+    });
+  } catch (error) {
+    console.error('[updateEdtGrille] Erreur :', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la mise à jour de l\'EDT.',
+      error: error.message,
+    });
+  }
+};
+
 // PUT /api/edt/:id - Mettre à jour un EDT
 exports.updateEdt = async (req, res) => {
   try {

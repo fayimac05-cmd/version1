@@ -152,7 +152,7 @@ exports.createAnnonce = async (req, res) => {
 exports.updateAnnonce = async (req, res) => {
   try {
     const { id } = req.params;
-    const { titre, contenu, filiere, niveau, cibleRole } = req.body;
+    const { titre, contenu, filiere, niveau, cibleRole, statut } = req.body;
     const userId = req.user?.id;
 
     // Vérifier que l'annonce existe
@@ -172,11 +172,19 @@ exports.updateAnnonce = async (req, res) => {
       });
     }
 
+    if (statut && !['brouillon', 'publie'].includes(statut)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Statut invalide. Valeurs autorisées : brouillon, publie.',
+      });
+    }
+
     const updateData = {
       ...(titre && { titre }),
       ...(contenu && { contenu }),
       ...(niveau && { niveau }),
       ...(cibleRole && { cibleRole }),
+      ...(statut && { statut }),
       updatedAt: new Date().toISOString(),
     };
     if (filiere) {

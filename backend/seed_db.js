@@ -64,7 +64,7 @@ pool.connect(async (err, client, release) => {
     
     // First, let's update Ibrahim's filiere_id to the 'Réseaux et Télécoms' filiere
     // Let's find the id of 'Réseaux et Télécoms'
-    const filiereRes = await client.query("SELECT id FROM filieres WHERE name ILIKE '%Réseaux%' LIMIT 1");
+    const filiereRes = await client.query("SELECT id FROM filieres WHERE nom ILIKE '%Réseaux%' LIMIT 1");
     if (filiereRes.rows.length > 0) {
       const filiereId = filiereRes.rows[0].id;
       await client.query("UPDATE users SET filiere_id = $1 WHERE matricule = '24IST-O2/1851'", [filiereId]);

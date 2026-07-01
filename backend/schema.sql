@@ -131,7 +131,9 @@ CREATE TABLE notes (
     id SERIAL PRIMARY KEY,
     etudiant_id INTEGER REFERENCES etudiants(id) ON DELETE CASCADE,
     module_id INTEGER REFERENCES modules(id) ON DELETE CASCADE,
-    valeur DECIMAL CHECK (valeur >= 0 AND valeur <= 20)
+    session_id UUID REFERENCES sessions_notes(id) ON DELETE CASCADE,
+    valeur DECIMAL CHECK (valeur >= 0 AND valeur <= 20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Table des évaluations professeurs
@@ -181,7 +183,8 @@ CREATE TABLE edt (
     filiere_nom VARCHAR(255),
     niveau VARCHAR(50) NOT NULL,
     "anneeAcademique" VARCHAR(50) NOT NULL,
-    "pdfUrl" VARCHAR(255) NOT NULL,
+    "pdfUrl" VARCHAR(255),
+    creneaux JSONB DEFAULT '[]',
     archive BOOLEAN DEFAULT FALSE,
     "archivedAt" TIMESTAMP,
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -207,7 +210,31 @@ CREATE TABLE sessions_notes (
     module_id INTEGER REFERENCES modules(id) ON DELETE CASCADE,
     professeur_id UUID REFERENCES users(id) ON DELETE CASCADE,
     date_session TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_sent BOOLEAN DEFAULT FALSE
+    is_sent BOOLEAN DEFAULT FALSE,
+    statut VARCHAR(20) DEFAULT 'en_attente',
+    motif_rejet TEXT
+);
+
+-- Table des appels (présences) faits par les professeurs
+CREATE TABLE appels (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    filiere_id INTEGER REFERENCES filieres(id) ON DELETE CASCADE,
+    filiere_nom VARCHAR(255),
+    niveau VARCHAR(50),
+    module_id INTEGER REFERENCES modules(id) ON DELETE CASCADE,
+    professeur_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    date_appel DATE DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE appel_presences (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    appel_id UUID REFERENCES appels(id) ON DELETE CASCADE,
+    etudiant_id INTEGER REFERENCES etudiants(id) ON DELETE CASCADE,
+    matricule VARCHAR(50),
+    nom VARCHAR(255),
+    prenoms VARCHAR(255),
+    statut VARCHAR(20) DEFAULT 'present'
 );
 
 -- Table des supports de cours

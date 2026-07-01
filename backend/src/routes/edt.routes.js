@@ -24,6 +24,22 @@ router.get(
   edtController.getAllEdt
 );
 
+// POST /api/edt/grille - Créer un EDT au format grille (jours/heures/salle), sans PDF
+router.post(
+  '/grille',
+  authMiddleware,
+  requireRole('admin'),
+  edtController.createEdtGrille
+);
+
+// PUT /api/edt/grille/:id - Modifier les créneaux d'un EDT grille
+router.put(
+  '/grille/:id',
+  authMiddleware,
+  requireRole('admin'),
+  edtController.updateEdtGrille
+);
+
 // GET /api/edt/:id - Récupérer un EDT spécifique
 router.get(
   '/:id',

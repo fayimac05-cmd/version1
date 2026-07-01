@@ -22,9 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
-import '../admin/admin_etudiants.dart';
 import '../models/etudiant_model.dart';
-import '../utils/snackbar_helper.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 1 — Données simulées isolées [ARCH-1]
@@ -97,7 +95,6 @@ class _Tendance {
 // ═══════════════════════════════════════════════════════════════
 
 extension _A on Color {
-  Color get a04 => withValues(alpha: 0.04);
   Color get a08 => withValues(alpha: 0.08);
   Color get a12 => withValues(alpha: 0.12);
   Color get a20 => withValues(alpha: 0.20);
@@ -1390,6 +1387,4 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
         getDrawingHorizontalLine: (_) =>
             const FlLine(color: Color(0xFFF3F4F6), strokeWidth: 1),
       );
-
-  void _snack(String msg) => showAppSnackBar(context, msg);
 }

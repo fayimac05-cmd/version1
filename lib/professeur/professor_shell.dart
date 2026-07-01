@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
+import 'appel_tab.dart';
+import 'notes_tab.dart';
 
 // ── Données mock ───────────────────────────────────────────────────────────
 
@@ -18,12 +20,6 @@ class _Etudiant {
 class _Cours {
   final String id, titre, matiere, classeId, date;
   const _Cours({required this.id, required this.titre, required this.matiere, required this.classeId, required this.date});
-}
-
-class _Note {
-  final String matricule;
-  double? note;
-  _Note({required this.matricule, this.note});
 }
 
 final _mockClasses = [
@@ -70,7 +66,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
     final pages = [
       _ClassesTab(profile: widget.profile),
       _CoursTab(profile: widget.profile),
-      _NotesTab(profile: widget.profile),
+      const AppelTab(),
+      const NotesTab(),
       _ProfilTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
@@ -100,8 +97,9 @@ class _ProfessorShellState extends State<ProfessorShell> {
             children: [
               _navItem(Icons.groups_outlined, Icons.groups_rounded, 'Classes', 0, AppPalette.blue),
               _navItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'Cours', 1, AppPalette.blue),
-              _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 2, const Color(0xFF10B981)),
-              _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 3, const Color(0xFF42A5F5)),
+              _navItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 2, const Color(0xFF0EA5E9)),
+              _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 3, const Color(0xFF10B981)),
+              _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 4, const Color(0xFF42A5F5)),
             ],
           ),
         ),
@@ -548,205 +546,6 @@ class _CoursCard extends StatelessWidget {
         IconButton(
           icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
           onPressed: onDelete,
-        ),
-      ]),
-    );
-  }
-}
-
-// ── Onglet Notes ───────────────────────────────────────────────────────────
-
-class _NotesTab extends StatefulWidget {
-  const _NotesTab({required this.profile});
-  final StudentProfile profile;
-
-  @override
-  State<_NotesTab> createState() => _NotesTabState();
-}
-
-class _NotesTabState extends State<_NotesTab> {
-  _Classe? _classe;
-  String _matiere = 'Administration Réseau';
-  String _type = 'DS';
-  final Map<String, double?> _notes = {};
-  bool _saved = false;
-
-  static const _matieres = ['Administration Réseau', 'Bases de Données', 'Développement Web', 'Anglais Technique', 'Sécurité Réseau'];
-  static const _types = ['DS', 'TP', 'Examen Final', 'Contrôle Continu'];
-
-  List<_Etudiant> get _etudiants => _classe == null ? [] : _mockEtudiants.where((e) => e.classeId == _classe!.id).toList();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      _ProfHeader(
-        title: 'Saisie des Notes',
-        subtitle: _classe == null ? 'Sélectionnez une classe' : '${_etudiants.length} étudiants',
-        trailing: _saved
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(20)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
-                  SizedBox(width: 4),
-                  Text('Enregistré', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                ]),
-              )
-            : null,
-      ),
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            // Sélecteurs
-            _selectCard(),
-            const SizedBox(height: 14),
-            if (_classe != null) ...[
-              if (_etudiants.isEmpty)
-                const Center(child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text('Aucun étudiant dans cette classe', style: TextStyle(color: Color(0xFF94A3B8))),
-                ))
-              else ...[
-                ..._etudiants.map((e) => _NoteRow(
-                  etudiant: e,
-                  note: _notes[e.matricule],
-                  onChanged: (v) => setState(() { _notes[e.matricule] = v; _saved = false; }),
-                )),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity, height: 52,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.save_rounded),
-                    label: const Text('Enregistrer les notes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: () => setState(() => _saved = true),
-                  ),
-                ),
-              ],
-            ],
-          ]),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _selectCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
-      ),
-      child: Column(children: [
-        DropdownButtonFormField<_Classe>(
-          initialValue: _classe,
-          hint: const Text('Sélectionner une classe'),
-          decoration: InputDecoration(
-            labelText: 'Classe',
-            prefixIcon: const Icon(Icons.groups_outlined, color: AppPalette.blue),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          items: _mockClasses.map((c) => DropdownMenuItem(value: c, child: Text(c.nom))).toList(),
-          onChanged: (v) => setState(() { _classe = v; _notes.clear(); _saved = false; }),
-        ),
-        const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          initialValue: _matiere,
-          decoration: InputDecoration(
-            labelText: 'Matière',
-            prefixIcon: const Icon(Icons.school_outlined, color: AppPalette.blue),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          items: _matieres.map((m) => DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis))).toList(),
-          onChanged: (v) => setState(() => _matiere = v!),
-        ),
-        const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          initialValue: _type,
-          decoration: InputDecoration(
-            labelText: 'Type d\'évaluation',
-            prefixIcon: const Icon(Icons.fact_check_outlined, color: AppPalette.blue),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-          onChanged: (v) => setState(() => _type = v!),
-        ),
-      ]),
-    );
-  }
-}
-
-class _NoteRow extends StatefulWidget {
-  const _NoteRow({required this.etudiant, required this.note, required this.onChanged});
-  final _Etudiant etudiant;
-  final double? note;
-  final ValueChanged<double?> onChanged;
-
-  @override
-  State<_NoteRow> createState() => _NoteRowState();
-}
-
-class _NoteRowState extends State<_NoteRow> {
-  late TextEditingController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = TextEditingController(text: widget.note?.toString() ?? '');
-  }
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    final note = widget.note;
-    Color noteColor = const Color(0xFF64748B);
-    if (note != null) noteColor = note >= 10 ? const Color(0xFF10B981) : const Color(0xFFEF4444);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6)],
-      ),
-      child: Row(children: [
-        CircleAvatar(radius: 18, backgroundColor: AppPalette.lightBlue,
-          child: Text(widget.etudiant.prenoms[0], style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w700, fontSize: 13))),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${widget.etudiant.prenoms} ${widget.etudiant.nom}',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-          Text(widget.etudiant.matricule, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-        ])),
-        SizedBox(
-          width: 70,
-          child: TextField(
-            controller: _ctrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: noteColor),
-            decoration: InputDecoration(
-              hintText: '/20',
-              hintStyle: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-            onChanged: (v) {
-              final parsed = double.tryParse(v);
-              widget.onChanged(parsed != null && parsed >= 0 && parsed <= 20 ? parsed : null);
-            },
-          ),
         ),
       ]),
     );
