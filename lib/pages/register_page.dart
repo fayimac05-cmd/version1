@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
+import '../models/student_profile.dart';
 import 'login_page.dart';
+import 'student_shell.dart';
+import 'splash_screen.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -11,6 +14,16 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+  static const _niveaux = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
+  static const _filieresParDefaut = [
+    'Réseaux Informatiques et Télécom',
+    'Électrotechnique',
+    'Marketing & Communication',
+    'Gestion Comptable et Financière',
+    'Génie Civil',
+    'Finance Comptabilité',
+  ];
+
   final _nomCtrl = TextEditingController();
   final _prenomsCtrl = TextEditingController();
   final _matriculeCtrl = TextEditingController();
@@ -19,11 +32,38 @@ class _RegisterPageState extends State<RegisterPage> {
   final _passCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
 
+  List<String> _filieres = _filieresParDefaut;
+  String? _filiereSelectionnee;
+  String _niveauSelectionne = _niveaux.first;
+  bool _chargementFilieres = true;
+
   bool _obscure1 = true;
   bool _obscure2 = true;
   bool _loading = false;
   String? _error;
   String? _success;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerFilieres();
+  }
+
+  Future<void> _chargerFilieres() async {
+    final result = await ApiService.getFilieres();
+    if (result['success'] == true) {
+      final data = result['data'] as List<dynamic>;
+      if (data.isNotEmpty) {
+        _filieres = data.map((f) => f['nom'] as String).toList();
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _filiereSelectionnee = _filieres.first;
+        _chargementFilieres = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -56,7 +96,8 @@ class _RegisterPageState extends State<RegisterPage> {
         prenoms.isEmpty ||
         matricule.isEmpty ||
         email.isEmpty ||
-        pass.isEmpty) {
+        pass.isEmpty ||
+        _filiereSelectionnee == null) {
       setState(() {
         _loading = false;
         _error = 'Veuillez remplir tous les champs obligatoires.';
@@ -88,17 +129,36 @@ class _RegisterPageState extends State<RegisterPage> {
       telephone: telephone,
       motDePasse: pass,
       matricule: matricule,
+      filiere: _filiereSelectionnee!,
+      niveau: _niveauSelectionne,
     );
 
     if (result['success'] == true) {
-      setState(() {
-        _loading = false;
-        _success = 'Inscription réussie ! Vous pouvez maintenant vous connecter.';
-      });
-      await Future.delayed(const Duration(seconds: 2));
+      final u = result['user'] as Map<String, dynamic>? ?? {};
+      final profile = StudentProfile(
+        nom: u['nom'] ?? nom.toUpperCase(),
+        prenoms: u['prenoms'] ?? prenoms,
+        matricule: u['matricule'] ?? matricule,
+        email: u['email'] ?? email,
+        telephone: u['telephone'] ?? telephone,
+        filiere: u['filiere'] ?? _filiereSelectionnee ?? '',
+        motDePasse: '',
+        domaine: u['domaine'] ?? '',
+        niveau: u['niveau'] ?? _niveauSelectionne,
+        role: u['role'] ?? 'etudiant',
+      );
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginPage()),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => StudentShell(
+              profile: profile,
+              onLogout: () => Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const SplashScreen()),
+                (route) => false,
+              ),
+            ),
+          ),
+          (route) => false,
         );
       }
     } else {
@@ -219,6 +279,51 @@ class _RegisterPageState extends State<RegisterPage> {
                     controller: _matriculeCtrl,
                     hint: 'Ex: 24IST-O2/1851',
                     icon: Icons.badge_outlined,
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // Filière / Niveau
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Filière *'),
+                            const SizedBox(height: 8),
+                            _chargementFilieres
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: LinearProgressIndicator())
+                                : _buildDropdownField(
+                                    value: _filiereSelectionnee,
+                                    items: _filieres,
+                                    icon: Icons.school_outlined,
+                                    onChanged: (v) =>
+                                        setState(() => _filiereSelectionnee = v),
+                                  ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Niveau *'),
+                            const SizedBox(height: 8),
+                            _buildDropdownField(
+                              value: _niveauSelectionne,
+                              items: _niveaux,
+                              icon: Icons.stairs_outlined,
+                              onChanged: (v) =>
+                                  setState(() => _niveauSelectionne = v!),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 18),
@@ -424,6 +529,42 @@ class _RegisterPageState extends State<RegisterPage> {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String? value,
+    required List<String> items,
+    required IconData icon,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppPalette.lightGrey,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppPalette.borderGrey),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Icon(icon, color: AppPalette.blue, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down, color: AppPalette.grey),
+                style: const TextStyle(fontSize: 14, color: AppPalette.black),
+                items: items
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis)))
+                    .toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

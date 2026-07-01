@@ -130,8 +130,9 @@ class _AuthPageState extends State<AuthPage> {
       _emailCtrl,
       _newPassCtrl,
       _confPassCtrl,
-    ])
+    ]) {
       c.dispose();
+    }
     super.dispose();
   }
 
@@ -401,8 +402,9 @@ class _AuthPageState extends State<AuthPage> {
       _emailCtrl,
       _newPassCtrl,
       _confPassCtrl,
-    ])
+    ]) {
       c.clear();
+    }
   });
 
   @override

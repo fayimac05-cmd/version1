@@ -68,9 +68,6 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
-  int get _nbEnAttentePub => adminPublications.where((p) => p.statut == 'en_attente').length;
-  int get _nbEnAttenteEv => adminEvenements.where((e) => e.statut == 'en_attente').length;
-
   @override
   Widget build(BuildContext context) {
     final isMobile = AdminTheme.isMobile(context);
@@ -133,6 +130,4 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
         itemCount: adminPublications.length,
         itemBuilder: (_, i) => ListTile(title: Text(adminPublications[i].titre)),
       );
-
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/app_palette.dart';
 import '../widgets/app_bubble_bg.dart';
 
 class NotificationsPage extends StatelessWidget {

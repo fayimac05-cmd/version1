@@ -88,7 +88,29 @@ class _LoginPageState extends State<LoginPage> {
       'role': 'professeur',
       'motDePasse': 'prof456',
     },
+    '24IST-PAR/001': {
+      'nom': 'KOURAOGO',
+      'prenoms': 'Seydou',
+      'filiere': '',
+      'domaine': '',
+      'role': 'parent',
+      'motDePasse': 'parent123',
+    },
   };
+
+  // Comptes de démonstration pour les boutons d'accès rapide
+  static const List<Map<String, String>> _accesRapide = [
+    {'label': 'Admin', 'matricule': '24IST-ADM/001', 'motDePasse': 'admin123'},
+    {'label': 'Prof', 'matricule': '24IST-PROF/001', 'motDePasse': 'prof123'},
+    {'label': 'Parent', 'matricule': '24IST-PAR/001', 'motDePasse': 'parent123'},
+    {'label': 'Étudiant', 'matricule': '24IST-O2/1851', 'motDePasse': '1851'},
+  ];
+
+  void _connexionRapide(Map<String, String> compte) {
+    _matriculeCtrl.text = compte['matricule']!;
+    _passCtrl.text = compte['motDePasse']!;
+    _login();
+  }
 
   @override
   void dispose() {
@@ -321,7 +343,26 @@ class _LoginPageState extends State<LoginPage> {
                     style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 28),
+
+                  // Accès rapide (démo)
+                  Text(
+                    'Accès rapide (démo)',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _accesRapide
+                        .map((compte) => _buildAccesRapideChip(compte))
+                        .toList(),
+                  ),
+
+                  const SizedBox(height: 28),
 
                   // Matricule field
                   _buildLabel('Matricule'),
@@ -450,6 +491,40 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAccesRapideChip(Map<String, String> compte) {
+    const icones = {
+      'Admin': Icons.admin_panel_settings_outlined,
+      'Prof': Icons.school_outlined,
+      'Parent': Icons.family_restroom_outlined,
+      'Étudiant': Icons.person_outline,
+    };
+    return GestureDetector(
+      onTap: _loading ? null : () => _connexionRapide(compte),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: AppPalette.lightBlue,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppPalette.blue.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icones[compte['label']], size: 16, color: AppPalette.blue),
+            const SizedBox(width: 6),
+            Text(
+              compte['label']!,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppPalette.blue),
+            ),
+          ],
+        ),
       ),
     );
   }

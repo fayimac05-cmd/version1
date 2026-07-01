@@ -281,8 +281,10 @@ class _AdminMessagesState extends State<AdminMessages>
   Widget _listeGroupes(List<GroupeAdmin> groupes) {
     final f = _query.isEmpty ? groupes : groupes.where((g) =>
         g.nom.toLowerCase().contains(_query.toLowerCase())).toList();
-    if (f.isEmpty) return const Center(child: Text('Aucun groupe',
-        style: TextStyle(fontSize: 13, color: AdminTheme.textMuted)));
+    if (f.isEmpty) {
+      return const Center(child: Text('Aucun groupe',
+          style: TextStyle(fontSize: 13, color: AdminTheme.textMuted)));
+    }
     return ListView.builder(
       itemCount: f.length,
       itemBuilder: (_, i) => _itemGroupe(f[i]));
@@ -765,7 +767,9 @@ class _AdminMessagesState extends State<AdminMessages>
                 onKeyEvent: (e) {
                   if (e is KeyDownEvent &&
                       e.logicalKey == LogicalKeyboardKey.enter &&
-                      !HardwareKeyboard.instance.isShiftPressed) _envoyer(g);
+                      !HardwareKeyboard.instance.isShiftPressed) {
+                    _envoyer(g);
+                  }
                 },
                 child: TextField(
                   controller: _msgCtrl,

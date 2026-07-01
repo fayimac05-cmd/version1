@@ -55,39 +55,6 @@ class _ChatIAScreenState extends State<ChatIAScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   bool _enChargement = false;
 
-  // ── Contexte académique d'Ibrahim passé à Claude ─────────────────────
-  String get _contexteEtudiant =>
-      '''
-Tu es le conseiller académique IA de ScolarHub pour l'IST (Institut Supérieur de Technologies), Campus Ouaga 2000, Burkina Faso.
-
-Étudiant : ${widget.profile.prenoms} ${widget.profile.nom}
-Matricule : ${widget.profile.matricule}
-Filière : ${widget.profile.filiere}
-Domaine : ${widget.profile.domaine.isNotEmpty ? widget.profile.domaine : 'Sciences & Technologies'}
-Niveau : Licence 2 — Semestre 3 — Année 2024/2025
-
-Notes actuelles :
-- Algorithmique & Structures de données (INFO101) : 14.5/20 — Coeff 3 ✅ Validé
-- Base de données (INFO102) : 8.0/20 — Coeff 3 ⚠️ En danger
-- Réseaux informatiques (INFO103) : 4.5/20 — Coeff 2 🚨 Blâmable
-- Mathématiques discrètes (MATH201) : 12.0/20 — Coeff 2 ✅ Validé
-- Anglais technique (ANG101) : 16.0/20 — Coeff 1 ✅ Validé
-- Programmation Orientée Objet (INFO104) : 9.5/20 — Coeff 3 ⚠️ En danger
-- Systèmes d\'exploitation (INFO105) : En attente — Coeff 2
-Moyenne générale pondérée : ~10.6/20 (modules notés)
-
-Ton rôle :
-- Analyser la situation académique de l\'étudiant
-- Proposer des plans de révision personnalisés
-- Féliciter les bons résultats
-- Alerter sur les modules critiques (Réseaux : 4.5/20 — urgence !)
-- Donner des conseils de méthode de travail
-- Répondre en français, de manière bienveillante et motivante
-- Être précis, concret et adapté au contexte burkinabè
-- Ne jamais inventer des notes ou des informations non fournies
-- Répondre de façon concise (max 200 mots sauf si demande détaillée)
-''';
-
   // ── Questions suggérées ───────────────────────────────────────────────
   final List<Map<String, dynamic>> _suggestions = [
     {
@@ -220,13 +187,11 @@ Ton rôle :
         });
         _sauvegarderHistorique();
       } else {
-        print("API Error: ${response.body}"); // Pour le debug
         _ajouterErreur(
           'Erreur ${response.statusCode}. Vérifiez votre clé API.',
         );
       }
     } catch (e) {
-      print("Exception: $e"); // Pour le debug
       _ajouterErreur('Connexion impossible. Vérifiez votre réseau.');
     }
 

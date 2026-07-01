@@ -1,38 +1,60 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../services/api_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
-// ENUMS & CONFIGURATIONS MÉTIER HAUT DE GAMME
+// ENUMS & CONFIGURATIONS MÉTIER
 // ════════════════════════════════════════════════════════════════════════════
-enum TypeAnnonce { urgent, academique, evenement, horaire }
 enum PorteeAnnonce { globale, filiere, niveau }
 enum StatutAnnonce { brouillon, publie }
 
-// Définition d'une couleur émeraude premium stable (Tailwind Emerald)
 const Color _emeraldColor = Color(0xFF10B981);
 
-class PieceJointe {
-  final String nom, type; 
-  final String? url;
-  PieceJointe({required this.nom, required this.type, this.url});
-}
+const List<Map<String, String>> cibleRoleOptions = [
+  {'val': 'tous', 'label': 'Tout l\'établissement'},
+  {'val': 'etudiant', 'label': 'Étudiants'},
+  {'val': 'professeur', 'label': 'Professeurs'},
+  {'val': 'bde', 'label': 'BDE'},
+];
+
+final List<String> istNiveaux = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
 
 class Annonce {
   final String id;
   String titre, contenu;
-  TypeAnnonce type;
-  PorteeAnnonce portee;
-  String? filiereId, niveau;
+  String cibleRole;
+  String? filiereId, filiereNom, niveau;
   StatutAnnonce statut;
   final DateTime dateCreation;
-  List<PieceJointe> piecesJointes;
+  List<String> fichiers;
 
   Annonce({
     required this.id, required this.titre, required this.contenu,
-    required this.type, required this.portee, required this.statut,
-    required this.dateCreation, this.filiereId, this.niveau,
-    List<PieceJointe>? piecesJointes,
-  }) : piecesJointes = piecesJointes ?? [];
+    required this.cibleRole, required this.statut,
+    required this.dateCreation, this.filiereId, this.filiereNom, this.niveau,
+    List<String>? fichiers,
+  }) : fichiers = fichiers ?? [];
+
+  factory Annonce.fromJson(Map<String, dynamic> json) {
+    return Annonce(
+      id: json['id'].toString(),
+      titre: json['titre'] ?? '',
+      contenu: json['contenu'] ?? '',
+      cibleRole: json['cibleRole'] ?? 'tous',
+      filiereId: json['filiere']?.toString(),
+      filiereNom: json['filiere_nom'],
+      niveau: json['niveau'],
+      statut: json['statut'] == 'publie' ? StatutAnnonce.publie : StatutAnnonce.brouillon,
+      dateCreation: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      fichiers: (json['fichiers'] as List<dynamic>? ?? []).map((f) => f.toString()).toList(),
+    );
+  }
+
+  PorteeAnnonce get portee {
+    if (filiereId != null && filiereId!.isNotEmpty) return PorteeAnnonce.filiere;
+    if (niveau != null && niveau!.isNotEmpty) return PorteeAnnonce.niveau;
+    return PorteeAnnonce.globale;
+  }
 }
 
 class AnnonceUiConfig {
@@ -41,56 +63,19 @@ class AnnonceUiConfig {
   final Color color;
   const AnnonceUiConfig({required this.label, required this.icon, required this.color});
 
-  static AnnonceUiConfig getTypeConfig(TypeAnnonce type) {
-    switch (type) {
-      case TypeAnnonce.urgent:
-        return const AnnonceUiConfig(label: 'Crucial / Alerte', icon: Icons.gpp_maybe_rounded, color: Colors.redAccent);
-      case TypeAnnonce.academique:
-        return const AnnonceUiConfig(label: 'Note Académique', icon: Icons.assignment_outlined, color: AdminTheme.iconBg);
-      case TypeAnnonce.evenement:
-        return const AnnonceUiConfig(label: 'Événement campus', icon: Icons.local_activity_outlined, color: Colors.purple);
-      case TypeAnnonce.horaire:
-        return const AnnonceUiConfig(label: 'Emploi du temps', icon: Icons.date_range_rounded, color: _emeraldColor);
-    }
-  }
-
-  static AnnonceUiConfig getPjConfig(String type) {
-    switch (type) {
-      case 'pdf':   return const AnnonceUiConfig(label: 'PDF', icon: Icons.picture_as_pdf_rounded, color: Colors.redAccent);
-      case 'word':  return const AnnonceUiConfig(label: 'Word', icon: Icons.description_rounded, color: Colors.blueAccent);
-      case 'image': return const AnnonceUiConfig(label: 'Image', icon: Icons.image_outlined, color: _emeraldColor);
-      case 'video': return const AnnonceUiConfig(label: 'Vidéo', icon: Icons.play_circle_outline_rounded, color: Colors.purple);
-      case 'lien':  return const AnnonceUiConfig(label: 'Lien', icon: Icons.link_rounded, color: Colors.cyan);
-      default:      return const AnnonceUiConfig(label: 'Fichier', icon: Icons.attach_file_rounded, color: Color(0xFF64748B));
+  static AnnonceUiConfig getCibleConfig(String cibleRole) {
+    switch (cibleRole) {
+      case 'etudiant':
+        return const AnnonceUiConfig(label: 'Étudiants', icon: Icons.school_outlined, color: AdminTheme.iconBg);
+      case 'professeur':
+        return const AnnonceUiConfig(label: 'Professeurs', icon: Icons.assignment_ind_outlined, color: Colors.purple);
+      case 'bde':
+        return const AnnonceUiConfig(label: 'BDE', icon: Icons.groups_outlined, color: _emeraldColor);
+      default:
+        return const AnnonceUiConfig(label: 'Tout l\'établissement', icon: Icons.campaign_outlined, color: Colors.redAccent);
     }
   }
 }
-
-final List<Map<String, String>> istFilieres = [
-  {'id': 'RIT', 'nom': 'Réseaux Informatiques et Télécommunications (RIT)'},
-  {'id': 'IDA', 'nom': 'Informatique de Gestion et Développements d\'Applications (IDA)'},
-  {'id': 'ELT', 'nom': 'Génie Électrique · Électrotechnique (ELT)'},
-  {'id': 'AGE', 'nom': 'Administration et Gestion des Entreprises (AGE)'},
-  {'id': 'GEC', 'nom': 'Gestion des Entreprises et Administrations (GEC)'},
-];
-
-final List<String> istNiveaux = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
-
-final List<Annonce> _globalAnnoncesList = [
-  Annonce(
-    id: 'A001', titre: 'Calendrier final des examens du Semestre 4',
-    contenu: 'Le secrétariat général informe les étudiants que le calendrier officiel du S4 est validé. Les épreuves débuteront le lundi suivant au campus de l\'IST Ouaga 2000.',
-    type: TypeAnnonce.urgent, portee: PorteeAnnonce.globale, statut: StatutAnnonce.publie,
-    dateCreation: DateTime.now().subtract(const Duration(hours: 2)),
-    piecesJointes: [PieceJointe(nom: 'Planning_General_S4_IST.pdf', type: 'pdf')],
-  ),
-  Annonce(
-    id: 'A002', titre: 'Notes de rattrapages disponibles — Session Mai',
-    contenu: 'Les fiches de notes après délibération pour la filière Réseaux (RIT) L2 sont consultables. Veuillez signaler toute réclamation sous 48h.',
-    type: TypeAnnonce.academique, portee: PorteeAnnonce.filiere, filiereId: 'RIT', statut: StatutAnnonce.publie,
-    dateCreation: DateTime.now().subtract(const Duration(days: 1)),
-  ),
-];
 
 // ════════════════════════════════════════════════════════════════════════════
 // VUE PRINCIPALE — TABLEAU DE BORD DES ANNONCES
@@ -103,18 +88,45 @@ class AdminAnnonces extends StatefulWidget {
 class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProviderStateMixin {
   late TabController _tabs;
   String _searchQuery = '';
+  List<Annonce> _annonces = [];
+  List<Map<String, dynamic>> _filieres = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
+    _loadData();
   }
 
   @override
   void dispose() { _tabs.dispose(); super.dispose(); }
 
+  Future<void> _loadData() async {
+    setState(() { _isLoading = true; _errorMessage = null; });
+    final results = await Future.wait([ApiService.getAnnonces(), ApiService.getFilieres()]);
+    final annoncesResult = results[0];
+    final filieresResult = results[1];
+
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      if (annoncesResult['success'] == true) {
+        _annonces = (annoncesResult['data'] as List<dynamic>)
+            .map((j) => Annonce.fromJson(j as Map<String, dynamic>))
+            .toList();
+      } else {
+        _errorMessage = annoncesResult['error'] as String?;
+      }
+      if (filieresResult['success'] == true) {
+        _filieres = (filieresResult['data'] as List<dynamic>).cast<Map<String, dynamic>>();
+      }
+    });
+  }
+
   List<Annonce> get _filteredAnnonces {
-    var list = List<Annonce>.from(_globalAnnoncesList);
+    var list = List<Annonce>.from(_annonces);
     if (_searchQuery.isNotEmpty) {
       list = list.where((a) =>
           a.titre.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -126,6 +138,17 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
   List<Annonce> _getAnnoncesByStatut(StatutAnnonce? statut) => statut == null
       ? _filteredAnnonces
       : _filteredAnnonces.where((a) => a.statut == statut).toList();
+
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.redAccent : const Color(0xFF1E293B),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +174,12 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                         ],
                       ),
                     ),
+                    IconButton(
+                      onPressed: _isLoading ? null : _loadData,
+                      icon: const Icon(Icons.refresh_rounded, color: Color(0xFF64748B)),
+                      tooltip: 'Actualiser',
+                    ),
+                    const SizedBox(width: 8),
                     _buildCreateButton(),
                   ],
                 ),
@@ -192,19 +221,36 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
           ),
           Container(height: 1, color: const Color(0xFFE2E8F0)),
           Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              children: [
-                _buildListView(_getAnnoncesByStatut(null)),
-                _buildListView(_getAnnoncesByStatut(StatutAnnonce.publie)),
-                _buildListView(_getAnnoncesByStatut(StatutAnnonce.brouillon)),
-              ],
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage != null
+                    ? _buildErrorState()
+                    : TabBarView(
+                        controller: _tabs,
+                        children: [
+                          _buildListView(_getAnnoncesByStatut(null)),
+                          _buildListView(_getAnnoncesByStatut(StatutAnnonce.publie)),
+                          _buildListView(_getAnnoncesByStatut(StatutAnnonce.brouillon)),
+                        ],
+                      ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildErrorState() => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 32),
+            const SizedBox(height: 12),
+            Text(_errorMessage ?? 'Erreur', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)), textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: _loadData, child: const Text('Réessayer')),
+          ],
+        ),
+      );
 
   Widget _buildCreateButton() => ElevatedButton.icon(
         onPressed: () => _openFormModal(),
@@ -241,7 +287,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
   }
 
   Widget _buildAnnonceCard(Annonce a) {
-    final typeConfig = AnnonceUiConfig.getTypeConfig(a.type);
+    final cibleConfig = AnnonceUiConfig.getCibleConfig(a.cibleRole);
     final statusColor = a.statut == StatutAnnonce.publie ? _emeraldColor : const Color(0xFFF59E0B);
 
     return Container(
@@ -262,8 +308,8 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
               children: [
                 Container(
                   width: 38, height: 38,
-                  decoration: BoxDecoration(color: typeConfig.color.withValues(alpha:0.08), borderRadius: BorderRadius.circular(8)),
-                  child: Icon(typeConfig.icon, color: typeConfig.color, size: 18),
+                  decoration: BoxDecoration(color: cibleConfig.color.withValues(alpha:0.08), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(cibleConfig.icon, color: cibleConfig.color, size: 18),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -275,7 +321,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                       Wrap(
                         spacing: 8, runSpacing: 4,
                         children: [
-                          _buildCardTag(typeConfig.label, typeConfig.color),
+                          _buildCardTag(cibleConfig.label, cibleConfig.color),
                           _buildCardTag(_getCibleText(a), const Color(0xFF475569), isFilled: false),
                         ],
                       ),
@@ -307,10 +353,10 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(a.contenu, style: const TextStyle(fontSize: 13, color: Color(0xFF334155), height: 1.5)),
           ),
-          if (a.piecesJointes.isNotEmpty)
+          if (a.fichiers.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Wrap(spacing: 8, runSpacing: 6, children: a.piecesJointes.map((p) => _buildPjBadge(p)).toList()),
+              child: Wrap(spacing: 8, runSpacing: 6, children: a.fichiers.map((f) => _buildPjBadge(f)).toList()),
             ),
           const SizedBox(height: 14),
           Container(height: 1, color: const Color(0xFFF1F5F9)),
@@ -326,13 +372,13 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                 const SizedBox(width: 8),
                 if (a.statut == StatutAnnonce.brouillon)
                   TextButton.icon(
-                    onPressed: () => setState(() => a.statut = StatutAnnonce.publie),
+                    onPressed: () => _togglePublication(a, StatutAnnonce.publie),
                     icon: const Icon(Icons.rocket_launch_outlined, size: 15, color: _emeraldColor),
                     label: const Text('Publier l\'annonce', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _emeraldColor)),
                   ),
                 if (a.statut == StatutAnnonce.publie)
                   TextButton.icon(
-                    onPressed: () => setState(() => a.statut = StatutAnnonce.brouillon),
+                    onPressed: () => _togglePublication(a, StatutAnnonce.brouillon),
                     icon: const Icon(Icons.inventory_2_outlined, size: 15, color: Color(0xFFF59E0B)),
                     label: const Text('Déposer en brouillon', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B))),
                   ),
@@ -360,20 +406,35 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
         child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
       );
 
-  Widget _buildPjBadge(PieceJointe p) {
-    final cfg = AnnonceUiConfig.getPjConfig(p.type);
+  Widget _buildPjBadge(String fileUrl) {
+    final name = fileUrl.split('/').last;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(cfg.icon, size: 14, color: cfg.color),
+          const Icon(Icons.attach_file_rounded, size: 14, color: Color(0xFF64748B)),
           const SizedBox(width: 6),
-          Text(p.nom, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)), maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ),
     );
+  }
+
+  Future<void> _togglePublication(Annonce a, StatutAnnonce newStatus) async {
+    final result = await ApiService.updateAnnonce(a.id, {
+      'statut': newStatus == StatutAnnonce.publie ? 'publie' : 'brouillon',
+    });
+    if (!mounted) return;
+    if (result['success'] == true) {
+      setState(() => a.statut = newStatus);
+      _showSnack(newStatus == StatutAnnonce.publie
+          ? '🚀 L\'avis d\'information a été publié sur les terminaux étudiants.'
+          : '💾 Document consigné dans vos brouillons.');
+    } else {
+      _showSnack(result['error'] as String? ?? 'Erreur lors de la mise à jour.', isError: true);
+    }
   }
 
   void _openFormModal({Annonce? annonce}) {
@@ -383,17 +444,30 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
       backgroundColor: Colors.transparent,
       builder: (_) => _FormulaireAnnonce(
         annonce: annonce,
-        onSave: (processedAnnonce, finalStatus) {
-          setState(() {
-            if (annonce != null) {
-              final index = _globalAnnoncesList.indexWhere((x) => x.id == annonce.id);
-              if (index != -1) {
-                _globalAnnoncesList[index] = processedAnnonce..statut = finalStatus;
-              }
-            } else {
-              _globalAnnoncesList.insert(0, processedAnnonce..statut = finalStatus);
-            }
-          });
+        filieres: _filieres,
+        onSave: (data, finalStatus) async {
+          final payload = {
+            ...data,
+            'statut': finalStatus == StatutAnnonce.publie ? 'publie' : 'brouillon',
+          };
+          Map<String, dynamic> result;
+          if (annonce != null) {
+            result = await ApiService.updateAnnonce(annonce.id, payload);
+          } else {
+            result = await ApiService.createAnnonce(payload);
+          }
+          if (!mounted) return false;
+          if (result['success'] == true) {
+            Navigator.pop(context);
+            _showSnack(finalStatus == StatutAnnonce.publie
+                ? '🚀 L\'avis d\'information a été publié sur les terminaux étudiants.'
+                : '💾 Document consigné dans vos brouillons.');
+            _loadData();
+            return true;
+          } else {
+            _showSnack(result['error'] as String? ?? 'Erreur lors de l\'enregistrement.', isError: true);
+            return false;
+          }
         },
       ),
     );
@@ -409,9 +483,16 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler', style: TextStyle(color: Color(0xFF64748B)))),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() => _globalAnnoncesList.removeWhere((x) => x.id == a.id));
+              final result = await ApiService.deleteAnnonce(a.id);
+              if (!mounted) return;
+              if (result['success'] == true) {
+                setState(() => _annonces.removeWhere((x) => x.id == a.id));
+                _showSnack('Annonce supprimée avec succès.');
+              } else {
+                _showSnack(result['error'] as String? ?? 'Erreur lors de la suppression.', isError: true);
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, elevation: 0),
             child: const Text('Supprimer définitivement', style: TextStyle(color: Colors.white)),
@@ -424,7 +505,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
   String _getCibleText(Annonce a) {
     switch (a.portee) {
       case PorteeAnnonce.globale: return 'Tous les étudiants';
-      case PorteeAnnonce.filiere: return 'Filière : ${a.filiereId}';
+      case PorteeAnnonce.filiere: return 'Filière : ${a.filiereNom ?? a.filiereId}';
       case PorteeAnnonce.niveau:  return 'Niveau : ${a.niveau}';
     }
   }
@@ -438,12 +519,13 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// PANNEAU FORMULAIRE D'ÉDITION RESTRUCTURÉ
+// PANNEAU FORMULAIRE D'ÉDITION
 // ════════════════════════════════════════════════════════════════════════════
 class _FormulaireAnnonce extends StatefulWidget {
   final Annonce? annonce;
-  final void Function(Annonce, StatutAnnonce) onSave;
-  const _FormulaireAnnonce({this.annonce, required this.onSave});
+  final List<Map<String, dynamic>> filieres;
+  final Future<bool> Function(Map<String, dynamic>, StatutAnnonce) onSave;
+  const _FormulaireAnnonce({this.annonce, required this.filieres, required this.onSave});
 
   @override State<_FormulaireAnnonce> createState() => _FormulaireAnnonceState();
 }
@@ -451,12 +533,11 @@ class _FormulaireAnnonce extends StatefulWidget {
 class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
   final _titreController = TextEditingController();
   final _contenuController = TextEditingController();
-  final _lienController = TextEditingController();
 
-  TypeAnnonce _selectedType = TypeAnnonce.academique;
+  String _selectedCibleRole = 'tous';
   PorteeAnnonce _selectedPortee = PorteeAnnonce.globale;
   String? _selectedFiliere, _selectedNiveau;
-  final List<PieceJointe> _attachmentsList = [];
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -465,24 +546,23 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
       final a = widget.annonce!;
       _titreController.text = a.titre;
       _contenuController.text = a.contenu;
-      _selectedType = a.type;
+      _selectedCibleRole = a.cibleRole;
       _selectedPortee = a.portee;
       _selectedFiliere = a.filiereId;
       _selectedNiveau = a.niveau;
-      _attachmentsList.addAll(a.piecesJointes);
     }
   }
 
   @override
   void dispose() {
-    _titreController.dispose(); _contenuController.dispose(); _lienController.dispose();
+    _titreController.dispose(); _contenuController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.94,
+      height: MediaQuery.of(context).size.height * 0.9,
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       child: Column(
         children: [
@@ -517,9 +597,9 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
                   const SizedBox(height: 6),
                   _buildBigTextArea(),
                   const SizedBox(height: 20),
-                  _buildSectionLabel('Catégorie de l\'information'),
+                  _buildSectionLabel('Rôle destinataire'),
                   const SizedBox(height: 8),
-                  _buildTypeSelector(),
+                  _buildCibleRoleSelector(),
                   const SizedBox(height: 20),
                   _buildSectionLabel('Cible de diffusion'),
                   const SizedBox(height: 8),
@@ -535,14 +615,6 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
                     _buildSectionLabel('Sélectionner le niveau académique'),
                     const SizedBox(height: 6),
                     _buildNiveauDropdown(),
-                  ],
-                  const SizedBox(height: 20),
-                  _buildSectionLabel('Ajouter des pièces jointes justificatives'),
-                  const SizedBox(height: 10),
-                  _buildPjActionsGrid(),
-                  if (_attachmentsList.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    ..._attachmentsList.map((p) => _buildAttachmentItem(p)),
                   ],
                 ],
               ),
@@ -574,19 +646,13 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
         ),
       );
 
-  Widget _buildTypeSelector() {
-    final elements = [
-      {'val': TypeAnnonce.academique, 'label': 'Scolarité', 'icon': Icons.assignment_outlined},
-      {'val': TypeAnnonce.urgent, 'label': 'Alerte', 'icon': Icons.gpp_maybe_rounded},
-      {'val': TypeAnnonce.evenement, 'label': 'Événement', 'icon': Icons.local_activity_outlined},
-      {'val': TypeAnnonce.horaire, 'label': 'Planning', 'icon': Icons.date_range_rounded},
-    ];
+  Widget _buildCibleRoleSelector() {
     return Row(
-      children: elements.map((e) {
-        final isSelected = _selectedType == e['val'];
+      children: cibleRoleOptions.map((e) {
+        final isSelected = _selectedCibleRole == e['val'];
         return Expanded(
           child: GestureDetector(
-            onTap: () => setState(() => _selectedType = e['val'] as TypeAnnonce),
+            onTap: () => setState(() => _selectedCibleRole = e['val']!),
             child: Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -595,13 +661,7 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: isSelected ? AdminTheme.iconBg : const Color(0xFFE2E8F0)),
               ),
-              child: Column(
-                children: [
-                  Icon(e['icon'] as IconData, color: isSelected ? Colors.white : const Color(0xFF475569), size: 18),
-                  const SizedBox(height: 4),
-                  Text(e['label'] as String, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : const Color(0xFF475569))),
-                ],
-              ),
+              child: Text(e['label']!, textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : const Color(0xFF475569))),
             ),
           ),
         );
@@ -649,9 +709,9 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
   Widget _buildFiliereDropdown() => _buildDropdownContainer(
         child: DropdownButton<String>(
           value: _selectedFiliere,
-          hint: const Text('Choisir la filière (ex: RIT, IDA)', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+          hint: const Text('Choisir la filière', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
           isExpanded: true, underline: const SizedBox(),
-          items: istFilieres.map((f) => DropdownMenuItem(value: f['id'], child: Text(f['nom']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))).toList(),
+          items: widget.filieres.map((f) => DropdownMenuItem(value: f['id'].toString(), child: Text(f['nom']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))).toList(),
           onChanged: (v) => setState(() => _selectedFiliere = v),
         ),
       );
@@ -672,75 +732,6 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
         child: DropdownButtonHideUnderline(child: child),
       );
 
-  Widget _buildPjActionsGrid() {
-    final tools = [
-      {'type': 'pdf', 'label': 'Fichier PDF', 'icon': Icons.picture_as_pdf_rounded},
-      {'type': 'word', 'label': 'Doc Word', 'icon': Icons.description_rounded},
-      {'type': 'image', 'label': 'Illustration', 'icon': Icons.image_rounded},
-      {'type': 'lien', 'label': 'Lien web', 'icon': Icons.link_rounded},
-    ];
-    return Wrap(
-      spacing: 8, runSpacing: 8,
-      children: tools.map((t) => ActionChip(
-            elevation: 0, pressElevation: 0,
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xFFE2E8F0))),
-            avatar: Icon(t['icon'] as IconData, size: 14, color: const Color(0xFF475569)),
-            label: Text(t['label'] as String, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-            onPressed: () => _handleAttachmentAddition(t['type'] as String),
-          )).toList(),
-    );
-  }
-
-  Widget _buildAttachmentItem(PieceJointe p) {
-    final cfg = AnnonceUiConfig.getPjConfig(p.type);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: cfg.color.withValues(alpha:0.04), borderRadius: BorderRadius.circular(8), border: Border.all(color: cfg.color.withValues(alpha:0.15))),
-      child: Row(
-        children: [
-          Icon(cfg.icon, size: 16, color: cfg.color),
-          const SizedBox(width: 10),
-          Expanded(child: Text(p.nom, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-          GestureDetector(onTap: () => setState(() => _attachmentsList.remove(p)), child: const Icon(Icons.cancel_rounded, size: 16, color: Color(0xFF94A3B8))),
-        ],
-      ),
-    );
-  }
-
-  void _handleAttachmentAddition(String type) {
-    if (type == 'lien') {
-      _lienController.clear();
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Text('Insérer une URL externe', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: _buildTextField(controller: _lienController, hint: 'https://example.com/ressource'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-            ElevatedButton(
-              onPressed: () {
-                final url = _lienController.text.trim();
-                if (url.isNotEmpty) {
-                  setState(() => _attachmentsList.add(PieceJointe(nom: url, type: 'lien', url: url)));
-                }
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt, foregroundColor: AdminTheme.iconFgAlt),
-              child: const Text('Lier la ressource', style: TextStyle(color: AdminTheme.iconFgAlt)),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-    
-    final mockNames = {'pdf': 'Note_Synthese_Ist.pdf', 'word': 'Formulaire_Inscription.docx', 'image': 'Affiche_Evenement.png'};
-    setState(() => _attachmentsList.add(PieceJointe(nom: mockNames[type] ?? 'Fichier_Attache', type: type)));
-  }
-
   Widget _buildFooterActions() => Container(
         padding: const EdgeInsets.fromLTRB(24, 14, 24, 24),
         decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE2E8F0)))),
@@ -748,7 +739,7 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: () => _executeSavingProcedure(StatutAnnonce.brouillon),
+                onPressed: _isSaving ? null : () => _executeSavingProcedure(StatutAnnonce.brouillon),
                 style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), side: const BorderSide(color: Color(0xFFCBD5E1))),
                 child: const Text('Sauvegarder en brouillon', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
               ),
@@ -756,9 +747,11 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
             const SizedBox(width: 14),
             Expanded(
               child: ElevatedButton(
-                onPressed: () => _executeSavingProcedure(StatutAnnonce.publie),
+                onPressed: _isSaving ? null : () => _executeSavingProcedure(StatutAnnonce.publie),
                 style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
-                child: const Text('Publier immédiatement', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.iconFgAlt)),
+                child: _isSaving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AdminTheme.iconFgAlt))
+                    : const Text('Publier immédiatement', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.iconFgAlt)),
               ),
             ),
           ],
@@ -768,32 +761,26 @@ class _FormulaireAnnonceState extends State<_FormulaireAnnonce> {
   void _executeSavingProcedure(StatutAnnonce finalStatus) {
     final title = _titreController.text.trim();
     final body = _contenuController.text.trim();
-    
+
     if (title.isEmpty || body.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('⚠️ Veuillez remplir les champs obligatoires (Titre et Corps de texte).'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
       );
       return;
     }
-    
-    final formattedAnnonce = Annonce(
-      id: widget.annonce?.id ?? 'A${DateTime.now().millisecondsSinceEpoch}',
-      titre: title, contenu: body,
-      type: _selectedType, portee: _selectedPortee,
-      filiereId: _selectedFiliere, niveau: _selectedNiveau,
-      statut: finalStatus,
-      dateCreation: widget.annonce?.dateCreation ?? DateTime.now(),
-      piecesJointes: List.from(_attachmentsList),
-    );
-    
-    widget.onSave(formattedAnnonce, finalStatus);
-    Navigator.pop(context);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(finalStatus == StatutAnnonce.publie ? '🚀 L\'avis d\'information a été publié sur les terminaux étudiants.' : '💾 Document consigné dans vos brouillons.'),
-        backgroundColor: const Color(0xFF1E293B), behavior: SnackBarBehavior.floating,
-      ),
-    );
+
+    setState(() => _isSaving = true);
+
+    final payload = {
+      'titre': title,
+      'contenu': body,
+      'cibleRole': _selectedCibleRole,
+      'filiere': _selectedPortee == PorteeAnnonce.filiere ? _selectedFiliere : null,
+      'niveau': _selectedPortee == PorteeAnnonce.niveau ? _selectedNiveau : null,
+    };
+
+    widget.onSave(payload, finalStatus).then((success) {
+      if (mounted && !success) setState(() => _isSaving = false);
+    });
   }
 }

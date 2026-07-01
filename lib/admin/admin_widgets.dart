@@ -94,7 +94,9 @@ class AdminSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      child: Container(
       height: 40,
       decoration: BoxDecoration(
         color: AdminTheme.background,
@@ -113,7 +115,7 @@ class AdminSearchBar extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(vertical: 10),
         ),
       ),
-    );
+    ));
   }
 }
 

@@ -33,7 +33,9 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
       final q = _recherche.toLowerCase();
       if (!e.nom.toLowerCase().contains(q) &&
           !e.prenoms.toLowerCase().contains(q) &&
-          !e.matricule.toLowerCase().contains(q)) return false;
+          !e.matricule.toLowerCase().contains(q)) {
+        return false;
+      }
     }
     return true;
   }).toList();
@@ -67,7 +69,15 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
   }
 
   void _inscrireEtudiant() {
-    showAppSnackBar(context, 'Fonctionnalité d\'inscription à venir.');
+    showDialog(
+      context: context,
+      builder: (_) => _InscrireEtudiantDialog(
+        onInscrit: () {
+          _chargerEtudiants();
+          _snack('Étudiant inscrit avec succès.');
+        },
+      ),
+    );
   }
 
   @override
@@ -322,40 +332,6 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
     );
   }
 
-  Widget _label(String t) => Padding(
-    padding: const EdgeInsets.only(bottom: 5),
-    child: Text(t, style: const TextStyle(fontSize: 12,
-        fontWeight: FontWeight.w700, color: Color(0xFF374151))));
-
-  Widget _inputField(TextEditingController ctrl, String hint,
-      {TextInputType type = TextInputType.text}) =>
-      Container(
-        decoration: BoxDecoration(color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE5E7EB))),
-        child: TextField(controller: ctrl, keyboardType: type,
-          style: const TextStyle(fontSize: 13),
-          decoration: InputDecoration(hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10))));
-
-  Widget _selectField(String value, List<String> items,
-      ValueChanged<String?> onChanged) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE5E7EB))),
-        child: DropdownButtonHideUnderline(child: DropdownButton<String>(
-          value: value, isExpanded: true,
-          style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
-          items: items.map((v) => DropdownMenuItem(value: v,
-              child: Text(v, style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis))).toList(),
-          onChanged: onChanged,
-        )));
 
   // ════════════════════════════════════════════════════════════════════════
   // FICHE INDIVIDUELLE
@@ -652,4 +628,256 @@ class _FicheEtudiant extends StatelessWidget {
       )),
     ]),
   );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DIALOGUE — INSCRIRE UN ÉTUDIANT
+// ════════════════════════════════════════════════════════════════════════════
+class _InscrireEtudiantDialog extends StatefulWidget {
+  final VoidCallback onInscrit;
+  const _InscrireEtudiantDialog({required this.onInscrit});
+
+  @override
+  State<_InscrireEtudiantDialog> createState() => _InscrireEtudiantDialogState();
+}
+
+class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
+  static const _niveaux = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
+  static const _filieresParDefaut = [
+    'Réseaux Informatiques et Télécom',
+    'Électrotechnique',
+    'Marketing & Communication',
+    'Gestion Comptable et Financière',
+    'Génie Civil',
+    'Finance Comptabilité',
+  ];
+
+  final _nomCtrl = TextEditingController();
+  final _prenomsCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _telephoneCtrl = TextEditingController();
+  final _matriculeCtrl = TextEditingController();
+
+  List<String> _filieres = _filieresParDefaut;
+  String? _filiereSelectionnee;
+  String _niveauSelectionne = _niveaux.first;
+  bool _chargementFilieres = true;
+  bool _envoi = false;
+  String? _erreur;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerFilieres();
+  }
+
+  Future<void> _chargerFilieres() async {
+    final result = await ApiService.getFilieres();
+    if (result['success'] == true) {
+      final data = result['data'] as List<dynamic>;
+      if (data.isNotEmpty) {
+        _filieres = data.map((f) => f['nom'] as String).toList();
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _filiereSelectionnee = _filieres.first;
+        _chargementFilieres = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _nomCtrl.dispose();
+    _prenomsCtrl.dispose();
+    _emailCtrl.dispose();
+    _telephoneCtrl.dispose();
+    _matriculeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _soumettre() async {
+    final nom = _nomCtrl.text.trim();
+    final prenoms = _prenomsCtrl.text.trim();
+
+    if (nom.isEmpty || prenoms.isEmpty) {
+      setState(() => _erreur = 'Nom et prénoms sont obligatoires.');
+      return;
+    }
+    if (_filiereSelectionnee == null) {
+      setState(() => _erreur = 'Veuillez sélectionner une filière.');
+      return;
+    }
+
+    setState(() {
+      _envoi = true;
+      _erreur = null;
+    });
+
+    final result = await ApiService.inscrireEtudiant({
+      'nom': nom,
+      'prenoms': prenoms,
+      'filiere': _filiereSelectionnee,
+      'niveau': _niveauSelectionne,
+      if (_emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
+      if (_telephoneCtrl.text.trim().isNotEmpty) 'telephone': _telephoneCtrl.text.trim(),
+      if (_matriculeCtrl.text.trim().isNotEmpty) 'matricule': _matriculeCtrl.text.trim(),
+    });
+
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      Navigator.pop(context);
+      widget.onInscrit();
+    } else {
+      setState(() {
+        _envoi = false;
+        _erreur = result['error'] as String? ?? 'Erreur lors de l\'inscription.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 440,
+        constraints: const BoxConstraints(maxHeight: 620),
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Row(children: [
+                Icon(Icons.person_add_rounded, color: AdminTheme.iconBgAlt),
+                SizedBox(width: 10),
+                Text('Inscrire un étudiant',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A2E))),
+              ]),
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(child: _champ('Nom *', _nomCtrl)),
+                const SizedBox(width: 12),
+                Expanded(child: _champ('Prénoms *', _prenomsCtrl)),
+              ]),
+              const SizedBox(height: 14),
+              _chargementFilieres
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: LinearProgressIndicator())
+                  : _dropdown('Filière *', _filiereSelectionnee, _filieres,
+                      (v) => setState(() => _filiereSelectionnee = v)),
+              const SizedBox(height: 14),
+              _dropdown('Niveau', _niveauSelectionne, _niveaux,
+                  (v) => setState(() => _niveauSelectionne = v!)),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(child: _champ('Email (optionnel)', _emailCtrl)),
+                const SizedBox(width: 12),
+                Expanded(child: _champ('Téléphone (optionnel)', _telephoneCtrl)),
+              ]),
+              const SizedBox(height: 14),
+              _champ('Matricule (auto-généré si vide)', _matriculeCtrl),
+              if (_erreur != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: AdminTheme.dangerLight,
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Text(_erreur!,
+                      style: const TextStyle(fontSize: 12, color: AdminTheme.danger)),
+                ),
+              ],
+              const SizedBox(height: 22),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _envoi ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10))),
+                    child: const Text('Annuler'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _envoi ? null : _soumettre,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AdminTheme.iconBgAlt,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10))),
+                    child: _envoi
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Inscrire',
+                            style: TextStyle(color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _champ(String label, TextEditingController ctrl) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12,
+              fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+          const SizedBox(height: 6),
+          TextField(
+            controller: ctrl,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+            ),
+          ),
+        ],
+      );
+
+  Widget _dropdown(String label, String? value, List<String> options,
+          ValueChanged<String?> onChanged) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12,
+              fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            initialValue: value,
+            isExpanded: true,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+            ),
+            items: options
+                .map((o) => DropdownMenuItem(value: o,
+                    child: Text(o, style: const TextStyle(fontSize: 13))))
+                .toList(),
+            onChanged: onChanged,
+          ),
+        ],
+      );
 }

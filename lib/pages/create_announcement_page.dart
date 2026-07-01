@@ -226,7 +226,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
               Switch(
                 value: value,
                 onChanged: (v) => setState(() => value = v),
-                activeColor: primaryBlue,
+                activeThumbColor: primaryBlue,
               ),
             ],
           ),

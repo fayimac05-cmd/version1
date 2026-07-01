@@ -60,7 +60,9 @@ class _CoursesTabState extends State<CoursesTab> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    return Column(children: [
+    return Scaffold(
+      backgroundColor: AppPalette.white,
+      body: Column(children: [
 
       // ── Header ─────────────────────────────────────────────────────
       AppPageHeader(
@@ -167,7 +169,7 @@ class _CoursesTabState extends State<CoursesTab> {
                 itemBuilder: (_, i) => _coursCard(filtered[i]),
               ),
       ),
-    ]);
+    ]));
   }
 
   Widget _coursCard(Map<String, dynamic> cours) {

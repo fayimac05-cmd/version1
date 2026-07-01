@@ -192,7 +192,6 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
 
   void _ouvrirFiche(Professeur p) {
     final modules = adminFilieres.expand((f) => f.modules).where((m) => m.professeur.contains(p.nom)).toList();
-    final filieres = adminFilieres.where((f) => f.modules.any((m) => m.professeur.contains(p.nom))).toList();
     showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => Container(height: MediaQuery.of(context).size.height * 0.85, decoration: const BoxDecoration(color: Color(0xFFF5F7FA), borderRadius: BorderRadius.vertical(top: Radius.circular(20))), child: Column(children: [
       const SizedBox(height: 8), Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2))),
       Container(color: Colors.white, padding: const EdgeInsets.all(20), child: Row(children: [

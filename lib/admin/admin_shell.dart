@@ -144,11 +144,7 @@ final themeNotifier = ThemeNotifier();
 // ═══════════════════════════════════════════════════════════════
 
 extension _Alpha on Color {
-  Color get a04 => withValues(alpha: 0.04);
-  Color get a06 => withValues(alpha: 0.06);
-  Color get a08 => withValues(alpha: 0.08);
   Color get a10 => withValues(alpha: 0.10);
-  Color get a12 => withValues(alpha: 0.12);
   Color get a15 => withValues(alpha: 0.15);
   Color get a20 => withValues(alpha: 0.20);
 }
@@ -813,8 +809,11 @@ class _MenuItemTileState extends State<_MenuItemTile> {
     final color = active ? AppPalette.blue : const Color(0xFF64748B);
 
     Color bgColor = Colors.transparent;
-    if (active)        bgColor = AppPalette.blue.withValues(alpha: 0.08);
-    else if (_hovered) bgColor = AppPalette.blue.withValues(alpha: 0.04);
+    if (active) {
+      bgColor = AppPalette.blue.withValues(alpha: 0.08);
+    } else if (_hovered) {
+      bgColor = AppPalette.blue.withValues(alpha: 0.04);
+    }
 
     return Tooltip(
       message: compact ? widget.item.label : '',
@@ -1267,38 +1266,3 @@ class _NotifsPanel extends StatelessWidget {
       );
 }
 
-// ── Placeholder page en construction ─────────────────────────────────────
-
-class _Placeholder extends StatelessWidget {
-  final String label;
-  const _Placeholder({required this.label});
-
-  @override
-  Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppPalette.blue.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(Icons.construction_rounded,
-                  color: AppPalette.blue, size: 36),
-            ),
-            const SizedBox(height: 20),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A))),
-            const SizedBox(height: 8),
-            const Text(
-                'Cette section administrative est en cours de liaison.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-          ],
-        ),
-      );
-}
