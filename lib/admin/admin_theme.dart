@@ -567,12 +567,12 @@ class AdminTheme {
       // ── PageTransitions ─────────────────────────────────────────────────
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS:     CupertinoPageTransitionsBuilder(),
-          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.macOS:   CupertinoPageTransitionsBuilder(),
-          TargetPlatform.linux:   CupertinoPageTransitionsBuilder(),
-          TargetPlatform.fuchsia: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS:     FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS:   FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.linux:   FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
         },
       ),
     );
