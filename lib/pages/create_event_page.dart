@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
-
+import '../models/event.dart';
 class CreateEventPage extends StatefulWidget {
   const CreateEventPage({super.key});
 
@@ -17,6 +20,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
   
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+  XFile? _selectedImage;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked != null) {
+      setState(() => _selectedImage = picked);
+    }
+  }
 
   static const primaryBlue = AppPalette.blue;
   static const textDark = Color(0xFF0F172A);
@@ -81,7 +93,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Nouvel Événemenst',
+          'Nouvel Événement',
           style: TextStyle(color: textDark, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
@@ -93,6 +105,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildSectionTitle('Affiche de l\'événement'),
+              const SizedBox(height: 16),
+              _buildPhotoPicker(),
+              const SizedBox(height: 32),
               _buildSectionTitle('Informations Générales'),
               const SizedBox(height: 16),
               _buildTextField(
@@ -154,11 +170,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 child: ElevatedButton(
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
+                      final newEvent = EventModel(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        name: _nameController.text,
+                        location: _locationController.text,
+                        date: _selectedDate ?? DateTime.now(),
+                        time: _selectedTime ?? TimeOfDay.now(),
+                        price: double.tryParse(_priceController.text) ?? 0,
+                        image: _selectedImage,
+                      );
+
+                      // TODO: Ajouter la logique d'upload de _selectedImage vers la base de données (ex: via multipart/form-data ou Firebase/Supabase Storage)
                       // Logique de création ici
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Événement créé avec succès !')),
                       );
-                      Navigator.pop(context);
+                      Navigator.pop(context, newEvent);
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -289,6 +316,90 @@ class _CreateEventPageState extends State<CreateEventPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoPicker() {
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Container(
+        width: double.infinity,
+        height: 160,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: primaryBlue.withValues(alpha: 0.3), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: _selectedImage != null
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  kIsWeb
+                      ? Image.network(
+                          _selectedImage!.path,
+                          fit: BoxFit.cover,
+                        )
+                      : Image.file(
+                          File(_selectedImage!.path),
+                          fit: BoxFit.cover,
+                        ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                        onPressed: () => setState(() => _selectedImage = null),
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(8),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: primaryBlue.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.add_a_photo_outlined, color: primaryBlue, size: 32),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Ajouter une affiche / photo',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Formats supportés : JPG, PNG',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textLight,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
