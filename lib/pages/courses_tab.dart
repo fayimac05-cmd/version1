@@ -60,114 +60,118 @@ class _CoursesTabState extends State<CoursesTab> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    return Column(children: [
+    return Scaffold(
+      backgroundColor: AppPalette.white,
+      body: Column(children: [
 
-      // ── Header ─────────────────────────────────────────────────────
-      AppPageHeader(
-        title: 'Mes Cours',
-        subtitle: 'Licence Informatique L2',
-        trailing: _nbNouveaux > 0
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                    color: AppPalette.yellow,
-                    borderRadius: BorderRadius.circular(20)),
-                child: Text('$_nbNouveaux nouveau${_nbNouveaux > 1 ? 'x' : ''}',
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF3A2A00))),
-              )
-            : null,
-        bottomWidget: Container(
-          decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
-          child: TextField(
-            controller: _searchCtrl,
-            onChanged: (v) => setState(() => _recherche = v),
-            style: const TextStyle(fontSize: 14, color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Rechercher un cours, module, prof...',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 14),
-              prefixIcon: Icon(Icons.search, color: Colors.white.withValues(alpha: 0.7), size: 20),
-              suffixIcon: _recherche.isNotEmpty
-                  ? IconButton(
-                      icon: Icon(Icons.close, size: 18, color: Colors.white.withValues(alpha: 0.7)),
-                      onPressed: () { _searchCtrl.clear(); setState(() => _recherche = ''); })
-                  : null,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        // ── Header ─────────────────────────────────────────────────────
+        AppPageHeader(
+          title: 'Mes Cours',
+          subtitle: 'Licence Informatique L2',
+          onBack: () => Navigator.pop(context),
+          trailing: _nbNouveaux > 0
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: AppPalette.yellow,
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Text('$_nbNouveaux nouveau${_nbNouveaux > 1 ? 'x' : ''}',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF3A2A00))),
+                )
+              : null,
+          bottomWidget: Container(
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _recherche = v),
+              style: const TextStyle(fontSize: 14, color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un cours, module, prof...',
+                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 14),
+                prefixIcon: Icon(Icons.search, color: Colors.white.withValues(alpha: 0.7), size: 20),
+                suffixIcon: _recherche.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.close, size: 18, color: Colors.white.withValues(alpha: 0.7)),
+                        onPressed: () { _searchCtrl.clear(); setState(() => _recherche = ''); })
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
           ),
         ),
-      ),
 
-      // ── Filtres ─────────────────────────────────────────────────────
-      Container(
-        color: AppPalette.white,
-        padding: const EdgeInsets.only(bottom: 14),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(children: _modules.map((mod) {
-            final selected = _moduleSelectionne == mod;
-            final Color color;
-            if (mod == 'Tous') {
-              color = AppPalette.blue;
-            } else {
-              final correspondant = _cours.firstWhere(
-                (c) => c['module'] == mod,
-                orElse: () => <String, dynamic>{'color': AppPalette.blue},
+        // ── Filtres ─────────────────────────────────────────────────────
+        Container(
+          color: AppPalette.white,
+          padding: const EdgeInsets.only(bottom: 14),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(children: _modules.map((mod) {
+              final selected = _moduleSelectionne == mod;
+              final Color color;
+              if (mod == 'Tous') {
+                color = AppPalette.blue;
+              } else {
+                final correspondant = _cours.firstWhere(
+                  (c) => c['module'] == mod,
+                  orElse: () => <String, dynamic>{'color': AppPalette.blue},
+                );
+                color = correspondant['color'] as Color;
+              }
+              return GestureDetector(
+                onTap: () => setState(() => _moduleSelectionne = mod),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.only(right: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected ? color : AppPalette.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: selected ? color : const Color(0xFFE2E8F0), width: 1.5),
+                    boxShadow: selected ? [BoxShadow(color: color.withValues(alpha:0.25),
+                        blurRadius: 8, offset: const Offset(0, 2))] : [],
+                  ),
+                  child: Text(
+                    mod == 'Tous' ? 'Tous  ${_cours.length}' :
+                    mod.length > 14 ? '${mod.substring(0, 14)}…' : mod,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                        color: selected ? Colors.white : const Color(0xFF64748B)),
+                  ),
+                ),
               );
-              color = correspondant['color'] as Color;
-            }
-            return GestureDetector(
-              onTap: () => setState(() => _moduleSelectionne = mod),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.only(right: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: selected ? color : AppPalette.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: selected ? color : const Color(0xFFE2E8F0), width: 1.5),
-                  boxShadow: selected ? [BoxShadow(color: color.withValues(alpha:0.25),
-                      blurRadius: 8, offset: const Offset(0, 2))] : [],
-                ),
-                child: Text(
-                  mod == 'Tous' ? 'Tous  ${_cours.length}' :
-                  mod.length > 14 ? '${mod.substring(0, 14)}…' : mod,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                      color: selected ? Colors.white : const Color(0xFF64748B)),
-                ),
-              ),
-            );
-          }).toList()),
+            }).toList()),
+          ),
         ),
-      ),
 
-      Container(height: 1, color: const Color(0xFFE2E8F0)),
+        Container(height: 1, color: const Color(0xFFE2E8F0)),
 
-      // ── Liste ───────────────────────────────────────────────────────
-      Expanded(
-        child: filtered.isEmpty
-            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.search_off_rounded, size: 70,
-                    color: const Color(0xFF64748B).withValues(alpha:0.35)),
-                const SizedBox(height: 16),
-                const Text('Aucun cours trouvé', style: TextStyle(fontSize: 18,
-                    fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-              ]))
-            : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                itemCount: filtered.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (_, i) => _coursCard(filtered[i]),
-              ),
-      ),
-    ]);
+        // ── Liste ───────────────────────────────────────────────────────
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.search_off_rounded, size: 70,
+                      color: const Color(0xFF64748B).withValues(alpha:0.35)),
+                  const SizedBox(height: 16),
+                  const Text('Aucun cours trouvé', style: TextStyle(fontSize: 18,
+                      fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                ]))
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) => _coursCard(filtered[i]),
+                ),
+        ),
+      ]),
+    );
   }
 
   Widget _coursCard(Map<String, dynamic> cours) {
