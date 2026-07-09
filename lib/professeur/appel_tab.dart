@@ -3,7 +3,10 @@ import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 
 class AppelTab extends StatefulWidget {
-  const AppelTab({super.key});
+  const AppelTab({super.key, this.initialClasse});
+
+  /// Classe présélectionnée depuis l'onglet "Mes Classes".
+  final Map<String, dynamic>? initialClasse;
 
   @override
   State<AppelTab> createState() => _AppelTabState();
@@ -43,6 +46,24 @@ class _AppelTabState extends State<AppelTab> {
       _historique = histResult['success'] == true ? histResult['data'] as List<dynamic> : [];
       _loading = false;
     });
+    _appliquerPreselection();
+  }
+
+  bool _preselectionAppliquee = false;
+
+  void _appliquerPreselection() {
+    final init = widget.initialClasse;
+    if (init == null || _classeId != null || _preselectionAppliquee) return;
+    _preselectionAppliquee = true;
+    final matches = _classes.where((c) => c['id'].toString() == init['id'].toString());
+    if (matches.isEmpty) return;
+    final c = matches.first;
+    setState(() {
+      _classeId = c['id'].toString();
+      _classeNom = c['nom'];
+      _niveau = c['niveau'];
+    });
+    _chargerEtudiants();
   }
 
   Future<void> _chargerEtudiants() async {
@@ -128,6 +149,19 @@ class _AppelTabState extends State<AppelTab> {
                 child: Column(children: [
                   _selectionCard(),
                   if (_loadingStudents) const Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+                  if (!_loadingStudents && _classeId != null && _students.isEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 14),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+                      child: const Row(children: [
+                        Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 20),
+                        SizedBox(width: 10),
+                        Expanded(child: Text(
+                          'Aucun étudiant inscrit dans cette classe. Vérifiez que les étudiants ont bien une filière affectée (Admin → Étudiants).',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF92400E)))),
+                      ]),
+                    ),
                   if (!_loadingStudents && _students.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     ..._students.map((s) => _EtudiantPresenceRow(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app/scolar_hub_app.dart';
 import '../models/student_profile.dart';
 import '../pages/student_shell.dart';
 import '../pages/splash_screen.dart';
@@ -138,10 +139,15 @@ class _AuthPageState extends State<AuthPage> {
 
   void _goToDashboard(StudentProfile profile) {
     SocketService().connect(profile.matricule);
-    void logout() => Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SplashScreen()),
-      (_) => false,
-    );
+    // Utilise le navigateur global : le context de cette page n'existe plus
+    // au moment où l'utilisateur se déconnecte depuis son tableau de bord.
+    void logout() {
+      ApiService.clearToken();
+      ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (_) => false,
+      );
+    }
 
     final Widget destination;
     switch (profile.role) {

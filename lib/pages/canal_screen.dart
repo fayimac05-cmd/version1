@@ -91,6 +91,22 @@ class _CanalScreenState extends State<CanalScreen> {
             ),
             
             child: Row(children: [
+              // Bouton retour (visible quand la page est ouverte par-dessus une autre,
+              // pas quand elle sert d'onglet dans la navigation principale)
+              if (Navigator.canPop(context))
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _border),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: _textMain, size: 18)),
+                  ),
+                ),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Canaux de discussion', style: TextStyle(fontSize: 22,
                     fontWeight: FontWeight.w800, color: _textMain, letterSpacing: -0.5)),

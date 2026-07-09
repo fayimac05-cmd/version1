@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'parent_styles.dart';
+import 'parent_assistant_ia_screen.dart';
+import 'parent_paiements_screen.dart';
 
 class ParentHomeTab extends StatelessWidget {
   final String nomEnfant;
@@ -273,31 +275,36 @@ class ParentHomeTab extends StatelessWidget {
                 Row(
                   children: [
                     _buildQuickLink(
-                      icon: Icons.calendar_month_rounded,
-                      label: 'Planning',
+                      icon: Icons.smart_toy_rounded,
+                      label: 'Assistant IA',
                       color: const Color(0xFF7C3AED),
-                      onTap: () => onNavigateToTab(2),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ParentAssistantIAScreen(nomEnfant: nomEnfant),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     _buildQuickLink(
                       icon: Icons.credit_card_rounded,
                       label: 'Paiements',
                       color: const Color(0xFF0891B2),
-                      onTap: () => onNavigateToTab(4),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ParentPaiementsScreen(nomEnfant: nomEnfant),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     _buildQuickLink(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: 'Messages',
+                      icon: Icons.calendar_month_rounded,
+                      label: 'Planning',
                       color: const Color(0xFF0D9488),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Messagerie bientôt disponible pour les parents !'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                      onTap: () => onNavigateToTab(2),
                     ),
                   ],
                 ),

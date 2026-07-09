@@ -40,6 +40,10 @@ import '../admin/admin_messages.dart';
 import '../admin/admin_bde.dart';
 import '../admin/admin_statistiques.dart';
 import '../admin/admin_evaluations.dart';
+import '../admin/admin_secondaire.dart';
+import '../admin/admin_primaire.dart';
+import '../config/etablissement_config.dart';
+import '../pages/choose_etablissement_type_page.dart';
 import '../pages/splash_screen.dart';
 // TODO: décommenter quand les services sont prêts
 // import '../services/auth_service.dart';
@@ -79,16 +83,20 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.celebration_outlined,        iconActive: Icons.celebration_rounded,        label: 'BDE & Événements',   group: 'ÉVÉNEMENTS'),
   _MenuItem(icon: Icons.bar_chart_outlined,          iconActive: Icons.bar_chart_rounded,          label: 'Statistiques',       group: 'RAPPORTS'),
   _MenuItem(icon: Icons.star_outline_rounded,        iconActive: Icons.star_rounded,               label: 'Éval. Professeurs',  group: 'RAPPORTS'),
+  _MenuItem(icon: Icons.apartment_outlined,          iconActive: Icons.apartment_rounded,          label: 'Collège & Lycée',    group: 'SECTIONS'),
+  _MenuItem(icon: Icons.auto_stories_outlined,       iconActive: Icons.auto_stories_rounded,       label: 'Primaire',           group: 'SECTIONS'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
   {'key': 'GÉNÉRAL',    'items': [0, 1]},
+  {'key': 'SECTIONS',   'items': [14, 15]},
   {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5]},
   {'key': 'PERSONNES',  'items': [6, 7, 8, 9]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
   {'key': 'RAPPORTS',   'items': [12, 13]},
 ];
+
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 2 — AdminMenuService (permissions par rôle) [ARCH-3]
@@ -105,10 +113,10 @@ class AdminMenuService {
     switch (role) {
       case AdminRole.superAdmin:
         // Accès total
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
       case AdminRole.academic:
-        // Notes, réclamations, filières, EDT, étudiants, profs, stats
-        return {0, 2, 3, 4, 5, 6, 7, 12, 13};
+        // Notes, réclamations, filières, EDT, étudiants, profs, stats, sections
+        return {0, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15};
       case AdminRole.secretariat:
         // Annonces, étudiants, parents, messages
         return {0, 1, 6, 8, 10};
@@ -194,6 +202,10 @@ class _AdminShellState extends State<AdminShell>
   @override
   void initState() {
     super.initState();
+    // Config multi-établissement : recharge le type persisté puis
+    // reconstruit l'interface à chaque changement de type.
+    EtablissementConfig.instance.addListener(_onConfigChanged);
+    EtablissementConfig.instance.charger();
     _pages = [
       AdminDashboard(profile: widget.profile),
       const AdminAnnonces(),
@@ -209,6 +221,8 @@ class _AdminShellState extends State<AdminShell>
       const AdminBDE(),
       const AdminStatistiques(),
       const AdminEvaluations(),
+      const AdminSecondaire(),
+      const AdminPrimaire(),
     ];
 
     _pageAnim = AnimationController(
@@ -221,8 +235,42 @@ class _AdminShellState extends State<AdminShell>
 
   @override
   void dispose() {
+    EtablissementConfig.instance.removeListener(_onConfigChanged);
     _pageAnim.dispose();
     super.dispose();
+  }
+
+  void _onConfigChanged() {
+    if (!mounted) return;
+    setState(() {
+      // Si la page courante n'existe plus pour ce type d'établissement,
+      // on revient au tableau de bord.
+      if (!_visibleParConfig(_idx)) {
+        _idx = 0;
+        _prevIdx = 0;
+      }
+    });
+  }
+
+  /// Visibilité d'un item de menu selon la config de l'établissement.
+  /// - 14 (Collège & Lycée) : uniquement si la section secondaire est active
+  /// - 15 (Primaire)        : uniquement si la section primaire est active
+  /// - 2 (Filières & Modules) et 11 (BDE) : réservés au supérieur
+  bool _visibleParConfig(int index) {
+    final config = EtablissementConfig.instance;
+    switch (index) {
+      case 14:
+        return config.sectionActive(SectionEnseignement.secondaire);
+      case 15:
+        return config.sectionActive(SectionEnseignement.primaire);
+      case 2:
+        return config.sectionActive(SectionEnseignement.superieur);
+      case 11:
+        return config.sectionActive(SectionEnseignement.superieur) &&
+            config.options.bde;
+      default:
+        return true;
+    }
   }
 
   void _resetPageAnimation({bool fromRight = true}) {
@@ -541,7 +589,10 @@ class _AdminShellState extends State<AdminShell>
               padding:
                   const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               children: [
-                for (final g in _menuGroups) ...[
+                for (final g in _menuGroups)
+                  if ((g['items'] as List<int>).any((i) =>
+                      AdminMenuService.canAccess(widget.role, i) &&
+                      _visibleParConfig(i))) ...[
                   if (!c)
                     // [UX-4] Hiérarchie typographique renforcée
                     Padding(
@@ -569,7 +620,9 @@ class _AdminShellState extends State<AdminShell>
 
                   for (final i in (g['items'] as List<int>))
                     // [ARCH-3] Masquer les items non autorisés
-                    if (AdminMenuService.canAccess(widget.role, i))
+                    // + filtrage selon le type d'établissement
+                    if (AdminMenuService.canAccess(widget.role, i) &&
+                        _visibleParConfig(i))
                       _MenuItemTile(
                         item: _items[i],
                         index: i,
@@ -595,6 +648,13 @@ class _AdminShellState extends State<AdminShell>
                 ? Column(
                     children: [
                       _SideBtn(
+                        icon: Icons.link_rounded,
+                        tooltip: 'Connecter mon établissement',
+                        onTap: _ouvrirChoixType,
+                        color: AppPalette.blue,
+                      ),
+                      const SizedBox(height: 8),
+                      _SideBtn(
                         icon: Icons.dark_mode_outlined,
                         tooltip: 'Mode Sombre',
                         onTap: _toggleDarkMode,
@@ -608,16 +668,23 @@ class _AdminShellState extends State<AdminShell>
                       ),
                     ],
                   )
-                : Row(
+                : Column(
                     children: [
-                      _SideBtn(
-                        icon: Icons.dark_mode_outlined,
-                        tooltip: 'Mode Sombre',
-                        onTap: _toggleDarkMode,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _LogoutButton(onTap: _showLogoutDialog),
+                      // Connexion de l'établissement (type + filtrage auto)
+                      _ConnectEtablissementButton(onTap: _ouvrirChoixType),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _SideBtn(
+                            icon: Icons.dark_mode_outlined,
+                            tooltip: 'Mode Sombre',
+                            onTap: _toggleDarkMode,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _LogoutButton(onTap: _showLogoutDialog),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -639,6 +706,17 @@ class _AdminShellState extends State<AdminShell>
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONNEXION DE L'ÉTABLISSEMENT (choix du type + filtrage auto)
+  // ═══════════════════════════════════════════════════════════════
+
+  void _ouvrirChoixType() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ChooseEtablissementTypePage()),
     );
   }
 
@@ -944,6 +1022,61 @@ class _SideBtn extends StatelessWidget {
           ),
         ),
       );
+}
+
+// ── Bouton « Connecter mon établissement » ────────────────────────────────
+// Ouvre le choix du type d'établissement ; l'interface se filtre ensuite
+// automatiquement (sections, menus, options, vocabulaire).
+
+class _ConnectEtablissementButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ConnectEtablissementButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final config = EtablissementConfig.instance;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppPalette.blue.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppPalette.blue.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.link_rounded, color: AppPalette.blue, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Connecter mon établissement',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.blue),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 1),
+                  Text(config.type.label,
+                      style: const TextStyle(
+                          fontSize: 10, color: Color(0xFF64748B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppPalette.blue, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Bouton déconnexion étendu ─────────────────────────────────────────────

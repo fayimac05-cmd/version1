@@ -267,19 +267,13 @@ class _SplashScreenState extends State<SplashScreen>
                       child: const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('College',
+                          Text('Scholar',
                               style: TextStyle(
                                   fontSize: 38,
                                   fontWeight: FontWeight.w800,
                                   color: AppPalette.black,
                                   height: 1.1)),
-                          Text('Management',
-                              style: TextStyle(
-                                  fontSize: 38,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppPalette.black,
-                                  height: 1.1)),
-                          Text('System',
+                          Text('Hub',
                               style: TextStyle(
                                   fontSize: 38,
                                   fontWeight: FontWeight.w800,

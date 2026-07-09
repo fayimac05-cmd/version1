@@ -97,13 +97,26 @@ exports.getModules = async (req, res) => {
 exports.getStudentsByFiliere = async (req, res) => {
   try {
     const { filiere_id } = req.params;
+    // Certains anciens comptes n'ont que le nom de la filière (filiere_id NULL) :
+    // on matche par id OU par nom, et on complète les champs manquants via users.
     const result = await db.query(`
-      SELECT id, nom, prenoms, matricule, email, tel, niveau
-      FROM etudiants
-      WHERE filiere_id = $1
+      SELECT e.id,
+             COALESCE(e.nom, u.nom) AS nom,
+             COALESCE(e.prenoms, u.prenoms) AS prenoms,
+             COALESCE(e.matricule, u.matricule) AS matricule,
+             COALESCE(e.email, u.email) AS email,
+             COALESCE(e.tel, u.tel) AS tel,
+             COALESCE(e.niveau, u.niveau) AS niveau
+      FROM etudiants e
+      JOIN users u ON u.id = e.user_id
+      CROSS JOIN (SELECT nom FROM filieres WHERE id = $1) f
+      WHERE u.role = 'etudiant'
+        AND (e.filiere_id = $1
+             OR LOWER(regexp_replace(COALESCE(e.filiere_nom, u.filiere_nom, ''), '[^a-zA-Z0-9 ]', '', 'g')) =
+                LOWER(regexp_replace(f.nom, '[^a-zA-Z0-9 ]', '', 'g')))
       ORDER BY nom ASC
     `, [filiere_id]);
-    
+
     res.json({ success: true, data: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

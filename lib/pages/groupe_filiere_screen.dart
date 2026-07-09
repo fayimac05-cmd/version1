@@ -594,6 +594,27 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
             child: Row(
               children: [
+                // Bouton retour (visible quand la page est ouverte par-dessus une autre)
+                if (Navigator.canPop(context))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
                 // Avatar groupe
                 Container(
                   width: 52,

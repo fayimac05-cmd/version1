@@ -46,8 +46,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/modules - Creer un module (admin)
-router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
+// POST /api/modules - Creer un module (admin ou professeur)
+router.post('/', authMiddleware, requireRole('admin', 'professeur'), async (req, res) => {
   try {
     const { nom, coefficient, volume_horaire, filiere_id, filiere_nom } = req.body;
     if (!nom?.trim()) {
@@ -58,6 +58,20 @@ router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [nom.trim(), coefficient || 1, volume_horaire || null, filiere_id || null, filiere_nom || null]
     );
+
+    // Un professeur qui cree un module se le voit assigner automatiquement,
+    // pour qu'il apparaisse dans ses listes (appel, notes, cours).
+    if (req.user.role === 'professeur') {
+      let prof = await pool.query('SELECT id FROM professeurs WHERE user_id = $1', [req.user.id]);
+      if (!prof.rows[0]) {
+        prof = await pool.query('INSERT INTO professeurs (user_id) VALUES ($1) RETURNING id', [req.user.id]);
+      }
+      await pool.query(
+        'INSERT INTO module_professeur (module_id, professeur_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [result.rows[0].id, prof.rows[0].id]
+      );
+    }
+
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error('[modules] POST /', err);

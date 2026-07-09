@@ -79,4 +79,10 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('[UnhandledRejection]', reason);
 });
 
+// Coupures réseau (ex: pooler Supabase qui reset une socket) : on journalise
+// au lieu de laisser le process mourir.
+process.on('uncaughtException', (err) => {
+  console.error('[UncaughtException]', err);
+});
+
 module.exports = { app, io };
