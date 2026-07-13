@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 import 'tickets_screen.dart';
 import 'notifications_page.dart';
@@ -55,7 +56,7 @@ class _HomeTabState extends State<HomeTab> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
       final response = await http.get(
-        Uri.parse('http://localhost:5000/api/annonces'),
+        Uri.parse('${ApiService.baseUrl}/annonces'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 5));
 

@@ -3,7 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://localhost:5000/api';
+  // Doit rester aligné avec ApiService.baseUrl (voir api_service.dart)
+  static const String baseUrl = 'http://192.168.11.101:5000/api';
 
   static Future<void> saveToken(String token, {int? userId}) async {
     final prefs = await SharedPreferences.getInstance();

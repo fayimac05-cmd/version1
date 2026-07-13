@@ -5,6 +5,7 @@ import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 import 'appel_tab.dart';
 import 'notes_tab.dart';
+import 'programme_screen.dart';
 import 'upload_course_screen.dart';
 
 // ── Shell principal ────────────────────────────────────────────────────────
@@ -812,6 +813,24 @@ class _ProfilTabState extends State<_ProfilTab> {
               _statCard('$_nbSessions', 'Sessions notes', Icons.fact_check_rounded, const Color(0xFF10B981)),
             ]),
             const SizedBox(height: 24),
+            // Programme hebdomadaire : déclarer et transmettre ses heures libres
+            SizedBox(
+              width: double.infinity, height: 52,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ProgrammeScreen())),
+                icon: const Icon(Icons.edit_calendar_rounded, size: 20),
+                label: const Text('Mon programme / heures libres',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity, height: 52,
               child: OutlinedButton.icon(

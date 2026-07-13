@@ -120,6 +120,43 @@ class ProfessorService {
     }
   }
 
+  // ── Disponibilités (heures libres transmises à l'admin) ───
+  static Future<Map<String, dynamic>> getDisponibilites() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/professeurs/disponibilites'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': 'Erreur lors du chargement des disponibilités.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  /// Remplace les créneaux libres du prof et les transmet à l'administration.
+  /// [creneaux] : liste de {jour, debut, fin}.
+  static Future<Map<String, dynamic>> saveDisponibilites(
+      List<Map<String, String>> creneaux) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/professeurs/disponibilites'),
+        headers: headers,
+        body: jsonEncode({'creneaux': creneaux}),
+      );
+      if (response.statusCode == 200) return {'success': true};
+      final body = jsonDecode(response.body);
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la transmission.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
   // ── Cours (Upload & List) ──────────────────────────────────
   static Future<Map<String, dynamic>> getCours() async {
     try {

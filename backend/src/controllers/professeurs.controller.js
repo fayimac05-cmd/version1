@@ -1,5 +1,93 @@
 const db = require('../config/db');
 
+// GET /api/professeurs — liste des professeurs (admin, pour attribution de modules)
+exports.listProfesseurs = async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT u.id AS user_id, u.nom, u.prenoms, u.email, u.tel, p.specialite
+      FROM users u
+      LEFT JOIN professeurs p ON p.user_id = u.id
+      WHERE u.role = 'professeur'
+      ORDER BY u.nom, u.prenoms
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ── Disponibilités (heures libres transmises à l'administration) ──────────
+
+// Assure l'existence de la fiche professeurs pour l'utilisateur connecté.
+async function ensureProfesseur(userId) {
+  let prof = await db.query('SELECT id FROM professeurs WHERE user_id = $1', [userId]);
+  if (!prof.rows[0]) {
+    prof = await db.query('INSERT INTO professeurs (user_id) VALUES ($1) RETURNING id', [userId]);
+  }
+  return prof.rows[0].id;
+}
+
+// GET /api/professeurs/disponibilites — créneaux libres du prof connecté
+exports.getDisponibilites = async (req, res) => {
+  try {
+    const profId = await ensureProfesseur(req.user.id);
+    const result = await db.query(
+      `SELECT jour, debut, fin, transmis_le FROM disponibilites_professeur
+       WHERE professeur_id = $1 ORDER BY jour, debut`,
+      [profId]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// PUT /api/professeurs/disponibilites — remplace et transmet les créneaux libres
+// Body: { creneaux: [{ jour: 'Lundi', debut: '08:00', fin: '10:00' }, ...] }
+exports.saveDisponibilites = async (req, res) => {
+  try {
+    const { creneaux } = req.body;
+    if (!Array.isArray(creneaux)) {
+      return res.status(400).json({ success: false, message: 'Liste de créneaux requise.' });
+    }
+    const profId = await ensureProfesseur(req.user.id);
+    await db.query('DELETE FROM disponibilites_professeur WHERE professeur_id = $1', [profId]);
+    for (const c of creneaux) {
+      if (!c.jour || !c.debut || !c.fin) continue;
+      await db.query(
+        `INSERT INTO disponibilites_professeur (professeur_id, jour, debut, fin, transmis_le)
+         VALUES ($1, $2, $3, $4, NOW()) ON CONFLICT DO NOTHING`,
+        [profId, c.jour, c.debut, c.fin]
+      );
+    }
+    res.json({ success: true, message: 'Disponibilités transmises à l\'administration.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// GET /api/professeurs/disponibilites/all — vue admin : heures libres de tous les profs
+exports.getAllDisponibilites = async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT u.id AS user_id, u.nom, u.prenoms, p.specialite,
+             d.jour, d.debut, d.fin, d.transmis_le
+      FROM disponibilites_professeur d
+      JOIN professeurs p ON p.id = d.professeur_id
+      JOIN users u ON u.id = p.user_id
+      ORDER BY u.nom, u.prenoms,
+               CASE d.jour
+                 WHEN 'Lundi' THEN 1 WHEN 'Mardi' THEN 2 WHEN 'Mercredi' THEN 3
+                 WHEN 'Jeudi' THEN 4 WHEN 'Vendredi' THEN 5 WHEN 'Samedi' THEN 6
+                 ELSE 7 END,
+               d.debut
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 exports.getProfile = async (req, res) => {
   try {
     const userId = req.user.id;

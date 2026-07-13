@@ -3,7 +3,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:5000/api';
+  // Adresse du backend.
+  // - Sur un téléphone : IP locale du PC qui héberge le serveur (même Wi-Fi).
+  // - Sur le PC (desktop/web) : cette IP fonctionne aussi.
+  // À changer ici uniquement — toute l'app (y compris le Socket.IO) en dépend.
+  static const String baseUrl = 'http://192.168.11.101:5000/api';
 
   // ── Sauvegarder le token ─────────────────────────────────
   static Future<void> saveToken(String token, {dynamic userId}) async {
@@ -394,6 +398,42 @@ class ApiService {
     }
   }
 
+  // ── Professeurs : liste (admin, pour attribution de modules) ──
+  static Future<Map<String, dynamic>> getProfesseurs() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/professeurs'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des professeurs.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+    }
+  }
+
+  // ── Disponibilités des professeurs (vue admin) ────────────
+  static Future<Map<String, dynamic>> getDisponibilitesProfesseurs() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/professeurs/disponibilites/all'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des disponibilités.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+    }
+  }
+
   // ── Modules : liste (optionnellement par filière) ─────────
   static Future<Map<String, dynamic>> getModules({String? filiereId}) async {
     try {
@@ -419,6 +459,7 @@ class ApiService {
     int? volumeHoraire,
     int? filiereId,
     String? filiereNom,
+    String? professeurUserId,
   }) async {
     try {
       final headers = await getHeaders();
@@ -431,6 +472,7 @@ class ApiService {
           'volume_horaire': volumeHoraire,
           'filiere_id': filiereId,
           'filiere_nom': filiereNom,
+          if (professeurUserId != null) 'professeur_user_id': professeurUserId,
         }),
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));

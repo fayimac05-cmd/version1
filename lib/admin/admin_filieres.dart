@@ -28,7 +28,7 @@ class Module {
         code: '',
         coefficient: ((json['coefficient'] as num?) ?? 1).round(),
         volumeHoraire: (json['volume_horaire'] as num?)?.round() ?? 0,
-        professeur: '',
+        professeur: (json['professeur'] as String?)?.trim() ?? '',
       );
 }
 
@@ -779,6 +779,10 @@ class _DetailFiliereState extends State<_DetailFiliere>
     final vhCtrl   = TextEditingController(text: '30');
     bool envoi = false;
 
+    // Liste des professeurs pour l'attribution du module
+    final profsFuture = ApiService.getProfesseurs();
+    String? profUserId;
+
     showDialog(context: context, builder: (dialogCtx) => StatefulBuilder(
       builder: (dialogCtx, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -794,6 +798,39 @@ class _DetailFiliereState extends State<_DetailFiliere>
             Expanded(child: _field(vhCtrl, 'Volume horaire (h)', Icons.schedule_rounded,
                 type: TextInputType.number)),
           ]),
+          const SizedBox(height: 10),
+          // Attribution du module à un professeur (optionnelle)
+          FutureBuilder<Map<String, dynamic>>(
+            future: profsFuture,
+            builder: (_, snap) {
+              final profs = (snap.data?['success'] == true)
+                  ? List<Map<String, dynamic>>.from(snap.data!['data'] as List)
+                  : <Map<String, dynamic>>[];
+              return DropdownButtonFormField<String>(
+                initialValue: profUserId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Professeur (attribution)',
+                  prefixIcon: const Icon(Icons.person_rounded, size: 20),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(
+                      value: null, child: Text('— Aucun pour l\'instant —')),
+                  ...profs.map((p) => DropdownMenuItem<String>(
+                        value: p['user_id'].toString(),
+                        child: Text(
+                            '${p['prenoms'] ?? ''} ${p['nom'] ?? ''}'.trim(),
+                            overflow: TextOverflow.ellipsis),
+                      )),
+                ],
+                onChanged: (v) => setDialogState(() => profUserId = v),
+              );
+            },
+          ),
         ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogCtx),
@@ -810,6 +847,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
                   volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
                   filiereId: int.tryParse(f.backendId!),
                   filiereNom: f.nom,
+                  professeurUserId: profUserId,
                 );
                 if (!mounted) return;
                 if (result['success'] == true) {

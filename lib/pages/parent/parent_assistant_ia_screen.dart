@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_palette.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -164,7 +165,7 @@ class _ParentAssistantIAScreenState extends State<ParentAssistantIAScreen> {
       final token = prefs.getString('token') ?? '';
 
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/ia/chat'),
+        Uri.parse('${ApiService.baseUrl}/ia/chat'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
