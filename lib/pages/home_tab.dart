@@ -10,6 +10,7 @@ import 'notifications_page.dart';
 import 'chat_ia_screen.dart';
 import 'bulletin_screen.dart';
 import 'courses_tab.dart';
+import 'groupe_filiere_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key, required this.profile});
@@ -154,6 +155,8 @@ class _HomeTabState extends State<HomeTab> {
                 _buildThreeRow(context),
                 const SizedBox(height: 16),
                 _buildCantineBtn(context),
+                const SizedBox(height: 16),
+                _buildFiliereBtn(context),
                 const SizedBox(height: 16),
                 _buildEventsCarousel(),
                 const SizedBox(height: 16),
@@ -459,6 +462,76 @@ class _HomeTabState extends State<HomeTab> {
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: Colors.white)),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+                color: AppPalette.yellow,
+                borderRadius: BorderRadius.circular(9)),
+            child: const Icon(Icons.arrow_forward_rounded,
+                color: Color(0xFF3A2A00), size: 16),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ── Ma filière bouton ─────────────────────────────────────────────────────
+
+  Widget _buildFiliereBtn(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => GroupeFiliere(profile: widget.profile))),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1565C0), Color(0xFF0A3D91)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color: AppPalette.blue.withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Row(children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(11)),
+            child: const Icon(Icons.groups_rounded,
+                color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Ma filière',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+                Text(
+                  widget.profile.filiere.isNotEmpty
+                      ? 'Canal ${widget.profile.filiere}'
+                      : 'Canal de la filière',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: Colors.white70),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 10),
           Container(

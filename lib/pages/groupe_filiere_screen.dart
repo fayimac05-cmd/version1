@@ -1,5 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -83,15 +87,93 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
   late List<_MessageGroupe> _messages;
 
+  // Id de la filière côté backend (récupéré via /auth/me) ; null si hors ligne
+  // → dans ce cas l'écran reste en mode démo locale.
+  int? _filiereId;
+  String? _myUserId;
+
   @override
   void initState() {
     super.initState();
     _messages = _messagesSimules();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
+    _init();
+  }
+
+  Future<void> _init() async {
+    _myUserId = await ApiService.getUserId();
+    try {
+      final headers = await ApiService.getHeaders();
+      final me = await http.get(
+          Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
+      if (me.statusCode != 200) return;
+      final filiereId = jsonDecode(me.body)['filiere_id'];
+      if (filiereId == null) return;
+      _filiereId = filiereId is int ? filiereId : int.tryParse('$filiereId');
+      if (_filiereId == null) return;
+
+      await _chargerMessages();
+      await _connecterSocket();
+    } catch (_) {
+      // Serveur injoignable : on reste sur la démo locale
+    }
+  }
+
+  Future<void> _chargerMessages() async {
+    final headers = await ApiService.getHeaders();
+    final response = await http.get(
+      Uri.parse('${ApiService.baseUrl}/messages/groupe/$_filiereId'),
+      headers: headers,
+    );
+    if (response.statusCode != 200 || !mounted) return;
+    final data = jsonDecode(utf8.decode(response.bodyBytes))['data'] as List? ?? [];
+    setState(() {
+      _messages = data
+          .map((m) => _messageDepuisJson(m as Map<String, dynamic>))
+          .toList();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
+  }
+
+  Future<void> _connecterSocket() async {
+    await SocketService().connect();
+    SocketService().onGroupeMessage((data) {
+      if (!mounted) return;
+      final json = data is Map<String, dynamic>
+          ? data
+          : jsonDecode(data.toString()) as Map<String, dynamic>;
+      if (json['filiere_id']?.toString() != _filiereId?.toString()) return;
+      // Mes propres messages sont déjà affichés à l'envoi
+      if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
+      setState(() => _messages.add(_messageDepuisJson(json)));
+      Future.delayed(const Duration(milliseconds: 100), _scrollBas);
+    });
+  }
+
+  _MessageGroupe _messageDepuisJson(Map<String, dynamic> json) {
+    final estMoi = _myUserId != null &&
+        json['auteur_id']?.toString() == _myUserId;
+    return _MessageGroupe(
+      id: json['id'].toString(),
+      auteur: estMoi
+          ? _moi
+          : _Membre(
+              nom: (json['nom'] ?? '') as String,
+              prenoms: (json['prenoms'] ?? '') as String,
+              matricule: json['auteur_id']?.toString() ?? '',
+            ),
+      contenu: (json['contenu'] ?? '') as String,
+      type: TypeMessage.texte,
+      heure: (DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now())
+          .toLocal(),
+      reactions: {},
+      estMoi: estMoi,
+    );
   }
 
   @override
   void dispose() {
+    SocketService().off('message:groupe');
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -198,24 +280,42 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
   }
 
   // ── Envoyer message texte ─────────────────────────────────────────────
-  void _envoyerTexte() {
+  Future<void> _envoyerTexte() async {
     final texte = _inputCtrl.text.trim();
     if (texte.isEmpty) return;
     _inputCtrl.clear();
-    setState(() {
-      _messages.add(
-        _MessageGroupe(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          auteur: _moi,
-          contenu: texte,
-          type: TypeMessage.texte,
-          heure: DateTime.now(),
-          reactions: {},
-          estMoi: true,
-        ),
-      );
-    });
+    final msgLocal = _MessageGroupe(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      auteur: _moi,
+      contenu: texte,
+      type: TypeMessage.texte,
+      heure: DateTime.now(),
+      reactions: {},
+      estMoi: true,
+    );
+    setState(() => _messages.add(msgLocal));
     Future.delayed(const Duration(milliseconds: 100), _scrollBas);
+
+    if (_filiereId == null) return; // mode démo locale
+
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/messages/groupe/$_filiereId'),
+        headers: headers,
+        body: jsonEncode({'contenu': texte}),
+      );
+      if (response.statusCode != 201 && mounted) {
+        setState(() => _messages.remove(msgLocal));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Échec de l\'envoi du message')));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _messages.remove(msgLocal));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Serveur injoignable — message non envoyé')));
+    }
   }
 
   // ── Simuler envoi média ───────────────────────────────────────────────

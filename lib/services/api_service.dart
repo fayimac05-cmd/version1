@@ -18,6 +18,12 @@ class ApiService {
     return prefs.getString('token');
   }
 
+  // ── Récupérer l'id utilisateur connecté ──────────────────
+  static Future<String?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('user_id');
+  }
+
   // ── Supprimer le token (logout) ──────────────────────────
   static Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import 'auth_choice_page.dart';
+import 'choose_school_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -134,6 +135,10 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _goAuthChoice() {
     Navigator.of(context).push(_slideRoute(const AuthChoicePage()));
+  }
+
+  void _goChooseSchool() {
+    Navigator.of(context).push(_slideRoute(const ChooseSchoolPage()));
   }
 
   Route _slideRoute(Widget page) => PageRouteBuilder(
@@ -317,6 +322,8 @@ class _SplashScreenState extends State<SplashScreen>
                         children: [
                           _buildPrimaryBtn(),
                           const SizedBox(height: 12),
+                          _buildSchoolBtn(),
+                          const SizedBox(height: 12),
                           const Text('Version 1.0.0',
                               style: TextStyle(
                                   fontSize: 12,
@@ -454,6 +461,32 @@ class _SplashScreenState extends State<SplashScreen>
                     TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             SizedBox(width: 10),
             Icon(Icons.arrow_forward_rounded, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSchoolBtn() {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: OutlinedButton(
+        onPressed: _goChooseSchool,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppPalette.blue,
+          side: const BorderSide(color: AppPalette.blue, width: 1.5),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.school_rounded, size: 20),
+            SizedBox(width: 10),
+            Text('Sélectionner mon école',
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           ],
         ),
       ),

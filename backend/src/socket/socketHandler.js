@@ -43,11 +43,15 @@ function initSocket(io) {
       socket.join(`filiere:${socket.filiere}`);
     }
 
-    // Rejoindre toutes les rooms des canaux accessibles
+    // Rejoindre toutes les rooms des canaux accessibles :
+    // adhésions explicites + canaux publics (lisibles par tous)
     try {
       const { rows: canaux } = await pool.query(
-        `SELECT canal_id FROM canal_membres WHERE user_id = $1`,
-        [userId]
+        `SELECT id AS canal_id FROM canaux
+         WHERE type = ANY($2)
+         UNION
+         SELECT canal_id FROM canal_membres WHERE user_id = $1`,
+        [userId, ['administration', 'admin_filiere', 'bde', 'general']]
       );
       canaux.forEach(({ canal_id }) => socket.join(`canal:${canal_id}`));
     } catch (err) {

@@ -17,6 +17,7 @@ const {
   envoyerMessageGroupe,
   ajouterReaction,
   supprimerMessage,
+  getAdminContact,
   getUsersOnline,
 } = require('../controllers/messageController');
 
@@ -41,7 +42,8 @@ router.post('/groupe/:filiereId',envoyerMessageGroupe);
 router.post('/:id/reaction',     ajouterReaction);
 router.delete('/:id',            supprimerMessage);
 
-// ── Présence ──────────────────────────────────────────────
+// ── Présence & contacts ───────────────────────────────────
 router.get('/online',            getUsersOnline);
+router.get('/admin-contact',     getAdminContact);
 
 module.exports = router;
