@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
+import 'appel_qr_screen.dart';
 
 class AppelTab extends StatefulWidget {
   const AppelTab({super.key, this.initialClasse});
@@ -242,6 +243,36 @@ class _AppelTabState extends State<AppelTab> {
               value: m['id'].toString(), child: Text('${m['nom']}', overflow: TextOverflow.ellipsis))).toList(),
           onChanged: (v) => setState(() => _moduleId = v),
         ),
+        if (_classeId != null && _moduleId != null) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity, height: 48,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.qr_code_2_rounded),
+              label: const Text('Appel par QR code',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppPalette.blue,
+                side: const BorderSide(color: AppPalette.blue, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                final module = _modules.firstWhere(
+                    (m) => m['id'].toString() == _moduleId,
+                    orElse: () => {'nom': ''});
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => AppelQrScreen(
+                    filiereId: int.parse(_classeId!),
+                    filiereNom: _classeNom ?? '',
+                    niveau: _niveau,
+                    moduleId: int.parse(_moduleId!),
+                    moduleNom: module['nom'] ?? '',
+                  ),
+                )).then((_) => _chargerDonnees());
+              },
+            ),
+          ),
+        ],
       ]),
     );
   }

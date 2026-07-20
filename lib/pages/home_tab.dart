@@ -2,16 +2,21 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/event.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../theme/app_palette.dart';
+import 'event_registration_page.dart';
 import 'tickets_screen.dart';
 import 'notifications_page.dart';
 import 'chat_ia_screen.dart';
 import 'bulletin_screen.dart';
 import 'courses_tab.dart';
 import 'groupe_filiere_screen.dart';
+import 'revision_ia_screen.dart';
+import 'checkin_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key, required this.profile});
@@ -33,13 +38,20 @@ class _HomeTabState extends State<HomeTab> {
   List<Map<String, dynamic>> _annonces = [];
   bool _annoncesLoading = true;
 
+  // Événements approuvés du backend (fallback : liste statique _events)
+  List<EventModel> _evenements = [];
+
+  int get _carouselLength =>
+      _evenements.isNotEmpty ? _evenements.length : _events.length;
+
   @override
   void initState() {
     super.initState();
     _fetchAnnonces();
+    _fetchEvenements();
     _autoScroll = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted) return;
-      final next = (_eventPage + 1) % _events.length;
+      if (!mounted || _carouselLength == 0) return;
+      final next = (_eventPage + 1) % _carouselLength;
       _eventsCtrl.animateToPage(next,
           duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
     });
@@ -74,6 +86,22 @@ class _HomeTabState extends State<HomeTab> {
     } catch (_) {
       if (mounted) setState(() => _annoncesLoading = false);
     }
+  }
+
+  Future<void> _fetchEvenements() async {
+    final result = await ApiService.getEvenements(statut: 'approuve');
+    if (!mounted || result['success'] != true) return;
+    final events = (result['data'] as List<dynamic>)
+        .map((j) => EventModel.fromJson(j as Map<String, dynamic>))
+        .toList();
+    // Ne garder que les événements à venir (aujourd'hui inclus)
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    setState(() {
+      _evenements =
+          events.where((e) => !e.date.isBefore(today)).toList();
+      if (_eventPage >= _carouselLength) _eventPage = 0;
+    });
   }
 
   @override
@@ -312,12 +340,22 @@ class _HomeTabState extends State<HomeTab> {
   // ── Action row ────────────────────────────────────────────────────────────
 
   Widget _buildActionRow(BuildContext context) {
-    return Row(children: [
-      Expanded(child: _actionCard(Icons.bar_chart_rounded, 'Résultats', () =>
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const BulletinScreen())))),
-      const SizedBox(width: 8),
-      Expanded(child: _actionCard(Icons.confirmation_number_outlined, 'Tickets', () =>
-          Navigator.push(context, MaterialPageRoute(builder: (_) => TicketsScreen(profile: widget.profile))))),
+    return Column(children: [
+      Row(children: [
+        Expanded(child: _actionCard(Icons.bar_chart_rounded, 'Résultats', () =>
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const BulletinScreen())))),
+        const SizedBox(width: 8),
+        Expanded(child: _actionCard(Icons.confirmation_number_outlined, 'Tickets', () =>
+            Navigator.push(context, MaterialPageRoute(builder: (_) => TicketsScreen(profile: widget.profile))))),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: _actionCard(Icons.qr_code_scanner_rounded, 'Présence', () =>
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const CheckinScreen())))),
+        const SizedBox(width: 8),
+        Expanded(child: _actionCard(Icons.auto_awesome_rounded, 'Révisions IA', () =>
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const RevisionIAScreen())))),
+      ]),
     ]);
   }
 
@@ -570,9 +608,11 @@ class _HomeTabState extends State<HomeTab> {
           height: 160,
           child: PageView.builder(
             controller: _eventsCtrl,
-            itemCount: _events.length,
+            itemCount: _carouselLength,
             onPageChanged: (i) => setState(() => _eventPage = i),
-            itemBuilder: (_, i) => _eventCard(_events[i]),
+            itemBuilder: (_, i) => _evenements.isNotEmpty
+                ? _eventCard(_toEventData(_evenements[i]), model: _evenements[i])
+                : _eventCard(_events[i]),
           ),
         ),
         const SizedBox(height: 10),
@@ -580,7 +620,7 @@ class _HomeTabState extends State<HomeTab> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
-            _events.length,
+            _carouselLength,
             (i) => AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -599,7 +639,25 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  Widget _eventCard(_EventData ev) {
+  _EventData _toEventData(EventModel e) {
+    final heure =
+        '${e.time.hour.toString().padLeft(2, '0')}h${e.time.minute.toString().padLeft(2, '0')}';
+    final lieu = e.location.isNotEmpty ? e.location : 'Lieu à confirmer';
+    final desc = e.description.isNotEmpty
+        ? e.description
+        : (e.price > 0
+            ? 'Ticket : ${e.price.toStringAsFixed(0)} FCFA — inscrivez-vous !'
+            : 'Entrée gratuite — inscrivez-vous !');
+    return _EventData(
+      '🎉',
+      DateFormat('dd MMM').format(e.date),
+      e.name,
+      desc,
+      '$lieu · $heure',
+    );
+  }
+
+  Widget _eventCard(_EventData ev, {EventModel? model}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5),
       padding: const EdgeInsets.all(16),
@@ -680,17 +738,31 @@ class _HomeTabState extends State<HomeTab> {
                             fontSize: 10,
                             color: Colors.white.withValues(alpha: 0.7))),
                   ]),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                        color: AppPalette.yellow,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Participer',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF3A2A00))),
+                  GestureDetector(
+                    onTap: model == null
+                        ? null
+                        : () async {
+                            final registered = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    EventRegistrationPage(event: model),
+                              ),
+                            );
+                            if (registered == true) _fetchEvenements();
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                          color: AppPalette.yellow,
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Text('Participer',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF3A2A00))),
+                    ),
                   ),
                 ],
               ),

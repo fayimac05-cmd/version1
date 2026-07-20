@@ -30,6 +30,7 @@ dependencies:
 
   # Interface Graphique & Charts
   fl_chart: ^1.2.0
+  qr_flutter: ^4.1.0
 
   # Moteur de génération et d'impression PDF
   pdf: ^3.12.0

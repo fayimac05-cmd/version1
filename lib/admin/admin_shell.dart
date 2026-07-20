@@ -42,6 +42,7 @@ import '../admin/admin_statistiques.dart';
 import '../admin/admin_evaluations.dart';
 import '../admin/admin_secondaire.dart';
 import '../admin/admin_primaire.dart';
+import '../admin/admin_risque.dart';
 import '../config/etablissement_config.dart';
 import '../pages/choose_etablissement_type_page.dart';
 import '../pages/splash_screen.dart';
@@ -85,6 +86,7 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.star_outline_rounded,        iconActive: Icons.star_rounded,               label: 'Éval. Professeurs',  group: 'RAPPORTS'),
   _MenuItem(icon: Icons.apartment_outlined,          iconActive: Icons.apartment_rounded,          label: 'Collège & Lycée',    group: 'SECTIONS'),
   _MenuItem(icon: Icons.auto_stories_outlined,       iconActive: Icons.auto_stories_rounded,       label: 'Primaire',           group: 'SECTIONS'),
+  _MenuItem(icon: Icons.warning_amber_outlined,      iconActive: Icons.warning_amber_rounded,      label: 'Élèves à risque',    group: 'RAPPORTS'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
@@ -94,7 +96,7 @@ const _menuGroups = <Map<String, Object>>[
   {'key': 'PERSONNES',  'items': [6, 7, 8, 9]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
-  {'key': 'RAPPORTS',   'items': [12, 13]},
+  {'key': 'RAPPORTS',   'items': [12, 13, 16]},
 ];
 
 
@@ -113,10 +115,10 @@ class AdminMenuService {
     switch (role) {
       case AdminRole.superAdmin:
         // Accès total
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
       case AdminRole.academic:
         // Notes, réclamations, filières, EDT, étudiants, profs, stats, sections
-        return {0, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15};
+        return {0, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15, 16};
       case AdminRole.secretariat:
         // Annonces, étudiants, parents, messages
         return {0, 1, 6, 8, 10};
@@ -186,6 +188,7 @@ class _AdminShellState extends State<AdminShell>
   bool _compact = false;
 
   // [UX-1] Contrôleur pour la SlideTransition entre pages
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late final AnimationController _pageAnim;
   late Animation<Offset> _slideIn;
   late Animation<double> _fadeIn;
@@ -223,6 +226,7 @@ class _AdminShellState extends State<AdminShell>
       const AdminEvaluations(),
       const AdminSecondaire(),
       const AdminPrimaire(),
+      const AdminRisque(),
     ];
 
     _pageAnim = AnimationController(
@@ -294,7 +298,7 @@ class _AdminShellState extends State<AdminShell>
     _pageAnim
       ..reset()
       ..forward();
-    if (Scaffold.of(context).isDrawerOpen) Navigator.pop(context);
+    if (_scaffoldKey.currentState?.isDrawerOpen == true) Navigator.pop(context);
   }
 
   // ── Getters sécurisés [SEC-2] ────────────────────────────────────────────
@@ -424,6 +428,7 @@ class _AdminShellState extends State<AdminShell>
     final mobile = AdminTheme.isMobile(context);
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8FAFC),
       drawer: mobile
           ? Drawer(

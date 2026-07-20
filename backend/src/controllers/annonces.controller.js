@@ -97,7 +97,7 @@ exports.getAnnonceById = async (req, res) => {
 // POST /api/annonces - Créer une annonce
 exports.createAnnonce = async (req, res) => {
   try {
-    const { titre, contenu, filiere, niveau, cibleRole } = req.body;
+    const { titre, contenu, filiere, niveau, cibleRole, statut, categorie } = req.body;
     const authorId = req.user?.id;
 
     // Validations
@@ -115,6 +115,13 @@ exports.createAnnonce = async (req, res) => {
       });
     }
 
+    if (statut && !['brouillon', 'publie'].includes(statut)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Statut invalide. Valeurs autorisées : brouillon, publie.',
+      });
+    }
+
     const filiereInfo = await resolveFiliere(pool, filiere);
 
     const annonceData = {
@@ -124,7 +131,8 @@ exports.createAnnonce = async (req, res) => {
       filiere_nom: filiereInfo.nom,
       niveau: niveau || null,
       cibleRole,
-      statut: 'brouillon', // Statut par défaut
+      categorie: categorie || null,
+      statut: statut || 'brouillon',
       fichiers: [],
       auteur: authorId,
       createdAt: new Date().toISOString(),
@@ -152,7 +160,7 @@ exports.createAnnonce = async (req, res) => {
 exports.updateAnnonce = async (req, res) => {
   try {
     const { id } = req.params;
-    const { titre, contenu, filiere, niveau, cibleRole, statut } = req.body;
+    const { titre, contenu, filiere, niveau, cibleRole, statut, categorie } = req.body;
     const userId = req.user?.id;
 
     // Vérifier que l'annonce existe
@@ -184,6 +192,7 @@ exports.updateAnnonce = async (req, res) => {
       ...(contenu && { contenu }),
       ...(niveau && { niveau }),
       ...(cibleRole && { cibleRole }),
+      ...(categorie && { categorie }),
       ...(statut && { statut }),
       updatedAt: new Date().toISOString(),
     };
