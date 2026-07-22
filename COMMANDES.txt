@@ -1,0 +1,75 @@
+========================================================
+  ScolarHub - Commandes pour lancer l'application
+========================================================
+
+L'app a DEUX parties qui doivent tourner EN MEME TEMPS :
+  - le BACKEND (serveur API)  -> port 5000
+  - l'APP Flutter (interface) -> ouverte dans Chrome
+
+Il faut donc DEUX fenetres PowerShell ouvertes.
+
+Pour ouvrir un PowerShell : touche Windows, taper "powershell", Entree.
+
+
+--------------------------------------------------------
+  ORDRE OBLIGATOIRE : LE BACKEND D'ABORD
+--------------------------------------------------------
+
+
+### TERMINAL 1 - BACKEND (a lancer EN PREMIER) ###
+
+    cd C:\Users\fayma\Desktop\fatigue\version1\backend
+    npm start
+
+  -> Attendre le message :
+     "Serveur demarre sur http://localhost:5000"
+  -> LAISSER cette fenetre ouverte.
+
+
+### TERMINAL 2 - APP FLUTTER (nouvelle fenetre) ###
+
+    cd C:\Users\fayma\Desktop\fatigue\version1
+    flutter run -d chrome
+
+  -> Chrome s'ouvre automatiquement avec l'application.
+
+
+--------------------------------------------------------
+  CONNEXION (comptes de demonstration)
+--------------------------------------------------------
+
+  Admin     : 24IST-ADM/001   / admin123
+  Prof      : 24IST-PROF/001  / prof123
+  Parent    : 24IST-PAR/001   / parent123
+  Etudiant  : 24IST-O2/1851   / 1851
+
+
+--------------------------------------------------------
+  VARIANTES / DEPANNAGE
+--------------------------------------------------------
+
+# Lancer l'app dans un navigateur (port 8080) au lieu de Chrome :
+    cd C:\Users\fayma\Desktop\fatigue\version1
+    flutter run -d web-server --web-port 8080
+  Puis ouvrir http://localhost:8080 dans le navigateur.
+
+# Voir les appareils Flutter disponibles :
+    flutter devices
+
+# Arreter un serveur :
+    - Backend : cliquer dans sa fenetre puis Ctrl + C
+    - App Flutter : appuyer sur la touche  q
+
+# Message "Serveur injoignable" dans l'app ?
+    -> Le backend n'est pas lance. Relancer le TERMINAL 1.
+
+
+--------------------------------------------------------
+  RACCOURCIS DOUBLE-CLIC (dans ce meme dossier)
+--------------------------------------------------------
+
+  LANCER_TOUT.bat        -> lance backend + app d'un coup
+  1_lancer_backend.bat   -> backend seul
+  2_lancer_app.bat       -> app seule
+
+========================================================

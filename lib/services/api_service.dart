@@ -12,9 +12,11 @@ class ApiService {
   //
   // Après le premier déploiement Render, remplacer _cloudUrl par l'URL
   // affichée dans le dashboard (https://scolarhub-backend.onrender.com).
-  static const bool _useCloud = true;
+  static const bool _useCloud = false;
   static const String _cloudUrl = 'https://scolarhub-backend.onrender.com/api';
-  static const String _localUrl = 'http://192.168.11.161:5000/api';
+  // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
+  // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
+  static const String _localUrl = 'http://localhost:5000/api';
   static const String baseUrl = _useCloud ? _cloudUrl : _localUrl;
 
   // ── Sauvegarder le token ─────────────────────────────────
@@ -120,7 +122,13 @@ class ApiService {
         return {'success': false, 'error': data['message'] ?? 'Erreur de connexion'};
       }
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+      // 'offline' distingue une panne réseau (backend injoignable) d'un refus
+      // du serveur : seul ce cas autorise le repli sur la base mock locale.
+      return {
+        'success': false,
+        'offline': true,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
     }
   }
 
@@ -147,6 +155,29 @@ class ApiService {
       return {'success': false, 'error': data['message'] ?? 'Erreur lors de la configuration du mot de passe.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  // ── Recherche d'un compte par matricule (avant connexion) ──
+  // Renvoie les infos d'affichage + premierLogin, sans mot de passe.
+  static Future<Map<String, dynamic>> lookupMatricule(String matricule) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/lookup?matricule=${Uri.encodeQueryComponent(matricule)}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && data['found'] == true) {
+        return {
+          'success': true,
+          'premierLogin': data['premierLogin'] == true,
+          'userId': data['userId'],
+          'user': data['user'],
+        };
+      }
+      return {'success': false, 'error': data['message'] ?? 'Matricule non reconnu.'};
+    } catch (e) {
+      return {'success': false, 'offline': true, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
@@ -583,6 +614,73 @@ class ApiService {
         return {'success': true, 'data': body['data']};
       }
       return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'archivage.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+    }
+  }
+
+  // ── Notifications de l'utilisateur connecté ──────────────────
+  static Future<Map<String, dynamic>> getNotifications() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/notifications'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['notifications'] ?? []};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur de chargement.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<bool> marquerNotificationLue(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/notifications/$id/lue'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> marquerToutesNotificationsLues() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/notifications/lire-tout'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ── Envoyer un EDT aux étudiants (filière + niveau) ──────────
+  static Future<Map<String, dynamic>> envoyerEdt(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/edt/$id/envoyer'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {
+          'success': true,
+          'total': body['total'] ?? 0,
+          'notifies': body['notifies'] ?? 0,
+          'message': body['message'],
+        };
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
     }

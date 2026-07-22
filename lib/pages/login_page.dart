@@ -158,7 +158,19 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // Fallback to local mock DB
+    // Le repli sur la base mock locale n'est autorisé QUE si le backend est
+    // injoignable (mode démo hors-ligne). Si le backend a répondu mais rejeté
+    // la connexion, on affiche son erreur au lieu d'entrer dans un tableau de
+    // bord sans token (ce qui provoquait des 401 sur tous les écrans).
+    if (result['offline'] != true) {
+      setState(() {
+        _loading = false;
+        _error = result['error']?.toString() ?? 'Identifiants incorrects.';
+      });
+      return;
+    }
+
+    // Fallback to local mock DB (backend injoignable uniquement)
     final user = _dbEtudiants[mat];
     if (user == null) {
       setState(() {

@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { pushToUser } = require('../socket/socketHandler');
 
 // GET /api/notifications - Liste des notifications de l'utilisateur
 const getNotifications = async (req, res) => {
@@ -64,20 +65,27 @@ const marquerToutesLues = async (req, res) => {
 // Returns { success: true } or { success: false, error: string }
 const envoyerNotificationAuto = async (userId, titre, corps) => {
   try {
-    const { error } = await supabase.from('notifications').insert({
-      user_id: userId,
-      titre,
-      corps,
-      lue: false,
-      created_at: new Date(),
-    });
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: userId,
+        titre,
+        corps,
+        lue: false,
+        created_at: new Date(),
+      })
+      .select()
+      .single();
 
     if (error) {
       console.error('[envoyerNotificationAuto]', error);
       return { success: false, error: error.message };
     }
 
-    return { success: true };
+    // Push temps réel vers la cloche de l'utilisateur (si connecté).
+    pushToUser(userId, 'notification', data);
+
+    return { success: true, data };
   } catch (error) {
     console.error('[envoyerNotificationAuto]', error);
     return { success: false, error: error.message };

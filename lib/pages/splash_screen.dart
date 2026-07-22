@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import 'auth_choice_page.dart';
 import 'choose_school_page.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -138,10 +137,6 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  void _goAuthChoice() {
-    Navigator.of(context).push(_slideRoute(const AuthChoicePage()));
-  }
-
   void _goChooseSchool() {
     Navigator.of(context).push(_slideRoute(const ChooseSchoolPage()));
   }
@@ -166,22 +161,6 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         children: [
           // ── Animated background circles ──────────────────────────────────
-          ScaleTransition(
-            scale: _bgScale,
-            alignment: Alignment.topLeft,
-            child: Positioned(
-              top: -80,
-              left: -80,
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppPalette.blue,
-                ),
-              ),
-            ),
-          ),
           Positioned(
             top: -80,
             left: -80,
@@ -327,8 +306,6 @@ class _SplashScreenState extends State<SplashScreen>
                         children: [
                           _buildPrimaryBtn(),
                           const SizedBox(height: 12),
-                          _buildSchoolBtn(),
-                          const SizedBox(height: 12),
                           const Text('Version 1.0.0',
                               style: TextStyle(
                                   fontSize: 12,
@@ -450,7 +427,7 @@ class _SplashScreenState extends State<SplashScreen>
       width: double.infinity,
       height: 54,
       child: ElevatedButton(
-        onPressed: _goAuthChoice,
+        onPressed: _goChooseSchool,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppPalette.blue,
           foregroundColor: Colors.white,
@@ -472,29 +449,4 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Widget _buildSchoolBtn() {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: OutlinedButton(
-        onPressed: _goChooseSchool,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppPalette.blue,
-          side: const BorderSide(color: AppPalette.blue, width: 1.5),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.school_rounded, size: 20),
-            SizedBox(width: 10),
-            Text('Sélectionner mon école',
-                style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
 }

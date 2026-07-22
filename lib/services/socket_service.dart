@@ -63,6 +63,11 @@ class SocketService {
     _socket?.on('message:groupe', callback);
   }
 
+  /// Notification temps réel poussée vers la cloche de l'utilisateur.
+  void onNotification(void Function(dynamic) callback) {
+    _socket?.on('notification', callback);
+  }
+
   /// Envoie un message dans un canal ; le serveur le persiste et le diffuse.
   void sendCanalMessage(String canalId, Map<String, dynamic> data) {
     _socket?.emit('message:canal', {
