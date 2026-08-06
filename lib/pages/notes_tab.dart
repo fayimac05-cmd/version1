@@ -1,12 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_palette.dart';
+
 
 // ── Modèle note ──────────────────────────────────────────────────────────────
 class _NoteModule {
@@ -116,52 +115,51 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
   Future<void> _fetchNotesBackend() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token') ?? '';
-      final response = await http.get(
-        Uri.parse('http://localhost:5000/api/notes/etudiant'),
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 5));
+      final matricule = prefs.getString('matricule') ?? '';
+      if (matricule.isEmpty) throw Exception('Matricule non disponible');
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List list = data['data'] ?? [];
+      final data = await Supabase.instance.client
+          .from('notes')
+          .select()
+          .eq('matricule', matricule)
+          .order('created_at', ascending: false);
+      final List list = data as List;
 
-        if (list.isNotEmpty) {
-          // Grouper par module_nom et calculer la note moyenne
-          final Map<String, List<double>> grouped = {};
-          final Map<String, String> typeMap = {};
-          for (final n in list) {
-            final mod = n['module_nom'] as String? ?? 'Module';
-            final note = (n['note'] as num?)?.toDouble();
-            final type = n['type_eval'] as String? ?? 'DS';
-            if (note != null) {
-              grouped.putIfAbsent(mod, () => []).add(note);
-              typeMap[mod] = type;
-            }
+      if (list.isNotEmpty) {
+        // Grouper par module_nom
+        final Map<String, List<double>> grouped = {};
+        final Map<String, String> typeMap = {};
+        for (final n in list) {
+          final mod = n['module_nom'] as String? ?? n['module'] as String? ?? 'Module';
+          final note = (n['valeur'] as num?)?.toDouble() ?? (n['note'] as num?)?.toDouble();
+          final type = n['type_eval'] as String? ?? 'DS';
+          if (note != null) {
+            grouped.putIfAbsent(mod, () => []).add(note);
+            typeMap[mod] = type;
           }
-
-          final modules = grouped.entries.toList();
-          setState(() {
-            _notes = List.generate(modules.length, (i) {
-              final entry = modules[i];
-              final notes = entry.value;
-              final avg = notes.reduce((a, b) => a + b) / notes.length;
-              final type = typeMap[entry.key] ?? 'DS';
-              return _NoteModule(
-                module: entry.key,
-                code: 'MOD${(i + 1).toString().padLeft(3, '0')}',
-                prof: 'Professeur assigné',
-                td: type == 'TP' || type == 'Contrôle Continu' ? avg : null,
-                exam: type == 'DS' || type == 'Examen Final' ? avg : avg,
-                coefTd: 1, coefExam: 2, coefficient: 3,
-                color: _colors[i % _colors.length],
-              );
-            });
-            _loading = false;
-            _fromBackend = true;
-          });
-          return;
         }
+
+        final modules = grouped.entries.toList();
+        setState(() {
+          _notes = List.generate(modules.length, (i) {
+            final entry = modules[i];
+            final notes = entry.value;
+            final avg = notes.reduce((a, b) => a + b) / notes.length;
+            final type = typeMap[entry.key] ?? 'DS';
+            return _NoteModule(
+              module: entry.key,
+              code: 'MOD${(i + 1).toString().padLeft(3, '0')}',
+              prof: 'Professeur assigné',
+              td: type == 'TP' || type == 'Contrôle Continu' ? avg : null,
+              exam: type == 'DS' || type == 'Examen Final' ? avg : avg,
+              coefTd: 1, coefExam: 2, coefficient: 3,
+              color: _colors[i % _colors.length],
+            );
+          });
+          _loading = false;
+          _fromBackend = true;
+        });
+        return;
       }
     } catch (_) {}
 
@@ -194,38 +192,28 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
     setState(() => _isDownloading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token') ?? '';
-      final etudiantId = prefs.getString('user_id') ?? '1';
-      final url = Uri.parse('http://localhost:5000/api/notes/bulletin/$etudiantId');
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $token',
-      });
-
-      if (response.statusCode == 200) {
-        final Uint8List pdfBytes = response.bodyBytes;
-        await Printing.layoutPdf(
-          onLayout: (_) => pdfBytes,
-          name: 'Bulletin_Semestre_3.pdf',
-        );
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Erreur serveur: impossible de générer le bulletin.'),
-            backgroundColor: const Color(0xFFC62828),
-          ));
-        }
-      }
-    } catch (e) {
+      final matricule = prefs.getString('matricule') ?? '';
+      // Chercher le bulletin PDF dans Supabase Storage (bucket : bulletins)
+      final path = '$matricule/bulletin_s3.pdf';
+      final pdfBytes = await Supabase.instance.client.storage
+          .from('bulletins')
+          .download(path);
+      await Printing.layoutPdf(
+        onLayout: (_) => pdfBytes,
+        name: 'Bulletin_Semestre_3.pdf',
+      );
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Erreur de connexion au serveur API.'),
-          backgroundColor: const Color(0xFFC62828),
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Bulletin non disponible — contactez l\'administration.'),
+          backgroundColor: Color(0xFFC62828),
         ));
       }
     } finally {
       if (mounted) setState(() => _isDownloading = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

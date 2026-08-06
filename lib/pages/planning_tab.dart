@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 
 class PlanningTab extends StatefulWidget {
   const PlanningTab({super.key});
@@ -19,10 +21,10 @@ class _PlanningTabState extends State<PlanningTab> with SingleTickerProviderStat
   static const Color _border = Color(0xFFE2E8F0);
   static const Color _brandBlue = Color(0xFF1E40AF);
 
-  // 1. STRUCTURE DE L'EMPLOI DU TEMPS HEBDOMADAIRE (Corrigé ici : sans espace !)
+  // 1. EMPLOI DU TEMPS HEBDOMADAIRE
   final List<String> _joursSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-  
-  final List<Map<String, dynamic>> _coursSemaine = [
+
+  List<Map<String, dynamic>> _coursSemaine = [
     {'jour': 'Lundi', 'heure': '08h00 - 10h00', 'matiere': 'Administration Réseau Linux', 'salle': 'Salle A102', 'type': 'CM', 'prof': 'Prof Ouédraogo'},
     {'jour': 'Lundi', 'heure': '10h15 - 12h15', 'matiere': 'Téléphonie sur IP (Asterisk)', 'salle': 'Labo Télécom', 'type': 'TP', 'prof': 'Prof Traoré'},
     {'jour': 'Mardi', 'heure': '08h00 - 11h00', 'matiere': 'Bases de Données Relationnelles', 'salle': 'Salle B204', 'type': 'TD', 'prof': 'Prof Sawadogo'},
@@ -32,7 +34,7 @@ class _PlanningTabState extends State<PlanningTab> with SingleTickerProviderStat
   ];
 
   // 2. EVENEMENTS ANNUELS
-  static const List<Map<String, String>> _events = [
+  List<Map<String, dynamic>> _eventsCalendrier = [
     {'titre': 'Rentrée académique 2024-2025', 'date': '15 septembre 2024', 'description': 'Début officiel de l\'année.', 'type': 'Académique'},
     {'titre': 'Début des examens S3', 'date': '04 Nov. → 15 Nov. 2024', 'description': 'Examens écrits de fin de semestre.', 'type': 'Examens'},
     {'titre': 'Délibérations S3', 'date': '25 novembre 2024', 'description': 'Publication des résultats du S3.', 'type': 'Résultats'},
@@ -44,6 +46,50 @@ class _PlanningTabState extends State<PlanningTab> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _fetchEdt();
+    _fetchCalendrier();
+  }
+
+  Future<void> _fetchEdt() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('emploi_du_temps')
+          .select()
+          .order('jour');
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() {
+          _coursSemaine = list.map((e) => {
+            'jour': e['jour'] ?? '',
+            'heure': '${e['heure_debut'] ?? ''} - ${e['heure_fin'] ?? ''}',
+            'matiere': e['matiere'] ?? '',
+            'salle': e['salle'] ?? '',
+            'type': e['type'] ?? 'CM',
+            'prof': e['prof'] ?? '',
+          }).toList();
+        });
+      }
+    } catch (_) {} // fallback sur données statiques déjà initialisées
+  }
+
+  Future<void> _fetchCalendrier() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('calendrier')
+          .select()
+          .order('date_debut');
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() {
+          _eventsCalendrier = list.map((e) => {
+            'titre': e['titre'] ?? '',
+            'date': e['date_debut']?.toString() ?? '',
+            'description': e['description'] ?? '',
+            'type': e['type'] ?? 'Académique',
+          }).toList();
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -280,9 +326,9 @@ class _PlanningTabState extends State<PlanningTab> with SingleTickerProviderStat
                 // ONGLET 2 : DATES IMPORTANTES
                 ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _events.length,
+                  itemCount: _eventsCalendrier.length,
                   itemBuilder: (context, index) {
-                    final item = _events[index];
+                    final item = _eventsCalendrier[index];
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),

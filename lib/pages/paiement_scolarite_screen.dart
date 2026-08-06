@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_palette.dart';
 
 class PaiementScolariteScreen extends StatefulWidget {
@@ -9,12 +11,12 @@ class PaiementScolariteScreen extends StatefulWidget {
 }
 
 class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
-  final List<Map<String, dynamic>> frais = [
+  List<Map<String, dynamic>> frais = [
     {'libelle': 'Frais d\'inscription', 'montant': 50000, 'statut': 'non_payé'},
     {'libelle': 'Mensualité Février', 'montant': 25000, 'statut': 'non_payé'},
   ];
 
-  final List<Map<String, dynamic>> historique = [
+  List<Map<String, dynamic>> historique = [
     {
       'libelle': 'Mensualité Janvier',
       'montant': 25000,
@@ -32,6 +34,54 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
   ];
 
   int _currentTab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchFrais();
+    _fetchHistorique();
+  }
+
+  Future<void> _fetchFrais() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final matricule = prefs.getString('matricule') ?? '';
+      if (matricule.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('frais_scolarite')
+          .select()
+          .eq('matricule', matricule)
+          .eq('statut', 'non_payé');
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() => frais = List<Map<String, dynamic>>.from(list));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchHistorique() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final matricule = prefs.getString('matricule') ?? '';
+      if (matricule.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('paiements')
+          .select()
+          .eq('matricule', matricule)
+          .order('date_paiement', ascending: false);
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() => historique = list.map((e) => {
+          'libelle': e['libelle'] ?? '',
+          'montant': e['montant'] ?? 0,
+          'date': e['date_paiement']?.toString().substring(0, 10) ?? '',
+          'ref': e['reference'] ?? '',
+          'mode': e['mode'] ?? 'Orange Money',
+        } as Map<String, dynamic>).toList());
+      }
+    } catch (_) {}
+  }
+
 
   void _payer(Map<String, dynamic> f) {
     final telCtrl     = TextEditingController();

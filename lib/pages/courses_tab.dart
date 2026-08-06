@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_palette.dart';
 import '../widgets/app_bubble_bg.dart';
 
@@ -14,7 +15,13 @@ class _CoursesTabState extends State<CoursesTab> {
   String _recherche = '';
   final TextEditingController _searchCtrl = TextEditingController();
 
-  final List<Map<String, dynamic>> _cours = [
+  // Couleurs par index pour les modules
+  static const _moduleColors = [
+    AppPalette.blue, Color(0xFF7C3AED), Color(0xFF0891B2),
+    Color(0xFF15803D), Color(0xFFD97706), Color(0xFFE11D48),
+  ];
+
+  List<Map<String, dynamic>> _cours = [
     {'module': 'Algorithmique & Structures', 'titre': 'Chapitre 3 — Les pointeurs',
       'prof': 'Prof Ouédraogo', 'date': 'Aujourd\'hui, 09h32', 'taille': '2.4 MB',
       'nouveau': true, 'color': AppPalette.blue},
@@ -34,6 +41,39 @@ class _CoursesTabState extends State<CoursesTab> {
       'prof': 'Prof Johnson', 'date': '22 Avr, 08h00', 'taille': '1.1 MB',
       'nouveau': false, 'color': Color(0xFFD97706)},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCours();
+  }
+
+  Future<void> _fetchCours() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('cours')
+          .select()
+          .order('created_at', ascending: false);
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() {
+          _cours = List.generate(list.length, (i) {
+            final e = list[i];
+            return {
+              'module': e['module'] ?? 'Module',
+              'titre': e['titre'] ?? 'Sans titre',
+              'prof': e['prof'] ?? 'Professeur',
+              'date': e['created_at']?.toString().substring(0, 10) ?? '',
+              'taille': e['taille'] ?? '',
+              'nouveau': e['nouveau'] ?? false,
+              'color': _moduleColors[i % _moduleColors.length],
+              'fichier_url': e['fichier_url'],
+            };
+          });
+        });
+      }
+    } catch (_) {} // fallback sur données statiques
+  }
 
   List<String> get _modules {
     final mods = _cours.map((c) => c['module'] as String).toSet().toList();
@@ -56,6 +96,7 @@ class _CoursesTabState extends State<CoursesTab> {
     showDialog(context: context, barrierDismissible: false,
         builder: (_) => _DownloadDialog(cours: cours));
   }
+
 
   @override
   Widget build(BuildContext context) {

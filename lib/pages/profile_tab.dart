@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/supabase_service.dart';
+
 import '../models/student_profile.dart';
 import 'splash_screen.dart';
 
@@ -73,6 +77,43 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     super.initState();
     _email = widget.profile.email.isNotEmpty ? widget.profile.email : '${widget.profile.prenoms.toLowerCase()}.${widget.profile.nom.toLowerCase()}@ist.bf';
     _telephone = widget.profile.telephone;
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final matricule = prefs.getString('matricule') ?? '';
+      if (matricule.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('notifications')
+          .select()
+          .eq('matricule', matricule)
+          .order('created_at', ascending: false)
+          .limit(20);
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() {
+          _notifs.clear();
+          _notifs.addAll(list.map((e) {
+            final typeStr = e['type'] as String? ?? 'message';
+            NotifType t = NotifType.message;
+            if (typeStr == 'examen') t = NotifType.examen;
+            if (typeStr == 'note') t = NotifType.note;
+            if (typeStr == 'cours') t = NotifType.cours;
+            if (typeStr == 'inscription') t = NotifType.inscription;
+            return AppNotification(
+              id: e['id']?.toString() ?? '',
+              type: t,
+              titre: e['titre'] ?? '',
+              corps: e['corps'] ?? '',
+              temps: e['created_at']?.toString().substring(0, 16) ?? '',
+              lu: e['lu'] ?? false,
+            );
+          }));
+        });
+      }
+    } catch (_) {} // fallback sur données statiques
   }
 
   @override
@@ -128,9 +169,27 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked != null) {
-      setState(() => _photoFile = File(picked.path));
+      final file = File(picked.path);
+      setState(() => _photoFile = file);
+
+      // Upload vers Supabase Storage
+      try {
+        final url = await SupabaseService().uploadProfilePhoto(file, widget.profile.matricule);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Photo de profil mise à jour sur Supabase !')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur d\'envoi de la photo : $e')),
+          );
+        }
+      }
     }
   }
+
 
   void _editer({
     required String titre, required String valeur, required String hint,
