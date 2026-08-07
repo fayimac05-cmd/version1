@@ -5,8 +5,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
 import '../models/event.dart';
+import '../services/api_service.dart';
 import 'create_event_page.dart';
 import 'create_announcement_page.dart';
+import 'event_registration_page.dart';
 
 class BureauDesEtudiantsScreen extends StatefulWidget {
   const BureauDesEtudiantsScreen({super.key});
@@ -18,11 +20,46 @@ class BureauDesEtudiantsScreen extends StatefulWidget {
 
 class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
   int _currentIndex = 0;
-  List<EventModel> _customEvents = [];
+  List<EventModel> _events = [];
+  List<Map<String, dynamic>> _annonces = [];
+  List<Map<String, dynamic>> _inscriptions = [];
+  bool _isLoading = true;
 
   static const primaryBlue = AppPalette.blue;
   static const textDark = Color(0xFF0F172A);
   static const textLight = Color(0xFF64748B);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final results = await Future.wait([
+      ApiService.getEvenements(),
+      ApiService.getAnnonces(statut: 'publie'),
+      ApiService.getHistoriqueInscriptions(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      if (results[0]['success'] == true) {
+        _events = (results[0]['data'] as List<dynamic>)
+            .map((j) => EventModel.fromJson(j as Map<String, dynamic>))
+            .toList();
+      }
+      if (results[1]['success'] == true) {
+        _annonces = (results[1]['data'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+      }
+      if (results[2]['success'] == true) {
+        _inscriptions = (results[2]['data'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+      }
+    });
+  }
 
   List<Widget> get _pages => [
     _buildAccueilBDE(),
@@ -147,8 +184,147 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           _buildCardVentesApprouvees(),
           const SizedBox(height: 16),
           _buildCardAnnoncesGestion(),
+          const SizedBox(height: 16),
+          _buildCardHistoriqueInscriptions(),
         ],
       ),
+    );
+  }
+
+  // ── Historique des inscriptions aux événements ─────────────────────────
+  Widget _buildCardHistoriqueInscriptions() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history_rounded, size: 18, color: primaryBlue),
+              const SizedBox(width: 8),
+              Text(
+                'Historique des inscriptions (${_inscriptions.length})',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_inscriptions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'Aucune inscription aux événements pour le moment.',
+                  style: TextStyle(fontSize: 13, color: textLight),
+                ),
+              ),
+            )
+          else
+            for (int i = 0; i < _inscriptions.length; i++) ...[
+              if (i > 0) const Divider(height: 24, color: Color(0xFFF1F5F9)),
+              _buildInscriptionItem(_inscriptions[i]),
+            ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInscriptionItem(Map<String, dynamic> ins) {
+    final nomComplet = [ins['prenoms'], ins['nom']]
+        .where((x) => x != null && x.toString().isNotEmpty)
+        .join(' ');
+    final date = DateTime.tryParse(ins['createdAt'] ?? '');
+    final prix = double.tryParse(ins['prix']?.toString() ?? '') ?? 0;
+    final details = [
+      if ((ins['matricule'] ?? '').toString().isNotEmpty) ins['matricule'],
+      if ((ins['telephone'] ?? '').toString().isNotEmpty) ins['telephone'],
+    ].join(' · ');
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFDCFCE7),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.how_to_reg_rounded, color: primaryBlue, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                nomComplet.isEmpty ? 'Étudiant' : nomComplet,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'S\'est inscrit à « ${ins['evenement_titre'] ?? ''} »',
+                style: const TextStyle(fontSize: 12, color: textLight),
+              ),
+              if (details.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(details, style: const TextStyle(fontSize: 11, color: textLight)),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              date != null ? DateFormat('dd MMM · HH:mm').format(date) : '',
+              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                prix > 0 ? '${prix.toStringAsFixed(0)} FCFA' : 'Gratuit',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF166534),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -173,9 +349,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   ),
                 );
                 if (result != null && result is EventModel) {
-                  setState(() {
-                    _customEvents.insert(0, result);
-                  });
+                  _loadData();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -222,13 +396,14 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const CreateAnnouncementPage(),
                   ),
                 );
+                if (result == true) _loadData();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
@@ -305,28 +480,47 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          _buildAnnonceItem(
-            icon: Icons.campaign_outlined,
-            title: 'Résultats Concours Photo BDE',
-            subtitle: '08 Jan 2025 · 312 vues',
-            status: 'Diffusé',
-            statusBg: const Color(0xFFDCFCE7),
-            statusColor: const Color(0xFF166534),
-            canEdit: true,
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildAnnonceItem(
-            icon: Icons.schedule_outlined,
-            title: 'Rappel : Soirée Culturelle J-3',
-            subtitle: '09 Jan 2025 · 180 vues',
-            status: 'Diffusé',
-            statusBg: const Color(0xFFDCFCE7),
-            statusColor: const Color(0xFF166534),
-            canEdit: true,
-          ),
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_annonces.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(
+                  'Aucune annonce publiée pour le moment.',
+                  style: TextStyle(fontSize: 13, color: textLight),
+                ),
+              ),
+            )
+          else
+            for (int i = 0; i < _annonces.length; i++) ...[
+              if (i > 0) const Divider(height: 24, color: Color(0xFFF1F5F9)),
+              _buildAnnonceItem(
+                icon: Icons.campaign_outlined,
+                title: _annonces[i]['titre'] ?? '',
+                subtitle: _formatAnnonceSubtitle(_annonces[i]),
+                status: 'Diffusé',
+                statusBg: const Color(0xFFDCFCE7),
+                statusColor: const Color(0xFF166534),
+              ),
+            ],
         ],
       ),
     );
+  }
+
+  String _formatAnnonceSubtitle(Map<String, dynamic> annonce) {
+    final date = DateTime.tryParse(annonce['createdAt'] ?? '');
+    final dateStr = date != null ? DateFormat('dd MMM yyyy').format(date) : '';
+    final categorie = annonce['categorie'];
+    return categorie != null && categorie.toString().isNotEmpty
+        ? '$dateStr · $categorie'
+        : dateStr;
   }
 
   Widget _buildAnnonceItem({
@@ -454,72 +648,43 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          if (!isUpcoming) ...[
-            for (final event in _customEvents) ...[
-              _buildEventItem(
-                title: event.name,
-                subtitle: '${DateFormat('dd MMM yyyy').format(event.date)} · ${event.location}',
-                count: '0 / 100', // Mock
-                status: event.status,
-                statusBg: const Color(0xFFFEF3C7),
-                statusColor: const Color(0xFF92400E),
-                image: event.image,
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(),
               ),
-              const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            ],
-            _buildEventItem(
-              title: 'Soirée Culturelle',
-              subtitle: '12 Jan 2025 · Salle polyvalente',
-              count: '120 / 150',
-              status: 'Approuvé',
-              statusBg: const Color(0xFFDCFCE7),
-              statusColor: const Color(0xFF166534),
-            ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Cérémonie Prix BDE',
-              subtitle: '20 Jan 2025 · Amphi A',
-              count: '87 / 120',
-              status: 'En attente',
-              statusBg: const Color(0xFFFEF3C7),
-              statusColor: const Color(0xFF92400E),
-            ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Journée Sport',
-              subtitle: '28 Jan 2025 · Terrain',
-              count: '40 / 80',
-              status: 'Ouvert',
-              statusBg: const Color(0xFFDBEAFE),
-              statusColor: const Color(0xFF1E40AF),
-            ),
-          ] else ...[
-            _buildEventItem(
-              title: 'Gala de fin d\'année',
-              subtitle: '15 Juin 2025 · Grand Amphi',
-              count: '0 / 500',
-              status: 'Planifié',
-              statusBg: const Color(0xFFF1F5F9),
-              statusColor: const Color(0xFF475569),
-            ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Forum Entreprises',
-              subtitle: '10 Avr 2025 · Hall Principal',
-              count: '0 / 200',
-              status: 'Ouvert',
-              statusBg: const Color(0xFFDBEAFE),
-              statusColor: const Color(0xFF1E40AF),
-            ),
-            const Divider(height: 24, color: Color(0xFFF1F5F9)),
-            _buildEventItem(
-              title: 'Tournoi E-sport',
-              subtitle: '05 Mar 2025 · Salle Info',
-              count: '12 / 32',
-              status: 'En attente',
-              statusBg: const Color(0xFFFEF3C7),
-              statusColor: const Color(0xFF92400E),
-            ),
+            )
+          else ...[
+            () {
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+              final visibles = _events
+                  .where((e) => isUpcoming
+                      ? e.date.isAfter(today.add(const Duration(days: 1)))
+                      : !e.date.isAfter(today.add(const Duration(days: 1))))
+                  .toList();
+              if (visibles.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text(
+                      'Aucun événement dans cette catégorie.',
+                      style: TextStyle(fontSize: 13, color: textLight),
+                    ),
+                  ),
+                );
+              }
+              return Column(
+                children: [
+                  for (int i = 0; i < visibles.length; i++) ...[
+                    if (i > 0)
+                      const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                    _buildEventItem(event: visibles[i]),
+                  ],
+                ],
+              );
+            }(),
           ],
           if (withButton) ...[
             const SizedBox(height: 24),
@@ -532,9 +697,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                   ),
                 );
                 if (result != null && result is EventModel) {
-                  setState(() {
-                    _customEvents.insert(0, result);
-                  });
+                  _loadData();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -560,7 +723,55 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     );
   }
 
-  Widget _buildEventItem({
+  Widget _buildEventItem({required EventModel event}) {
+    final title = event.name;
+    final subtitle =
+        '${DateFormat('dd MMM yyyy').format(event.date)}${event.location.isNotEmpty ? ' · ${event.location}' : ''}';
+    final count =
+        '${event.inscrits} / ${event.capacite > 0 ? event.capacite : '∞'}';
+    final status = event.status;
+    Color statusBg;
+    Color statusColor;
+    switch (status) {
+      case 'Approuvé':
+        statusBg = const Color(0xFFDCFCE7);
+        statusColor = const Color(0xFF166534);
+        break;
+      case 'Annulé':
+        statusBg = const Color(0xFFFEE2E2);
+        statusColor = const Color(0xFF991B1B);
+        break;
+      default:
+        statusBg = const Color(0xFFFEF3C7);
+        statusColor = const Color(0xFF92400E);
+    }
+    final XFile? image = event.image;
+    final String? imageUrl = event.imageUrl;
+
+    return InkWell(
+      onTap: () async {
+        final registered = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EventRegistrationPage(event: event),
+          ),
+        );
+        if (registered == true) _loadData();
+      },
+      child: _buildEventItemContent(
+        title: title,
+        subtitle: subtitle,
+        count: count,
+        status: status,
+        statusBg: statusBg,
+        statusColor: statusColor,
+        image: image,
+        imageUrl: imageUrl,
+      ),
+    );
+  }
+
+  Widget _buildEventItemContent({
     required String title,
     required String subtitle,
     required String count,
@@ -568,6 +779,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
     required Color statusBg,
     required Color statusColor,
     XFile? image,
+    String? imageUrl,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -575,7 +787,7 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
         Expanded(
           child: Row(
             children: [
-              if (image != null)
+              if (imageUrl != null || image != null)
                 Container(
                   width: 48,
                   height: 48,
@@ -585,9 +797,11 @@ class _BureauDesEtudiantsScreenState extends State<BureauDesEtudiantsScreen> {
                     color: const Color(0xFFF1F5F9),
                   ),
                   clipBehavior: Clip.hardEdge,
-                  child: kIsWeb
-                      ? Image.network(image.path, fit: BoxFit.cover)
-                      : Image.file(File(image.path), fit: BoxFit.cover),
+                  child: imageUrl != null
+                      ? Image.network(imageUrl, fit: BoxFit.cover)
+                      : kIsWeb
+                          ? Image.network(image!.path, fit: BoxFit.cover)
+                          : Image.file(File(image!.path), fit: BoxFit.cover),
                 ),
               Expanded(
                 child: Column(

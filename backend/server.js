@@ -50,6 +50,7 @@ app.use('/api/messages',      require('./src/routes/messageRoutes'));  // ← Ja
 app.use('/api/canaux',        require('./src/routes/canaux.routes'));
 app.use('/api/tickets',       require('./src/routes/tickets.routes'));
 app.use('/api/bde',           require('./src/routes/bde.routes'));
+app.use('/api/evenements',    require('./src/routes/evenements.routes'));
 app.use('/api/edt',           require('./src/routes/edt.routes'));
 app.use('/api/upload',        require('./src/routes/upload.routes'));
 app.use('/api/cours',         require('./src/routes/cours.routes'));
@@ -58,6 +59,8 @@ app.use('/api/statistiques',  require('./src/routes/statistiques.routes'));
 app.use('/api/notifications', require('./src/routes/notifications.routes'));
 app.use('/api/evaluations',   require('./src/routes/evaluations.routes'));
 app.use('/api/appels',        require('./src/routes/appels.routes'));
+app.use('/api/risque',        require('./src/routes/risque.routes'));
+app.use('/api/paiements',     require('./src/routes/paiements.routes'));
 
 app.get('/', (req, res) => res.json({ message: 'ScolarHub API — IST Ouaga 2000', status: 'OK' }));
 
@@ -77,6 +80,12 @@ server.listen(PORT, () => console.log('Serveur demarre sur http://localhost:' + 
 // Prevent unhandled rejections from crashing the process
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[UnhandledRejection]', reason);
+});
+
+// Coupures réseau (ex: pooler Supabase qui reset une socket) : on journalise
+// au lieu de laisser le process mourir.
+process.on('uncaughtException', (err) => {
+  console.error('[UncaughtException]', err);
 });
 
 module.exports = { app, io };

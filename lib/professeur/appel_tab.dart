@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
+import 'appel_qr_screen.dart';
 
 class AppelTab extends StatefulWidget {
-  const AppelTab({super.key});
+  const AppelTab({super.key, this.initialClasse});
+
+  /// Classe présélectionnée depuis l'onglet "Mes Classes".
+  final Map<String, dynamic>? initialClasse;
 
   @override
   State<AppelTab> createState() => _AppelTabState();
@@ -43,6 +47,24 @@ class _AppelTabState extends State<AppelTab> {
       _historique = histResult['success'] == true ? histResult['data'] as List<dynamic> : [];
       _loading = false;
     });
+    _appliquerPreselection();
+  }
+
+  bool _preselectionAppliquee = false;
+
+  void _appliquerPreselection() {
+    final init = widget.initialClasse;
+    if (init == null || _classeId != null || _preselectionAppliquee) return;
+    _preselectionAppliquee = true;
+    final matches = _classes.where((c) => c['id'].toString() == init['id'].toString());
+    if (matches.isEmpty) return;
+    final c = matches.first;
+    setState(() {
+      _classeId = c['id'].toString();
+      _classeNom = c['nom'];
+      _niveau = c['niveau'];
+    });
+    _chargerEtudiants();
   }
 
   Future<void> _chargerEtudiants() async {
@@ -128,6 +150,19 @@ class _AppelTabState extends State<AppelTab> {
                 child: Column(children: [
                   _selectionCard(),
                   if (_loadingStudents) const Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+                  if (!_loadingStudents && _classeId != null && _students.isEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 14),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+                      child: const Row(children: [
+                        Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 20),
+                        SizedBox(width: 10),
+                        Expanded(child: Text(
+                          'Aucun étudiant inscrit dans cette classe. Vérifiez que les étudiants ont bien une filière affectée (Admin → Étudiants).',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF92400E)))),
+                      ]),
+                    ),
                   if (!_loadingStudents && _students.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     ..._students.map((s) => _EtudiantPresenceRow(
@@ -208,6 +243,36 @@ class _AppelTabState extends State<AppelTab> {
               value: m['id'].toString(), child: Text('${m['nom']}', overflow: TextOverflow.ellipsis))).toList(),
           onChanged: (v) => setState(() => _moduleId = v),
         ),
+        if (_classeId != null && _moduleId != null) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity, height: 48,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.qr_code_2_rounded),
+              label: const Text('Appel par QR code',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppPalette.blue,
+                side: const BorderSide(color: AppPalette.blue, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                final module = _modules.firstWhere(
+                    (m) => m['id'].toString() == _moduleId,
+                    orElse: () => {'nom': ''});
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => AppelQrScreen(
+                    filiereId: int.parse(_classeId!),
+                    filiereNom: _classeNom ?? '',
+                    niveau: _niveau,
+                    moduleId: int.parse(_moduleId!),
+                    moduleNom: module['nom'] ?? '',
+                  ),
+                )).then((_) => _chargerDonnees());
+              },
+            ),
+          ),
+        ],
       ]),
     );
   }

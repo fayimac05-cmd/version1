@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app/scolar_hub_app.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
@@ -157,7 +158,19 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // Fallback to local mock DB
+    // Le repli sur la base mock locale n'est autorisé QUE si le backend est
+    // injoignable (mode démo hors-ligne). Si le backend a répondu mais rejeté
+    // la connexion, on affiche son erreur au lieu d'entrer dans un tableau de
+    // bord sans token (ce qui provoquait des 401 sur tous les écrans).
+    if (result['offline'] != true) {
+      setState(() {
+        _loading = false;
+        _error = result['error']?.toString() ?? 'Identifiants incorrects.';
+      });
+      return;
+    }
+
+    // Fallback to local mock DB (backend injoignable uniquement)
     final user = _dbEtudiants[mat];
     if (user == null) {
       setState(() {
@@ -193,10 +206,15 @@ class _LoginPageState extends State<LoginPage> {
   void _goToDashboard(StudentProfile profile) {
     SocketService().connect(profile.matricule);
 
-    void logout() => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()),
-          (_) => false,
-        );
+    // Utilise le navigateur global : le context de cette page n'existe plus
+    // au moment où l'utilisateur se déconnecte depuis son tableau de bord.
+    void logout() {
+      ApiService.clearToken();
+      ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (_) => false,
+      );
+    }
 
     final Widget destination;
     switch (profile.role) {

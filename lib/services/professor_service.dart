@@ -120,6 +120,43 @@ class ProfessorService {
     }
   }
 
+  // ── Disponibilités (heures libres transmises à l'admin) ───
+  static Future<Map<String, dynamic>> getDisponibilites() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/professeurs/disponibilites'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['success'] == true) return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': 'Erreur lors du chargement des disponibilités.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  /// Remplace les créneaux libres du prof et les transmet à l'administration.
+  /// [creneaux] : liste de {jour, debut, fin}.
+  static Future<Map<String, dynamic>> saveDisponibilites(
+      List<Map<String, String>> creneaux) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/professeurs/disponibilites'),
+        headers: headers,
+        body: jsonEncode({'creneaux': creneaux}),
+      );
+      if (response.statusCode == 200) return {'success': true};
+      final body = jsonDecode(response.body);
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la transmission.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
   // ── Cours (Upload & List) ──────────────────────────────────
   static Future<Map<String, dynamic>> getCours() async {
     try {
@@ -314,6 +351,59 @@ class ProfessorService {
         return {'success': true, 'data': body['data']};
       }
       return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement de l\'appel.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  // ── Appel par QR code ──────────────────────────────────────
+  static Future<Map<String, dynamic>> ouvrirSessionQr(Map<String, dynamic> data) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/appels/qr'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201) {
+        return {'success': true, ...body};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'ouverture de la session.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getSessionQr(String sessionId) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/appels/qr/$sessionId'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement de la session.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> cloturerSessionQr(String sessionId) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/appels/qr/$sessionId/cloturer'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, ...body};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la clôture.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
+import '../services/api_service.dart';
 
 class CreateAnnouncementPage extends StatefulWidget {
   const CreateAnnouncementPage({super.key});
@@ -15,6 +16,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   
   String _selectedCategory = 'Information';
   final List<String> _categories = ['Information', 'Urgent', 'Événement', 'Scolarité', 'Divers'];
+  bool _isPublishing = false;
 
   static const primaryBlue = AppPalette.blue;
   static const textDark = Color(0xFF0F172A);
@@ -32,7 +34,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Nouvelle Annoncce',
+          'Nouvelle Annonce',
           style: TextStyle(color: textDark, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
@@ -71,24 +73,23 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Annonce publiée avec succès !')),
-                      );
-                      Navigator.pop(context);
-                    }
-                  },
+                  onPressed: _isPublishing ? null : _publishAnnouncement,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryBlue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Publier l\'annonce',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isPublishing
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          'Publier l\'annonce',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
               const SizedBox(height: 40),
@@ -97,6 +98,37 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _publishAnnouncement() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isPublishing = true);
+
+    final result = await ApiService.createAnnonce({
+      'titre': _titleController.text.trim(),
+      'contenu': _contentController.text.trim(),
+      'cibleRole': 'tous',
+      'categorie': _selectedCategory,
+      'statut': 'publie',
+    });
+
+    if (!mounted) return;
+    setState(() => _isPublishing = false);
+
+    if (result['success'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Annonce publiée avec succès !')),
+      );
+      Navigator.pop(context, true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['error'] ?? 'Erreur lors de la publication.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   Widget _buildSectionTitle(String title) {

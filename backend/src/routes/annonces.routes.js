@@ -15,11 +15,11 @@ router.get('/', optionalAuth, annonceController.getAllAnnonces);
 // GET /api/annonces/:id - Récupérer une annonce spécifique
 router.get('/:id', optionalAuth, annonceController.getAnnonceById);
 
-// POST /api/annonces - Créer une annonce
+// POST /api/annonces - Créer une annonce (admin, professeur ou étudiant)
 router.post(
   '/',
   authMiddleware,
-  requireRole('admin', 'professeur'),
+  requireRole('admin', 'professeur', 'etudiant'),
   annonceController.createAnnonce
 );
 

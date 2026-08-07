@@ -1,6 +1,7 @@
 const EdtModel = require('../models/edtModel');
 const pool = require('../config/db');
 const { resolveFiliere } = require('../utils/filieres');
+const { envoyerNotificationAuto } = require('./notifications.controller');
 
 /**
  * Contrôleur pour les Emplois Du Temps (EDT)
@@ -350,5 +351,56 @@ exports.deleteEdt = async (req, res) => {
       message: 'Erreur lors de la suppression de l\'EDT.',
       error: error.message,
     });
+  }
+};
+
+// POST /api/edt/:id/envoyer - Notifier les étudiants de la filière + niveau de
+// cet EDT qu'un nouvel emploi du temps est disponible.
+exports.envoyerEdt = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const edt = await EdtModel.findById(id);
+    if (!edt) {
+      return res.status(404).json({ success: false, message: 'Emploi du temps introuvable.' });
+    }
+
+    const filiereId = edt.filiere;      // id de filière stocké dans l'EDT
+    const niveau = edt.niveau || null;  // ex. "Licence 2"
+
+    // Étudiants actifs de cette filière (et de ce niveau si renseigné).
+    const r = await pool.query(
+      `SELECT u.id, u.prenoms, u.nom
+         FROM etudiants e
+         JOIN users u ON u.id = e.user_id
+        WHERE e.filiere_id = $1
+          AND ($2::text IS NULL OR e.niveau = $2 OR u.niveau = $2)
+          AND u.role = 'etudiant'
+          AND COALESCE(u.statut, 'actif') NOT IN ('suspendu', 'renvoye')`,
+      [filiereId, niveau]
+    );
+    const etudiants = r.rows;
+
+    const titre = 'Nouvel emploi du temps';
+    const corps =
+      `Votre emploi du temps${edt.filiere_nom ? ' — ' + edt.filiere_nom : ''}` +
+      `${niveau ? ' (' + niveau + ')' : ''} est disponible.`;
+
+    let notifies = 0;
+    for (const etu of etudiants) {
+      const rr = await envoyerNotificationAuto(etu.id, titre, corps);
+      if (rr.success) notifies += 1;
+    }
+
+    return res.status(200).json({
+      success: true,
+      total: etudiants.length,
+      notifies,
+      message: etudiants.length === 0
+        ? 'Aucun étudiant trouvé pour cette filière et ce niveau.'
+        : `Emploi du temps envoyé à ${notifies} étudiant(s).`,
+    });
+  } catch (error) {
+    console.error('[envoyerEdt] Erreur :', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

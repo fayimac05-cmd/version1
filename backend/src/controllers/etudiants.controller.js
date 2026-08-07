@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { ensureFilieres } = require('../utils/filieres');
+const { notifierInscription } = require('../services/inscription.notify');
 
 const domaineFromFiliere = (filiere) => {
   const f = (filiere || '').toLowerCase();
@@ -191,9 +192,27 @@ const inscrireEtudiant = async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Notification best-effort (SMS + Email) : n'interrompt jamais l'inscription.
+    // L'email n'est envoyé que si l'admin a fourni une vraie adresse (pas le
+    // placeholder auto @ist.bf).
+    let notifications = { sms: { envoye: false }, email: { envoye: false } };
+    try {
+      notifications = await notifierInscription({
+        prenoms: prenoms.trim(),
+        nom: nom.trim().toUpperCase(),
+        matricule,
+        email: email?.trim() || null,
+        telephone: telephone?.trim() || null,
+        ecole: filiere?.trim(),
+      });
+    } catch (notifErr) {
+      console.error('[inscrireEtudiant] notification', notifErr.message);
+    }
+
     return res.status(201).json({
       success: true,
       matricule,
+      notifications,
       etudiant: {
         id: etuRes.rows[0].id,
         userId,

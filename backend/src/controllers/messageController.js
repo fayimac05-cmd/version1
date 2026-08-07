@@ -6,6 +6,25 @@
 const pool = require('../config/db');
 const { notifierUser } = require('../socket/socketHandler');
 
+// Types de canaux « publics » : lisibles par tout utilisateur authentifié,
+// sans inscription préalable dans canal_membres (les droits d'écriture
+// restent gérés par rôle côté app / canal_membres).
+const CANAUX_PUBLICS = ['administration', 'admin_filiere', 'bde', 'general'];
+
+// Vérifie l'accès d'un utilisateur à un canal : membre, ou canal public.
+async function accesCanal(canalId, userId) {
+  const { rows: membre } = await pool.query(
+    `SELECT role FROM canal_membres WHERE canal_id = $1 AND user_id = $2`,
+    [canalId, userId]
+  );
+  if (membre.length) return true;
+  const { rows: canal } = await pool.query(
+    `SELECT 1 FROM canaux WHERE id = $1 AND type = ANY($2)`,
+    [canalId, CANAUX_PUBLICS]
+  );
+  return canal.length > 0;
+}
+
 // ── GET /api/messages/canaux ──────────────────────────────
 // Liste des canaux accessibles par l'utilisateur connecté
 const getCanaux = async (req, res) => {
@@ -34,12 +53,8 @@ const getMessagesCanal = async (req, res) => {
   const avant  = req.query.avant || null; // pour la pagination
 
   try {
-    // Vérifier l'accès
-    const { rows: access } = await pool.query(
-      `SELECT 1 FROM canal_membres WHERE canal_id = $1 AND user_id = $2`,
-      [id, req.user.id]
-    );
-    if (!access.length) {
+    // Vérifier l'accès (membre ou canal public)
+    if (!(await accesCanal(id, req.user.id))) {
       return res.status(403).json({ success: false, error: 'Accès refusé à ce canal' });
     }
 
@@ -77,12 +92,8 @@ const envoyerMessageCanal = async (req, res) => {
   }
 
   try {
-    // Vérifier les droits d'écriture
-    const { rows: access } = await pool.query(
-      `SELECT role FROM canal_membres WHERE canal_id = $1 AND user_id = $2`,
-      [id, req.user.id]
-    );
-    if (!access.length) {
+    // Vérifier les droits d'écriture (membre ou canal public)
+    if (!(await accesCanal(id, req.user.id))) {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
@@ -176,8 +187,9 @@ const envoyerMessagePrive = async (req, res) => {
       [req.user.id, userId, contenu.trim()]
     );
 
+    // userId est un UUID : ne surtout pas le convertir en entier
     const io = req.app.get('io');
-    if (io) notifierUser(io, parseInt(userId), 'message:prive', rows[0]);
+    if (io) notifierUser(io, userId, 'message:prive', rows[0]);
 
     res.status(201).json({ success: true, data: rows[0] });
   } catch (err) {
@@ -312,6 +324,23 @@ const supprimerMessage = async (req, res) => {
   }
 };
 
+// ── GET /api/messages/admin-contact ───────────────────────
+// Renvoie l'identité du compte administration à contacter en privé
+const getAdminContact = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nom, prenoms FROM users WHERE role = 'admin' ORDER BY matricule NULLS LAST LIMIT 1`
+    );
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: 'Aucun administrateur disponible' });
+    }
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
 // ── GET /api/messages/online ──────────────────────────────
 // Liste des utilisateurs en ligne
 const getUsersOnline = (req, res) => {
@@ -330,5 +359,6 @@ module.exports = {
   envoyerMessageGroupe,
   ajouterReaction,
   supprimerMessage,
+  getAdminContact,
   getUsersOnline,
 };

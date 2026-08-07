@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,36 +57,114 @@ class _ChatIAScreenState extends State<ChatIAScreen> {
   bool _enChargement = false;
 
   // ── Questions suggérées ───────────────────────────────────────────────
+  // Chaque question possède une réponse locale ('reponse') utilisée en mode
+  // hors ligne, quand le serveur ou l'IA est indisponible.
   final List<Map<String, dynamic>> _suggestions = [
     {
       'texte': '📊 Analyse mes notes',
       'query':
           'Analyse ma situation académique actuelle et dis-moi comment je me situe.',
+      'reponse':
+          'Voici comment analyser ta situation académique toi-même :\n\n'
+          '**1. Consulte tes résultats** dans l\'onglet Résultats ou Bulletins de l\'app.\n\n'
+          '**2. Classe tes modules en 3 catégories :**\n'
+          '• ✅ Validés (moyenne ≥ 10) : maintiens le rythme\n'
+          '• ⚠️ En danger (entre 8 et 10) : quelques efforts ciblés suffisent\n'
+          '• 🚨 Critiques (< 8) : priorité absolue pour le rattrapage\n\n'
+          '**3. Vérifie les coefficients** : un module à fort coefficient pèse plus dans ta moyenne générale. Concentre tes efforts là où l\'impact est le plus grand.\n\n'
+          '💡 Pour une analyse personnalisée détaillée, reviens me voir quand la connexion sera rétablie.',
     },
     {
       'texte': '🚨 Module en danger',
       'query':
-          'J\'ai 4.5/20 en Réseaux informatiques. Que dois-je faire en urgence ?',
+          'J\'ai un module en grande difficulté. Que dois-je faire en urgence ?',
+      'reponse':
+          'Plan d\'urgence pour un module en difficulté :\n\n'
+          '**Cette semaine :**\n'
+          '• Identifie précisément les chapitres où tu perds des points (reprends tes copies)\n'
+          '• Parle au professeur : demande-lui les points essentiels à maîtriser\n'
+          '• Trouve un camarade fort dans ce module pour réviser en binôme\n\n'
+          '**Les 2 semaines suivantes :**\n'
+          '• 45 min par jour sur CE module, en commençant par les bases\n'
+          '• Refais les TD et anciens sujets d\'examen, pas seulement le cours\n'
+          '• Note chaque erreur dans un carnet et relis-le avant chaque séance\n\n'
+          '**À l\'examen :** commence par les questions que tu maîtrises pour sécuriser des points.\n\n'
+          '💪 Un module se rattrape presque toujours quand on s\'y prend avant les examens.',
     },
     {
       'texte': '📅 Plan de révision',
       'query':
           'Crée-moi un plan de révision personnalisé pour rattraper mes modules en difficulté.',
+      'reponse':
+          'Voici une méthode de plan de révision efficace :\n\n'
+          '**Étape 1 — Fais le bilan (30 min)**\n'
+          'Liste tes modules du plus faible au plus fort avec leurs coefficients.\n\n'
+          '**Étape 2 — Répartis ton temps (règle 50/30/20)**\n'
+          '• 50 % du temps sur les modules critiques\n'
+          '• 30 % sur les modules moyens\n'
+          '• 20 % pour entretenir tes points forts\n\n'
+          '**Étape 3 — Planifie des sessions courtes**\n'
+          '• 2 à 3 sessions de 45 min par jour valent mieux qu\'une nuit blanche\n'
+          '• Alterne les matières pour rester concentré(e)\n'
+          '• Garde une demi-journée de repos par semaine\n\n'
+          '**Étape 4 — Contrôle chaque dimanche**\n'
+          'Teste-toi sur ce que tu as révisé : si tu ne peux pas l\'expliquer simplement, ce n\'est pas acquis.\n\n'
+          '📌 La régularité bat l\'intensité : 3 semaines de travail constant transforment une moyenne.',
     },
     {
       'texte': '✅ Points positifs',
       'query':
           'Quels sont mes points forts cette année ? Comment les maintenir ?',
+      'reponse':
+          'Pour identifier et entretenir tes points forts :\n\n'
+          '**Les repérer :**\n'
+          '• Les modules où ta moyenne dépasse 12 sans effort excessif\n'
+          '• Les matières où tu aides spontanément les autres\n'
+          '• Les cours où tu poses des questions parce que ça t\'intéresse\n\n'
+          '**Les maintenir sans y passer trop de temps :**\n'
+          '• Une révision rapide hebdomadaire suffit (20-30 min)\n'
+          '• Reste actif en cours : c\'est ta meilleure révision gratuite\n'
+          '• Explique les notions aux camarades — enseigner, c\'est consolider\n\n'
+          '**Les valoriser :**\n'
+          '• Ces modules sécurisent ta moyenne générale et compensent les plus faibles\n'
+          '• Ils orientent souvent vers ta future spécialisation : note ce qui te plaît vraiment.\n\n'
+          '🌟 Un point fort entretenu est une assurance pour tes examens.',
     },
     {
-      'texte': '🎯 Objectifs S4',
+      'texte': '🎯 Objectifs semestre',
       'query':
-          'Pour le semestre 4, quels objectifs dois-je me fixer pour valider mon année ?',
+          'Pour le prochain semestre, quels objectifs dois-je me fixer pour valider mon année ?',
+      'reponse':
+          'Comment fixer de bons objectifs pour le semestre :\n\n'
+          '**1. L\'objectif chiffré**\n'
+          'Calcule la moyenne nécessaire pour valider ton année, puis fixe-toi un objectif légèrement au-dessus (marge de sécurité de 1 point).\n\n'
+          '**2. Décompose par module**\n'
+          '• Modules critiques : viser d\'abord 10, pas 15\n'
+          '• Modules moyens : gagner 1 à 2 points\n'
+          '• Points forts : maintenir le niveau\n\n'
+          '**3. Des objectifs de moyens, pas seulement de résultats**\n'
+          '• « Assister à tous les TD » dépend de toi à 100 %\n'
+          '• « Rendre tous les devoirs à temps » aussi\n'
+          '• Les notes suivront ces habitudes\n\n'
+          '**4. Un point d\'étape par mois**\n'
+          'Compare tes notes de contrôle continu à ton objectif et ajuste.\n\n'
+          '🎯 Un objectif réaliste et suivi vaut mieux qu\'une ambition abandonnée en semaine 2.',
     },
     {
-      'texte': '📝 Conseil POO',
+      'texte': '📝 Méthode de travail',
       'query':
-          'J\'ai 9.5/20 en Programmation OO. Comment progresser rapidement ?',
+          'Comment progresser rapidement dans un module technique difficile ?',
+      'reponse':
+          'Méthode pour progresser vite dans un module technique :\n\n'
+          '**1. La pratique avant la théorie**\n'
+          'Dans les matières techniques (programmation, réseaux, électronique…), on apprend en faisant : refais chaque TP jusqu\'à le réussir sans aide.\n\n'
+          '**2. La règle des 20 minutes**\n'
+          'Bloqué(e) sur un exercice ? Cherche seul(e) 20 minutes maximum, puis demande de l\'aide (camarade, professeur, documentation). Rester bloqué des heures démotive sans faire progresser.\n\n'
+          '**3. Le carnet d\'erreurs**\n'
+          'Note chaque erreur rencontrée et sa solution. Le relire avant un examen vaut toutes les fiches de révision.\n\n'
+          '**4. Expliquer pour vérifier**\n'
+          'Si tu peux expliquer une notion à un camarade sans notes, elle est acquise. Sinon, retravaille-la.\n\n'
+          '⚡ 30 minutes de pratique quotidienne battent 4 heures le week-end.',
     },
   ];
 
@@ -146,7 +225,9 @@ class _ChatIAScreenState extends State<ChatIAScreen> {
   }
 
   // ── Appel API Claude / OpenAI ─────────────────────────────────────────
-  Future<void> _envoyer(String texte) async {
+  // [reponseHorsLigne] : réponse locale affichée si le serveur ou l'IA est
+  // indisponible (mode hors ligne des questions suggérées).
+  Future<void> _envoyer(String texte, {String? reponseHorsLigne}) async {
     if (texte.trim().isEmpty || _enChargement) return;
 
     final messageUser = texte.trim();
@@ -167,7 +248,7 @@ class _ChatIAScreenState extends State<ChatIAScreen> {
       final token = prefs.getString('token') ?? '';
 
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/ia/chat'),
+        Uri.parse('${ApiService.baseUrl}/ia/chat'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -186,16 +267,37 @@ class _ChatIAScreenState extends State<ChatIAScreen> {
           _enChargement = false;
         });
         _sauvegarderHistorique();
+      } else if (reponseHorsLigne != null) {
+        _ajouterReponseHorsLigne(reponseHorsLigne);
       } else {
         _ajouterErreur(
           'Erreur ${response.statusCode}. Vérifiez votre clé API.',
         );
       }
     } catch (e) {
-      _ajouterErreur('Connexion impossible. Vérifiez votre réseau.');
+      if (reponseHorsLigne != null) {
+        _ajouterReponseHorsLigne(reponseHorsLigne);
+      } else {
+        _ajouterErreur('Connexion impossible. Vérifiez votre réseau.');
+      }
     }
 
     _scrollBas();
+  }
+
+  void _ajouterReponseHorsLigne(String reponse) {
+    setState(() {
+      _messages.add(
+        _Message(
+          texte: '📡 **Mode hors ligne** — conseil général, l\'assistant IA '
+              'est momentanément indisponible.\n\n$reponse',
+          estIA: true,
+          heure: DateTime.now(),
+        ),
+      );
+      _enChargement = false;
+    });
+    _sauvegarderHistorique();
   }
 
   void _ajouterErreur(String msg) {
@@ -211,6 +313,33 @@ class _ChatIAScreenState extends State<ChatIAScreen> {
       _enChargement = false;
     });
     _sauvegarderHistorique();
+  }
+
+  Widget _puceSuggestion(Map<String, dynamic> s) {
+    return GestureDetector(
+      onTap: () => _envoyer(
+        s['query'] as String,
+        reponseHorsLigne: s['reponse'] as String?,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F3FF),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+          ),
+        ),
+        child: Text(
+          s['texte'] as String,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Color(0xFF7C3AED),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
   }
 
   void _scrollBas() {
@@ -349,60 +478,46 @@ class _ChatIAScreenState extends State<ChatIAScreen> {
             ]),
           ),
 
-          // ── Suggestions rapides (seulement si 1 message) ──────────────
-          if (_messages.length == 1)
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Questions fréquentes',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B),
-                    ),
+          // ── Suggestions rapides (toujours accessibles) ────────────────
+          // Grille complète au premier message, puis rangée horizontale
+          // compacte pour rester disponibles à tout moment (mode hors ligne).
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Questions fréquentes',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
                   ),
-                  const SizedBox(height: 10),
+                ),
+                const SizedBox(height: 10),
+                if (_messages.length <= 1)
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: _suggestions
-                        .map(
-                          (s) => GestureDetector(
-                            onTap: () => _envoyer(s['query']!),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF5F3FF),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFF7C3AED,
-                                  ).withValues(alpha:0.3),
-                                ),
-                              ),
-                              child: Text(
-                                s['texte']!,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF7C3AED),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
+                    children:
+                        _suggestions.map((s) => _puceSuggestion(s)).toList(),
+                  )
+                else
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _suggestions
+                          .map((s) => Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _puceSuggestion(s),
+                              ))
+                          .toList(),
+                    ),
                   ),
-                ],
-              ),
+              ],
             ),
+          ),
 
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
 

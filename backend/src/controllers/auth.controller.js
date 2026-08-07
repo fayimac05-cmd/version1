@@ -67,6 +67,52 @@ const setupPassword = async (req, res) => {
   }
 };
 
+// Recherche publique par matricule : renvoie les infos d'affichage (sans mot de
+// passe) + le drapeau premierLogin. Sert à l'écran de connexion pour afficher la
+// carte de l'étudiant AVANT la saisie / définition du mot de passe.
+const lookup = async (req, res) => {
+  try {
+    const matricule = (req.query.matricule || '').trim().toUpperCase();
+    if (!matricule) return res.status(400).json({ found: false, message: 'Matricule requis.' });
+
+    const r = await pool.query(
+      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.statut,
+              u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
+              COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
+              COALESCE(e.domaine, u.domaine)        AS domaine,
+              COALESCE(e.niveau, u.niveau)          AS niveau
+       FROM users u
+       LEFT JOIN etudiants e ON u.id = e.user_id
+       WHERE u.matricule = $1`,
+      [matricule]
+    );
+    const row = r.rows[0];
+    if (!row) return res.status(404).json({ found: false, message: 'Matricule non reconnu.' });
+    if (row.statut === 'suspendu' || row.statut === 'renvoye') {
+      return res.status(403).json({ found: false, message: 'Compte désactivé. Contactez l\'administration.' });
+    }
+
+    return res.status(200).json({
+      found: true,
+      premierLogin: !row.a_mot_de_passe,
+      userId: row.id,
+      user: {
+        id: row.id,
+        nom: row.nom,
+        prenoms: row.prenoms,
+        matricule: row.matricule,
+        role: row.role,
+        filiere: row.filiere_nom || '',
+        domaine: row.domaine || '',
+        niveau: row.niveau || '',
+      },
+    });
+  } catch (err) {
+    console.error('Lookup error:', err);
+    return res.status(500).json({ found: false, message: 'Erreur serveur.' });
+  }
+};
+
 const me = async (req, res) => {
   try {
     const r = await pool.query(
@@ -204,4 +250,4 @@ const register = async (req, res) => {
   }
 };
 
-module.exports = { login, setupPassword, me, changePassword, register };
+module.exports = { login, setupPassword, me, changePassword, register, lookup };
