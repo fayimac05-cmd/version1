@@ -1,21 +1,64 @@
-﻿# Flutter
-build/
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.env
+
+# Node.js
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Flutter / Dart
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.packages
-pubspec.lock
+.pub-cache/
+.pub/
+build/
+-*.flutter-plugins-dependencies
 
-# Backend
-backend/node_modules/
-backend/.env
+# Android
+.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+**/android/app/debug
+**/android/app/release
 
-# IDE
+# iOS / macOS
+**/ios/Flutter/ephemeral/
+**/ios/Pods/
+**/ios/Runner.xcworkspace
+**/ios/.symlinks/
+**/ios/flutter_export_environment.sh
+
+# Web / Linux / Windows builds
+**/linux/flutter/ephemeral/
+**/windows/flutter/ephemeral/
+**/web/pubspec.html
+
+# IDEs & Editors
 .idea/
 .vscode/
 *.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs & output
+analyze_output.txt
+*.log
 .env
