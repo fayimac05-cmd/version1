@@ -9,7 +9,12 @@ const pool = require('../config/db');
 // Stocke les utilisateurs en ligne : { userId: socketId }
 const onlineUsers = new Map();
 
+// Référence globale à l'instance io, pour pousser des événements depuis
+// n'importe quel contrôleur (ex. notifications) sans avoir accès à req.
+let ioRef = null;
+
 function initSocket(io) {
+  ioRef = io;
 
   // ── Middleware d'authentification Socket ──────────────────
   io.use((socket, next) => {
@@ -43,11 +48,15 @@ function initSocket(io) {
       socket.join(`filiere:${socket.filiere}`);
     }
 
-    // Rejoindre toutes les rooms des canaux accessibles
+    // Rejoindre toutes les rooms des canaux accessibles :
+    // adhésions explicites + canaux publics (lisibles par tous)
     try {
       const { rows: canaux } = await pool.query(
-        `SELECT canal_id FROM canal_membres WHERE user_id = $1`,
-        [userId]
+        `SELECT id AS canal_id FROM canaux
+         WHERE type = ANY($2)
+         UNION
+         SELECT canal_id FROM canal_membres WHERE user_id = $1`,
+        [userId, ['administration', 'admin_filiere', 'bde', 'general']]
       );
       canaux.forEach(({ canal_id }) => socket.join(`canal:${canal_id}`));
     } catch (err) {
@@ -219,9 +228,15 @@ function notifierUser(io, userId, event, data) {
   io.to(`user:${userId}`).emit(event, data);
 }
 
+// Pousse un événement à un utilisateur via l'instance io globale (sans req).
+// Utilisé par les contrôleurs (notifications) pour la mise à jour temps réel.
+function pushToUser(userId, event, data) {
+  if (ioRef) ioRef.to(`user:${userId}`).emit(event, data);
+}
+
 // Utilitaire : obtenir la liste des utilisateurs en ligne
 function getOnlineUsers() {
   return Array.from(onlineUsers.keys());
 }
 
-module.exports = { initSocket, notifierUser, getOnlineUsers };
+module.exports = { initSocket, notifierUser, pushToUser, getOnlineUsers };

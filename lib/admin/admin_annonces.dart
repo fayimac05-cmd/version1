@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
+import '../pages/create_event_page.dart';
 import '../services/api_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -90,13 +91,14 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
   String _searchQuery = '';
   List<Annonce> _annonces = [];
   List<Map<String, dynamic>> _filieres = [];
+  List<Map<String, dynamic>> _inscriptions = [];
   bool _isLoading = true;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
     _loadData();
   }
 
@@ -105,9 +107,14 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
 
   Future<void> _loadData() async {
     setState(() { _isLoading = true; _errorMessage = null; });
-    final results = await Future.wait([ApiService.getAnnonces(), ApiService.getFilieres()]);
+    final results = await Future.wait([
+      ApiService.getAnnonces(),
+      ApiService.getFilieres(),
+      ApiService.getHistoriqueInscriptions(),
+    ]);
     final annoncesResult = results[0];
     final filieresResult = results[1];
+    final inscriptionsResult = results[2];
 
     if (!mounted) return;
     setState(() {
@@ -121,6 +128,9 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
       }
       if (filieresResult['success'] == true) {
         _filieres = (filieresResult['data'] as List<dynamic>).cast<Map<String, dynamic>>();
+      }
+      if (inscriptionsResult['success'] == true) {
+        _inscriptions = (inscriptionsResult['data'] as List<dynamic>).cast<Map<String, dynamic>>();
       }
     });
   }
@@ -180,7 +190,17 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                       tooltip: 'Actualiser',
                     ),
                     const SizedBox(width: 8),
-                    _buildCreateButton(),
+                    IntrinsicWidth(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildCreateButton(),
+                          const SizedBox(height: 8),
+                          _buildCreateEventButton(),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -214,6 +234,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                     Tab(text: 'Toutes les annonces (${_filteredAnnonces.length})'),
                     Tab(text: 'En ligne (${_getAnnoncesByStatut(StatutAnnonce.publie).length})'),
                     Tab(text: 'Brouillons (${_getAnnoncesByStatut(StatutAnnonce.brouillon).length})'),
+                    Tab(text: 'Historique (${_inscriptions.length})'),
                   ],
                 ),
               ],
@@ -231,6 +252,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
                           _buildListView(_getAnnoncesByStatut(null)),
                           _buildListView(_getAnnoncesByStatut(StatutAnnonce.publie)),
                           _buildListView(_getAnnoncesByStatut(StatutAnnonce.brouillon)),
+                          _buildHistoriqueView(),
                         ],
                       ),
           ),
@@ -258,6 +280,126 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
         label: const Text('Nouvelle annonce', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.iconFgAlt)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AdminTheme.iconBgAlt,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          elevation: 0,
+        ),
+      );
+
+  // ── Historique des inscriptions aux événements ─────────────────────────
+  Widget _buildHistoriqueView() {
+    if (_inscriptions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(color: AdminTheme.iconBg, borderRadius: BorderRadius.circular(14)),
+              child: const Icon(Icons.history_rounded, color: AdminTheme.iconFg, size: 26),
+            ),
+            const SizedBox(height: 16),
+            const Text('Aucune inscription', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+            const SizedBox(height: 4),
+            const Text('Les inscriptions des étudiants aux événements apparaîtront ici.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+          ],
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(24),
+      itemCount: _inscriptions.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, i) => _buildInscriptionCard(_inscriptions[i]),
+    );
+  }
+
+  Widget _buildInscriptionCard(Map<String, dynamic> ins) {
+    final nomComplet = [ins['prenoms'], ins['nom']]
+        .where((x) => x != null && x.toString().isNotEmpty)
+        .join(' ');
+    final date = DateTime.tryParse(ins['createdAt'] ?? '');
+    final prix = double.tryParse(ins['prix']?.toString() ?? '') ?? 0;
+    final details = [
+      if ((ins['matricule'] ?? '').toString().isNotEmpty) 'Matricule : ${ins['matricule']}',
+      if ((ins['email'] ?? '').toString().isNotEmpty) ins['email'],
+      if ((ins['telephone'] ?? '').toString().isNotEmpty) ins['telephone'],
+    ].join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: _emeraldColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.how_to_reg_rounded, color: _emeraldColor, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nomComplet.isEmpty ? 'Étudiant' : nomComplet,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const SizedBox(height: 4),
+                Text('S\'est inscrit à « ${ins['evenement_titre'] ?? ''} »',
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF334155))),
+                if (details.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(details, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(date != null ? _formatDisplayDate(date) : '',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _emeraldColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(prix > 0 ? '${prix.toStringAsFixed(0)} FCFA' : 'Gratuit',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _emeraldColor)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreateEventButton() => ElevatedButton.icon(
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CreateEventPage()),
+          );
+          if (result != null) {
+            _showSnack('🚀 Événement créé et approuvé — visible dans le carrousel étudiant.');
+          }
+        },
+        icon: const Icon(Icons.celebration_outlined, size: 18, color: Colors.white),
+        label: const Text('Créer un événement',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF10B981),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           elevation: 0,

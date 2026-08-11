@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app/scolar_hub_app.dart';
 import '../models/student_profile.dart';
 import '../pages/student_shell.dart';
 import '../pages/splash_screen.dart';
@@ -53,8 +54,10 @@ enum _Etape { saisie, motDePasse, premiereFois }
 
 class AuthPage extends StatefulWidget {
   final Etablissement etablissement;
-  const AuthPage({Key? key, required this.etablissement}) : super(key: key);
-
+  /// Matricule pré-rempli (ex. ouverture du lien reçu par SMS/email :
+  /// http://.../?matricule=XXX). Déclenche une recherche automatique.
+  final String? matriculePrefill;
+  const AuthPage({super.key, required this.etablissement, this.matriculePrefill});
   @override
   State<AuthPage> createState() => _AuthPageState();
 }
@@ -80,6 +83,21 @@ class _AuthPageState extends State<AuthPage> {
 
   Map<String, dynamic>? _userTrouve;
   String? _cleTrouvee;
+  String? _userId; // id backend, requis pour setupPassword (1ère connexion)
+
+  @override
+  void initState() {
+    super.initState();
+    final pre = widget.matriculePrefill?.trim();
+    if (pre != null && pre.isNotEmpty) {
+      _tab = 0;
+      _matriculeCtrl.text = pre.toUpperCase();
+      // Lance la recherche automatiquement une fois la page affichée.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _verifier();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -102,10 +120,15 @@ class _AuthPageState extends State<AuthPage> {
 
   void _goToDashboard(StudentProfile profile) {
     SocketService().connect(profile.matricule);
-    void logout() => Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SplashScreen()),
-          (_) => false,
-        );
+    // Utilise le navigateur global : le context de cette page n'existe plus
+    // au moment où l'utilisateur se déconnecte depuis son tableau de bord.
+    void logout() {
+      ApiService.clearToken();
+      ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (_) => false,
+      );
+    }
 
     final Widget destination;
     switch (profile.role) {
@@ -150,21 +173,48 @@ class _AuthPageState extends State<AuthPage> {
         return;
       }
 
-      final student = await _fetchStudent(mat);
-      if (student == null) {
-        _setError('Matricule non reconnu.\nContactez l\'administration.');
+      // Recherche réelle dans le backend (compte créé par l'administration).
+      final result = await ApiService.lookupMatricule(mat);
+
+      if (result['success'] == true) {
+        final u = Map<String, dynamic>.from(result['user'] as Map);
+        final premierLogin = result['premierLogin'] == true;
+        setState(() {
+          _userTrouve = {
+            'nom': u['nom'] ?? '',
+            'prenoms': u['prenoms'] ?? '',
+            'filiere': u['filiere'] ?? '',
+            'domaine': u['domaine'] ?? '',
+            'niveau': u['niveau'] ?? '',
+            'role': u['role'] ?? 'etudiant',
+            'premiereFois': premierLogin,
+          };
+          _cleTrouvee = u['matricule']?.toString() ?? mat;
+          _userId = result['userId']?.toString();
+          _loading = false;
+          _etape = premierLogin ? _Etape.premiereFois : _Etape.motDePasse;
+        });
         return;
       }
-      setState(() {
-        _userTrouve = student;
-        _cleTrouvee = mat;
-        _loading = false;
-        _etape = student['premiere_fois'] == true
-            ? _Etape.premiereFois
-            : _Etape.motDePasse;
-      });
-    } else {
-      // Connexion par Nom/Prénom/Téléphone (Professeur, Parent)
+
+      // Repli hors-ligne : base de démonstration locale (affichage uniquement).
+      if (result['offline'] == true && _dbEtudiants[mat] != null) {
+        final user = _dbEtudiants[mat]!;
+        setState(() {
+          _userTrouve = user;
+          _cleTrouvee = mat;
+          _userId = null;
+          _loading = false;
+          _etape = user['premiereFois'] == true ? _Etape.premiereFois : _Etape.motDePasse;
+        });
+        return;
+      }
+
+      _setError(result['error']?.toString() ??
+          'Matricule non reconnu.\nContactez l\'administration.');
+    }
+    // ─── CAS ONGLET 1 : NOM & PRÉNOM (Professeur, Parent) ───
+    else {
       final nom = _nomCtrl.text.trim().toLowerCase();
       final prenom = _prenomCtrl.text.trim().toLowerCase();
       final tel = _numeroCtrl.text.trim();
@@ -230,7 +280,6 @@ class _AuthPageState extends State<AuthPage> {
       _loading = true;
       _error = null;
     });
-    await Future.delayed(const Duration(milliseconds: 800));
     if (_emailCtrl.text.isEmpty ||
         _newPassCtrl.text.isEmpty ||
         _confPassCtrl.text.isEmpty) {
@@ -249,6 +298,24 @@ class _AuthPageState extends State<AuthPage> {
       _setError('Les mots de passe ne correspondent pas.');
       return;
     }
+
+    // Compte backend : on confirme l'inscription en définissant le mot de passe.
+    if (_userId != null) {
+      final result = await ApiService.setupPassword(
+        userId: _userId!,
+        email: _emailCtrl.text.trim(),
+        motDePasse: _newPassCtrl.text,
+      );
+      if (result['success'] == true) {
+        setState(() => _loading = false);
+        _goToDashboard(_buildProfile(_newPassCtrl.text));
+      } else {
+        _setError(result['error']?.toString() ?? 'Erreur lors de la confirmation.');
+      }
+      return;
+    }
+
+    // Repli hors-ligne (démonstration) : pas d'appel backend.
     setState(() => _loading = false);
     _goToDashboard(_buildProfile(_newPassCtrl.text));
   }
@@ -338,24 +405,23 @@ class _AuthPageState extends State<AuthPage> {
       });
 
   void _recommencer() => setState(() {
-        _etape = _Etape.saisie;
-        _userTrouve = null;
-        _error = null;
-        for (final c in [
-          _matriculeCtrl,
-          _nomCtrl,
-          _prenomCtrl,
-          _numeroCtrl,
-          _passCtrl,
-          _emailCtrl,
-          _newPassCtrl,
-          _confPassCtrl,
-        ]) {
-          c.clear();
-        }
-      });
-
-  // ─── Build ─────────────────────────────────────────────────────────────────
+    _etape = _Etape.saisie;
+    _userTrouve = null;
+    _userId = null;
+    _error = null;
+    for (final c in [
+      _matriculeCtrl,
+      _nomCtrl,
+      _prenomCtrl,
+      _numeroCtrl,
+      _passCtrl,
+      _emailCtrl,
+      _newPassCtrl,
+      _confPassCtrl,
+    ]) {
+      c.clear();
+    }
+  });
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -399,7 +465,15 @@ class _AuthPageState extends State<AuthPage> {
         Row(
           children: [
             GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
+              onTap: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const SplashScreen()),
+                  );
+                }
+              },
               child: Container(
                 width: 42,
                 height: 42,

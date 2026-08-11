@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import '../admin/admin_edt.dart';
+import '../admin/admin_notes.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
+import '../models/student_profile.dart';
+import '../pages/groupe_filiere_screen.dart';
 import '../services/api_service.dart';
+import '../services/professor_service.dart';
 import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -21,7 +28,7 @@ class Module {
         code: '',
         coefficient: ((json['coefficient'] as num?) ?? 1).round(),
         volumeHoraire: (json['volume_horaire'] as num?)?.round() ?? 0,
-        professeur: '',
+        professeur: (json['professeur'] as String?)?.trim() ?? '',
       );
 }
 
@@ -395,10 +402,46 @@ class _DetailFiliere extends StatefulWidget {
 class _DetailFiliereState extends State<_DetailFiliere>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
+  List<dynamic> _etudiants = [];
+  bool _loadingEtudiants = true;
+
   @override
-  void initState() { super.initState(); _tab = TabController(length: 3, vsync: this); }
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 3, vsync: this);
+    _chargerEtudiants();
+  }
+
   @override
   void dispose() { _tab.dispose(); super.dispose(); }
+
+  Future<void> _chargerEtudiants() async {
+    var id = widget.filiere.backendId;
+    // Filière pas encore rattachée au backend : on tente le rattachement ici.
+    if (id == null) {
+      final res = await ApiService.getFilieres();
+      if (res['success'] == true) {
+        final matches = (res['data'] as List<dynamic>).where((bf) =>
+            (bf['nom'] as String).trim().toLowerCase() ==
+            widget.filiere.nom.trim().toLowerCase());
+        if (matches.isNotEmpty) {
+          widget.filiere.backendId = matches.first['id'].toString();
+          id = widget.filiere.backendId;
+        }
+      }
+    }
+    if (id == null) {
+      if (mounted) setState(() => _loadingEtudiants = false);
+      return;
+    }
+    final res = await ProfessorService.getStudentsByFiliere(int.parse(id));
+    if (!mounted) return;
+    setState(() {
+      _etudiants = res['success'] == true ? res['data'] as List<dynamic> : [];
+      if (_etudiants.isNotEmpty) widget.filiere.nbEtudiants = _etudiants.length;
+      _loadingEtudiants = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -520,40 +563,179 @@ class _DetailFiliereState extends State<_DetailFiliere>
     ],
   );
 
-  Widget _tabEtudiants(Filiere f) => Center(child: Column(
-    mainAxisSize: MainAxisSize.min, children: [
-    Text('${f.nbEtudiants} étudiants inscrits en ${f.nom}',
-        style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
-    const SizedBox(height: 16),
-    Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(color: AdminTheme.primaryLight,
-          borderRadius: BorderRadius.circular(10)),
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.download_rounded, color: AdminTheme.primary, size: 16),
-        SizedBox(width: 6),
-        Text('Exporter liste PDF', style: TextStyle(fontSize: 13,
-            fontWeight: FontWeight.w700, color: AdminTheme.primary)),
-      ]),
-    ),
-  ]));
+  Widget _tabEtudiants(Filiere f) {
+    if (_loadingEtudiants) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_etudiants.isEmpty) {
+      return Center(child: Text('Aucun étudiant inscrit en ${f.nom}',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280))));
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+        child: Row(children: [
+          Expanded(child: Text('${_etudiants.length} étudiant(s) inscrit(s)',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)))),
+          GestureDetector(
+            onTap: () => _exporterListePdf(f),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(color: AdminTheme.primaryLight,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.download_rounded, color: AdminTheme.primary, size: 16),
+                SizedBox(width: 6),
+                Text('Exporter liste PDF', style: TextStyle(fontSize: 13,
+                    fontWeight: FontWeight.w700, color: AdminTheme.primary)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+      Expanded(child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: _etudiants.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (_, i) {
+          final e = _etudiants[i];
+          final prenoms = '${e['prenoms'] ?? ''}';
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            leading: CircleAvatar(
+              backgroundColor: AdminTheme.primaryLight,
+              child: Text(prenoms.isNotEmpty ? prenoms[0].toUpperCase() : '?',
+                  style: const TextStyle(color: AdminTheme.primary, fontWeight: FontWeight.w700)),
+            ),
+            title: Text('$prenoms ${e['nom'] ?? ''}',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            subtitle: Text('${e['matricule'] ?? ''}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          );
+        },
+      )),
+    ]);
+  }
+
+  Future<void> _exporterListePdf(Filiere f) async {
+    final doc = pw.Document();
+    doc.addPage(pw.MultiPage(
+      build: (_) => [
+        pw.Header(level: 0, text: 'Liste des étudiants — ${f.nom} (${f.niveau})'),
+        pw.Paragraph(text: 'Année académique : ${f.anneeAcademique} · ${_etudiants.length} étudiant(s)'),
+        pw.TableHelper.fromTextArray(
+          headers: ['N°', 'Matricule', 'Nom', 'Prénoms'],
+          data: [
+            for (var i = 0; i < _etudiants.length; i++)
+              [
+                '${i + 1}',
+                '${_etudiants[i]['matricule'] ?? ''}',
+                '${_etudiants[i]['nom'] ?? ''}',
+                '${_etudiants[i]['prenoms'] ?? ''}',
+              ],
+          ],
+        ),
+      ],
+    ));
+    await Printing.layoutPdf(onLayout: (format) async => doc.save());
+  }
 
   Widget _tabActions(Filiere f, Color color) => Padding(
     padding: const EdgeInsets.all(20),
     child: Column(children: [
       _actionRow(Icons.campaign_rounded, 'Envoyer une annonce à la filière',
-          'Cibler uniquement les étudiants de ${f.nom}', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
+          'Cibler uniquement les étudiants de ${f.nom}', color, () => _envoyerAnnonce(f)),
       const SizedBox(height: 12),
       _actionRow(Icons.forum_rounded, 'Ouvrir le groupe de messagerie',
-          'Voir le groupe privé de la filière', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
+          'Voir le groupe privé de la filière', color, () => _ouvrirGroupe(f)),
       const SizedBox(height: 12),
       _actionRow(Icons.calendar_today_rounded, 'Emploi du temps',
-          'Voir ou modifier l\'emploi du temps', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
+          'Voir ou modifier l\'emploi du temps', color,
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminEDT()))),
       const SizedBox(height: 12),
       _actionRow(Icons.grade_rounded, 'Notes de la filière',
-          'Voir toutes les notes et moyennes', color, () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...')))),
+          'Voir toutes les notes et moyennes', color,
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminNotes()))),
     ]),
   );
+
+  void _envoyerAnnonce(Filiere f) {
+    final titreCtrl = TextEditingController();
+    final contenuCtrl = TextEditingController();
+    bool envoi = false;
+
+    showDialog(context: context, builder: (dialogCtx) => StatefulBuilder(
+      builder: (dialogCtx, setDialogState) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Annonce — ${f.nom}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          _field(titreCtrl, 'Titre de l\'annonce', Icons.title_rounded),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(color: const Color(0xFFF5F7FA),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE5E7EB))),
+            child: TextField(controller: contenuCtrl, maxLines: 5,
+              style: const TextStyle(fontSize: 14),
+              decoration: const InputDecoration(hintText: 'Contenu du message...',
+                  hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(12))),
+          ),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280)))),
+          ElevatedButton.icon(
+            icon: envoi
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.send_rounded, size: 16),
+            label: const Text('Envoyer'),
+            onPressed: envoi ? null : () async {
+              if (titreCtrl.text.trim().isEmpty || contenuCtrl.text.trim().isEmpty) return;
+              setDialogState(() => envoi = true);
+
+              final res = await ApiService.createAnnonce({
+                'titre': titreCtrl.text.trim(),
+                'contenu': contenuCtrl.text.trim(),
+                'filiere': f.backendId ?? f.nom,
+                'niveau': f.niveau,
+                'cibleRole': 'etudiant',
+              });
+              if (!mounted) return;
+              if (res['success'] == true) {
+                // L'annonce est créée en brouillon : on la publie aussitôt
+                // pour qu'elle atteigne les étudiants de la filière.
+                final id = res['data']?['id'];
+                if (id != null) await ApiService.publierAnnonce(id.toString());
+                if (!mounted) return;
+                Navigator.pop(dialogCtx);
+                showAppSnackBar(context, 'Annonce envoyée aux étudiants de ${f.nom}.');
+              } else {
+                setDialogState(() => envoi = false);
+                showAppSnackBar(context, res['error'] as String? ?? 'Erreur lors de l\'envoi.',
+                    backgroundColor: AdminTheme.danger);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
+                foregroundColor: Colors.white, elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+          ),
+        ],
+      ),
+    ));
+  }
+
+  void _ouvrirGroupe(Filiere f) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => GroupeFiliere(
+      profile: StudentProfile(
+        nom: 'ScolarHub', prenoms: 'Administration', matricule: 'ADMIN',
+        email: '', telephone: '', filiere: f.nom, motDePasse: '',
+        niveau: f.niveau, role: 'admin',
+      ),
+    )));
+  }
 
   Widget _actionRow(IconData icon, String titre, String sub, Color color,
       VoidCallback onTap) => GestureDetector(
@@ -597,6 +779,10 @@ class _DetailFiliereState extends State<_DetailFiliere>
     final vhCtrl   = TextEditingController(text: '30');
     bool envoi = false;
 
+    // Liste des professeurs pour l'attribution du module
+    final profsFuture = ApiService.getProfesseurs();
+    String? profUserId;
+
     showDialog(context: context, builder: (dialogCtx) => StatefulBuilder(
       builder: (dialogCtx, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -612,6 +798,39 @@ class _DetailFiliereState extends State<_DetailFiliere>
             Expanded(child: _field(vhCtrl, 'Volume horaire (h)', Icons.schedule_rounded,
                 type: TextInputType.number)),
           ]),
+          const SizedBox(height: 10),
+          // Attribution du module à un professeur (optionnelle)
+          FutureBuilder<Map<String, dynamic>>(
+            future: profsFuture,
+            builder: (_, snap) {
+              final profs = (snap.data?['success'] == true)
+                  ? List<Map<String, dynamic>>.from(snap.data!['data'] as List)
+                  : <Map<String, dynamic>>[];
+              return DropdownButtonFormField<String>(
+                initialValue: profUserId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Professeur (attribution)',
+                  prefixIcon: const Icon(Icons.person_rounded, size: 20),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(
+                      value: null, child: Text('— Aucun pour l\'instant —')),
+                  ...profs.map((p) => DropdownMenuItem<String>(
+                        value: p['user_id'].toString(),
+                        child: Text(
+                            '${p['prenoms'] ?? ''} ${p['nom'] ?? ''}'.trim(),
+                            overflow: TextOverflow.ellipsis),
+                      )),
+                ],
+                onChanged: (v) => setDialogState(() => profUserId = v),
+              );
+            },
+          ),
         ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogCtx),
@@ -628,6 +847,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
                   volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
                   filiereId: int.tryParse(f.backendId!),
                   filiereNom: f.nom,
+                  professeurUserId: profUserId,
                 );
                 if (!mounted) return;
                 if (result['success'] == true) {

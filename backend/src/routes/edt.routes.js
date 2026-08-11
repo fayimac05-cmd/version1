@@ -67,6 +67,14 @@ router.put(
   edtController.updateEdt
 );
 
+// POST /api/edt/:id/envoyer - Notifier les étudiants (filière + niveau)
+router.post(
+  '/:id/envoyer',
+  authMiddleware,
+  requireRole('admin'),
+  edtController.envoyerEdt
+);
+
 // PATCH /api/edt/:id/archiver - Archiver un EDT
 router.patch(
   '/:id/archiver',

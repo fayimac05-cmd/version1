@@ -18,10 +18,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
   final _nameController = TextEditingController();
   final _locationController = TextEditingController();
   final _priceController = TextEditingController();
-  
+  final _capaciteController = TextEditingController();
+
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   XFile? _selectedImage;
+  bool _isSaving = false;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -164,6 +166,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 keyboardType: TextInputType.number,
                 suffix: const Text('FCFA', style: TextStyle(fontWeight: FontWeight.bold, color: primaryBlue)),
               ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: _capaciteController,
+                label: 'Nombre de places',
+                hint: '0 pour illimité',
+                icon: Icons.group_outlined,
+                keyboardType: TextInputType.number,
+              ),
               const SizedBox(height: 48),
               SizedBox(
                 width: double.infinity,
@@ -245,10 +255,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Créer l\'événement',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          'Créer l\'événement',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
               const SizedBox(height: 40),
@@ -257,6 +273,80 @@ class _CreateEventPageState extends State<CreateEventPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _submitEvent() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez choisir la date de l\'événement.')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    final time = _selectedTime ?? TimeOfDay.now();
+    final dateDebut = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      time.hour,
+      time.minute,
+    );
+
+    final result = await ApiService.createEvenement({
+      'titre': _nameController.text.trim(),
+      'lieu': _locationController.text.trim(),
+      'dateDebut': dateDebut.toIso8601String(),
+      'prix': double.tryParse(_priceController.text) ?? 0,
+      'capacite': int.tryParse(_capaciteController.text) ?? 0,
+    });
+
+    if (!mounted) return;
+
+    if (result['success'] != true) {
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['error'] ?? 'Erreur lors de la création de l\'événement.'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
+    final data = result['data'] as Map<String, dynamic>;
+    String? afficheUrl;
+
+    if (_selectedImage != null) {
+      final bytes = await _selectedImage!.readAsBytes();
+      final uploadResult = await ApiService.uploadEvenementAffiche(
+        data['id'].toString(),
+        bytes,
+        _selectedImage!.name,
+      );
+      if (uploadResult['success'] == true) {
+        afficheUrl = uploadResult['url'] as String?;
+      }
+    }
+
+    if (!mounted) return;
+
+    final newEvent = EventModel(
+      id: data['id'].toString(),
+      name: data['titre'] ?? _nameController.text.trim(),
+      location: data['lieu'] ?? _locationController.text.trim(),
+      date: dateDebut,
+      time: time,
+      price: double.tryParse(_priceController.text) ?? 0,
+      image: _selectedImage,
+      imageUrl: afficheUrl,
+      status: EventModel.statutLabel(data['statut']),
+      capacite: int.tryParse(_capaciteController.text) ?? 0,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Événement créé avec succès !')),
+    );
+    Navigator.pop(context, newEvent);
   }
 
   Widget _buildSectionTitle(String title) {

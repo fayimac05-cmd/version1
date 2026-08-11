@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../admin/admin_filieres.dart';
+import '../services/api_service.dart';
 import '../utils/snackbar_helper.dart';
 
 class Professeur {
@@ -74,6 +75,25 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
             AdminFilterChip(label: 'Permanents', active: _filtre == 'permanent', onTap: () => setState(() => _filtre = 'permanent')),
             const SizedBox(width: 6),
             AdminFilterChip(label: 'Vacataires', active: _filtre == 'vacataire', onTap: () => setState(() => _filtre = 'vacataire')),
+            const SizedBox(width: 6),
+            // Heures libres transmises par les professeurs
+            GestureDetector(
+              onTap: _voirDisponibilites,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF10B981)),
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.schedule_rounded, size: 14, color: Color(0xFF10B981)),
+                  SizedBox(width: 5),
+                  Text('Heures libres', style: TextStyle(fontSize: 12,
+                      fontWeight: FontWeight.w700, color: Color(0xFF10B981))),
+                ]),
+              ),
+            ),
           ]),
         ),
         adminDivider,
@@ -284,4 +304,94 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
   ]));
 
   void _snack(String msg) => showAppSnackBar(context, msg);
+
+  // ── Heures libres transmises par les professeurs ─────────────────────────
+  void _voirDisponibilites() {
+    final future = ApiService.getDisponibilitesProfesseurs();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        height: MediaQuery.of(context).size.height * 0.80,
+        decoration: const BoxDecoration(color: Color(0xFFF5F7FA),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: Column(children: [
+          const SizedBox(height: 8),
+          Container(width: 40, height: 4,
+              decoration: BoxDecoration(color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2))),
+          Container(
+            color: Colors.transparent,
+            padding: const EdgeInsets.fromLTRB(20, 14, 8, 6),
+            child: Row(children: [
+              const Icon(Icons.schedule_rounded, color: Color(0xFF10B981)),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Heures libres des professeurs',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+                      color: Color(0xFF1A1A2E)))),
+              IconButton(icon: const Icon(Icons.close_rounded, color: Color(0xFF6B7280)),
+                  onPressed: () => Navigator.pop(context)),
+            ]),
+          ),
+          Expanded(child: FutureBuilder<Map<String, dynamic>>(
+            future: future,
+            builder: (_, snap) {
+              if (!snap.hasData) {
+                return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+              }
+              if (snap.data!['success'] != true) {
+                return Center(child: Text(
+                    snap.data!['error'] as String? ?? 'Erreur de chargement.',
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))));
+              }
+              final rows = List<Map<String, dynamic>>.from(snap.data!['data'] as List);
+              if (rows.isEmpty) {
+                return const Center(child: Text(
+                    'Aucun professeur n\'a encore transmis ses heures libres.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))));
+              }
+              // Groupement par professeur (l'API renvoie une ligne par créneau)
+              final Map<String, List<Map<String, dynamic>>> parProf = {};
+              for (final r in rows) {
+                final cle = '${r['prenoms'] ?? ''} ${r['nom'] ?? ''}'.trim();
+                parProf.putIfAbsent(cle, () => []).add(r);
+              }
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: parProf.entries.map((e) => Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB))),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Icon(Icons.person_rounded, size: 16, color: Color(0xFF10B981)),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(e.key, style: const TextStyle(fontSize: 14,
+                          fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)))),
+                      if (e.value.first['specialite'] != null)
+                        Text(e.value.first['specialite'] as String,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                    ]),
+                    const SizedBox(height: 8),
+                    Wrap(spacing: 6, runSpacing: 6, children: e.value.map((c) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Text('${c['jour']} ${c['debut']}–${c['fin']}',
+                          style: const TextStyle(fontSize: 12,
+                              fontWeight: FontWeight.w600, color: Color(0xFF047857))),
+                    )).toList()),
+                  ]),
+                )).toList(),
+              );
+            },
+          )),
+        ]),
+      ),
+    );
+  }
 }

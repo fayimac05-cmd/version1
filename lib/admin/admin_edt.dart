@@ -227,6 +227,14 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
         icon: const Icon(Icons.more_vert),
         onSelected: (value) => _handleAction(value, e),
         itemBuilder: (_) => [
+          const PopupMenuItem(
+            value: 'envoyer',
+            child: Row(children: [
+              Icon(Icons.send_rounded, size: 18, color: AdminTheme.iconBgAlt),
+              SizedBox(width: 10),
+              Text('Envoyer aux étudiants'),
+            ]),
+          ),
           const PopupMenuItem(value: 'modifier', child: Text('Modifier la grille')),
           PopupMenuItem(value: e.archive ? 'reactiver' : 'archiver', child: Text(e.archive ? 'Réactiver' : 'Archiver')),
           const PopupMenuItem(value: 'supprimer', child: Text('Supprimer', style: TextStyle(color: Colors.redAccent))),
@@ -239,6 +247,10 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
   Future<void> _handleAction(String action, EdtEntry e) async {
     if (action == 'modifier') {
       _ouvrirEditeurGrille(filiereId: e.filiereId, filiereNom: e.filiereNom, niveau: e.niveau, existant: e);
+      return;
+    }
+    if (action == 'envoyer') {
+      await _envoyerAuxEtudiants(e.id, e.filiereNom, e.niveau);
       return;
     }
     if (action == 'archiver') {
@@ -275,6 +287,45 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
         if (result['success'] == true) { _showSnack('Emploi du temps supprimé.'); _loadData(); }
         else { _showSnack(result['error'] as String? ?? 'Erreur.', isError: true); }
       }
+    }
+  }
+
+  // ── Envoyer un EDT aux étudiants (filière + niveau) ───────────────────
+  Future<void> _envoyerAuxEtudiants(String id, String filiereNom, String niveau) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(children: [
+          Icon(Icons.send_rounded, color: AdminTheme.iconBgAlt),
+          SizedBox(width: 10),
+          Text('Envoyer aux étudiants', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        ]),
+        content: Text(
+          'Notifier tous les étudiants de « $filiereNom — $niveau » que leur emploi du temps est disponible ?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt),
+            child: const Text('Envoyer', style: TextStyle(color: AdminTheme.iconFgAlt)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    _showSnack('Envoi en cours…');
+    final result = await ApiService.envoyerEdt(id);
+    if (!mounted) return;
+    if (result['success'] == true) {
+      final total = result['total'] ?? 0;
+      final notifies = result['notifies'] ?? 0;
+      _showSnack(total == 0
+          ? 'Aucun étudiant trouvé pour cette filière et ce niveau.'
+          : 'Emploi du temps envoyé à $notifies étudiant(s).');
+    } else {
+      _showSnack(result['error'] as String? ?? 'Erreur lors de l\'envoi.', isError: true);
     }
   }
 
@@ -645,6 +696,60 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
     setState(() => _isSaving = false);
 
     if (result['success'] == true) {
+      // Récupère l'id (nouvel EDT ou EDT existant) pour proposer l'envoi.
+      final newId = (widget.edtId ??
+              (result['data'] is Map ? result['data']['id'] : null))
+          ?.toString();
+
+      if (newId != null && mounted) {
+        final envoyer = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title: const Text('Emploi du temps enregistré',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+            content: Text(
+                'Envoyer une notification aux étudiants de ${widget.filiereNom} — ${widget.niveau} ?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Plus tard')),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt),
+                icon: const Icon(Icons.send_rounded, size: 18, color: AdminTheme.iconFgAlt),
+                label: const Text('Envoyer aux étudiants',
+                    style: TextStyle(color: AdminTheme.iconFgAlt)),
+              ),
+            ],
+          ),
+        ) ?? false;
+
+        if (envoyer && mounted) {
+          final env = await ApiService.envoyerEdt(newId);
+          if (mounted) {
+            final msg = env['success'] == true
+                ? ((env['total'] ?? 0) == 0
+                    ? 'Aucun étudiant trouvé pour cette filière et ce niveau.'
+                    : 'Emploi du temps envoyé à ${env['notifies'] ?? 0} étudiant(s).')
+                : (env['error'] as String? ?? 'Erreur lors de l\'envoi.');
+            await showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                content: Text(msg),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('OK')),
+                ],
+              ),
+            );
+          }
+        }
+      }
+
+      if (!mounted) return;
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Emploi du temps enregistré avec succès.'), backgroundColor: Color(0xFF1E293B), behavior: SnackBarBehavior.floating),

@@ -37,6 +37,9 @@ DROP TABLE IF EXISTS transactions CASCADE;
 DROP TABLE IF EXISTS messages_canal CASCADE;
 DROP TABLE IF EXISTS cours_ressources CASCADE;
 DROP TABLE IF EXISTS cours_supports CASCADE;
+DROP TABLE IF EXISTS appel_qr_sessions CASCADE;
+DROP TABLE IF EXISTS paiements CASCADE;
+DROP TABLE IF EXISTS frais_scolarite CASCADE;
 
 -- Extension pour générer des UUIDs
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -169,11 +172,42 @@ CREATE TABLE annonces (
     filiere_nom VARCHAR(255),
     niveau VARCHAR(50),
     "cibleRole" VARCHAR(50) NOT NULL,
+    categorie VARCHAR(50),
     statut VARCHAR(50) DEFAULT 'brouillon',
     fichiers JSONB DEFAULT '[]',
     auteur UUID REFERENCES users(id) ON DELETE SET NULL,
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table des evenements (BDE / administration)
+CREATE TABLE evenements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    titre VARCHAR(255) NOT NULL,
+    description TEXT,
+    lieu VARCHAR(255),
+    date_debut TIMESTAMP NOT NULL,
+    prix NUMERIC(12,2) DEFAULT 0,
+    capacite INTEGER DEFAULT 0,
+    affiche_url TEXT,
+    statut VARCHAR(50) DEFAULT 'en_attente', -- en_attente | approuve | annule
+    auteur UUID REFERENCES users(id) ON DELETE SET NULL,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Fiches d'inscription aux evenements
+CREATE TABLE evenement_inscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    evenement_id UUID NOT NULL REFERENCES evenements(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    nom VARCHAR(255) NOT NULL,
+    prenoms VARCHAR(255),
+    email VARCHAR(255),
+    telephone VARCHAR(50),
+    matricule VARCHAR(100),
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (evenement_id, user_id)
 );
 
 -- Table des emplois du temps (EDT)
@@ -348,5 +382,47 @@ CREATE TABLE tickets (
     statut VARCHAR(50) DEFAULT 'en_attente',
     qr_code TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================================================
+-- ─── PAIEMENTS MOBILE MONEY ─────────────────────────────────────────────
+-- =========================================================================
+
+CREATE TABLE frais_scolarite (
+    id SERIAL PRIMARY KEY,
+    libelle VARCHAR(255) NOT NULL,
+    montant NUMERIC(12,2) NOT NULL,
+    niveau VARCHAR(50),          -- NULL = tous les niveaux
+    echeance DATE,
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE paiements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    etudiant_id INTEGER REFERENCES etudiants(id) ON DELETE CASCADE,
+    frais_id INTEGER REFERENCES frais_scolarite(id) ON DELETE SET NULL,
+    montant NUMERIC(12,2) NOT NULL,
+    operateur VARCHAR(50) NOT NULL,       -- orange_money | wave | moov_money | mtn_momo
+    telephone VARCHAR(50),
+    reference VARCHAR(100) UNIQUE,
+    transaction_id VARCHAR(100),
+    statut VARCHAR(50) DEFAULT 'en_attente',  -- en_attente | reussi | echoue
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TIMESTAMP
+);
+
+-- =========================================================================
+-- ─── APPEL PAR QR CODE ──────────────────────────────────────────────────
+-- =========================================================================
+
+CREATE TABLE appel_qr_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    appel_id UUID REFERENCES appels(id) ON DELETE CASCADE,
+    code VARCHAR(10) NOT NULL,            -- code à 6 chiffres (saisie manuelle)
+    token UUID NOT NULL,                  -- token encodé dans le QR
+    statut VARCHAR(20) DEFAULT 'ouverte', -- ouverte | cloturee
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

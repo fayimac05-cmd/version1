@@ -9,7 +9,13 @@ router.get('/', async (req, res) => {
     const { filiere_id } = req.query;
     let query = `
       SELECT m.id, m.nom, m.coefficient, m.volume_horaire, m.filiere_id, m.filiere_nom,
-             f.nom AS filiere
+             f.nom AS filiere,
+             (SELECT CONCAT(u2.prenoms, ' ', u2.nom)
+              FROM module_professeur mp
+              JOIN professeurs p ON p.id = mp.professeur_id
+              JOIN users u2 ON u2.id = p.user_id
+              WHERE mp.module_id = m.id
+              LIMIT 1) AS professeur
       FROM modules m
       LEFT JOIN filieres f ON f.id = m.filiere_id
     `;
@@ -46,10 +52,10 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/modules - Creer un module (admin)
-router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
+// POST /api/modules - Creer un module (admin ou professeur)
+router.post('/', authMiddleware, requireRole('admin', 'professeur'), async (req, res) => {
   try {
-    const { nom, coefficient, volume_horaire, filiere_id, filiere_nom } = req.body;
+    const { nom, coefficient, volume_horaire, filiere_id, filiere_nom, professeur_user_id } = req.body;
     if (!nom?.trim()) {
       return res.status(400).json({ success: false, message: 'Nom du module requis.' });
     }
@@ -58,7 +64,37 @@ router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [nom.trim(), coefficient || 1, volume_horaire || null, filiere_id || null, filiere_nom || null]
     );
-    res.status(201).json({ success: true, data: result.rows[0] });
+
+    // Assure l'existence de la fiche professeurs(user_id) et lie le module.
+    async function assignerProf(userId) {
+      let prof = await pool.query('SELECT id FROM professeurs WHERE user_id = $1', [userId]);
+      if (!prof.rows[0]) {
+        prof = await pool.query('INSERT INTO professeurs (user_id) VALUES ($1) RETURNING id', [userId]);
+      }
+      await pool.query(
+        'INSERT INTO module_professeur (module_id, professeur_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [result.rows[0].id, prof.rows[0].id]
+      );
+    }
+
+    let professeurNom = null;
+    if (req.user.role === 'professeur') {
+      // Un professeur qui cree un module se le voit assigner automatiquement.
+      await assignerProf(req.user.id);
+    } else if (professeur_user_id) {
+      // L'admin attribue le module a un professeur des la creation.
+      const u = await pool.query(
+        `SELECT id, CONCAT(prenoms, ' ', nom) AS nom_complet FROM users WHERE id = $1 AND role = 'professeur'`,
+        [professeur_user_id]
+      );
+      if (!u.rows[0]) {
+        return res.status(400).json({ success: false, message: 'Professeur introuvable.' });
+      }
+      await assignerProf(professeur_user_id);
+      professeurNom = u.rows[0].nom_complet;
+    }
+
+    res.status(201).json({ success: true, data: { ...result.rows[0], professeur: professeurNom } });
   } catch (err) {
     console.error('[modules] POST /', err);
     res.status(500).json({ success: false, message: 'Erreur creation module.' });

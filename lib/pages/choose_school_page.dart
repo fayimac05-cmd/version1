@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/etablissement_config.dart';
 import '../theme/app_palette.dart';
 import 'auth_page.dart';
 
@@ -10,12 +11,17 @@ class Etablissement {
   final String campus;
   final bool disponible;
 
+  /// Type d'établissement — détermine les sections, options et le
+  /// vocabulaire de l'app (voir EtablissementConfig).
+  final TypeEtablissement type;
+
   const Etablissement({
     required this.nom,
     required this.abreviation,
     required this.ville,
     this.campus = '',
     this.disponible = true,
+    this.type = TypeEtablissement.superieur,
   });
 }
 
@@ -63,6 +69,9 @@ class _ChooseSchoolPageState extends State<ChooseSchoolPage> {
 
   void _continuer() {
     if (_selected == null || !_selected!.disponible) return;
+    // L'app s'adapte au type de l'établissement choisi
+    // (sections visibles, options, vocabulaire).
+    EtablissementConfig.instance.appliquerType(_selected!.type);
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => AuthPage(etablissement: _selected!),

@@ -1,51 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
+import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 import 'appel_tab.dart';
 import 'notes_tab.dart';
-
-// ── Données mock ───────────────────────────────────────────────────────────
-
-class _Classe {
-  final String id, nom, niveau, filiere;
-  final int effectif;
-  const _Classe({required this.id, required this.nom, required this.niveau, required this.filiere, required this.effectif});
-}
-
-class _Etudiant {
-  final String matricule, nom, prenoms, classeId;
-  const _Etudiant({required this.matricule, required this.nom, required this.prenoms, required this.classeId});
-}
-
-class _Cours {
-  final String id, titre, matiere, classeId, date;
-  const _Cours({required this.id, required this.titre, required this.matiere, required this.classeId, required this.date});
-}
-
-final _mockClasses = [
-  const _Classe(id: 'c1', nom: 'Licence 2 - RT', niveau: 'Licence 2', filiere: 'Réseaux & Télécommunications', effectif: 32),
-  const _Classe(id: 'c2', nom: 'Licence 3 - INFO', niveau: 'Licence 3', filiere: 'Informatique de Gestion', effectif: 28),
-  const _Classe(id: 'c3', nom: 'Licence 1 - RT', niveau: 'Licence 1', filiere: 'Réseaux & Télécommunications', effectif: 40),
-];
-
-final _mockEtudiants = [
-  const _Etudiant(matricule: '24IST-O2/1851', nom: 'KOURAOGO', prenoms: 'Ibrahim', classeId: 'c1'),
-  const _Etudiant(matricule: '24IST-O2/1234', nom: 'TRAORÉ', prenoms: 'Fatimata', classeId: 'c1'),
-  const _Etudiant(matricule: '24IST-O2/1852', nom: 'SAWADOGO', prenoms: 'Abdoul', classeId: 'c1'),
-  const _Etudiant(matricule: '24IST-O2/1853', nom: 'OUÉDRAOGO', prenoms: 'Mariama', classeId: 'c1'),
-  const _Etudiant(matricule: '24IST-O2/1854', nom: 'ZONGO', prenoms: 'Luc', classeId: 'c1'),
-  const _Etudiant(matricule: '24IST-O3/0001', nom: 'KABORÉ', prenoms: 'Alice', classeId: 'c2'),
-  const _Etudiant(matricule: '24IST-O3/0002', nom: 'COMPAORÉ', prenoms: 'Rasmané', classeId: 'c2'),
-  const _Etudiant(matricule: '24IST-O3/0003', nom: 'BELEM', prenoms: 'Sandra', classeId: 'c2'),
-  const _Etudiant(matricule: '24IST-O1/0010', nom: 'NIKIEMA', prenoms: 'Paul', classeId: 'c3'),
-  const _Etudiant(matricule: '24IST-O1/0011', nom: 'SOME', prenoms: 'Awa', classeId: 'c3'),
-];
-
-final List<_Cours> _mockCours = [
-  const _Cours(id: 'k1', titre: 'Introduction aux Réseaux', matiere: 'Administration Réseau', classeId: 'c1', date: '2025-03-10'),
-  const _Cours(id: 'k2', titre: 'Protocoles TCP/IP', matiere: 'Administration Réseau', classeId: 'c1', date: '2025-03-17'),
-  const _Cours(id: 'k3', titre: 'Algèbre Relationnelle', matiere: 'Bases de Données', classeId: 'c2', date: '2025-03-12'),
-];
+import 'programme_screen.dart';
+import 'upload_course_screen.dart';
 
 // ── Shell principal ────────────────────────────────────────────────────────
 
@@ -61,13 +22,27 @@ class ProfessorShell extends StatefulWidget {
 class _ProfessorShellState extends State<ProfessorShell> {
   int _currentTab = 0;
 
+  // Classe présélectionnée depuis "Mes Classes" pour l'appel ou les notes.
+  Map<String, dynamic>? _classePreselectionnee;
+
+  void _ouvrirDepuisClasse(int tab, Map<String, dynamic> classe) {
+    setState(() {
+      _classePreselectionnee = classe;
+      _currentTab = tab;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _ClassesTab(profile: widget.profile),
+      _ClassesTab(
+        profile: widget.profile,
+        onFaireAppel: (c) => _ouvrirDepuisClasse(2, c),
+        onSaisirNotes: (c) => _ouvrirDepuisClasse(3, c),
+      ),
       _CoursTab(profile: widget.profile),
-      const AppelTab(),
-      const NotesTab(),
+      AppelTab(initialClasse: _classePreselectionnee),
+      NotesTab(initialClasse: _classePreselectionnee),
       _ProfilTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
@@ -110,7 +85,10 @@ class _ProfessorShellState extends State<ProfessorShell> {
   Widget _navItem(IconData icon, IconData activeIcon, String label, int index, Color color) {
     final isActive = _currentTab == index;
     return GestureDetector(
-      onTap: () => setState(() => _currentTab = index),
+      onTap: () => setState(() {
+        _currentTab = index;
+        _classePreselectionnee = null;
+      }),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 72,
@@ -189,57 +167,90 @@ class _ProfHeader extends StatelessWidget {
 // ── Onglet Classes ─────────────────────────────────────────────────────────
 
 class _ClassesTab extends StatefulWidget {
-  const _ClassesTab({required this.profile});
+  const _ClassesTab({required this.profile, required this.onFaireAppel, required this.onSaisirNotes});
   final StudentProfile profile;
+  final ValueChanged<Map<String, dynamic>> onFaireAppel;
+  final ValueChanged<Map<String, dynamic>> onSaisirNotes;
 
   @override
   State<_ClassesTab> createState() => _ClassesTabState();
 }
 
 class _ClassesTabState extends State<_ClassesTab> {
+  List<dynamic> _classes = [];
+  bool _loading = true;
+  String? _erreur;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerClasses();
+  }
+
+  Future<void> _chargerClasses() async {
+    setState(() {
+      _loading = true;
+      _erreur = null;
+    });
+    final res = await ProfessorService.getClasses();
+    if (!mounted) return;
+    setState(() {
+      _classes = res['success'] == true ? res['data'] as List<dynamic> : [];
+      _erreur = res['success'] == true ? null : (res['error']?.toString() ?? 'Erreur lors du chargement.');
+      _loading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(children: [
       _ProfHeader(
         title: 'Mes Classes',
-        subtitle: '${_mockClasses.length} classes assignées',
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppPalette.yellow,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text('${_mockEtudiants.length} étudiants',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF3A2A00))),
-        ),
+        subtitle: '${_classes.length} classe(s)',
       ),
       Expanded(
-        child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          itemCount: _mockClasses.length,
-          itemBuilder: (_, i) => _ClasseCard(
-            classe: _mockClasses[i],
-            onTap: () => _showClasseDetail(context, _mockClasses[i]),
-          ),
-        ),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _erreur != null
+                ? _ErrorState(message: _erreur!, onRetry: _chargerClasses)
+                : _classes.isEmpty
+                    ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.groups_outlined, size: 60, color: Color(0xFFCBD5E1)),
+                        SizedBox(height: 12),
+                        Text('Aucune classe disponible', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15)),
+                      ]))
+                    : RefreshIndicator(
+                        onRefresh: _chargerClasses,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                          itemCount: _classes.length,
+                          itemBuilder: (_, i) => _ClasseCard(
+                            classe: _classes[i],
+                            onTap: () => _showClasseDetail(context, _classes[i]),
+                          ),
+                        ),
+                      ),
       ),
     ]);
   }
 
-  void _showClasseDetail(BuildContext context, _Classe classe) {
-    final etudiants = _mockEtudiants.where((e) => e.classeId == classe.id).toList();
+  void _showClasseDetail(BuildContext context, dynamic classe) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ClasseDetailSheet(classe: classe, etudiants: etudiants),
+      builder: (_) => _ClasseDetailSheet(
+        classe: classe,
+        onFaireAppel: widget.onFaireAppel,
+        onSaisirNotes: widget.onSaisirNotes,
+      ),
     );
   }
 }
 
 class _ClasseCard extends StatelessWidget {
   const _ClasseCard({required this.classe, required this.onTap});
-  final _Classe classe;
+  final dynamic classe;
   final VoidCallback onTap;
 
   @override
@@ -265,14 +276,12 @@ class _ClasseCard extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(classe.nom, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+            Text('${classe['nom'] ?? ''}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
             const SizedBox(height: 3),
-            Text(classe.filiere, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+            Text('${classe['description'] ?? classe['filiere_nom'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
             const SizedBox(height: 6),
             Row(children: [
-              _badge('${classe.effectif} étudiants', const Color(0xFF0A4DA2)),
-              const SizedBox(width: 8),
-              _badge(classe.niveau, AppPalette.yellow, textColor: const Color(0xFF3A2A00)),
+              _badge('${classe['niveau'] ?? ''}', AppPalette.yellow, textColor: const Color(0xFF3A2A00)),
             ]),
           ])),
           const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
@@ -291,10 +300,118 @@ class _ClasseCard extends StatelessWidget {
   }
 }
 
-class _ClasseDetailSheet extends StatelessWidget {
-  const _ClasseDetailSheet({required this.classe, required this.etudiants});
-  final _Classe classe;
-  final List<_Etudiant> etudiants;
+class _ClasseDetailSheet extends StatefulWidget {
+  const _ClasseDetailSheet({required this.classe, required this.onFaireAppel, required this.onSaisirNotes});
+  final dynamic classe;
+  final ValueChanged<Map<String, dynamic>> onFaireAppel;
+  final ValueChanged<Map<String, dynamic>> onSaisirNotes;
+
+  @override
+  State<_ClasseDetailSheet> createState() => _ClasseDetailSheetState();
+}
+
+class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
+  List<dynamic> _etudiants = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerEtudiants();
+  }
+
+  Future<void> _chargerEtudiants() async {
+    final res = await ProfessorService.getStudentsByFiliere(int.parse('${widget.classe['id']}'));
+    if (!mounted) return;
+    setState(() {
+      _etudiants = res['success'] == true ? res['data'] as List<dynamic> : [];
+      _loading = false;
+    });
+  }
+
+  void _lancerAction(ValueChanged<Map<String, dynamic>> action) {
+    Navigator.pop(context);
+    action(Map<String, dynamic>.from(widget.classe as Map));
+  }
+
+  void _ajouterModule() {
+    final nomCtrl = TextEditingController();
+    final coefCtrl = TextEditingController(text: '2');
+    final vhCtrl = TextEditingController(text: '30');
+    bool envoi = false;
+
+    showDialog(context: context, builder: (dialogCtx) => StatefulBuilder(
+      builder: (dialogCtx, setDialogState) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Nouveau module — ${widget.classe['nom']}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: nomCtrl,
+            decoration: InputDecoration(
+              labelText: 'Nom du module',
+              prefixIcon: const Icon(Icons.menu_book_outlined, color: AppPalette.blue),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: TextField(
+              controller: coefCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Coefficient',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: TextField(
+              controller: vhCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Volume (h)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            )),
+          ]),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Annuler', style: TextStyle(color: Color(0xFF64748B)))),
+          ElevatedButton(
+            onPressed: envoi ? null : () async {
+              if (nomCtrl.text.trim().isEmpty) return;
+              setDialogState(() => envoi = true);
+              final res = await ApiService.createModule(
+                nom: nomCtrl.text.trim(),
+                coefficient: int.tryParse(coefCtrl.text) ?? 2,
+                volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
+                filiereId: int.tryParse('${widget.classe['id']}'),
+                filiereNom: '${widget.classe['nom']}',
+              );
+              if (!mounted) return;
+              if (res['success'] == true) {
+                Navigator.pop(dialogCtx);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('Module "${nomCtrl.text.trim()}" ajouté à ${widget.classe['nom']}.'),
+                    backgroundColor: const Color(0xFF10B981)));
+              } else {
+                setDialogState(() => envoi = false);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(res['error']?.toString() ?? 'Erreur lors de l\'ajout du module.'),
+                    backgroundColor: Colors.red));
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: envoi
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Ajouter'),
+          ),
+        ],
+      ),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -310,35 +427,76 @@ class _ClasseDetailSheet extends StatelessWidget {
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(classe.nom, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-              Text('${etudiants.length} étudiant(s) dans cette classe',
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-            ])),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${widget.classe['nom'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+            Text(_loading ? 'Chargement des étudiants...' : '${_etudiants.length} étudiant(s) dans cette classe',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(child: ElevatedButton.icon(
+                icon: const Icon(Icons.how_to_reg_rounded, size: 18),
+                label: const Text('Faire l\'appel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9), foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => _lancerAction(widget.onFaireAppel),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: ElevatedButton.icon(
+                icon: const Icon(Icons.fact_check_rounded, size: 18),
+                label: const Text('Saisir les notes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => _lancerAction(widget.onSaisirNotes),
+              )),
+            ]),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.library_add_outlined, size: 18),
+                label: const Text('Ajouter un module', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppPalette.blue,
+                  side: const BorderSide(color: AppPalette.blue),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _ajouterModule,
+              ),
+            ),
           ]),
         ),
         const SizedBox(height: 12),
         const Divider(),
         Expanded(
-          child: etudiants.isEmpty
-              ? const Center(child: Text('Aucun étudiant trouvé', style: TextStyle(color: Color(0xFF94A3B8))))
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: etudiants.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final e = etudiants[i];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                      leading: CircleAvatar(
-                        backgroundColor: AppPalette.lightBlue,
-                        child: Text(e.prenoms[0], style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w700)),
-                      ),
-                      title: Text('${e.prenoms} ${e.nom}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                      subtitle: Text(e.matricule, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                    );
-                  }),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _etudiants.isEmpty
+                  ? const Center(child: Text('Aucun étudiant trouvé', style: TextStyle(color: Color(0xFF94A3B8))))
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: _etudiants.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final e = _etudiants[i];
+                        final prenoms = '${e['prenoms'] ?? ''}';
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          leading: CircleAvatar(
+                            backgroundColor: AppPalette.lightBlue,
+                            child: Text(prenoms.isNotEmpty ? prenoms[0] : '?',
+                                style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w700)),
+                          ),
+                          title: Text('$prenoms ${e['nom'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          subtitle: Text('${e['matricule'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        );
+                      }),
         ),
       ]),
     );
@@ -356,20 +514,60 @@ class _CoursTab extends StatefulWidget {
 }
 
 class _CoursTabState extends State<_CoursTab> {
-  String? _filtreClasse;
+  List<dynamic> _cours = [];
+  bool _loading = true;
+  String? _erreur;
+  String? _filtreFiliere; // filiere_id sélectionné dans les chips
 
-  List<_Cours> get _coursFiltres => _filtreClasse == null
-      ? _mockCours
-      : _mockCours.where((c) => c.classeId == _filtreClasse).toList();
+  @override
+  void initState() {
+    super.initState();
+    _chargerCours();
+  }
+
+  Future<void> _chargerCours() async {
+    setState(() {
+      _loading = true;
+      _erreur = null;
+    });
+    final res = await ProfessorService.getCours();
+    if (!mounted) return;
+    setState(() {
+      _cours = res['success'] == true ? res['data'] as List<dynamic> : [];
+      _erreur = res['success'] == true ? null : (res['error']?.toString() ?? 'Erreur lors du chargement.');
+      _loading = false;
+    });
+  }
+
+  Future<void> _ajouterCours() async {
+    final publie = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const UploadCourseScreen()),
+    );
+    if (publie == true) _chargerCours();
+  }
+
+  List<dynamic> get _coursFiltres => _filtreFiliere == null
+      ? _cours
+      : _cours.where((c) => c['filiere_id'].toString() == _filtreFiliere).toList();
+
+  /// Filières distinctes présentes dans les cours publiés (id -> nom).
+  Map<String, String> get _filieres {
+    final map = <String, String>{};
+    for (final c in _cours) {
+      final id = c['filiere_id']?.toString();
+      if (id != null) map[id] = '${c['filiere_nom'] ?? 'Filière $id'}';
+    }
+    return map;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(children: [
       _ProfHeader(
         title: 'Mes Cours',
-        subtitle: '${_mockCours.length} supports publiés',
+        subtitle: '${_cours.length} support(s) publié(s)',
         trailing: GestureDetector(
-          onTap: () => _showAjoutCours(context),
+          onTap: _ajouterCours,
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -380,39 +578,55 @@ class _CoursTabState extends State<_CoursTab> {
           ),
         ),
       ),
-      // Filtre par classe
-      SizedBox(
-        height: 48,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          children: [
-            _filtreChip('Toutes', null),
-            ..._mockClasses.map((c) => _filtreChip(c.nom, c.id)),
-          ],
+      if (_filieres.isNotEmpty)
+        SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            children: [
+              _filtreChip('Toutes', null),
+              ..._filieres.entries.map((e) => _filtreChip(e.value, e.key)),
+            ],
+          ),
         ),
-      ),
       Expanded(
-        child: _coursFiltres.isEmpty
-            ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.menu_book_outlined, size: 60, color: Color(0xFFCBD5E1)),
-                SizedBox(height: 12),
-                Text('Aucun cours pour cette classe', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15)),
-              ]))
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                itemCount: _coursFiltres.length,
-                itemBuilder: (_, i) => _CoursCard(cours: _coursFiltres[i],
-                    onDelete: () => setState(() => _mockCours.removeWhere((c) => c.id == _coursFiltres[i].id))),
-              ),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _erreur != null
+                ? _ErrorState(message: _erreur!, onRetry: _chargerCours)
+                : _coursFiltres.isEmpty
+                    ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.menu_book_outlined, size: 60, color: Color(0xFFCBD5E1)),
+                        const SizedBox(height: 12),
+                        const Text('Aucun cours publié', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15)),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('Publier un cours'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _ajouterCours,
+                        ),
+                      ]))
+                    : RefreshIndicator(
+                        onRefresh: _chargerCours,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          itemCount: _coursFiltres.length,
+                          itemBuilder: (_, i) => _CoursCard(cours: _coursFiltres[i]),
+                        ),
+                      ),
       ),
     ]);
   }
 
-  Widget _filtreChip(String label, String? classeId) {
-    final isActive = _filtreClasse == classeId;
+  Widget _filtreChip(String label, String? filiereId) {
+    final isActive = _filtreFiliere == filiereId;
     return GestureDetector(
-      onTap: () => setState(() => _filtreClasse = classeId),
+      onTap: () => setState(() => _filtreFiliere = filiereId),
       child: Container(
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -426,93 +640,15 @@ class _CoursTabState extends State<_CoursTab> {
       ),
     );
   }
-
-  void _showAjoutCours(BuildContext context) {
-    final titreCtrl = TextEditingController();
-    final matiereCtrl = TextEditingController();
-    String? classeId = _mockClasses.first.id;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Ajouter un cours', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-            const SizedBox(height: 16),
-            _input(titreCtrl, 'Titre du cours', Icons.title_rounded),
-            const SizedBox(height: 12),
-            _input(matiereCtrl, 'Matière', Icons.school_outlined),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: classeId,
-              decoration: InputDecoration(
-                labelText: 'Classe',
-                prefixIcon: const Icon(Icons.groups_outlined, color: AppPalette.blue),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              ),
-              items: _mockClasses.map((c) => DropdownMenuItem(value: c.id, child: Text(c.nom))).toList(),
-              onChanged: (v) => setS(() => classeId = v),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(width: double.infinity, height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                onPressed: () {
-                  if (titreCtrl.text.isNotEmpty && matiereCtrl.text.isNotEmpty) {
-                    setState(() {
-                      _mockCours.add(_Cours(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        titre: titreCtrl.text,
-                        matiere: matiereCtrl.text,
-                        classeId: classeId!,
-                        date: DateTime.now().toIso8601String().split('T')[0],
-                      ));
-                    });
-                    Navigator.pop(ctx);
-                  }
-                },
-                child: const Text('Publier le cours', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ]),
-        ),
-      )),
-    );
-  }
-
-  Widget _input(TextEditingController c, String hint, IconData icon) {
-    return TextField(
-      controller: c,
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(icon, color: AppPalette.blue),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      ),
-    );
-  }
 }
 
 class _CoursCard extends StatelessWidget {
-  const _CoursCard({required this.cours, required this.onDelete});
-  final _Cours cours;
-  final VoidCallback onDelete;
+  const _CoursCard({required this.cours});
+  final dynamic cours;
 
   @override
   Widget build(BuildContext context) {
-    final classe = _mockClasses.firstWhere((c) => c.id == cours.classeId,
-        orElse: () => const _Classe(id: '', nom: 'Inconnue', niveau: '', filiere: '', effectif: 0));
+    final date = (cours['date_creation'] ?? '').toString().split('T').first;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -529,35 +665,94 @@ class _CoursCard extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(cours.titre, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+          Text('${cours['titre'] ?? ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
           const SizedBox(height: 2),
-          Text(cours.matiere, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          Text('${cours['module_nom'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
           const SizedBox(height: 4),
           Row(children: [
             const Icon(Icons.groups_outlined, size: 12, color: Color(0xFF94A3B8)),
             const SizedBox(width: 4),
-            Text(classe.nom, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+            Flexible(child: Text('${cours['filiere_nom'] ?? ''} · ${cours['niveau'] ?? ''}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)))),
             const SizedBox(width: 12),
             const Icon(Icons.calendar_today_outlined, size: 12, color: Color(0xFF94A3B8)),
             const SizedBox(width: 4),
-            Text(cours.date, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+            Text(date, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
           ]),
         ])),
-        IconButton(
-          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
-          onPressed: onDelete,
-        ),
       ]),
+    );
+  }
+}
+
+// ── État d'erreur réutilisable ─────────────────────────────────────────────
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.wifi_off_rounded, size: 54, color: Color(0xFFCBD5E1)),
+          const SizedBox(height: 12),
+          Text(message, textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Réessayer'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: onRetry,
+          ),
+        ]),
+      ),
     );
   }
 }
 
 // ── Onglet Profil ──────────────────────────────────────────────────────────
 
-class _ProfilTab extends StatelessWidget {
+class _ProfilTab extends StatefulWidget {
   const _ProfilTab({required this.profile, required this.onLogout});
   final StudentProfile profile;
   final VoidCallback onLogout;
+
+  @override
+  State<_ProfilTab> createState() => _ProfilTabState();
+}
+
+class _ProfilTabState extends State<_ProfilTab> {
+  StudentProfile get profile => widget.profile;
+  int _nbClasses = 0;
+  int _nbCours = 0;
+  int _nbSessions = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerStats();
+  }
+
+  Future<void> _chargerStats() async {
+    final classesRes = await ProfessorService.getClasses();
+    final coursRes = await ProfessorService.getCours();
+    final sessionsRes = await ProfessorService.getGradeSessions();
+    if (!mounted) return;
+    setState(() {
+      _nbClasses = classesRes['success'] == true ? (classesRes['data'] as List).length : 0;
+      _nbCours = coursRes['success'] == true ? (coursRes['data'] as List).length : 0;
+      _nbSessions = sessionsRes['success'] == true ? (sessionsRes['data'] as List).length : 0;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -603,25 +798,43 @@ class _ProfilTab extends StatelessWidget {
                 const Divider(height: 1, indent: 56),
                 _profilLigne(Icons.domain_rounded, 'Département', profile.filiere),
                 const Divider(height: 1, indent: 56),
-                _profilLigne(Icons.groups_rounded, 'Classes assignées', '${_mockClasses.length} classes'),
+                _profilLigne(Icons.groups_rounded, 'Classes', '$_nbClasses classe(s)'),
                 const Divider(height: 1, indent: 56),
-                _profilLigne(Icons.menu_book_rounded, 'Cours publiés', '${_mockCours.length} supports'),
+                _profilLigne(Icons.menu_book_rounded, 'Cours publiés', '$_nbCours support(s)'),
               ]),
             ),
             const SizedBox(height: 24),
             // Stats
             Row(children: [
-              _statCard('${_mockClasses.length}', 'Classes', Icons.groups_rounded, AppPalette.blue),
+              _statCard('$_nbClasses', 'Classes', Icons.groups_rounded, AppPalette.blue),
               const SizedBox(width: 12),
-              _statCard('${_mockCours.length}', 'Cours', Icons.menu_book_rounded, const Color(0xFFD97706)),
+              _statCard('$_nbCours', 'Cours', Icons.menu_book_rounded, const Color(0xFFD97706)),
               const SizedBox(width: 12),
-              _statCard('${_mockEtudiants.length}', 'Étudiants', Icons.people_rounded, const Color(0xFF10B981)),
+              _statCard('$_nbSessions', 'Sessions notes', Icons.fact_check_rounded, const Color(0xFF10B981)),
             ]),
             const SizedBox(height: 24),
+            // Programme hebdomadaire : déclarer et transmettre ses heures libres
+            SizedBox(
+              width: double.infinity, height: 52,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ProgrammeScreen())),
+                icon: const Icon(Icons.edit_calendar_rounded, size: 20),
+                label: const Text('Mon programme / heures libres',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity, height: 52,
               child: OutlinedButton.icon(
-                onPressed: onLogout,
+                onPressed: widget.onLogout,
                 icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
                 label: const Text('Se déconnecter', style: TextStyle(color: Color(0xFFEF4444), fontSize: 15, fontWeight: FontWeight.w700)),
                 style: OutlinedButton.styleFrom(

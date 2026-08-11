@@ -28,7 +28,8 @@ class _MessageCanal {
   }) : reactions = reactions ?? {};
 
   factory _MessageCanal.fromJson(Map<String, dynamic> json, Color color) {
-    final createdAt = DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now();
+    final createdAt =
+        (DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now()).toLocal();
     final heure =
         '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
     final now = DateTime.now();
@@ -36,7 +37,10 @@ class _MessageCanal {
     if (createdAt.day != now.day || createdAt.month != now.month) {
       date = 'Hier';
     }
-    final nom = json['expediteur'] ?? 'Inconnu';
+    // Le backend renvoie soit un champ 'expediteur', soit 'prenoms'/'nom'
+    final nomComplet = '${json['prenoms'] ?? ''} ${json['nom'] ?? ''}'.trim();
+    final nom = (json['expediteur'] as String?) ??
+        (nomComplet.isNotEmpty ? nomComplet : 'Inconnu');
     final parts = nom.split(' ');
     final initiales = parts.length >= 2
         ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
@@ -91,6 +95,22 @@ class _CanalScreenState extends State<CanalScreen> {
             ),
             
             child: Row(children: [
+              // Bouton retour (visible quand la page est ouverte par-dessus une autre,
+              // pas quand elle sert d'onglet dans la navigation principale)
+              if (Navigator.canPop(context))
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _border),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: _textMain, size: 18)),
+                  ),
+                ),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Canaux de discussion', style: TextStyle(fontSize: 22,
                     fontWeight: FontWeight.w800, color: _textMain, letterSpacing: -0.5)),
@@ -275,12 +295,18 @@ class _CanalDetailState extends State<_CanalDetail> {
   final _scroll = ScrollController();
   bool _hasText = false;
   bool _loading = true;
+  String? _myUserId;
 
   @override
   void initState() {
     super.initState();
-    _chargerMessages();
-    _connecterSocket();
+    _init();
+  }
+
+  Future<void> _init() async {
+    _myUserId = await ApiService.getUserId();
+    await _chargerMessages();
+    await _connecterSocket();
   }
 
   @override
@@ -293,33 +319,44 @@ class _CanalDetailState extends State<_CanalDetail> {
 
   Future<void> _chargerMessages() async {
     try {
+      final headers = await ApiService.getHeaders();
       final response = await http.get(
         Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as List;
+        final body = jsonDecode(utf8.decode(response.bodyBytes));
+        final data = (body is Map ? body['data'] : body) as List? ?? [];
+        if (!mounted) return;
         setState(() {
           _msgs.clear();
-          _msgs.addAll(data.map((m) => _MessageCanal.fromJson(m, widget.couleur)));
+          _msgs.addAll(data.map((m) =>
+              _MessageCanal.fromJson(m as Map<String, dynamic>, widget.couleur)));
           _loading = false;
         });
         _scrollBas();
       } else {
+        if (!mounted) return;
         setState(() { _loading = false; _msgs.addAll(_fallbackMsgs()); });
       }
     } catch (_) {
+      if (!mounted) return;
       setState(() { _loading = false; _msgs.addAll(_fallbackMsgs()); });
     }
   }
 
-  void _connecterSocket() {
-    final roomId = 'canal_${widget.canalId}';
-    SocketService().joinRoom(roomId);
+  Future<void> _connecterSocket() async {
+    await SocketService().connect();
+    SocketService().joinRoom('canal:${widget.canalId}');
     SocketService().onCanalMessage((data) {
       if (!mounted) return;
-      final msg = _MessageCanal.fromJson(
-          data is Map<String, dynamic> ? data : jsonDecode(data.toString()), widget.couleur);
+      final json = data is Map<String, dynamic>
+          ? data
+          : jsonDecode(data.toString()) as Map<String, dynamic>;
+      // Ne concerne pas ce canal, ou message déjà affiché (envoyé par moi)
+      if (json['canal_id']?.toString() != widget.canalId) return;
+      if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
+      final msg = _MessageCanal.fromJson(json, widget.couleur);
       setState(() => _msgs.add(msg));
       _scrollBas();
     });
@@ -344,23 +381,23 @@ class _CanalDetailState extends State<_CanalDetail> {
     _scrollBas();
 
     try {
-      await http.post(
+      final headers = await ApiService.getHeaders();
+      final response = await http.post(
         Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contenu': texte,
-          'expediteur': '${p.prenoms} ${p.nom}',
-          'userId': p.matricule,
-        }),
+        headers: headers,
+        body: jsonEncode({'contenu': texte}),
       );
-
-      SocketService().sendCanalMessage(widget.canalId, {
-        'contenu': texte,
-        'expediteur': '${p.prenoms} ${p.nom}',
-        'created_at': DateTime.now().toIso8601String(),
-        'type': 'texte',
-      });
-    } catch (_) {}
+      if (response.statusCode != 201 && mounted) {
+        setState(() => _msgs.remove(msgLocal));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Échec de l\'envoi du message')));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _msgs.remove(msgLocal));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Serveur injoignable — message non envoyé')));
+    }
   }
 
   void _scrollBas() {
@@ -612,9 +649,12 @@ class _MessagePriveAdmin extends StatefulWidget {
 }
 
 class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
+  static final String _baseUrl = ApiService.baseUrl;
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
   bool _hasText = false;
+  String? _adminId;
+  String? _myUserId;
 
   final List<Map<String, dynamic>> _msgs = [
     {'texte': 'Bonjour, l\'administration est à votre écoute. Posez votre question de manière détaillée.',
@@ -625,14 +665,58 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
   void initState() {
     super.initState();
     _ctrl.addListener(() => setState(() => _hasText = _ctrl.text.trim().isNotEmpty));
+    _init();
+  }
+
+  Future<void> _init() async {
+    _myUserId = await ApiService.getUserId();
+    await _chargerConversation();
+    await SocketService().connect();
     SocketService().onPrivateMessage((data) {
       if (!mounted) return;
+      final json = data is Map<String, dynamic>
+          ? data
+          : jsonDecode(data.toString()) as Map<String, dynamic>;
+      // N'afficher que les messages venant de l'administration
+      if (_adminId != null && json['expediteur_id']?.toString() != _adminId) return;
       setState(() => _msgs.add({
-        'texte': data['contenu'] ?? data['texte'] ?? '',
+        'texte': json['contenu'] ?? json['texte'] ?? '',
         'estMoi': false, 'heure': _now(), 'lu': true,
       }));
       _scrollBas();
     });
+  }
+
+  String _heureDe(String? createdAt) {
+    final dt = (DateTime.tryParse(createdAt ?? '') ?? DateTime.now()).toLocal();
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _chargerConversation() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final rc = await http.get(
+          Uri.parse('$_baseUrl/messages/admin-contact'), headers: headers);
+      if (rc.statusCode != 200) return;
+      _adminId = (jsonDecode(rc.body)['data']?['id'])?.toString();
+      if (_adminId == null) return;
+
+      final rh = await http.get(
+          Uri.parse('$_baseUrl/messages/prives/$_adminId'), headers: headers);
+      if (rh.statusCode != 200 || !mounted) return;
+      final data = jsonDecode(utf8.decode(rh.bodyBytes))['data'] as List? ?? [];
+      setState(() {
+        _msgs.addAll(data.map((m) => {
+          'texte': m['contenu'] ?? '',
+          'estMoi': m['expediteur_id']?.toString() == _myUserId,
+          'heure': _heureDe(m['created_at'] as String?),
+          'lu': true,
+        }));
+      });
+      _scrollBas();
+    } catch (_) {
+      // Hors ligne : on garde le message d'accueil local
+    }
   }
 
   @override
@@ -756,17 +840,45 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
     );
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     if (_ctrl.text.trim().isEmpty) return;
     final texte = _ctrl.text.trim();
-    setState(() {
-      _msgs.add({'texte': texte, 'estMoi': true, 'heure': _now(), 'lu': false});
-    });
-    SocketService().sendPrivateMessage('admin', {
-      'contenu': texte,
-      'expediteur': '${widget.profile.prenoms} ${widget.profile.nom}',
-    });
+    final msgLocal = {'texte': texte, 'estMoi': true, 'heure': _now(), 'lu': false};
+    setState(() => _msgs.add(msgLocal));
     _ctrl.clear();
     _scrollBas();
+
+    if (_adminId == null) {
+      // Contact admin pas encore chargé (hors ligne ?) : nouvelle tentative
+      await _chargerConversation();
+      if (_adminId == null) {
+        if (!mounted) return;
+        setState(() => _msgs.remove(msgLocal));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Serveur injoignable — message non envoyé')));
+        return;
+      }
+    }
+
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/messages/prives/$_adminId'),
+        headers: headers,
+        body: jsonEncode({'contenu': texte}),
+      );
+      if (response.statusCode == 201 && mounted) {
+        setState(() => msgLocal['lu'] = true);
+      } else if (mounted) {
+        setState(() => _msgs.remove(msgLocal));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Échec de l\'envoi du message')));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _msgs.remove(msgLocal));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Serveur injoignable — message non envoyé')));
+    }
   }
 }

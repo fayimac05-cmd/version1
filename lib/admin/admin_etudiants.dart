@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/etudiant_model.dart';
 import '../services/api_service.dart';
+import '../app/scolar_hub_app.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
@@ -728,8 +729,13 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
     if (!mounted) return;
 
     if (result['success'] == true) {
+      final mat = result['matricule']?.toString() ?? '';
+      final notif = result['notifications'] is Map ? result['notifications'] as Map : const {};
+      final smsOk = notif['sms'] is Map && notif['sms']['envoye'] == true;
+      final emailOk = notif['email'] is Map && notif['email']['envoye'] == true;
       Navigator.pop(context);
       widget.onInscrit();
+      _confirmationInscription(mat, smsOk, emailOk);
     } else {
       setState(() {
         _envoi = false;
@@ -737,6 +743,74 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
       });
     }
   }
+
+  // Confirmation affichée à l'admin : matricule généré + état des notifications.
+  void _confirmationInscription(String matricule, bool smsOk, bool emailOk) {
+    final ctx = ScolarHubApp.navigatorKey.currentContext;
+    if (ctx == null) return;
+    showDialog(
+      context: ctx,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(children: [
+          Icon(Icons.check_circle, color: Color(0xFF15803D)),
+          SizedBox(width: 10),
+          Text('Étudiant inscrit', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Matricule généré', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Text(matricule,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold,
+                      letterSpacing: 1, color: Color(0xFF1E40AF))),
+            ),
+            const SizedBox(height: 16),
+            _ligneNotif('SMS de confirmation', smsOk),
+            const SizedBox(height: 8),
+            _ligneNotif('Email de confirmation', emailOk),
+            const SizedBox(height: 14),
+            const Text(
+              'L\'étudiant reçoit son matricule et un lien pour définir son mot de passe et confirmer son inscription.',
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AdminTheme.iconBgAlt,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Terminé'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ligneNotif(String label, bool ok) => Row(children: [
+        Icon(ok ? Icons.check_circle_outline : Icons.cancel_outlined,
+            size: 18, color: ok ? const Color(0xFF15803D) : const Color(0xFF94A3B8)),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))),
+        const Spacer(),
+        Text(ok ? 'Envoyé' : 'Non envoyé',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600,
+                color: ok ? const Color(0xFF15803D) : const Color(0xFF94A3B8))),
+      ]);
 
   @override
   Widget build(BuildContext context) {

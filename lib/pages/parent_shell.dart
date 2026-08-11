@@ -6,6 +6,8 @@ import 'parent/parent_home_tab.dart';
 import 'parent/parent_grades_tab.dart';
 import 'parent/parent_schedule_tab.dart';
 import 'parent/parent_profile_tab.dart';
+import 'parent/parent_assistant_ia_screen.dart';
+import 'parent/parent_paiements_screen.dart';
 
 class ParentShell extends StatefulWidget {
   const ParentShell({
@@ -189,6 +191,41 @@ class _ParentAccueilTab extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           const Text(
+            'Services',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _ServiceCard(
+                icon: Icons.smart_toy_rounded,
+                label: 'Assistant IA',
+                description: 'Analyse des notes et alertes en temps réel',
+                color: const Color(0xFF7C3AED),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ParentAssistantIAScreen(nomEnfant: nomEnfant),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _ServiceCard(
+                icon: Icons.credit_card_rounded,
+                label: 'Paiements',
+                description: 'Scolarité, cantine et bus scolaire',
+                color: const Color(0xFF0891B2),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ParentPaiementsScreen(nomEnfant: nomEnfant),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Text(
             'Alertes et Notifications (2)',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
           ),
@@ -209,6 +246,62 @@ class _ParentAccueilTab extends StatelessWidget {
             date: 'Hier',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ServiceCard extends StatelessWidget {
+  const _ServiceCard({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: const TextStyle(fontSize: 11, color: Colors.grey, height: 1.3),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

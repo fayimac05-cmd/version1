@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import 'auth_choice_page.dart';
+import 'choose_school_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -110,14 +110,19 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _startSequence() async {
     await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
     _bgCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
     _logoCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
     _textCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
     _cardsCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
     _btnCtrl.forward();
   }
 
@@ -132,8 +137,8 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  void _goAuthChoice() {
-    Navigator.of(context).push(_slideRoute(const AuthChoicePage()));
+  void _goChooseSchool() {
+    Navigator.of(context).push(_slideRoute(const ChooseSchoolPage()));
   }
 
   Route _slideRoute(Widget page) => PageRouteBuilder(
@@ -156,22 +161,6 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         children: [
           // ── Animated background circles ──────────────────────────────────
-          ScaleTransition(
-            scale: _bgScale,
-            alignment: Alignment.topLeft,
-            child: Positioned(
-              top: -80,
-              left: -80,
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppPalette.blue,
-                ),
-              ),
-            ),
-          ),
           Positioned(
             top: -80,
             left: -80,
@@ -267,19 +256,13 @@ class _SplashScreenState extends State<SplashScreen>
                       child: const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('College',
+                          Text('Scholar',
                               style: TextStyle(
                                   fontSize: 38,
                                   fontWeight: FontWeight.w800,
                                   color: AppPalette.black,
                                   height: 1.1)),
-                          Text('Management',
-                              style: TextStyle(
-                                  fontSize: 38,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppPalette.black,
-                                  height: 1.1)),
-                          Text('System',
+                          Text('Hub',
                               style: TextStyle(
                                   fontSize: 38,
                                   fontWeight: FontWeight.w800,
@@ -444,7 +427,7 @@ class _SplashScreenState extends State<SplashScreen>
       width: double.infinity,
       height: 54,
       child: ElevatedButton(
-        onPressed: _goAuthChoice,
+        onPressed: _goChooseSchool,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppPalette.blue,
           foregroundColor: Colors.white,
@@ -465,4 +448,5 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
+
 }

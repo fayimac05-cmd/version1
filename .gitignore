@@ -21,14 +21,12 @@ lerna-debug.log*
 build/
 -*.flutter-plugins-dependencies
 
-# Android
-.gradle/
-local.properties
-captures/
-.externalNativeBuild/
-.cxx/
-**/android/app/debug
-**/android/app/release
+# Node
+node_modules/
+
+# Backend
+backend/node_modules/
+backend/.env
 
 # iOS / macOS
 **/ios/Flutter/ephemeral/
