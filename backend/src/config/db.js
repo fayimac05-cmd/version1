@@ -1,11 +1,11 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 const pool = new Pool({
-  host:     process.env.DB_HOST,
-  port:     parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME,
-  user:     process.env.DB_USER,
-  password: process.env.DB_PASS,
+  host:     process.env.DB_HOST || process.env.host,
+  port:     parseInt(process.env.DB_PORT || process.env.port) || 5432,
+  database: process.env.DB_NAME || process.env.database,
+  user:     process.env.DB_USER || process.env.user,
+  password: process.env.DB_PASS || process.env.DB_PASSWORD,
   ssl:      { rejectUnauthorized: false },
   keepAlive: true,
   // Le pooler Supabase coupe les connexions inactives : on les recycle avant.
