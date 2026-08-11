@@ -30,11 +30,14 @@ dependencies:
 
   # Interface Graphique & Charts
   fl_chart: ^1.2.0
-  qr_flutter: ^4.1.0
 
   # Moteur de génération et d'impression PDF
   pdf: ^3.12.0
   printing: ^5.14.3
+  
+  # Backend & Configuration
+  supabase_flutter: ^2.5.1
+  flutter_dotenv: ^5.0.2
 
 dev_dependencies:
   flutter_test:
@@ -47,4 +50,5 @@ flutter:
   uses-material-design: true
 
   assets:
+    - .env
     - assets/programme_semaine.png

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
+import '../services/supabase_service.dart';
 import '../models/student_profile.dart';
 import 'login_page.dart';
 import 'student_shell.dart';
 import 'splash_screen.dart';
+
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -121,53 +123,62 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    // Try backend registration
-    final result = await ApiService.register(
-      nom: nom,
-      prenoms: prenoms,
-      email: email,
-      telephone: telephone,
-      motDePasse: pass,
-      matricule: matricule,
-      filiere: _filiereSelectionnee!,
-      niveau: _niveauSelectionne,
-    );
-
-    if (result['success'] == true) {
-      final u = result['user'] as Map<String, dynamic>? ?? {};
-      final profile = StudentProfile(
-        nom: u['nom'] ?? nom.toUpperCase(),
-        prenoms: u['prenoms'] ?? prenoms,
-        matricule: u['matricule'] ?? matricule,
-        email: u['email'] ?? email,
-        telephone: u['telephone'] ?? telephone,
-        filiere: u['filiere'] ?? _filiereSelectionnee ?? '',
-        motDePasse: '',
-        domaine: u['domaine'] ?? '',
-        niveau: u['niveau'] ?? _niveauSelectionne,
-        role: u['role'] ?? 'etudiant',
+    // Inscription via Supabase
+    try {
+      final result = await SupabaseService().registerEtudiant(
+        nom: nom,
+        prenoms: prenoms,
+        email: email,
+        telephone: telephone,
+        motDePasse: pass,
+        matricule: matricule,
+        filiere: _filiereSelectionnee!,
+        niveau: _niveauSelectionne,
       );
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => StudentShell(
-              profile: profile,
-              onLogout: () => Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const SplashScreen()),
-                (route) => false,
+
+      if (result['success'] == true) {
+        final u = result['user'] as Map<String, dynamic>? ?? {};
+        final profile = StudentProfile(
+          nom: u['nom'] ?? nom.toUpperCase(),
+          prenoms: u['prenoms'] ?? prenoms,
+          matricule: u['matricule'] ?? matricule,
+          email: u['email'] ?? email,
+          telephone: u['telephone'] ?? telephone,
+          filiere: u['filiere'] ?? _filiereSelectionnee ?? '',
+          motDePasse: '',
+          domaine: u['domaine'] ?? '',
+          niveau: u['niveau'] ?? _niveauSelectionne,
+          role: u['role'] ?? 'etudiant',
+        );
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => StudentShell(
+                profile: profile,
+                onLogout: () => Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SplashScreen()),
+                  (route) => false,
+                ),
               ),
             ),
-          ),
-          (route) => false,
-        );
+            (route) => false,
+          );
+        }
+      } else {
+        setState(() {
+          _loading = false;
+          _error = result['message'] ?? 'Erreur lors de l\'inscription.';
+        });
       }
-    } else {
+    } catch (e) {
       setState(() {
         _loading = false;
-        _error = result['error'] ?? 'Erreur lors de l\'inscription.';
+        _error = 'Erreur de connexion Supabase : $e';
       });
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {

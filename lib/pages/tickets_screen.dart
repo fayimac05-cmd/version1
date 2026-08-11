@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE
@@ -37,8 +40,11 @@ class _TicketsScreenState extends State<TicketsScreen>
 
   late TabController _tabCtrl;
   final List<Map<String, dynamic>> _mesTickets = [];
+  List<_Evenement> _evenements = [];
+  bool _loadingEvents = true;
 
-  static const List<_Evenement> _evenements = [
+  // ── Données de fallback si Supabase vide ──
+  static const List<_Evenement> _evenementsFallback = [
     _Evenement(id: 'E001', titre: 'Soirée Étudiante BDE', emoji: '🎵',
         date: 'Vendredi 02 Mai 2026', heure: '20h00',
         lieu: 'Campus IST, Salle des fêtes', type: 'Soirée', prix: 500,
@@ -48,34 +54,91 @@ class _TicketsScreenState extends State<TicketsScreen>
         date: 'Samedi 10 Mai 2026', heure: '09h00',
         lieu: 'Campus IST, Terrain principal', type: 'Culturel', prix: 300,
         placesTotal: 500, placesRestantes: 230,
-        description: 'Célébration des cultures du Burkina Faso. Tenues traditionnelles, danses, plats locaux.'),
+        description: 'Célébration des cultures du Burkina Faso.'),
     _Evenement(id: 'E003', titre: 'Cérémonie Remise de Diplômes', emoji: '🎓',
         date: 'Samedi 03 Mai 2026', heure: '10h00',
         lieu: 'Salle des fêtes IST', type: 'Académique', prix: 1000,
         placesTotal: 150, placesRestantes: 12,
-        description: 'Cérémonie officielle de la promotion 2023-2024. Tenue de cérémonie obligatoire.'),
-    _Evenement(id: 'E004', titre: 'Visite Entreprise Sonabel', emoji: '🏢',
-        date: 'Mercredi 30 Avril 2026', heure: '08h00',
-        lieu: 'Siège Sonabel, Ouagadougou', type: 'Pédagogique', prix: 0,
-        placesTotal: 40, placesRestantes: 8,
-        description: 'Visite pédagogique pour les étudiants ST. Transport inclus. Inscription obligatoire.'),
-    _Evenement(id: 'E005', titre: 'Tournoi Sportif Inter-Filières', emoji: '⚽',
-        date: 'Jeudi 01 Mai 2026', heure: '08h00',
-        lieu: 'Terrain universitaire', type: 'Sport', prix: 0,
-        placesTotal: 100, placesRestantes: 55,
-        description: 'Foot, basket, athlétisme. Inscriptions par filière auprès du BDE.'),
+        description: 'Cérémonie officielle de la promotion 2023-2024.'),
   ];
 
   @override
-  void initState() { super.initState(); _tabCtrl = TabController(length: 2, vsync: this); }
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+    _fetchEvents();
+    _fetchMesTickets();
+  }
+
+  Future<void> _fetchEvents() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('events')
+          .select()
+          .order('date', ascending: true);
+      final list = data as List;
+      if (mounted) {
+        setState(() {
+          if (list.isNotEmpty) {
+            _evenements = list.map((e) => _Evenement(
+              id: e['id']?.toString() ?? '',
+              titre: e['titre'] ?? e['name'] ?? 'Événement',
+              emoji: e['emoji'] ?? '🎓',
+              date: e['date']?.toString() ?? '',
+              heure: e['heure'] ?? e['time'] ?? '',
+              lieu: e['lieu'] ?? e['location'] ?? '',
+              type: e['type'] ?? 'Autre',
+              description: e['description'] ?? '',
+              prix: (e['prix'] ?? e['price'] ?? 0) as int,
+              placesTotal: (e['places_total'] ?? 100) as int,
+              placesRestantes: (e['places_restantes'] ?? 100) as int,
+            )).toList();
+          } else {
+            _evenements = List.from(_evenementsFallback);
+          }
+          _loadingEvents = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _evenements = List.from(_evenementsFallback);
+          _loadingEvents = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchMesTickets() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final matricule = prefs.getString('matricule') ?? '';
+      if (matricule.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('tickets')
+          .select('*, events(*)')
+          .eq('matricule', matricule)
+          .order('date_achat', ascending: false);
+      if (mounted) {
+        setState(() {
+          _mesTickets.clear();
+          _mesTickets.addAll(List<Map<String, dynamic>>.from(data as List));
+        });
+      }
+    } catch (_) {}
+  }
+
   @override
   void dispose() { _tabCtrl.dispose(); super.dispose(); }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(children: [
+      body: _loadingEvents && _evenements.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : Column(children: [
 
         // ── Header simple ─────────────────────────────────────────────
         Container(

@@ -1,10 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../models/event.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../theme/app_palette.dart';
@@ -65,23 +62,16 @@ class _HomeTabState extends State<HomeTab> {
 
   Future<void> _fetchAnnonces() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token') ?? '';
-      final response = await http.get(
-        Uri.parse('${ApiService.baseUrl}/annonces'),
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            _annonces = List<Map<String, dynamic>>.from(data['data'] ?? []);
-            _annoncesLoading = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _annoncesLoading = false);
+      final data = await Supabase.instance.client
+          .from('annonces')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(10);
+      if (mounted) {
+        setState(() {
+          _annonces = List<Map<String, dynamic>>.from(data as List);
+          _annoncesLoading = false;
+        });
       }
     } catch (_) {
       if (mounted) setState(() => _annoncesLoading = false);

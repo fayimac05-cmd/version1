@@ -4,6 +4,7 @@ import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../services/supabase_service.dart';
 import 'student_shell.dart';
 import 'splash_screen.dart';
 import 'register_page.dart';
@@ -137,7 +138,32 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // Try backend first
+    // 1. Essayer la connexion directe via Supabase
+    try {
+      final supabaseRes = await SupabaseService().loginEtudiant(
+        matricule: mat,
+        motDePasse: pass,
+      );
+      if (supabaseRes['success'] == true && supabaseRes['user'] != null) {
+        final u = supabaseRes['user'];
+        final profile = StudentProfile(
+          nom: u['nom'] ?? '',
+          prenoms: u['prenoms'] ?? '',
+          matricule: u['matricule'] ?? mat,
+          email: u['email'] ?? '',
+          telephone: u['telephone'] ?? '',
+          filiere: u['filiere'] ?? '',
+          motDePasse: '',
+          domaine: u['domaine'] ?? '',
+          niveau: u['niveau'] ?? '',
+          role: u['role'] ?? 'etudiant',
+        );
+        _goToDashboard(profile);
+        return;
+      }
+    } catch (_) {}
+
+    // 2. Try backend API
     final result = await ApiService.login(matricule: mat, motDePasse: pass);
 
     if (result['success'] == true && result['user'] != null) {
@@ -157,6 +183,8 @@ class _LoginPageState extends State<LoginPage> {
       _goToDashboard(profile);
       return;
     }
+
+    // 3. Fallback to local mock DB
 
     // Le repli sur la base mock locale n'est autorisé QUE si le backend est
     // injoignable (mode démo hors-ligne). Si le backend a répondu mais rejeté

@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
 import '../models/event.dart';
-import '../services/api_service.dart';
+import '../services/supabase_service.dart';
 class CreateEventPage extends StatefulWidget {
   const CreateEventPage({super.key});
 
@@ -179,7 +179,76 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : _submitEvent,
+                  onPressed: () async {
+                    if (_formKey.currentState!.validate()) {
+                      final newEvent = EventModel(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        name: _nameController.text,
+                        location: _locationController.text,
+                        date: _selectedDate ?? DateTime.now(),
+                        time: _selectedTime ?? TimeOfDay.now(),
+                        price: double.tryParse(_priceController.text) ?? 0,
+                        image: _selectedImage,
+                      );
+
+                      // ── Capture des valeurs dépendantes du contexte AVANT les awaits ──
+                      final timeFormatted =
+                          (_selectedTime ?? TimeOfDay.now()).format(context);
+                      final scaffoldMessenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(context);
+
+                      // ── Upload image vers Supabase Storage ──
+                      String? imageUrl;
+                      if (_selectedImage != null && !kIsWeb) {
+                        try {
+                          final fileName =
+                              '${DateTime.now().millisecondsSinceEpoch}_event.jpg';
+                          imageUrl = await SupabaseService()
+                              .uploadEventImage(
+                                  File(_selectedImage!.path), fileName);
+                        } catch (e) {
+                          if (!mounted) return;
+                          scaffoldMessenger.showSnackBar(
+                            SnackBar(
+                                content:
+                                    Text('Erreur upload image : $e')),
+                          );
+                          return;
+                        }
+                      }
+
+                      // ── Insérer l'événement dans Supabase ──
+                      try {
+                        await SupabaseService().createEvent({
+                          'name': _nameController.text,
+                          'location': _locationController.text,
+                          'date': (_selectedDate ?? DateTime.now())
+                              .toIso8601String(),
+                          'time': timeFormatted,
+                          'price':
+                              double.tryParse(_priceController.text) ?? 0,
+                          if (imageUrl != null) 'image_url': imageUrl,
+                        });
+                      } catch (e) {
+                        if (!mounted) return;
+                        scaffoldMessenger.showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  'Erreur création événement : $e')),
+                        );
+                        return;
+                      }
+
+                      if (!mounted) return;
+                      scaffoldMessenger.showSnackBar(
+                        const SnackBar(
+                            content:
+                                Text('Événement créé avec succès !')),
+                      );
+                      navigator.pop(newEvent);
+                    }
+
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryBlue,
                     foregroundColor: Colors.white,

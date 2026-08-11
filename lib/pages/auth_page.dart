@@ -11,85 +11,46 @@ import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Dans _goToDashboard(), avant Navigator.of(context).pushAndRemoveUntil(...)
+// ─── Helpers Supabase ────────────────────────────────────────────────────────
 
-final Map<String, Map<String, dynamic>> _dbEtudiants = {
-  '24IST-O2/1851': {
-    'nom': 'KOURAOGO',
-    'prenoms': 'Ibrahim',
-    'filiere': 'Réseaux Informatiques et Télécom',
-    'domaine': 'Sciences & Technologies',
-    'niveau': 'Licence 2',
-    'role': 'etudiant',
-    'premiereFois': false,
-    'motDePasse': '1851',
-  },
-  '24IST-O2/1234': {
-    'nom': 'TRAORÉ',
-    'prenoms': 'Fatimata',
-    'filiere': 'Licence Informatique',
-    'domaine': 'Sciences & Technologies',
-    'niveau': 'Licence 2',
-    'role': 'etudiant',
-    'premiereFois': true,
-    'motDePasse': '',
-  },
-  '23IST-O2/0987': {
-    'nom': 'SAWADOGO',
-    'prenoms': 'Moussa',
-    'filiere': 'Gestion Comptable et Financière',
-    'domaine': 'Sciences de Gestion',
-    'niveau': 'Licence 3',
-    'role': 'etudiant',
-    'premiereFois': false,
-    'motDePasse': '0987',
-  },
-  '24IST-ADM/001': {
-    'nom': 'COMPAORÉ',
-    'prenoms': 'Idrissa',
-    'filiere': 'Direction Pédagogique',
-    'domaine': '',
-    'role': 'admin',
-    'premiereFois': false,
-    'motDePasse': 'admin123',
-  },
-  '24IST-BDE/001': {
-    'nom': 'OUÉDRAOGO',
-    'prenoms': 'Aïcha',
-    'filiere': 'Bureau des Étudiants',
-    'domaine': '',
-    'role': 'bde',
-    'premiereFois': false,
-    'motDePasse': 'bde123',
-  },
-};
+/// Récupère un étudiant par matricule depuis la table `etudiants`
+Future<Map<String, dynamic>?> _fetchStudent(String mat) async {
+  try {
+    final response = await Supabase.instance.client
+        .from('etudiants')
+        .select()
+        .eq('matricule', mat)
+        .maybeSingle();
+    return response;
+  } catch (_) {
+    return null;
+  }
+}
 
-final Map<String, Map<String, dynamic>> _dbProfs = {
-  'ouedraogo mamadou 70123456': {
-    'nom': 'OUÉDRAOGO',
-    'prenoms': 'Mamadou',
-    'filiere': 'Algorithmes & Réseaux',
-    'domaine': '',
-    'role': 'professeur',
-    'premiereFois': false,
-    'motDePasse': 'prof123',
-  },
-};
+/// Récupère un professeur ou un parent par nom, prénom et téléphone
+Future<Map<String, dynamic>?> _fetchByDetails(
+    String table, String nom, String prenom, String tel) async {
+  try {
+    final response = await Supabase.instance.client
+        .from(table)
+        .select()
+        .eq('nom', nom)
+        .eq('prenoms', prenom)
+        .eq('telephone', tel)
+        .maybeSingle();
+    return response;
+  } catch (_) {
+    return null;
+  }
+}
 
-final Map<String, Map<String, dynamic>> _dbParents = {
-  'kouraogo seydou 65001234': {
-    'nom': 'KOURAOGO',
-    'prenoms': 'Seydou',
-    'filiere': 'Parent d\'élève',
-    'domaine': '',
-    'role': 'parent',
-    'premiereFois': false,
-    'motDePasse': 'parent123',
-  },
-};
+// ─── Enum étapes ─────────────────────────────────────────────────────────────
 
 enum _Etape { saisie, motDePasse, premiereFois }
+
+// ─── Widget principal ─────────────────────────────────────────────────────────
 
 class AuthPage extends StatefulWidget {
   final Etablissement etablissement;
@@ -155,6 +116,8 @@ class _AuthPageState extends State<AuthPage> {
     super.dispose();
   }
 
+  // ─── Navigation ────────────────────────────────────────────────────────────
+
   void _goToDashboard(StudentProfile profile) {
     SocketService().connect(profile.matricule);
     // Utilise le navigateur global : le context de cette page n'existe plus
@@ -194,14 +157,16 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
-  void _verifier() async {
+  // ─── Logique d'authentification ────────────────────────────────────────────
+
+  Future<void> _verifier() async {
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    // ─── CAS ONGLET 0 : MATRICULE (Étudiant, Admin, BDE) ───
     if (_tab == 0) {
+      // Connexion par matricule (Étudiant, Admin, BDE)
       final mat = _matriculeCtrl.text.trim().toUpperCase();
       if (mat.isEmpty) {
         _setError('Veuillez saisir votre matricule.');
@@ -253,40 +218,30 @@ class _AuthPageState extends State<AuthPage> {
       final nom = _nomCtrl.text.trim().toLowerCase();
       final prenom = _prenomCtrl.text.trim().toLowerCase();
       final tel = _numeroCtrl.text.trim();
-
       if (nom.isEmpty || prenom.isEmpty || tel.isEmpty) {
         _setError('Veuillez remplir tous les champs.');
         return;
       }
 
-      // Reconstitution de la clé comme dans tes Maps (ex: "ouedraogo mamadou 70123456")
-      final cleRecherche = '$nom $prenom $tel';
-      Map<String, dynamic>? user;
-      String? roleDetecte;
-
-      if (_dbProfs.containsKey(cleRecherche)) {
-        user = _dbProfs[cleRecherche];
-        roleDetecte = 'professeur';
-      } else if (_dbParents.containsKey(cleRecherche)) {
-        user = _dbParents[cleRecherche];
-        roleDetecte = 'parent';
-      }
-
-      if (user == null) {
+      // Heuristique : table profs si le numéro commence par 7, sinon parents
+      final table = tel.startsWith('7') ? 'profs' : 'parents';
+      final data = await _fetchByDetails(table, nom, prenom, tel);
+      if (data == null) {
         _setError('Identifiants non reconnus.\nVérifiez vos informations.');
         return;
       }
-
       setState(() {
-        _userTrouve = user;
-        _cleTrouvee = roleDetecte == 'professeur' ? 'PROF-$tel' : 'PARENT-$tel';
+        _userTrouve = data;
+        _cleTrouvee = table == 'profs' ? 'PROF-$tel' : 'PARENT-$tel';
         _loading = false;
-        _etape = user!['premiereFois'] == true ? _Etape.premiereFois : _Etape.motDePasse;
+        _etape = data['premiere_fois'] == true
+            ? _Etape.premiereFois
+            : _Etape.motDePasse;
       });
     }
   }
 
-  void _connecter() async {
+  Future<void> _connecter() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -304,25 +259,23 @@ class _AuthPageState extends State<AuthPage> {
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
-      _goToDashboard(
-        StudentProfile(
-          nom: user['nom'] ?? '',
-          prenoms: user['prenoms'] ?? '',
-          matricule: user['matricule'] ?? _cleTrouvee!,
-          email: user['email'] ?? '',
-          telephone: user['tel'] ?? '',
-          filiere: (user['filiere_id'] ?? '').toString(),
-          motDePasse: '',
-          domaine: user['domaine'] ?? '',
-          role: user['role'] ?? 'etudiant',
-        ),
-      );
+      _goToDashboard(StudentProfile(
+        nom: user['nom'] ?? '',
+        prenoms: user['prenoms'] ?? '',
+        matricule: user['matricule'] ?? _cleTrouvee!,
+        email: user['email'] ?? '',
+        telephone: user['tel'] ?? '',
+        filiere: (user['filiere_id'] ?? '').toString(),
+        motDePasse: '',
+        domaine: user['domaine'] ?? '',
+        role: user['role'] ?? 'etudiant',
+      ));
     } else {
       _setError(result['error'] ?? 'Mot de passe incorrect.');
     }
   }
 
-  void _creerCompte() async {
+  Future<void> _creerCompte() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -375,87 +328,81 @@ class _AuthPageState extends State<AuthPage> {
       matricule: _cleTrouvee!,
       email: _emailCtrl.text,
       telephone: '',
-      filiere: u['filiere'],
+      filiere: u['filiere'] ?? '',
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
       role: u['role'] ?? 'etudiant',
     );
   }
 
-  void _demoBrahim() => _goToDashboard(
-    const StudentProfile(
-      nom: 'KOURAOGO',
-      prenoms: 'Ibrahim',
-      matricule: '24IST-O2/1851',
-      email: 'ibrahim.kouraogo@ist.bf',
-      telephone: '',
-      filiere: 'Réseaux Informatiques et Télécom',
-      motDePasse: '1851',
-      domaine: 'Sciences & Technologies',
-      role: 'etudiant',
-    ),
-  );
+  // ─── Comptes démo ──────────────────────────────────────────────────────────
 
-  void _demoBDE() => _goToDashboard(
-    const StudentProfile(
-      nom: 'OUÉDRAOGO',
-      prenoms: 'Aïcha',
-      matricule: '24IST-BDE/001',
-      email: 'bde@ist.bf',
-      telephone: '',
-      filiere: 'Bureau des Étudiants',
-      motDePasse: 'bde123',
-      domaine: '',
-      role: 'bde',
-    ),
-  );
+  void _demoBrahim() => _goToDashboard(const StudentProfile(
+        nom: 'KOURAOGO',
+        prenoms: 'Ibrahim',
+        matricule: '24IST-O2/1851',
+        email: 'ibrahim.kouraogo@ist.bf',
+        telephone: '',
+        filiere: 'Réseaux Informatiques et Télécom',
+        motDePasse: '1851',
+        domaine: 'Sciences & Technologies',
+        role: 'etudiant',
+      ));
 
-  void _demoAdmin() => _goToDashboard(
-    const StudentProfile(
-      nom: 'COMPAORÉ',
-      prenoms: 'Idrissa',
-      matricule: '24IST-ADM/001',
-      email: 'admin@ist.bf',
-      telephone: '',
-      filiere: 'Direction Pédagogique',
-      motDePasse: 'admin123',
-      domaine: '',
-      role: 'admin',
-    ),
-  );
+  void _demoBDE() => _goToDashboard(const StudentProfile(
+        nom: 'OUÉDRAOGO',
+        prenoms: 'Aïcha',
+        matricule: '24IST-BDE/001',
+        email: 'bde@ist.bf',
+        telephone: '',
+        filiere: 'Bureau des Étudiants',
+        motDePasse: 'bde123',
+        domaine: '',
+        role: 'bde',
+      ));
 
-  void _demoProf() => _goToDashboard(
-    const StudentProfile(
-      nom: 'OUEDRAOGO',
-      prenoms: 'Mamadou',
-      matricule: 'PROF-70123456',
-      email: 'mamadou.ouedraogo@ist.bf',
-      telephone: '70123456',
-      filiere: 'Algorithmes & Reseaux',
-      motDePasse: 'prof123',
-      domaine: 'Sciences & Technologies',
-      role: 'professeur',
-    ),
-  );
+  void _demoAdmin() => _goToDashboard(const StudentProfile(
+        nom: 'COMPAORÉ',
+        prenoms: 'Idrissa',
+        matricule: '24IST-ADM/001',
+        email: 'admin@ist.bf',
+        telephone: '',
+        filiere: 'Direction Pédagogique',
+        motDePasse: 'admin123',
+        domaine: '',
+        role: 'admin',
+      ));
 
-  void _demoParent() => _goToDashboard(
-    const StudentProfile(
-      nom: 'KOURAOGO',
-      prenoms: 'Seydou',
-      matricule: 'PARENT-65001234',
-      email: 'parent@ist.bf',
-      telephone: '65001234',
-      filiere: 'Parent d\'élève',
-      motDePasse: 'parent123',
-      domaine: '',
-      role: 'parent',
-    ),
-  );
+  void _demoProf() => _goToDashboard(const StudentProfile(
+        nom: 'OUEDRAOGO',
+        prenoms: 'Mamadou',
+        matricule: 'PROF-70123456',
+        email: 'mamadou.ouedraogo@ist.bf',
+        telephone: '70123456',
+        filiere: 'Algorithmes & Reseaux',
+        motDePasse: 'prof123',
+        domaine: 'Sciences & Technologies',
+        role: 'professeur',
+      ));
+
+  void _demoParent() => _goToDashboard(const StudentProfile(
+        nom: 'KOURAOGO',
+        prenoms: 'Seydou',
+        matricule: 'PARENT-65001234',
+        email: 'parent@ist.bf',
+        telephone: '65001234',
+        filiere: "Parent d'élève",
+        motDePasse: 'parent123',
+        domaine: '',
+        role: 'parent',
+      ));
+
+  // ─── Utilitaires ───────────────────────────────────────────────────────────
 
   void _setError(String msg) => setState(() {
-    _error = msg;
-    _loading = false;
-  });
+        _error = msg;
+        _loading = false;
+      });
 
   void _recommencer() => setState(() {
     _etape = _Etape.saisie;
@@ -478,22 +425,23 @@ class _AuthPageState extends State<AuthPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF8FAFC),
-    body: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: _buildEtape(),
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: _buildEtape(),
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 
   Widget _buildEtape() {
     switch (_etape) {
@@ -505,6 +453,8 @@ class _AuthPageState extends State<AuthPage> {
         return _buildPremiereFois();
     }
   }
+
+  // ─── Écran 1 : Saisie identifiants ─────────────────────────────────────────
 
   Widget _buildSaisie() {
     final e = widget.etablissement;
@@ -625,7 +575,8 @@ class _AuthPageState extends State<AuthPage> {
                 decoration: BoxDecoration(
                   color: AppPalette.lightBlue,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppPalette.blue.withValues(alpha:0.2)),
+                  border:
+                      Border.all(color: AppPalette.blue.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   e.campus.isNotEmpty
@@ -739,7 +690,8 @@ class _AuthPageState extends State<AuthPage> {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Text(
                 'ou',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                style:
+                    TextStyle(fontSize: 13, color: Colors.grey.shade400),
               ),
             ),
             const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
@@ -782,7 +734,7 @@ class _AuthPageState extends State<AuthPage> {
           _demoBtn(
             '👨‍👩‍👦',
             'Accès Démo — Parent',
-            'KOURAOGO Seydou · Parent d\'Ibrahim',
+            "KOURAOGO Seydou · Parent d'Ibrahim",
             const Color(0xFFD97706),
             _demoParent,
           ),
@@ -794,230 +746,244 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
+  // ─── Écran 2 : Mot de passe ────────────────────────────────────────────────
+
+  Widget _buildMotDePasse() => Column(
+        key: const ValueKey('mdp'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _boutonRetour(_recommencer),
+          const SizedBox(height: 24),
+          _carteUser(_userTrouve!),
+          const SizedBox(height: 28),
+          const Text(
+            'Saisissez votre mot de passe',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Entrez votre mot de passe pour accéder à votre espace.',
+            style: TextStyle(
+                fontSize: 15, color: Color(0xFF64748B), height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          _lbl('Mot de passe'),
+          _champPass(
+            _passCtrl,
+            'Votre mot de passe',
+            _obscure,
+            () => setState(() => _obscure = !_obscure),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _motDePasseOublie,
+              child: const Text(
+                'Mot de passe oublié ?',
+                style: TextStyle(color: AppPalette.blue, fontSize: 13),
+              ),
+            ),
+          ),
+          if (_error != null) ...[const SizedBox(height: 8), _erreur(_error!)],
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _loading ? null : _connecter,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.blue,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFE2E8F0),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+              child: _loading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Text(
+                      'SE CONNECTER',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: TextButton(
+              onPressed: _recommencer,
+              child: const Text(
+                "Ce n'est pas moi",
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      );
+
+  // ─── Écran 3 : Première connexion ──────────────────────────────────────────
+
+  Widget _buildPremiereFois() => Column(
+        key: const ValueKey('premier'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _boutonRetour(_recommencer),
+          const SizedBox(height: 24),
+          _carteUser(_userTrouve!),
+          const SizedBox(height: 28),
+          const Text(
+            'Créez votre compte',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Première connexion — Définissez votre email et mot de passe.',
+            style: TextStyle(
+                fontSize: 15, color: Color(0xFF64748B), height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          _lbl('Adresse email'),
+          _champ(
+            _emailCtrl,
+            'votre@email.com',
+            Icons.email_outlined,
+            TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 18),
+          _lbl('Choisissez un mot de passe'),
+          _champPass(
+            _newPassCtrl,
+            'Minimum 4 caractères',
+            _obscure2,
+            () => setState(() => _obscure2 = !_obscure2),
+          ),
+          const SizedBox(height: 18),
+          _lbl('Confirmer le mot de passe'),
+          _champPass(
+            _confPassCtrl,
+            'Répétez votre mot de passe',
+            _obscure3,
+            () => setState(() => _obscure3 = !_obscure3),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            _erreur(_error!)
+          ],
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: _loading ? null : _creerCompte,
+              icon: _loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Icon(Icons.check_circle_outline, size: 22),
+              label: Text(
+                _loading ? 'Création...' : 'CRÉER MON COMPTE',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF15803D),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFE2E8F0),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: TextButton(
+              onPressed: _recommencer,
+              child: const Text(
+                "Ce n'est pas moi",
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      );
+
+  // ─── Widgets réutilisables ─────────────────────────────────────────────────
+
   Widget _demoBtn(
     String emoji,
     String label,
     String sub,
     Color color,
     VoidCallback onTap,
-  ) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      SizedBox(
-        width: double.infinity,
-        height: 54,
-        child: OutlinedButton.icon(
-          onPressed: onTap,
-          icon: Text(emoji, style: const TextStyle(fontSize: 20)),
-          label: Text(
-            label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: color,
-            side: BorderSide(color: color, width: 2),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 4),
-      Padding(
-        padding: const EdgeInsets.only(left: 4),
-        child: Text(
-          sub,
-          style: const TextStyle(
-            fontSize: 11,
-            color: Color(0xFF64748B),
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      ),
-    ],
-  );
-
-  Widget _buildMotDePasse() => Column(
-    key: const ValueKey('mdp'),
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _boutonRetour(_recommencer),
-      const SizedBox(height: 24),
-      _carteUser(_userTrouve!),
-      const SizedBox(height: 28),
-      const Text(
-        'Saisissez votre mot de passe',
-        style: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF0F172A),
-          letterSpacing: -0.3,
-        ),
-      ),
-      const SizedBox(height: 8),
-      const Text(
-        'Entrez votre mot de passe pour accéder à votre espace.',
-        style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
-      ),
-      const SizedBox(height: 24),
-      _lbl('Mot de passe'),
-      _champPass(
-        _passCtrl,
-        'Votre mot de passe',
-        _obscure,
-        () => setState(() => _obscure = !_obscure),
-      ),
-      Align(
-        alignment: Alignment.centerRight,
-        child: TextButton(
-          onPressed: _motDePasseOublie,
-          child: const Text(
-            'Mot de passe oublié ?',
-            style: TextStyle(color: AppPalette.blue, fontSize: 13),
-          ),
-        ),
-      ),
-      if (_error != null) ...[const SizedBox(height: 8), _erreur(_error!)],
-      const SizedBox(height: 20),
-      SizedBox(
-        width: double.infinity,
-        height: 54,
-        child: ElevatedButton(
-          onPressed: _loading ? null : _connecter,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppPalette.blue,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFFE2E8F0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            elevation: 0,
-          ),
-          child: _loading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : const Text(
-                  'SE CONNECTER',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
+  ) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: OutlinedButton.icon(
+              onPressed: onTap,
+              icon: Text(emoji, style: const TextStyle(fontSize: 20)),
+              label: Text(
+                label,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: color,
+                side: BorderSide(color: color, width: 2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
-        ),
-      ),
-      const SizedBox(height: 16),
-      Center(
-        child: TextButton(
-          onPressed: _recommencer,
-          child: const Text(
-            'Ce n\'est pas moi',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
-          ),
-        ),
-      ),
-    ],
-  );
-
-  Widget _buildPremiereFois() => Column(
-    key: const ValueKey('premier'),
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _boutonRetour(_recommencer),
-      const SizedBox(height: 24),
-      _carteUser(_userTrouve!),
-      const SizedBox(height: 28),
-      const Text(
-        'Créez votre compte',
-        style: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF0F172A),
-          letterSpacing: -0.3,
-        ),
-      ),
-      const SizedBox(height: 8),
-      const Text(
-        'Première connexion — Définissez votre email et mot de passe.',
-        style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
-      ),
-      const SizedBox(height: 24),
-      _lbl('Adresse email'),
-      _champ(
-        _emailCtrl,
-        'votre@email.com',
-        Icons.email_outlined,
-        TextInputType.emailAddress,
-      ),
-      const SizedBox(height: 18),
-      _lbl('Choisissez un mot de passe'),
-      _champPass(
-        _newPassCtrl,
-        'Minimum 4 caractères',
-        _obscure2,
-        () => setState(() => _obscure2 = !_obscure2),
-      ),
-      const SizedBox(height: 18),
-      _lbl('Confirmer le mot de passe'),
-      _champPass(
-        _confPassCtrl,
-        'Répétez votre mot de passe',
-        _obscure3,
-        () => setState(() => _obscure3 = !_obscure3),
-      ),
-      if (_error != null) ...[const SizedBox(height: 14), _erreur(_error!)],
-      const SizedBox(height: 24),
-      SizedBox(
-        width: double.infinity,
-        height: 54,
-        child: ElevatedButton.icon(
-          onPressed: _loading ? null : _creerCompte,
-          icon: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : const Icon(Icons.check_circle_outline, size: 22),
-          label: Text(
-            _loading ? 'Création...' : 'CRÉER MON COMPTE',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF15803D),
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFFE2E8F0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              ),
             ),
-            elevation: 0,
           ),
-        ),
-      ),
-      const SizedBox(height: 16),
-      Center(
-        child: TextButton(
-          onPressed: _recommencer,
-          child: const Text(
-            'Ce n\'est pas moi',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              sub,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF64748B),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
           ),
-        ),
-      ),
-    ],
-  );
+        ],
+      );
 
   Widget _carteUser(Map<String, dynamic> u) {
-    final role = u['role'] as String;
+    final role = u['role'] as String? ?? 'etudiant';
     final domaine = (u['domaine'] ?? '') as String;
     Color rc;
     String rl;
@@ -1050,14 +1016,14 @@ class _AuthPageState extends State<AuthPage> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [rc, rc.withValues(alpha:0.78)],
+          colors: [rc, rc.withValues(alpha: 0.78)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: rc.withValues(alpha:0.3),
+            color: rc.withValues(alpha: 0.3),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -1070,11 +1036,11 @@ class _AuthPageState extends State<AuthPage> {
             height: 58,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha:0.2),
+              color: Colors.white.withValues(alpha: 0.2),
             ),
             child: Center(
               child: Text(
-                '${u['prenoms'].toString()[0]}${u['nom'].toString()[0]}',
+                '${(u['prenoms'] ?? '?').toString()[0]}${(u['nom'] ?? '?').toString()[0]}',
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -1089,7 +1055,7 @@ class _AuthPageState extends State<AuthPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${u['prenoms']} ${u['nom']}',
+                  '${u['prenoms'] ?? ''} ${u['nom'] ?? ''}',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1100,11 +1066,12 @@ class _AuthPageState extends State<AuthPage> {
                 const SizedBox(height: 4),
                 Text(
                   _cleTrouvee ?? '',
-                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  style:
+                      const TextStyle(fontSize: 12, color: Colors.white70),
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  u['filiere'],
+                  u['filiere'] ?? '',
                   style: const TextStyle(
                     fontSize: 13,
                     color: Colors.white,
@@ -1119,7 +1086,7 @@ class _AuthPageState extends State<AuthPage> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha:0.22),
+                      color: Colors.white.withValues(alpha: 0.22),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -1141,7 +1108,7 @@ class _AuthPageState extends State<AuthPage> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha:0.18),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -1153,7 +1120,7 @@ class _AuthPageState extends State<AuthPage> {
                         ),
                       ),
                     ),
-                    if (u['premiereFois'] == true) ...[
+                    if (u['premiere_fois'] == true) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1161,7 +1128,7 @@ class _AuthPageState extends State<AuthPage> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha:0.3),
+                          color: Colors.orange.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text(
@@ -1179,29 +1146,30 @@ class _AuthPageState extends State<AuthPage> {
               ],
             ),
           ),
-          const Icon(Icons.check_circle_rounded, color: Colors.white, size: 28),
+          const Icon(Icons.check_circle_rounded,
+              color: Colors.white, size: 28),
         ],
       ),
     );
   }
 
   Widget _boutonRetour(VoidCallback onTap) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: const Icon(
-        Icons.arrow_back_ios_new,
-        size: 16,
-        color: Color(0xFF0F172A),
-      ),
-    ),
-  );
+        onTap: onTap,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: const Icon(
+            Icons.arrow_back_ios_new,
+            size: 16,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+      );
 
   Widget _tabBtn(int index, String label, IconData icon) {
     final active = _tab == index;
@@ -1224,7 +1192,7 @@ class _AuthPageState extends State<AuthPage> {
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha:0.06),
+                      color: Colors.black.withValues(alpha: 0.06),
                       blurRadius: 4,
                       offset: const Offset(0, 1),
                     ),
@@ -1245,7 +1213,8 @@ class _AuthPageState extends State<AuthPage> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: active ? AppPalette.blue : const Color(0xFF64748B),
+                  color:
+                      active ? AppPalette.blue : const Color(0xFF64748B),
                 ),
               ),
             ],
@@ -1256,210 +1225,227 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Widget _lbl(String text) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Text(
-      text,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF0F172A),
-      ),
-    ),
-  );
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+      );
 
   Widget _champ(
     TextEditingController ctrl,
     String hint,
     IconData ico,
     TextInputType type,
-  ) => Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha:0.03),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
+  ) =>
+      Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-      ],
-    ),
-    child: TextField(
-      controller: ctrl,
-      keyboardType: type,
-      onChanged: (_) => setState(() => _error = null),
-      style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
-        prefixIcon: Icon(ico, color: const Color(0xFF64748B), size: 22),
-        border: InputBorder.none,
-        contentPadding: const EdgeInsets.symmetric(vertical: 18),
-      ),
-    ),
-  );
+        child: TextField(
+          controller: ctrl,
+          keyboardType: type,
+          onChanged: (_) => setState(() => _error = null),
+          style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle:
+                const TextStyle(color: Color(0xFF64748B), fontSize: 15),
+            prefixIcon:
+                Icon(ico, color: const Color(0xFF64748B), size: 22),
+            border: InputBorder.none,
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 18),
+          ),
+        ),
+      );
 
   Widget _champPass(
     TextEditingController ctrl,
     String hint,
     bool obscure,
     VoidCallback toggle,
-  ) => Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha:0.03),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
+  ) =>
+      Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-      ],
-    ),
-    child: TextField(
-      controller: ctrl,
-      obscureText: obscure,
-      onChanged: (_) => setState(() => _error = null),
-      style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 15),
-        prefixIcon: const Icon(
-          Icons.lock_outline,
-          color: Color(0xFF64748B),
-          size: 22,
-        ),
-        suffixIcon: IconButton(
-          icon: Icon(
-            obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-            color: const Color(0xFF64748B),
-            size: 22,
+        child: TextField(
+          controller: ctrl,
+          obscureText: obscure,
+          onChanged: (_) => setState(() => _error = null),
+          style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle:
+                const TextStyle(color: Color(0xFF64748B), fontSize: 15),
+            prefixIcon: const Icon(
+              Icons.lock_outline,
+              color: Color(0xFF64748B),
+              size: 22,
+            ),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscure
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: const Color(0xFF64748B),
+                size: 22,
+              ),
+              onPressed: toggle,
+            ),
+            border: InputBorder.none,
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 18),
           ),
-          onPressed: toggle,
         ),
-        border: InputBorder.none,
-        contentPadding: const EdgeInsets.symmetric(vertical: 18),
-      ),
-    ),
-  );
+      );
 
   Widget _erreur(String msg) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFEBEE),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFEF9A9A)),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(Icons.error_outline, color: Color(0xFFC62828), size: 20),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            msg,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFFC62828),
-              height: 1.4,
-            ),
-          ),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFEBEE),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFEF9A9A)),
         ),
-      ],
-    ),
-  );
-
-  Widget _infoMatricule(Etablissement e) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppPalette.lightBlue,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppPalette.blue.withValues(alpha:0.2)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.info_outline, color: AppPalette.blue, size: 16),
-            const SizedBox(width: 8),
-            Text(
-              'Format du matricule ${e.abreviation}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: AppPalette.blue,
+            const Icon(Icons.error_outline,
+                color: Color(0xFFC62828), size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                msg,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFFC62828),
+                  height: 1.4,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        if (e.abreviation == 'IST') ...[
-          _fmtLigne('24', 'Année d\'entrée (2024)'),
-          _fmtLigne('IST', 'Institut Supérieur de Technologies'),
-          _fmtLigne('-O2/', 'Campus Ouaga 2000'),
-          _fmtLigne('1851', 'Numéro d\'étudiant'),
-          const SizedBox(height: 6),
-          const Text(
-            'Exemple : 24IST-O2/1851',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: AppPalette.blue,
+      );
+
+  Widget _infoMatricule(Etablissement e) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppPalette.lightBlue,
+          borderRadius: BorderRadius.circular(12),
+          border:
+              Border.all(color: AppPalette.blue.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline,
+                    color: AppPalette.blue, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  'Format du matricule ${e.abreviation}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppPalette.blue,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ] else
-          Text(
-            'Consultez votre carte d\'étudiant ${e.abreviation}.',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-          ),
-      ],
-    ),
-  );
+            const SizedBox(height: 10),
+            if (e.abreviation == 'IST') ...[
+              _fmtLigne('24', "Année d'entrée (2024)"),
+              _fmtLigne('IST', 'Institut Supérieur de Technologies'),
+              _fmtLigne('-O2/', 'Campus Ouaga 2000'),
+              _fmtLigne('1851', "Numéro d'étudiant"),
+              const SizedBox(height: 6),
+              const Text(
+                'Exemple : 24IST-O2/1851',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppPalette.blue,
+                ),
+              ),
+            ] else
+              Text(
+                "Consultez votre carte d'étudiant ${e.abreviation}.",
+                style: const TextStyle(
+                    fontSize: 13, color: Color(0xFF64748B)),
+              ),
+          ],
+        ),
+      );
 
   Widget _fmtLigne(String code, String desc) => Padding(
-    padding: const EdgeInsets.only(bottom: 4),
-    child: Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppPalette.blue.withValues(alpha:0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            code,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: AppPalette.blue,
-              fontFamily: 'monospace',
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppPalette.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                code,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppPalette.blue,
+                  fontFamily: 'monospace',
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            Text(
+              desc,
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        Text(
-          desc,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-        ),
-      ],
-    ),
-  );
+      );
 
   void _motDePasseOublie() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.lock_reset, color: AppPalette.blue),
             SizedBox(width: 10),
             Text(
               'Mot de passe oublié',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -1492,7 +1478,8 @@ class _AuthPageState extends State<AuthPage> {
                     size: 20,
                   ),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  contentPadding:
+                      EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             ),
@@ -1511,7 +1498,8 @@ class _AuthPageState extends State<AuthPage> {
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Lien envoyé ! Vérifiez votre email.'),
+                  content:
+                      Text('Lien envoyé ! Vérifiez votre email.'),
                   backgroundColor: Color(0xFF15803D),
                 ),
               );
@@ -1531,4 +1519,3 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 }
-   

@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import '../services/api_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_palette.dart';
 
 /// Paiement de la scolarité par mobile money (Orange Money, Wave, Moov, MTN).
@@ -16,19 +13,26 @@ class PaiementScolariteScreen extends StatefulWidget {
 }
 
 class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
-  List<dynamic> _frais = [];
-  List<dynamic> _historique = [];
-  Map<String, dynamic>? _etudiant;
-  bool _loading = true;
-  bool _offline = false;
-  String? _error;
-  int _currentTab = 0;
+  List<Map<String, dynamic>> frais = [
+    {'libelle': 'Frais d\'inscription', 'montant': 50000, 'statut': 'non_payé'},
+    {'libelle': 'Mensualité Février', 'montant': 25000, 'statut': 'non_payé'},
+  ];
 
-  static const _operateurs = [
-    {'value': 'orange_money', 'label': 'Orange Money', 'color': Color(0xFFFF6B00)},
-    {'value': 'wave', 'label': 'Wave', 'color': Color(0xFF00B8D9)},
-    {'value': 'moov_money', 'label': 'Moov Money', 'color': Color(0xFF0066B3)},
-    {'value': 'mtn_momo', 'label': 'MTN MoMo', 'color': Color(0xFFFFCC00)},
+  List<Map<String, dynamic>> historique = [
+    {
+      'libelle': 'Mensualité Janvier',
+      'montant': 25000,
+      'date': '12/01/2026',
+      'ref': 'SH-982341',
+      'mode': 'Orange Money'
+    },
+    {
+      'libelle': 'Frais de Dossier',
+      'montant': 10000,
+      'date': '05/01/2026',
+      'ref': 'SH-774102',
+      'mode': 'Orange Money'
+    },
   ];
 
   @override
@@ -61,6 +65,54 @@ class _PaiementScolariteScreenState extends State<PaiementScolariteScreen> {
     final op = _operateurs.where((o) => o['value'] == value);
     return op.isNotEmpty ? op.first['label'] as String : (value ?? '');
   }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchFrais();
+    _fetchHistorique();
+  }
+
+  Future<void> _fetchFrais() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final matricule = prefs.getString('matricule') ?? '';
+      if (matricule.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('frais_scolarite')
+          .select()
+          .eq('matricule', matricule)
+          .eq('statut', 'non_payé');
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() => frais = List<Map<String, dynamic>>.from(list));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchHistorique() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final matricule = prefs.getString('matricule') ?? '';
+      if (matricule.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('paiements')
+          .select()
+          .eq('matricule', matricule)
+          .order('date_paiement', ascending: false);
+      final list = data as List;
+      if (list.isNotEmpty && mounted) {
+        setState(() => historique = list.map((e) => {
+          'libelle': e['libelle'] ?? '',
+          'montant': e['montant'] ?? 0,
+          'date': e['date_paiement']?.toString().substring(0, 10) ?? '',
+          'ref': e['reference'] ?? '',
+          'mode': e['mode'] ?? 'Orange Money',
+        } as Map<String, dynamic>).toList());
+      }
+    } catch (_) {}
+  }
+
 
   void _payer(Map<String, dynamic> f) {
     final telCtrl = TextEditingController();
