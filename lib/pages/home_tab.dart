@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:intl/intl.dart';
 import '../models/student_profile.dart';
+import '../models/event.dart';
 import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 import 'event_registration_page.dart';

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
 import '../models/event.dart';
 import '../services/supabase_service.dart';
+import '../services/api_service.dart';
 class CreateEventPage extends StatefulWidget {
   const CreateEventPage({super.key});
 

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
+const supabase = require('../config/supabase');
 
 const genToken = (user) => jwt.sign(
   { id: user.id, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id },
@@ -11,16 +12,32 @@ const genToken = (user) => jwt.sign(
 const login = async (req, res) => {
   try {
     const { matricule, nom, tel, motDePasse } = req.body;
-    let user;
+    let user = null;
 
-    if (matricule) {
-      const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.matricule = $1', [matricule.trim().toUpperCase()]);
-      user = r.rows[0];
-    } else if (nom && tel) {
-      const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE LOWER(u.nom) = LOWER($1) AND u.tel = $2', [nom.trim(), tel.trim()]);
-      user = r.rows[0];
-    } else {
-      return res.status(400).json({ message: 'Identifiants manquants.' });
+    try {
+      if (matricule) {
+        const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.matricule = $1', [matricule.trim().toUpperCase()]);
+        user = r.rows[0];
+      } else if (nom && tel) {
+        const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE LOWER(u.nom) = LOWER($1) AND u.tel = $2', [nom.trim(), tel.trim()]);
+        user = r.rows[0];
+      } else {
+        return res.status(400).json({ message: 'Identifiants manquants.' });
+      }
+    } catch (dbErr) {
+      console.warn('Direct PG failed in login, fallback to Supabase SDK:', dbErr.message);
+      if (supabase && typeof supabase.from === 'function') {
+        let query = supabase.from('users').select('*');
+        if (matricule) {
+          query = query.eq('matricule', matricule.trim().toUpperCase());
+        } else if (nom && tel) {
+          query = query.ilike('nom', nom.trim()).eq('tel', tel.trim());
+        }
+        const { data, error } = await query.maybeSingle();
+        if (!error && data) {
+          user = data;
+        }
+      }
     }
 
     if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
@@ -28,16 +45,15 @@ const login = async (req, res) => {
     if (user.statut === 'renvoye')  return res.status(403).json({ message: 'Compte desactive.' });
 
     if (!user.mot_de_passe) {
-      return res.status(200).json({ premierLogin: true, userId: user.id, message: 'Premiere connexion.' });
+      return res.status(400).json({ message: 'Premiere connexion : veuillez d\'abord definir un mot de passe.' });
     }
 
-    const isValid = await bcrypt.compare(motDePasse, user.mot_de_passe);
-    if (!isValid) return res.status(401).json({ message: 'Mot de passe incorrect.' });
+    const match = await bcrypt.compare(motDePasse, user.mot_de_passe);
+    if (!match) return res.status(401).json({ message: 'Mot de passe incorrect.' });
 
-    return res.status(200).json({
-      token: genToken(user),
-      user: { id: user.id, nom: user.nom, prenoms: user.prenoms, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id, statut: user.statut },
-    });
+    const token = genToken(user);
+    const { mot_de_passe, ...safeUser } = user;
+    return res.status(200).json({ token, user: safeUser });
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ message: 'Erreur serveur.' });
@@ -49,20 +65,36 @@ const setupPassword = async (req, res) => {
     const { userId, email, motDePasse } = req.body;
     if (!userId || !motDePasse) return res.status(400).json({ message: 'Donnees manquantes.' });
 
-    // Only allow setting a password for accounts that have never set one (first login)
-    const check = await pool.query('SELECT id, mot_de_passe FROM users WHERE id = $1', [userId]);
-    if (!check.rows[0]) return res.status(404).json({ message: 'Utilisateur introuvable.' });
-    if (check.rows[0].mot_de_passe) {
+    let checkUser = null;
+    try {
+      const check = await pool.query('SELECT id, mot_de_passe FROM users WHERE id = $1', [userId]);
+      checkUser = check.rows[0];
+    } catch (dbErr) {
+      console.warn('Direct PG failed in setupPassword, fallback to Supabase SDK:', dbErr.message);
+      if (supabase && typeof supabase.from === 'function') {
+        const { data } = await supabase.from('users').select('id, mot_de_passe').eq('id', userId).maybeSingle();
+        checkUser = data;
+      }
+    }
+
+    if (!checkUser) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    if (checkUser.mot_de_passe) {
       return res.status(403).json({ message: 'Mot de passe deja defini. Utilisez /change-password.' });
     }
 
     const hashed = await bcrypt.hash(motDePasse, 10);
-    await pool.query('UPDATE users SET mot_de_passe = $1, email = $2 WHERE id = $3', [hashed, email || null, userId]);
-    const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1', [userId]);
-    const user = r.rows[0];
-    return res.status(200).json({ token: genToken(user), user: { id: user.id, nom: user.nom, prenoms: user.prenoms, role: user.role } });
+    
+    try {
+      await pool.query('UPDATE users SET mot_de_passe = $1, email = $2 WHERE id = $3', [hashed, email || null, userId]);
+    } catch (dbErr) {
+      if (supabase && typeof supabase.from === 'function') {
+        await supabase.from('users').update({ mot_de_passe: hashed, email: email || null }).eq('id', userId);
+      }
+    }
+
+    return res.status(200).json({ message: 'Mot de passe defini avec succes.' });
   } catch (err) {
-    console.error('Setup error:', err);
+    console.error('SetupPassword error:', err);
     return res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
@@ -75,18 +107,45 @@ const lookup = async (req, res) => {
     const matricule = (req.query.matricule || '').trim().toUpperCase();
     if (!matricule) return res.status(400).json({ found: false, message: 'Matricule requis.' });
 
-    const r = await pool.query(
-      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.statut,
-              u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
-              COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
-              COALESCE(e.domaine, u.domaine)        AS domaine,
-              COALESCE(e.niveau, u.niveau)          AS niveau
-       FROM users u
-       LEFT JOIN etudiants e ON u.id = e.user_id
-       WHERE u.matricule = $1`,
-      [matricule]
-    );
-    const row = r.rows[0];
+    let row = null;
+    try {
+      const r = await pool.query(
+        `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.statut,
+                u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
+                COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
+                COALESCE(e.domaine, u.domaine)        AS domaine,
+                COALESCE(e.niveau, u.niveau)          AS niveau
+         FROM users u
+         LEFT JOIN etudiants e ON u.id = e.user_id
+         WHERE u.matricule = $1`,
+        [matricule]
+      );
+      row = r.rows[0];
+    } catch (dbErr) {
+      console.warn('Direct PG failed in lookup, fallback to Supabase SDK:', dbErr.message);
+      if (supabase && typeof supabase.from === 'function') {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, nom, prenoms, matricule, role, statut, mot_de_passe, filiere_nom, domaine, niveau')
+          .eq('matricule', matricule)
+          .maybeSingle();
+        if (!error && data) {
+          row = {
+            id: data.id,
+            nom: data.nom,
+            prenoms: data.prenoms,
+            matricule: data.matricule,
+            role: data.role,
+            statut: data.statut,
+            a_mot_de_passe: !!data.mot_de_passe,
+            filiere_nom: data.filiere_nom,
+            domaine: data.domaine,
+            niveau: data.niveau,
+          };
+        }
+      }
+    }
+
     if (!row) return res.status(404).json({ found: false, message: 'Matricule non reconnu.' });
     if (row.statut === 'suspendu' || row.statut === 'renvoye') {
       return res.status(403).json({ found: false, message: 'Compte désactivé. Contactez l\'administration.' });

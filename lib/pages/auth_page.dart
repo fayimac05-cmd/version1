@@ -63,6 +63,7 @@ class AuthPage extends StatefulWidget {
 }
 
 class _AuthPageState extends State<AuthPage> {
+  static const Map<String, Map<String, dynamic>> _dbEtudiants = {};
   int _tab = 0;
   _Etape _etape = _Etape.saisie;
 
