@@ -38,6 +38,7 @@ dependencies:
   # Backend & Configuration
   supabase_flutter: ^2.5.1
   flutter_dotenv: ^5.0.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
