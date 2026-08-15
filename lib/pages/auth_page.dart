@@ -15,19 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─── Helpers Supabase ────────────────────────────────────────────────────────
 
-/// Récupère un étudiant par matricule depuis la table `etudiants`
-Future<Map<String, dynamic>?> _fetchStudent(String mat) async {
-  try {
-    final response = await Supabase.instance.client
-        .from('etudiants')
-        .select()
-        .eq('matricule', mat)
-        .maybeSingle();
-    return response;
-  } catch (_) {
-    return null;
-  }
-}
+
 
 /// Récupère un professeur ou un parent par nom, prénom et téléphone
 Future<Map<String, dynamic>?> _fetchByDetails(

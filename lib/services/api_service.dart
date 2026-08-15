@@ -102,7 +102,7 @@ class ApiService {
   }) async {
     try {
       final body = matricule != null
-          ? {'matricule': matricule, 'motDePasse': motDePasse}
+          ? {'matricule': matricule, 'password': motDePasse}
           : {'nom': nom, 'tel': tel, 'motDePasse': motDePasse};
 
       final response = await http.post(
@@ -111,7 +111,12 @@ class ApiService {
         body: jsonEncode(body),
       );
 
-      final data = jsonDecode(response.body);
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+      // Première connexion détectée par le backend
+      if (data['premiereFois'] == true && data['student'] != null) {
+        return {'success': false, 'premiereFois': true, 'student': data['student']};
+      }
 
       if (response.statusCode == 200 && data['token'] != null) {
         await saveToken(data['token'], userId: data['user']?['id']);
@@ -119,7 +124,7 @@ class ApiService {
       } else if (data['premierLogin'] == true) {
         return {'success': true, 'premierLogin': true, 'userId': data['userId']};
       } else {
-        return {'success': false, 'error': data['message'] ?? 'Erreur de connexion'};
+        return {'success': false, 'error': data['error'] ?? data['message'] ?? 'Erreur de connexion'};
       }
     } catch (e) {
       // 'offline' distingue une panne réseau (backend injoignable) d'un refus
@@ -158,6 +163,39 @@ class ApiService {
     }
   }
 
+  // ── Finaliser l'inscription (Première connexion étudiants) ─
+  static Future<Map<String, dynamic>> finaliserInscription({
+    String? matricule,
+    String? id,
+    required String email,
+    String? telephone,
+    required String password,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/etudiants/finaliser'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          if (id != null) 'id': id,
+          if (matricule != null) 'matricule': matricule,
+          'email': email,
+          'telephone': telephone ?? '',
+          'password': password,
+        }),
+      );
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        if (data['token'] != null) {
+          await saveToken(data['token'], userId: data['user']?['id']);
+        }
+        return {'success': true, 'user': data['user'] ?? {}};
+      }
+      return {'success': false, 'error': data['error'] ?? data['message'] ?? 'Erreur lors de l\'activation.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
   // ── Recherche d'un compte par matricule (avant connexion) ──
   // Renvoie les infos d'affichage + premierLogin, sans mot de passe.
   static Future<Map<String, dynamic>> lookupMatricule(String matricule) async {
@@ -178,6 +216,54 @@ class ApiService {
       return {'success': false, 'error': data['message'] ?? 'Matricule non reconnu.'};
     } catch (e) {
       return {'success': false, 'offline': true, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  // ── Mot de passe oublié ──────────────────────────────────
+  static Future<Map<String, dynamic>> forgotPassword({required String identifiant}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'identifiant': identifiant}),
+      );
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Code envoyé.',
+          'code': data['code']?.toString(),
+        };
+      }
+      return {'success': false, 'error': data['message'] ?? 'Erreur lors de la demande.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  // ── Réinitialiser le mot de passe ────────────────────────
+  static Future<Map<String, dynamic>> resetPassword({
+    required String identifiant,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'identifiant': identifiant,
+          'code': code,
+          'newPassword': newPassword,
+        }),
+      );
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': data['message'] ?? 'Mot de passe réinitialisé.'};
+      }
+      return {'success': false, 'error': data['message'] ?? 'Erreur lors de la réinitialisation.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
     }
   }
 

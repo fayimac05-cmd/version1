@@ -174,7 +174,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
       // Upload vers Supabase Storage
       try {
-        final url = await SupabaseService().uploadProfilePhoto(file, widget.profile.matricule);
+        await SupabaseService().uploadProfilePhoto(file, widget.profile.matricule);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Photo de profil mise à jour sur Supabase !')),

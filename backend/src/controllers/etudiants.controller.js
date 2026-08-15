@@ -1,3 +1,5 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { ensureFilieres } = require('../utils/filieres');
 const { notifierInscription } = require('../services/inscription.notify');
@@ -249,4 +251,87 @@ const inscrireEtudiant = async (req, res) => {
   }
 };
 
-module.exports = { listEtudiants, inscrireEtudiant };
+const finaliserPremiereConnexion = async (req, res) => {
+  const { matricule, id, email, telephone, password } = req.body;
+  try {
+    if (!password || password.trim().length < 4) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 4 caractères.' });
+    }
+
+    // Trouver l'utilisateur
+    let userRow = null;
+    if (matricule) {
+      const r = await pool.query(
+        `SELECT u.*, e.id AS etudiant_id, e.filiere_id,
+                COALESCE(e.filiere_nom, u.filiere_nom) AS filiere,
+                COALESCE(e.niveau, u.niveau) AS niveau_etudiant
+         FROM users u LEFT JOIN etudiants e ON u.id = e.user_id
+         WHERE u.matricule = $1`,
+        [matricule.toUpperCase()]
+      );
+      userRow = r.rows[0];
+    } else if (id) {
+      const r = await pool.query(
+        `SELECT u.*, e.id AS etudiant_id, e.filiere_id,
+                COALESCE(e.filiere_nom, u.filiere_nom) AS filiere,
+                COALESCE(e.niveau, u.niveau) AS niveau_etudiant
+         FROM users u LEFT JOIN etudiants e ON u.id = e.user_id
+         WHERE u.id = $1`,
+        [id]
+      );
+      userRow = r.rows[0];
+    } else {
+      return res.status(400).json({ error: 'Matricule ou ID requis.' });
+    }
+
+    if (!userRow) {
+      return res.status(404).json({ error: 'Étudiant non trouvé.' });
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    // Mettre à jour users
+    await pool.query(
+      'UPDATE users SET mot_de_passe = $1, email = COALESCE($2, email), tel = COALESCE($3, tel) WHERE id = $4',
+      [hashed, email || null, telephone || null, userRow.id]
+    );
+
+    // Mettre à jour etudiants si la ligne existe
+    if (userRow.etudiant_id) {
+      await pool.query(
+        'UPDATE etudiants SET premierefois = false, email = COALESCE($1, email), tel = COALESCE($2, tel) WHERE id = $3',
+        [email || null, telephone || null, userRow.etudiant_id]
+      );
+    }
+
+    // Générer un token JWT
+    const token = jwt.sign(
+      { id: userRow.id, matricule: userRow.matricule, role: userRow.role, filiere_id: userRow.filiere_id },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Compte activé avec succès.',
+      token,
+      user: {
+        id: userRow.id,
+        matricule: userRow.matricule,
+        nom: userRow.nom,
+        prenoms: userRow.prenoms,
+        email: email || userRow.email || '',
+        telephone: telephone || userRow.tel || '',
+        filiere: userRow.filiere || '',
+        filiere_id: userRow.filiere_id,
+        niveau: userRow.niveau_etudiant || userRow.niveau || '',
+        role: userRow.role || 'etudiant',
+      }
+    });
+  } catch (err) {
+    console.error('[finaliserPremiereConnexion]', err);
+    return res.status(500).json({ error: err.message || 'Erreur lors de l\'activation du compte.' });
+  }
+};
+
+module.exports = { listEtudiants, inscrireEtudiant, finaliserPremiereConnexion };

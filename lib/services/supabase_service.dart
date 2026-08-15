@@ -80,24 +80,102 @@ class SupabaseService {
 
   Future<Map<String, dynamic>> loginEtudiant({
     required String matricule,
-    required String motDePasse,
+    String? motDePasse,
   }) async {
-    final user = await client
-        .from('etudiants')
-        .select()
-        .eq('matricule', matricule)
-        .maybeSingle();
+    final matClean = matricule.toUpperCase();
+    Map<String, dynamic>? user;
 
+    // 1. Chercher dans la table 'users'
+    try {
+      user = await client
+          .from('users')
+          .select()
+          .eq('matricule', matClean)
+          .maybeSingle();
+    } catch (_) {}
+
+    // 2. Si non trouvé, chercher dans 'etudiants'
     if (user == null) {
-      return {'success': false, 'message': 'Matricule introuvable.'};
+      try {
+        user = await client
+            .from('etudiants')
+            .select()
+            .eq('matricule', matClean)
+            .maybeSingle();
+      } catch (_) {}
     }
 
-    final pwd = user['mot_de_passe'] ?? user['motDePasse'] ?? '';
+    if (user == null) {
+      return {'success': false, 'message': 'Matricule non reconnu.'};
+    }
+
+    final String pwd = (user['mot_de_passe'] ?? user['motDePasse'] ?? user['password'] ?? '').toString();
+    final bool hasNoPassword = pwd.trim().isEmpty || pwd == 'null';
+    final bool premiereFois = user['premiere_fois'] == true || user['premierefois'] == true || hasNoPassword;
+
+    // Si première connexion / aucun mot de passe défini dans Supabase
+    if (premiereFois || hasNoPassword) {
+      if (motDePasse == null || motDePasse.trim().isEmpty) {
+        return {
+          'success': true,
+          'isFirstConnection': true,
+          'user': user,
+          'message': 'Première connexion détectée.'
+        };
+      }
+    }
+
+    // Si un mot de passe existe dans Supabase, il est requis
+    if (motDePasse == null || motDePasse.trim().isEmpty) {
+      return {'success': false, 'message': 'Veuillez saisir votre mot de passe.'};
+    }
+
     if (pwd != motDePasse) {
       return {'success': false, 'message': 'Mot de passe incorrect.'};
     }
 
     return {'success': true, 'user': user};
+  }
+
+  Future<Map<String, dynamic>> finaliserPremiereConnexion({
+    required String matricule,
+    required String email,
+    required String telephone,
+    required String motDePasse,
+  }) async {
+    final matClean = matricule.toUpperCase();
+
+    // 1. Retrouver l'étudiant pour obtenir son user_id
+    final etudiant = await getEtudiant(matClean);
+    if (etudiant == null) {
+      return {'success': false, 'message': 'Matricule introuvable.'};
+    }
+
+    // 2. Mettre à jour la table 'users' (mot de passe + email + tel)
+    final userId = etudiant['user_id'];
+    if (userId != null) {
+      await client
+          .from('users')
+          .update({
+            'mot_de_passe': motDePasse,
+            'email': email,
+            'tel': telephone,
+          })
+          .eq('id', userId);
+    }
+
+    // 3. Mettre à jour la table 'etudiants' (email + tel + premierefois)
+    await client
+        .from('etudiants')
+        .update({
+          'email': email,
+          'tel': telephone,
+          'premierefois': false,
+        })
+        .eq('matricule', matClean);
+
+    final user = await getEtudiant(matClean);
+    return {'success': true, 'user': user ?? {}};
   }
 
   // ── Photo de Profil Supabase ──────────────────────────────────────────────

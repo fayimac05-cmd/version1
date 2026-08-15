@@ -135,4 +135,4 @@ const envoyerEmail = async (to, subject, contenu) => {
   return provider.envoyer(to, subject, contenu);
 };
 
-module.exports = { envoyerEmail };
+module.exports = { envoyerEmail, envoyer: envoyerEmail };
