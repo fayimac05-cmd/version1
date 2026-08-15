@@ -8,6 +8,8 @@ import '../services/supabase_service.dart';
 import 'student_shell.dart';
 import 'splash_screen.dart';
 import 'register_page.dart';
+import 'first_connection_page.dart';
+import 'forgot_password_page.dart';
 import '../professeur/professor_shell.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
@@ -130,10 +132,11 @@ class _LoginPageState extends State<LoginPage> {
     final mat = _matriculeCtrl.text.trim().toUpperCase();
     final pass = _passCtrl.text.trim();
 
-    if (mat.isEmpty || pass.isEmpty) {
+    // Le matricule est toujours obligatoire
+    if (mat.isEmpty) {
       setState(() {
         _loading = false;
-        _error = 'Veuillez remplir tous les champs.';
+        _error = 'Veuillez saisir votre matricule.';
       });
       return;
     }
@@ -142,8 +145,29 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final supabaseRes = await SupabaseService().loginEtudiant(
         matricule: mat,
-        motDePasse: pass,
+        motDePasse: pass.isEmpty ? null : pass,
       );
+
+      // Première connexion détectée par Supabase
+      if (supabaseRes['success'] == true && supabaseRes['isFirstConnection'] == true) {
+        final u = supabaseRes['user'] as Map<String, dynamic>? ?? {};
+        if (!mounted) return;
+        setState(() => _loading = false);
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => FirstConnectionPage(
+              matricule: u['matricule']?.toString() ?? mat,
+              nom: u['nom']?.toString() ?? '',
+              prenoms: u['prenoms']?.toString() ?? '',
+              filiereId: u['filiere_id']?.toString() ?? '',
+              filiere: u['filiere']?.toString() ?? '',
+              niveau: u['niveau']?.toString() ?? '',
+            ),
+          ),
+        );
+        return;
+      }
+
       if (supabaseRes['success'] == true && supabaseRes['user'] != null) {
         final u = supabaseRes['user'];
         final profile = StudentProfile(
@@ -163,8 +187,28 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (_) {}
 
-    // 2. Try backend API
+    // 2. Essayer via le backend Node.js (ApiService)
     final result = await ApiService.login(matricule: mat, motDePasse: pass);
+
+    // Première connexion détectée par le backend
+    if (result['premiereFois'] == true && result['student'] != null) {
+      final u = result['student'] as Map<String, dynamic>? ?? {};
+      if (!mounted) return;
+      setState(() => _loading = false);
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => FirstConnectionPage(
+            matricule: u['matricule']?.toString() ?? mat,
+            nom: u['nom']?.toString() ?? '',
+            prenoms: u['prenoms']?.toString() ?? '',
+            filiereId: u['filiere_id']?.toString() ?? '',
+            filiere: u['filiere']?.toString() ?? '',
+            niveau: u['niveau']?.toString() ?? '',
+          ),
+        ),
+      );
+      return;
+    }
 
     if (result['success'] == true && result['user'] != null) {
       final u = result['user'];
@@ -184,12 +228,7 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // 3. Fallback to local mock DB
-
-    // Le repli sur la base mock locale n'est autorisé QUE si le backend est
-    // injoignable (mode démo hors-ligne). Si le backend a répondu mais rejeté
-    // la connexion, on affiche son erreur au lieu d'entrer dans un tableau de
-    // bord sans token (ce qui provoquait des 401 sur tous les écrans).
+    // Si le backend a répondu mais a rejeté la connexion
     if (result['offline'] != true) {
       setState(() {
         _loading = false;
@@ -422,7 +461,24 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 20),
 
                   // Password field
-                  _buildLabel('Mot de passe'),
+                  Row(
+                    children: [
+                      _buildLabel('Mot de passe'),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Text(
+                          'Optionnel à la 1ère connexion',
+                          style: TextStyle(fontSize: 11, color: Colors.orange.shade700, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   _buildPasswordField(),
 
@@ -455,7 +511,11 @@ class _LoginPageState extends State<LoginPage> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const ForgotPasswordPage()),
+                        );
+                      },
                       child: const Text(
                         'Mot de passe oublié ?',
                         style: TextStyle(

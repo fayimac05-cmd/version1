@@ -65,7 +65,9 @@ CREATE TABLE users (
     email_parent VARCHAR(255),
     etudiant_role VARCHAR(50) DEFAULT 'etudiant',
     filiere_role VARCHAR(255),
-    filiere_nom VARCHAR(255)
+    filiere_nom VARCHAR(255),
+    reset_code VARCHAR(6),
+    reset_expires TIMESTAMP
 );
 
 -- Table des filières

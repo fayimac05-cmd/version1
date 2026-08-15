@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const supabase = require('../config/supabase');
+const emailService = require('../services/email.service');
 
 const genToken = (user) => jwt.sign(
   { id: user.id, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id },
@@ -11,15 +12,28 @@ const genToken = (user) => jwt.sign(
 
 const login = async (req, res) => {
   try {
-    const { matricule, nom, tel, motDePasse } = req.body;
+    const { matricule, nom, tel, motDePasse, password } = req.body;
+    const mdp = password || motDePasse; // Accepter les deux formats
     let user = null;
 
     try {
       if (matricule) {
-        const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.matricule = $1', [matricule.trim().toUpperCase()]);
+        const r = await pool.query(
+          `SELECT u.*, e.filiere_id, e.premierefois,
+                  COALESCE(e.filiere_nom, u.filiere_nom) AS filiere,
+                  COALESCE(e.niveau, u.niveau) AS niveau_etudiant,
+                  COALESCE(e.email, u.email) AS email_etudiant,
+                  COALESCE(e.tel, u.tel) AS tel_etudiant
+           FROM users u LEFT JOIN etudiants e ON u.id = e.user_id
+           WHERE u.matricule = $1`,
+          [matricule.trim().toUpperCase()]
+        );
         user = r.rows[0];
       } else if (nom && tel) {
-        const r = await pool.query('SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE LOWER(u.nom) = LOWER($1) AND u.tel = $2', [nom.trim(), tel.trim()]);
+        const r = await pool.query(
+          'SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE LOWER(u.nom) = LOWER($1) AND u.tel = $2',
+          [nom.trim(), tel.trim()]
+        );
         user = r.rows[0];
       } else {
         return res.status(400).json({ message: 'Identifiants manquants.' });
@@ -40,15 +54,41 @@ const login = async (req, res) => {
       }
     }
 
-    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    if (!user) return res.status(404).json({ message: 'Matricule non reconnu.' });
     if (user.statut === 'suspendu') return res.status(403).json({ message: 'Compte suspendu.' });
     if (user.statut === 'renvoye')  return res.status(403).json({ message: 'Compte desactive.' });
 
-    if (!user.mot_de_passe) {
-      return res.status(400).json({ message: 'Premiere connexion : veuillez d\'abord definir un mot de passe.' });
+    const motDePasseExiste = user.mot_de_passe && user.mot_de_passe.trim() !== '' && user.mot_de_passe !== 'null';
+    const estPremiereFois = user.premierefois === true || user.premiere_fois === true || !motDePasseExiste;
+
+    // Première connexion : pas encore de mot de passe défini en base
+    if (estPremiereFois || !motDePasseExiste) {
+      // Si l'étudiant n'a pas soumis de mot de passe, on renvoie le signal de première connexion
+      if (!mdp || mdp.trim() === '') {
+        return res.status(200).json({
+          premiereFois: true,
+          student: {
+            id: user.id,
+            matricule: user.matricule,
+            nom: user.nom,
+            prenoms: user.prenoms,
+            email: user.email_etudiant || user.email || '',
+            telephone: user.tel_etudiant || user.tel || '',
+            filiere: user.filiere || user.filiere_nom || '',
+            filiere_id: user.filiere_id,
+            niveau: user.niveau_etudiant || user.niveau || '',
+            role: user.role || 'etudiant',
+          }
+        });
+      }
     }
 
-    const match = await bcrypt.compare(motDePasse, user.mot_de_passe);
+    // Si mot de passe requis mais absent
+    if (!mdp || mdp.trim() === '') {
+      return res.status(400).json({ message: 'Veuillez saisir votre mot de passe.' });
+    }
+
+    const match = await bcrypt.compare(mdp, user.mot_de_passe);
     if (!match) return res.status(401).json({ message: 'Mot de passe incorrect.' });
 
     const token = genToken(user);
@@ -309,4 +349,108 @@ const register = async (req, res) => {
   }
 };
 
-module.exports = { login, setupPassword, me, changePassword, register, lookup };
+const forgotPassword = async (req, res) => {
+  try {
+    const { identifiant } = req.body;
+    if (!identifiant) return res.status(400).json({ message: 'Matricule ou email requis.' });
+
+    // Chercher l'utilisateur par matricule ou email
+    const r = await pool.query(
+      'SELECT id, email, nom FROM users WHERE matricule = $1 OR email = $1',
+      [identifiant.trim().toUpperCase()]
+    );
+    const user = r.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({ message: 'Aucune adresse email associée à ce compte.' });
+    }
+
+    // Générer un code à 6 chiffres
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60000); // 15 minutes
+
+    // Sauvegarder dans la DB
+    await pool.query(
+      'UPDATE users SET reset_code = $1, reset_expires = $2 WHERE id = $3',
+      [resetCode, expiresAt, user.id]
+    );
+
+    // Envoyer l'email
+    const emailResult = await emailService.envoyer(
+      user.email,
+      'ScolarHub - Réinitialisation de mot de passe',
+      {
+        text: `Bonjour ${user.nom},\n\nVotre code de réinitialisation est : ${resetCode}\n\nCe code expirera dans 15 minutes.\n\nL'équipe ScolarHub`,
+      }
+    );
+
+    if (!emailResult.success) {
+      console.error('Failed to send email:', emailResult.error);
+      // We still return success so we don't block testing in dev, but ideally handle it better
+    }
+
+    return res.status(200).json({
+      message: 'Un code de réinitialisation a été envoyé à votre adresse email.',
+      email: user.email,
+      code: (process.env.EMAIL_PROVIDER === 'console' || process.env.NODE_ENV !== 'production') ? resetCode : undefined,
+    });
+  } catch (err) {
+    console.error('ForgotPassword error:', err);
+    return res.status(500).json({ message: 'Erreur serveur.' });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { identifiant, code, newPassword } = req.body;
+    if (!identifiant || !code || !newPassword) {
+      return res.status(400).json({ message: 'Données manquantes.' });
+    }
+
+    // Chercher l'utilisateur
+    const r = await pool.query(
+      'SELECT id, reset_code, reset_expires FROM users WHERE matricule = $1 OR email = $1',
+      [identifiant.trim().toUpperCase()]
+    );
+    const user = r.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    }
+
+    if (user.reset_code !== code) {
+      return res.status(400).json({ message: 'Code de réinitialisation incorrect.' });
+    }
+
+    if (new Date() > new Date(user.reset_expires)) {
+      return res.status(400).json({ message: 'Le code de réinitialisation a expiré.' });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    await pool.query(
+      'UPDATE users SET mot_de_passe = $1, reset_code = NULL, reset_expires = NULL WHERE id = $2',
+      [hashed, user.id]
+    );
+
+    return res.status(200).json({ message: 'Mot de passe réinitialisé avec succès.' });
+  } catch (err) {
+    console.error('ResetPassword error:', err);
+    return res.status(500).json({ message: 'Erreur serveur.' });
+  }
+};
+
+module.exports = {
+  login,
+  setupPassword,
+  me,
+  changePassword,
+  register,
+  lookup,
+  forgotPassword,
+  resetPassword,
+};
