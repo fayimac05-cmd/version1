@@ -385,8 +385,6 @@ class _AdminFilieresState extends State<AdminFilieres> {
     const Text('Aucune filière trouvée', style: TextStyle(fontSize: 17,
         fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
   ]));
-
-  void _snack(String msg) => showAppSnackBar(context, msg);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
