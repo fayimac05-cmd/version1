@@ -88,7 +88,24 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Veuillez saisir votre mot de passe.' });
     }
 
-    const match = await bcrypt.compare(mdp, user.mot_de_passe);
+    let match = false;
+    if (user.mot_de_passe && (user.mot_de_passe.startsWith('$2a$') || user.mot_de_passe.startsWith('$2b$'))) {
+      try {
+        match = await bcrypt.compare(mdp, user.mot_de_passe);
+      } catch (_) {
+        match = false;
+      }
+    } else {
+      // Cas des mots de passe initialisés en clair
+      match = (mdp === user.mot_de_passe);
+      // Mise à jour automatique en hash bcrypt si succès
+      if (match) {
+        bcrypt.hash(mdp, 10).then(h => {
+          pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [h, user.id]).catch(() => {});
+        });
+      }
+    }
+
     if (!match) return res.status(401).json({ message: 'Mot de passe incorrect.' });
 
     const token = genToken(user);
