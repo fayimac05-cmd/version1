@@ -3,6 +3,7 @@ import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
+import '../widgets/profile_header_cover.dart';
 import 'appel_tab.dart';
 import 'notes_tab.dart';
 import 'programme_screen.dart';
@@ -762,28 +763,15 @@ class _ProfilTabState extends State<_ProfilTab> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(children: [
-            // Avatar
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(colors: [AppPalette.blue, Color(0xFF1565C0)]),
-                boxShadow: [BoxShadow(color: AppPalette.blue.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 6))],
-              ),
-              child: const CircleAvatar(radius: 48, backgroundColor: Colors.white,
-                child: Icon(Icons.school_rounded, size: 50, color: AppPalette.blue)),
-            ),
-            const SizedBox(height: 14),
-            Text('${profile.prenoms} ${profile.nom}',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppPalette.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text('Professeur', style: TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w700, fontSize: 13)),
+          // Cover + Avatar Premium
+            ProfileHeaderCover(
+              matricule: profile.matricule,
+              nomComplet: '${profile.prenoms} ${profile.nom}',
+              roleLabel: profile.filiere.isNotEmpty ? profile.filiere : 'Enseignant',
+              initiales: '${profile.prenoms.isNotEmpty ? profile.prenoms[0] : ''}${profile.nom.isNotEmpty ? profile.nom[0] : ''.toUpperCase()}',
+              badgeText: 'Professeur',
+              accentColor: AppPalette.blue,
+              bannerGradient: const [Color(0xFF0D1B4B), Color(0xFF1565C0), Color(0xFF42A5F5)],
             ),
             const SizedBox(height: 24),
             // Infos

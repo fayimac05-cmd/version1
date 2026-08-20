@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'parent_styles.dart';
+import '../../widgets/profile_header_cover.dart';
 
 class ParentProfileTab extends StatelessWidget {
   final String nomEnfant;
@@ -40,46 +41,51 @@ class ParentProfileTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ─── CARTE PARENT (TEXTUELLE, SANS AVATAR) ─────────────
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(18),
-                        decoration: ParentStyles.cardDecoration(
-                          border: Border.all(color: ParentStyles.primary.withValues(alpha:0.15)),
+              ProfileHeaderCover(
+                matricule: 'PARENT-${nomEnfant.hashCode.abs()}',
+                nomComplet: 'KOURAOGO Seydou',
+                roleLabel: "Parent d'élève",
+                initiales: 'KS',
+                badgeText: 'Tuteur Légal',
+                badgeColor: ParentStyles.primary,
+                accentColor: ParentStyles.primary,
+                bannerGradient: const [Color(0xFF0D3B5E), Color(0xFF1B5E8A), Color(0xFF2E86C1)],
+              ),
+              const SizedBox(height: 16),
+              // ─── INFOS CONTACT PARENT ────────────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: ParentStyles.cardDecoration(
+                  border: Border.all(color: ParentStyles.primary.withValues(alpha:0.15)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.badge_outlined, color: ParentStyles.primary, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          'COMPTE PARENT / TUTEUR',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: ParentStyles.primary.withValues(alpha:0.8),
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.badge_outlined,
-                                  color: ParentStyles.primary,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'COMPTE PARENT / TUTEUR',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: ParentStyles.primary.withValues(alpha:0.8),
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Divider(height: 20),
-                            _buildInfoTextRow('Nom complet', 'KOURAOGO Seydou'),
-                            const SizedBox(height: 10),
-                            _buildInfoTextRow('Adresse email', 'parent@ist.bf'),
-                            const SizedBox(height: 10),
-                            _buildInfoTextRow('Téléphone tuteur', '+226 65 00 12 34'),
-                            const SizedBox(height: 10),
-                            _buildInfoTextRow('Statut de liaison', 'Validé par l\'établissement'),
-                          ],
-                        ),
-                      ),
+                      ],
+                    ),
+                    const Divider(height: 20),
+                    _buildInfoTextRow('Adresse email', 'parent@ist.bf'),
+                    const SizedBox(height: 10),
+                    _buildInfoTextRow('Téléphone tuteur', '+226 65 00 12 34'),
+                    const SizedBox(height: 10),
+                    _buildInfoTextRow('Statut de liaison', "Validé par l'établissement"),
+                  ],
+                ),
+              ),
                       const SizedBox(height: 24),
 
                       // ─── CARTE ENFANT RATTACHÉ ──────────────────────────────

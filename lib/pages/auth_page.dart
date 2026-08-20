@@ -258,6 +258,8 @@ class _AuthPageState extends State<AuthPage> {
         motDePasse: '',
         domaine: user['domaine'] ?? '',
         role: user['role'] ?? 'etudiant',
+        photoUrl: user['photo_url'] ?? user['photoUrl'],
+        coverUrl: user['cover_url'] ?? user['coverUrl'],
       ));
     } else {
       _setError(result['error'] ?? 'Mot de passe incorrect.');
