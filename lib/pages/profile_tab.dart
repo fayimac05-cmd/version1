@@ -1,9 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/supabase_service.dart';
+import '../widgets/profile_header_cover.dart';
 
 import '../models/student_profile.dart';
 import 'splash_screen.dart';
@@ -57,7 +55,6 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
   bool _emailVisible = true;
   bool _telVisible = true;
-  File? _photoFile;
 
   OverlayEntry? _overlayEntry;
   bool _panelOuvert = false;
@@ -165,30 +162,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _choisirPhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked != null) {
-      final file = File(picked.path);
-      setState(() => _photoFile = file);
 
-      // Upload vers Supabase Storage
-      try {
-        await SupabaseService().uploadProfilePhoto(file, widget.profile.matricule);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Photo de profil mise à jour sur Supabase !')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur d\'envoi de la photo : $e')),
-          );
-        }
-      }
-    }
-  }
 
 
   void _editer({
@@ -289,47 +263,17 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           
-          // ── BENTO BLOCK 1 : L'AVATAR & L'IDENTITÉ PREMIUM ──────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: _border),
-            ),
-            child: Column(children: [
-              Stack(alignment: Alignment.bottomRight, children: [
-                Container(
-                  width: 96, height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle, border: Border.all(color: _bgGlobal, width: 4),
-                    color: _brandBlue.withValues(alpha:0.08),
-                  ),
-                  child: _photoFile != null
-                      ? ClipOval(child: Image.file(_photoFile!, width: 96, height: 96, fit: BoxFit.cover))
-                      : Center(child: Text(_initiales, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _brandBlue, letterSpacing: -0.5))),
-                ),
-                GestureDetector(
-                  onTap: _choisirPhoto,
-                  child: Container(
-                    width: 30, height: 30,
-                    decoration: const BoxDecoration(color: _textMain, shape: BoxShape.circle),
-                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                  ),
-                )
-              ]),
-              const SizedBox(height: 16),
-              Text('${widget.profile.prenoms} ${widget.profile.nom}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _textMain, letterSpacing: -0.5)),
-              const SizedBox(height: 4),
-              Text(widget.profile.matricule, style: const TextStyle(fontSize: 13, color: _textMuted, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFDCFCE7))),
-                child: Text(widget.profile.filiere.isNotEmpty ? widget.profile.filiere.toUpperCase() : 'CURSUS NON SPÉCIFIÉ',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF16A34A), letterSpacing: 0.3), maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-            ]),
+          // ── BENTO BLOCK 1 : COVER + AVATAR PREMIUM ───────────────────────
+          ProfileHeaderCover(
+            matricule: widget.profile.matricule,
+            nomComplet: '${widget.profile.prenoms} ${widget.profile.nom}',
+            roleLabel: widget.profile.filiere.isNotEmpty
+                ? widget.profile.filiere
+                : 'Étudiant(e)',
+            initiales: _initiales,
+            badgeText: widget.profile.niveau.isNotEmpty ? widget.profile.niveau : null,
+            accentColor: _brandBlue,
+            bannerGradient: const [Color(0xFF0F172A), Color(0xFF1E3A8A), Color(0xFF3B82F6)],
           ),
 
           const SizedBox(height: 16),

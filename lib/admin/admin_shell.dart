@@ -46,6 +46,7 @@ import '../admin/admin_risque.dart';
 import '../config/etablissement_config.dart';
 import '../pages/choose_etablissement_type_page.dart';
 import '../pages/splash_screen.dart';
+import '../widgets/profile_header_cover.dart';
 // TODO: décommenter quand les services sont prêts
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
@@ -398,9 +399,101 @@ class _AdminShellState extends State<AdminShell>
             bold: true),
       ],
     ).then((val) {
+      if (!mounted) return;
       if (val == 'logout') _showLogoutDialog();
-      // TODO: router vers profil / paramètres
+      if (val == 'profile') _showAdminProfileSheet(context);
     });
+  }
+
+  void _showAdminProfileSheet(BuildContext ctx) {
+    showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollCtrl) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: scrollCtrl,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ProfileHeaderCover(
+                matricule: widget.profile.matricule,
+                nomComplet: _fullName,
+                roleLabel: widget.profile.filiere.isNotEmpty
+                    ? widget.profile.filiere
+                    : 'Direction Pédagogique',
+                initiales: _initials,
+                badgeText: 'Administrateur',
+                badgeColor: const Color(0xFFD97706),
+                accentColor: const Color(0xFF1E40AF),
+                bannerGradient: const [Color(0xFF0C1A3D), Color(0xFF1A237E), Color(0xFF283593)],
+              ),
+              const SizedBox(height: 20),
+              _adminInfoTile(Icons.badge_outlined, 'Matricule', widget.profile.matricule),
+              _adminInfoTile(Icons.email_outlined, 'Email', widget.profile.email.isNotEmpty ? widget.profile.email : 'admin@ist.bf'),
+              _adminInfoTile(Icons.shield_outlined, 'Rôle système', widget.profile.roleLabel),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () { Navigator.pop(ctx); _showLogoutDialog(); },
+                icon: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
+                label: const Text('Déconnexion', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFDC2626)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _adminInfoTile(IconData icon, String label, String value) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E40AF).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: const Color(0xFF1E40AF), size: 18),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+        ])),
+      ]),
+    );
   }
 
   PopupMenuItem<String> _popItem(

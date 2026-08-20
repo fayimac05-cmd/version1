@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
+import '../widgets/profile_header_cover.dart';
 import 'paiement_scolarite_screen.dart';
 import 'splash_screen.dart';
 import 'parent/parent_home_tab.dart';
@@ -674,32 +675,15 @@ class _ParentProfilTab extends StatelessWidget {
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppPalette.blue),
           ),
           const SizedBox(height: 20),
-          Center(
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppPalette.yellow, width: 3),
-                  ),
-                  child: const CircleAvatar(
-                    radius: 40,
-                    backgroundColor: AppPalette.blue,
-                    child: Icon(Icons.person, size: 48, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'M. Ousmane Diallo',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                ),
-                const Text(
-                  'Parent / Tuteur Légal',
-                  style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
+          ProfileHeaderCover(
+            matricule: 'PARENT-OD001',
+            nomComplet: 'M. Ousmane Diallo',
+            roleLabel: "Parent / Tuteur Légal",
+            initiales: 'OD',
+            badgeText: 'Tuteur Légal',
+            badgeColor: AppPalette.blue,
+            accentColor: AppPalette.blue,
+            bannerGradient: const [Color(0xFF0D3B5E), Color(0xFF1B5E8A), Color(0xFF2E86C1)],
           ),
           const SizedBox(height: 24),
           const Divider(color: Color(0xFFE2E8F0)),

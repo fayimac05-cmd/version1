@@ -11,6 +11,8 @@ class StudentProfile {
     this.niveau = '',
     this.role = 'etudiant',
     this.filiereRole,
+    this.photoUrl,
+    this.coverUrl,
   });
 
   final String nom;
@@ -22,6 +24,8 @@ class StudentProfile {
   final String motDePasse;
   final String domaine;
   final String niveau;
+  final String? photoUrl;
+  final String? coverUrl;
 
   // ── Rôle dans l'établissement ──────────────────────────────────────
   // 'etudiant'        → étudiant normal
@@ -92,6 +96,8 @@ class StudentProfile {
     String? niveau,
     String? role,
     String? filiereRole,
+    String? photoUrl,
+    String? coverUrl,
   }) =>
       StudentProfile(
         nom: nom ?? this.nom,
@@ -105,5 +111,7 @@ class StudentProfile {
         niveau: niveau ?? this.niveau,
         role: role ?? this.role,
         filiereRole: filiereRole ?? this.filiereRole,
+        photoUrl: photoUrl ?? this.photoUrl,
+        coverUrl: coverUrl ?? this.coverUrl,
       );
 }

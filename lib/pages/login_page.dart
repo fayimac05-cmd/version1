@@ -181,6 +181,8 @@ class _LoginPageState extends State<LoginPage> {
           domaine: u['domaine'] ?? '',
           niveau: u['niveau'] ?? '',
           role: u['role'] ?? 'etudiant',
+          photoUrl: u['photo_url'] ?? u['photoUrl'],
+          coverUrl: u['cover_url'] ?? u['coverUrl'],
         );
         _goToDashboard(profile);
         return;
@@ -223,6 +225,8 @@ class _LoginPageState extends State<LoginPage> {
         domaine: u['domaine'] ?? '',
         niveau: u['niveau'] ?? '',
         role: u['role'] ?? 'etudiant',
+        photoUrl: u['photo_url'] ?? u['photoUrl'],
+        coverUrl: u['cover_url'] ?? u['coverUrl'],
       );
       _goToDashboard(profile);
       return;
