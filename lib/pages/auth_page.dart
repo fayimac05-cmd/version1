@@ -129,6 +129,7 @@ class _AuthPageState extends State<AuthPage> {
       destination = ParentShell(
         nomEnfant: '${profile.prenoms} ${profile.nom}',
         onLogout: logout,
+        etudiantId: profile.matricule,
       );
     } else if (r == 'bde') {
       destination = const BureauDesEtudiantsScreen();
