@@ -17,16 +17,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 
 
-/// Récupère un professeur ou un parent par nom, prénom et téléphone
+/// Récupère un utilisateur (professeur ou parent) par nom, prénom et téléphone
 Future<Map<String, dynamic>?> _fetchByDetails(
-    String table, String nom, String prenom, String tel) async {
+    String nom, String prenom, String tel) async {
   try {
     final response = await Supabase.instance.client
-        .from(table)
+        .from('users')
         .select()
-        .eq('nom', nom)
-        .eq('prenoms', prenom)
-        .eq('telephone', tel)
+        .ilike('nom', nom)
+        .ilike('prenoms', prenom)
+        .eq('tel', tel)
         .maybeSingle();
     return response;
   } catch (_) {
@@ -119,25 +119,21 @@ class _AuthPageState extends State<AuthPage> {
       );
     }
 
+    final String r = profile.role.toLowerCase().trim();
     final Widget destination;
-    switch (profile.role) {
-      case 'admin':
-        destination = AdminShell(profile: profile, onLogout: logout);
-        break;
-      case 'bde':
-        destination = const BureauDesEtudiantsScreen();
-        break;
-      case 'professeur':
-        destination = ProfessorShell(profile: profile, onLogout: logout);
-        break;
-      case 'parent':
-        destination = ParentShell(
-          nomEnfant: '${profile.prenoms} ${profile.nom}',
-          onLogout: logout,
-        );
-        break;
-      default:
-        destination = StudentShell(profile: profile, onLogout: logout);
+    if (r == 'admin' || r == 'admi' || r == 'administrator') {
+      destination = AdminShell(profile: profile, onLogout: logout);
+    } else if (r == 'prof' || r == 'professeur' || r == 'enseignant' || r == 'teacher') {
+      destination = ProfessorShell(profile: profile, onLogout: logout);
+    } else if (r == 'parent' || r == 'tuteur') {
+      destination = ParentShell(
+        nomEnfant: '${profile.prenoms} ${profile.nom}',
+        onLogout: logout,
+      );
+    } else if (r == 'bde') {
+      destination = const BureauDesEtudiantsScreen();
+    } else {
+      destination = StudentShell(profile: profile, onLogout: logout);
     }
 
     Navigator.of(context).pushAndRemoveUntil(
@@ -213,17 +209,22 @@ class _AuthPageState extends State<AuthPage> {
       }
 
       // Heuristique : table profs si le numéro commence par 7, sinon parents
-      final table = tel.startsWith('7') ? 'profs' : 'parents';
-      final data = await _fetchByDetails(table, nom, prenom, tel);
+      final data = await _fetchByDetails(nom, prenom, tel);
       if (data == null) {
         _setError('Identifiants non reconnus.\nVérifiez vos informations.');
         return;
       }
       setState(() {
         _userTrouve = data;
-        _cleTrouvee = table == 'profs' ? 'PROF-$tel' : 'PARENT-$tel';
+        _cleTrouvee = data['matricule']?.toString();
+        if (_cleTrouvee == null || _cleTrouvee!.isEmpty) {
+          final role = (data['role']?.toString() ?? 'USER').toUpperCase();
+          _cleTrouvee = '$role-$tel';
+        }
+        _userId = data['id']?.toString();
         _loading = false;
-        _etape = data['premiere_fois'] == true
+        final motDePasse = data['mot_de_passe']?.toString();
+        _etape = (data['premiere_fois'] == true || data['premierefois'] == true || motDePasse == null || motDePasse.isEmpty)
             ? _Etape.premiereFois
             : _Etape.motDePasse;
       });
@@ -242,7 +243,9 @@ class _AuthPageState extends State<AuthPage> {
     }
 
     final result = await ApiService.login(
-      matricule: _cleTrouvee,
+      matricule: _tab == 0 ? _cleTrouvee : null,
+      nom: _tab == 1 ? _nomCtrl.text.trim() : null,
+      tel: _tab == 1 ? _numeroCtrl.text.trim() : null,
       motDePasse: _passCtrl.text,
     );
     if (result['success'] == true) {
@@ -251,7 +254,7 @@ class _AuthPageState extends State<AuthPage> {
       _goToDashboard(StudentProfile(
         nom: user['nom'] ?? '',
         prenoms: user['prenoms'] ?? '',
-        matricule: user['matricule'] ?? _cleTrouvee!,
+        matricule: user['matricule'] ?? _cleTrouvee ?? '',
         email: user['email'] ?? '',
         telephone: user['tel'] ?? '',
         filiere: (user['filiere_id'] ?? '').toString(),

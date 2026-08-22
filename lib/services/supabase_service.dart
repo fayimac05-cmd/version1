@@ -85,16 +85,27 @@ class SupabaseService {
     final matClean = matricule.toUpperCase();
     Map<String, dynamic>? user;
 
-    // 1. Chercher dans la table 'users'
+    // 1. Chercher dans la table 'utilisateurs'
     try {
       user = await client
-          .from('users')
+          .from('utilisateurs')
           .select()
-          .eq('matricule', matClean)
+          .or('matricule.eq.$matClean,email.eq.$matricule,telephone.eq.$matricule')
           .maybeSingle();
     } catch (_) {}
 
-    // 2. Si non trouvé, chercher dans 'etudiants'
+    // 2. Chercher dans la table 'users'
+    if (user == null) {
+      try {
+        user = await client
+            .from('users')
+            .select()
+            .or('matricule.eq.$matClean,email.eq.$matricule,tel.eq.$matricule')
+            .maybeSingle();
+      } catch (_) {}
+    }
+
+    // 3. Chercher dans la table 'etudiants'
     if (user == null) {
       try {
         user = await client
@@ -102,6 +113,34 @@ class SupabaseService {
             .select()
             .eq('matricule', matClean)
             .maybeSingle();
+      } catch (_) {}
+    }
+
+    // 4. Chercher dans la table 'profs'
+    if (user == null) {
+      try {
+        user = await client
+            .from('profs')
+            .select()
+            .or('matricule.eq.$matClean,telephone.eq.$matricule,email.eq.$matricule')
+            .maybeSingle();
+        if (user != null && (user['role'] == null || user['role'].toString().isEmpty)) {
+          user['role'] = 'professeur';
+        }
+      } catch (_) {}
+    }
+
+    // 5. Chercher dans la table 'parents'
+    if (user == null) {
+      try {
+        user = await client
+            .from('parents')
+            .select()
+            .or('matricule.eq.$matClean,telephone.eq.$matricule,email.eq.$matricule')
+            .maybeSingle();
+        if (user != null && (user['role'] == null || user['role'].toString().isEmpty)) {
+          user['role'] = 'parent';
+        }
       } catch (_) {}
     }
 

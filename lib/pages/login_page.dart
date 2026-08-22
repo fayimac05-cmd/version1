@@ -287,25 +287,21 @@ class _LoginPageState extends State<LoginPage> {
       );
     }
 
+    final String r = profile.role.toLowerCase().trim();
     final Widget destination;
-    switch (profile.role) {
-      case 'admin':
-        destination = AdminShell(profile: profile, onLogout: logout);
-        break;
-      case 'bde':
-        destination = const BureauDesEtudiantsScreen();
-        break;
-      case 'professeur':
-        destination = ProfessorShell(profile: profile, onLogout: logout);
-        break;
-      case 'parent':
-        destination = ParentShell(
-          nomEnfant: '${profile.prenoms} ${profile.nom}',
-          onLogout: logout,
-        );
-        break;
-      default:
-        destination = StudentShell(profile: profile, onLogout: logout);
+    if (r == 'admin' || r == 'admi' || r == 'administrator') {
+      destination = AdminShell(profile: profile, onLogout: logout);
+    } else if (r == 'prof' || r == 'professeur' || r == 'enseignant' || r == 'teacher') {
+      destination = ProfessorShell(profile: profile, onLogout: logout);
+    } else if (r == 'parent' || r == 'tuteur') {
+      destination = ParentShell(
+        nomEnfant: '${profile.prenoms} ${profile.nom}',
+        onLogout: logout,
+      );
+    } else if (r == 'bde') {
+      destination = const BureauDesEtudiantsScreen();
+    } else {
+      destination = StudentShell(profile: profile, onLogout: logout);
     }
 
     Navigator.of(context).pushAndRemoveUntil(
