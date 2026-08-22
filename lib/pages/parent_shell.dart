@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import '../widgets/profile_header_cover.dart';
-import 'paiement_scolarite_screen.dart';
 import 'splash_screen.dart';
-import 'parent/parent_home_tab.dart';
 import 'parent/parent_grades_tab.dart';
-import 'parent/parent_schedule_tab.dart';
-import 'parent/parent_profile_tab.dart';
 import 'parent/parent_assistant_ia_screen.dart';
 import 'parent/parent_paiements_screen.dart';
+import '../../services/parent_service.dart';
 
 class ParentShell extends StatefulWidget {
   const ParentShell({
     super.key,
     required this.nomEnfant,
     required this.onLogout,
+    this.etudiantId,
   });
 
   final String nomEnfant;
   final VoidCallback onLogout;
+  final String? etudiantId;
 
   @override
   State<ParentShell> createState() => _ParentShellState();
@@ -31,20 +30,10 @@ class _ParentShellState extends State<ParentShell> {
   Widget build(BuildContext context) {
     final pages = [
       _ParentAccueilTab(nomEnfant: widget.nomEnfant),
-      _ParentNotesTab(nomEnfant: widget.nomEnfant),
+      ParentGradesTab(nomEnfant: widget.nomEnfant, etudiantId: widget.etudiantId),
       _ParentPlanningTab(),
+      _ParentPresencesTab(etudiantId: widget.etudiantId),
       _ParentProfilTab(onLogout: widget.onLogout),
-      ParentHomeTab(
-        nomEnfant: widget.nomEnfant,
-        onNavigateToTab: (index) => setState(() => _currentTab = index),
-      ),
-      ParentGradesTab(nomEnfant: widget.nomEnfant),
-      const ParentScheduleTab(),
-      ParentProfileTab(
-        nomEnfant: widget.nomEnfant,
-        onLogout: widget.onLogout,
-      ),
-      const PaiementScolariteScreen(),
     ];
 
     return Scaffold(
@@ -78,6 +67,11 @@ class _ParentShellState extends State<ParentShell> {
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month_rounded),
             label: 'Programme',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_alt_outlined),
+            selectedIcon: Icon(Icons.people_alt_rounded),
+            label: 'Présences',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
@@ -403,132 +397,8 @@ class _StatCard extends StatelessWidget {
 }
 
 // ─── ONGLET NOTES ─────────────────────────────────────────
-class _ParentNotesTab extends StatelessWidget {
-  const _ParentNotesTab({required this.nomEnfant});
-  final String nomEnfant;
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Notes de l\'enfant',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppPalette.blue),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Suivi académique détaillé de $nomEnfant',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: ListView(
-              children: const [
-                _NoteCard(
-                  matiere: 'Mathématiques Appliquées',
-                  note: 15.5,
-                  status: 'Validé',
-                ),
-                _NoteCard(
-                  matiere: 'Réseaux Informatiques',
-                  note: 12.0,
-                  status: 'Validé',
-                ),
-                _NoteCard(
-                  matiere: 'Programmation Orientée Objet',
-                  note: 9.5,
-                  status: 'À surveiller',
-                ),
-                _NoteCard(
-                  matiere: 'Anglais Technique',
-                  note: 8.0,
-                  status: 'Fragile',
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
-class _NoteCard extends StatelessWidget {
-  const _NoteCard({
-    required this.matiere,
-    required this.note,
-    required this.status,
-  });
-  final String matiere;
-  final double note;
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    IconData icon;
-    if (status == 'Validé') {
-      color = const Color(0xFF15803D);
-      icon = Icons.check_circle_rounded;
-    } else if (status == 'À surveiller') {
-      color = const Color(0xFFD97706);
-      icon = Icons.warning_rounded;
-    } else {
-      color = const Color(0xFFC62828);
-      icon = Icons.error_rounded;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha:0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha:0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  matiere,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha:0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            '$note / 20',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: color,
-              fontSize: 17,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── ONGLET PLANNING ──────────────────────────────────────
 class _ParentPlanningTab extends StatelessWidget {
@@ -769,6 +639,236 @@ class _ParentProfilTab extends StatelessWidget {
             Text(val, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
           ],
         ),
+      ],
+    );
+  }
+}
+
+// ─── ONGLET PRÉSENCES ─────────────────────────────────────
+class _ParentPresencesTab extends StatefulWidget {
+  const _ParentPresencesTab({this.etudiantId});
+  final String? etudiantId;
+
+  @override
+  State<_ParentPresencesTab> createState() => _ParentPresencesTabState();
+}
+
+class _ParentPresencesTabState extends State<_ParentPresencesTab> {
+  late Future<Map<String, dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetch();
+  }
+
+  Future<Map<String, dynamic>> _fetch() async {
+    if (widget.etudiantId == null || widget.etudiantId!.isEmpty) {
+      return {'success': false, 'error': 'Identifiant étudiant non disponible.'};
+    }
+    return ParentService.getEnfantPresences(widget.etudiantId!);
+  }
+
+  Color _couleurStatut(String statut) {
+    switch (statut) {
+      case 'present': return const Color(0xFF15803D);
+      case 'absent': return const Color(0xFFC62828);
+      case 'retard': return const Color(0xFFD97706);
+      default: return Colors.grey;
+    }
+  }
+
+  String _libelleStatut(String statut) {
+    switch (statut) {
+      case 'present': return 'Présent';
+      case 'absent': return 'Absent';
+      case 'retard': return 'Retard';
+      default: return statut;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          'Présences',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Color(0xFF1E293B)),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+        ),
+      ),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!['success'] != true) {
+            final error = snapshot.data?['error'] ?? 'Impossible de charger les présences.';
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                    const SizedBox(height: 12),
+                    Text(error, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => setState(() => _future = _fetch()),
+                      child: const Text('Réessayer'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final List<dynamic> presences = snapshot.data!['data'] ?? [];
+          final stats = snapshot.data!['stats'] as Map<String, dynamic>? ?? {};
+          final total = stats['total'] ?? 0;
+          final presentes = stats['presentes'] ?? 0;
+          final absentes = stats['absentes'] ?? 0;
+          final retards = stats['retards'] ?? 0;
+          final tauxPresence = total > 0 ? (presentes / total * 100).toStringAsFixed(1) : '-';
+
+          return RefreshIndicator(
+            onRefresh: () async => setState(() => _future = _fetch()),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Carte statistiques
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0F766E), Color(0xFF0EA5E9)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0F766E).withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Taux de présence', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$tauxPresence%',
+                        style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _statBadge('Présent', presentes.toString(), Colors.white),
+                          _statBadge('Absent', absentes.toString(), Colors.red.shade200),
+                          _statBadge('Retard', retards.toString(), Colors.orange.shade200),
+                          _statBadge('Total', total.toString(), Colors.white70),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (presences.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Icon(Icons.people_alt_outlined, size: 64, color: Colors.grey),
+                          SizedBox(height: 12),
+                          Text('Aucune présence enregistrée.', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  ...presences.map((p) {
+                    final statut = p['presence_statut']?.toString() ?? 'inconnu';
+                    final module = p['module_nom'] ?? 'Module inconnu';
+                    final prof = '${p['prof_prenoms'] ?? ''} ${p['prof_nom'] ?? ''}'.trim();
+                    final dateStr = p['date_appel'] != null
+                        ? DateTime.tryParse(p['date_appel'].toString())
+                            ?.toLocal()
+                            .toString()
+                            .substring(0, 10)
+                        : null;
+
+                    final color = _couleurStatut(statut);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(module, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B))),
+                                if (prof.isNotEmpty)
+                                  Text('Prof. $prof', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                                if (dateStr != null)
+                                  Text(dateStr, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _libelleStatut(statut),
+                              style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _statBadge(String label, String value, Color textColor) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 22)),
+        Text(label, style: TextStyle(color: textColor.withValues(alpha: 0.8), fontSize: 11)),
       ],
     );
   }

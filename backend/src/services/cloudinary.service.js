@@ -20,6 +20,10 @@ const CloudinaryService = {
    * @returns {Promise<string>} URL du fichier uploadé
    */
   async uploadFile(fileBuffer, fileName, folder = 'scolarhub') {
+    if (!process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY === 'your_cloudinary_api_key') {
+      throw new Error('Les identifiants Cloudinary ne sont pas configurés dans le fichier .env');
+    }
+
     try {
       return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(

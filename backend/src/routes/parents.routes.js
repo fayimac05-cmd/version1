@@ -59,4 +59,44 @@ router.put('/enfant/:etudiantId', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/parents/enfant/:etudiantId/notes - Notes de l'enfant
+router.get('/enfant/:etudiantId/notes', authMiddleware, async (req, res) => {
+  try {
+    const { etudiantId } = req.params;
+    const result = await pool.query(
+      `SELECT * FROM vue_notes_etudiants WHERE etudiant_id = $1 ORDER BY date_session DESC`,
+      [etudiantId]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('[parents] GET /enfant/:id/notes', err);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+});
+
+// GET /api/parents/enfant/:etudiantId/presences - Présences de l'enfant
+router.get('/enfant/:etudiantId/presences', authMiddleware, async (req, res) => {
+  try {
+    const { etudiantId } = req.params;
+    const result = await pool.query(
+      `SELECT * FROM vue_presences_etudiants WHERE etudiant_id = $1 ORDER BY date_appel DESC`,
+      [etudiantId]
+    );
+
+    const total = result.rows.length;
+    const presentes = result.rows.filter(r => r.presence_statut === 'present').length;
+    const absentes = result.rows.filter(r => r.presence_statut === 'absent').length;
+    const retards = result.rows.filter(r => r.presence_statut === 'retard').length;
+
+    res.json({
+      success: true,
+      data: result.rows,
+      stats: { total, presentes, absentes, retards }
+    });
+  } catch (err) {
+    console.error('[parents] GET /enfant/:id/presences', err);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+});
+
 module.exports = router;
