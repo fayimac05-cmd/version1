@@ -218,7 +218,7 @@ class _AdminShellState extends State<AdminShell>
       const AdminNotes(),
       const AdminReclamations(),
       const AdminEtudiants(),
-      const AdminProfesseurs(),
+AdminProfesseurs(profile: widget.profile),
       const AdminParents(),
       const AdminMembres(),
       const AdminMessages(),
