@@ -43,20 +43,40 @@ function initSocket(io) {
     // Rejoindre la room personnelle (notifications)
     socket.join(`user:${userId}`);
 
-    // Rejoindre la room de sa filière
+    // Rejoindre la room de sa filière (ou les filières assignées pour un professeur)
     if (socket.filiere) {
       socket.join(`filiere:${socket.filiere}`);
     }
+    if (socket.userRole === 'professeur') {
+      try {
+        const { rows: profFilieres } = await pool.query(
+          `SELECT DISTINCT m.filiere_id 
+           FROM module_professeur mp
+           JOIN modules m ON m.id = mp.module_id
+           WHERE mp.professeur_id IN (SELECT id FROM professeurs WHERE user_id = $1)`,
+          [userId]
+        );
+        profFilieres.forEach(({ filiere_id }) => {
+          if (filiere_id) socket.join(`filiere:${filiere_id}`);
+        });
+      } catch (err) {
+        console.error('[Socket] Erreur chargement filières prof:', err.message);
+      }
+    }
 
     // Rejoindre toutes les rooms des canaux accessibles :
-    // adhésions explicites + canaux publics (lisibles par tous)
+    // adhésions explicites + canaux publics (lisibles par tous ou par profs/admin)
     try {
+      const publicTypes = ['administration', 'admin_filiere', 'bde', 'general'];
+      if (socket.userRole === 'professeur' || socket.userRole === 'admin') {
+        publicTypes.push('admin_profs');
+      }
       const { rows: canaux } = await pool.query(
         `SELECT id AS canal_id FROM canaux
          WHERE type = ANY($2)
          UNION
          SELECT canal_id FROM canal_membres WHERE user_id = $1`,
-        [userId, ['administration', 'admin_filiere', 'bde', 'general']]
+        [userId, publicTypes]
       );
       canaux.forEach(({ canal_id }) => socket.join(`canal:${canal_id}`));
     } catch (err) {
@@ -72,12 +92,23 @@ function initSocket(io) {
       if (!contenu?.trim()) return callback?.({ error: 'Contenu vide' });
 
       try {
-        // Vérifier que l'utilisateur a le droit d'écrire
-        const { rows: access } = await pool.query(
-          `SELECT role FROM canal_membres WHERE canal_id = $1 AND user_id = $2`,
-          [canalId, userId]
-        );
-        if (!access.length) return callback?.({ error: 'Accès refusé à ce canal' });
+        // Vérifier que l'utilisateur a le droit d'écrire (admin, prof sur admin_profs, ou membre)
+        let isAuthorized = socket.userRole === 'admin';
+        if (!isAuthorized) {
+          const { rows: canalInfo } = await pool.query(`SELECT type FROM canaux WHERE id = $1`, [canalId]);
+          if (canalInfo.length && canalInfo[0].type === 'admin_profs' && socket.userRole === 'professeur') {
+            isAuthorized = true;
+          }
+        }
+        if (!isAuthorized) {
+          const { rows: access } = await pool.query(
+            `SELECT role FROM canal_membres WHERE canal_id = $1 AND user_id = $2`,
+            [canalId, userId]
+          );
+          if (access.length) isAuthorized = true;
+        }
+
+        if (!isAuthorized) return callback?.({ error: 'Accès refusé à ce canal' });
 
         // Persister le message
         const { rows } = await pool.query(
@@ -87,6 +118,14 @@ function initSocket(io) {
           [canalId, userId, contenu.trim()]
         );
         const message = rows[0];
+
+        // Charger infos auteur
+        const { rows: uRows } = await pool.query(`SELECT prenoms, nom, role FROM users WHERE id = $1`, [userId]);
+        if (uRows.length) {
+          message.prenoms = uRows[0].prenoms;
+          message.nom = uRows[0].nom;
+          message.role = uRows[0].role;
+        }
 
         // Diffuser à tous les membres du canal
         io.to(`canal:${canalId}`).emit('message:canal', message);
@@ -111,13 +150,17 @@ function initSocket(io) {
         );
         const message = rows[0];
 
-        // Envoyer au destinataire s'il est en ligne
-        const destSocketId = onlineUsers.get(destinataireId);
-        if (destSocketId) {
-          io.to(`user:${destinataireId}`).emit('message:prive', message);
+        // Charger infos expéditeur
+        const { rows: uRows } = await pool.query(`SELECT prenoms, nom, role FROM users WHERE id = $1`, [userId]);
+        if (uRows.length) {
+          message.prenoms = uRows[0].prenoms;
+          message.nom = uRows[0].nom;
         }
 
-        // Confirmer à l'expéditeur
+        // Envoyer au destinataire et à l'expéditeur
+        io.to(`user:${destinataireId}`).emit('message:prive', message);
+        io.to(`user:${userId}`).emit('message:prive', message);
+
         callback?.({ success: true, message });
       } catch (err) {
         console.error('[Socket] message:prive erreur:', err.message);
@@ -130,8 +173,8 @@ function initSocket(io) {
       const { filiereId, contenu } = data;
       if (!contenu?.trim()) return callback?.({ error: 'Contenu vide' });
 
-      // Vérifier que l'utilisateur appartient à la filière
-      if (String(socket.filiere) !== String(filiereId)) {
+      // Vérifier que l'utilisateur appartient à la filière ou est admin/professeur
+      if (String(socket.filiere) !== String(filiereId) && socket.userRole !== 'admin' && socket.userRole !== 'professeur') {
         return callback?.({ error: 'Vous n\'appartenez pas à cette filière' });
       }
 
@@ -143,6 +186,14 @@ function initSocket(io) {
           [filiereId, userId, contenu.trim()]
         );
         const message = rows[0];
+
+        // Charger infos auteur
+        const { rows: uRows } = await pool.query(`SELECT prenoms, nom, role FROM users WHERE id = $1`, [userId]);
+        if (uRows.length) {
+          message.prenoms = uRows[0].prenoms;
+          message.nom = uRows[0].nom;
+          message.role = uRows[0].role;
+        }
 
         // Diffuser à toute la filière
         io.to(`filiere:${filiereId}`).emit('message:groupe', message);

@@ -10,6 +10,7 @@ const CANAUX = [
   { id: 1, nom: 'Administration',        description: 'Annonces officielles de l\'administration', type: 'administration' },
   { id: 2, nom: 'Admin & Filière',       description: 'Échanges entre l\'administration et les délégués de filière', type: 'admin_filiere' },
   { id: 3, nom: 'Bureau des Étudiants',  description: 'Annonces et activités du BDE', type: 'bde' },
+  { id: 4, nom: 'Corps Enseignant & Administration', description: 'Communications officielles pour les professeurs', type: 'admin_profs' },
 ];
 
 (async () => {

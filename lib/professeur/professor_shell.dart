@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
+import '../pages/canal_screen.dart';
+import '../pages/groupe_filiere_screen.dart';
 import '../services/api_service.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
@@ -38,10 +40,11 @@ class _ProfessorShellState extends State<ProfessorShell> {
     final pages = [
       _ClassesTab(
         profile: widget.profile,
-        onFaireAppel: (c) => _ouvrirDepuisClasse(2, c),
-        onSaisirNotes: (c) => _ouvrirDepuisClasse(3, c),
+        onFaireAppel: (c) => _ouvrirDepuisClasse(3, c),
+        onSaisirNotes: (c) => _ouvrirDepuisClasse(4, c),
       ),
       _CoursTab(profile: widget.profile),
+      CanalScreen(profile: widget.profile),
       AppelTab(initialClasse: _classePreselectionnee),
       NotesTab(initialClasse: _classePreselectionnee),
       _ProfilTab(profile: widget.profile, onLogout: widget.onLogout),
@@ -67,15 +70,16 @@ class _ProfessorShellState extends State<ProfessorShell> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          padding: const EdgeInsets.fromLTRB(4, 10, 4, 10),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _navItem(Icons.groups_outlined, Icons.groups_rounded, 'Classes', 0, AppPalette.blue),
               _navItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'Cours', 1, AppPalette.blue),
-              _navItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 2, const Color(0xFF0EA5E9)),
-              _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 3, const Color(0xFF10B981)),
-              _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 4, const Color(0xFF42A5F5)),
+              _navItem(Icons.forum_outlined, Icons.forum_rounded, 'Canaux', 2, const Color(0xFF7C3AED)),
+              _navItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 3, const Color(0xFF0EA5E9)),
+              _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 4, const Color(0xFF10B981)),
+              _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 5, const Color(0xFF42A5F5)),
             ],
           ),
         ),
@@ -241,6 +245,7 @@ class _ClassesTabState extends State<_ClassesTab> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ClasseDetailSheet(
+        profile: widget.profile,
         classe: classe,
         onFaireAppel: widget.onFaireAppel,
         onSaisirNotes: widget.onSaisirNotes,
@@ -302,7 +307,8 @@ class _ClasseCard extends StatelessWidget {
 }
 
 class _ClasseDetailSheet extends StatefulWidget {
-  const _ClasseDetailSheet({required this.classe, required this.onFaireAppel, required this.onSaisirNotes});
+  const _ClasseDetailSheet({required this.profile, required this.classe, required this.onFaireAppel, required this.onSaisirNotes});
+  final StudentProfile profile;
   final dynamic classe;
   final ValueChanged<Map<String, dynamic>> onFaireAppel;
   final ValueChanged<Map<String, dynamic>> onSaisirNotes;
@@ -370,7 +376,7 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
               controller: vhCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: 'Volume (h)',
+                labelText: 'Volume H (h)',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             )),
@@ -381,33 +387,27 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
               child: const Text('Annuler', style: TextStyle(color: Color(0xFF64748B)))),
           ElevatedButton(
             onPressed: envoi ? null : () async {
-              if (nomCtrl.text.trim().isEmpty) return;
+              final nom = nomCtrl.text.trim();
+              if (nom.isEmpty) return;
               setDialogState(() => envoi = true);
               final res = await ApiService.createModule(
-                nom: nomCtrl.text.trim(),
+                nom: nom,
+                filiereId: int.parse('${widget.classe['id']}'),
                 coefficient: int.tryParse(coefCtrl.text) ?? 2,
                 volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
-                filiereId: int.tryParse('${widget.classe['id']}'),
-                filiereNom: '${widget.classe['nom']}',
               );
-              if (!mounted) return;
-              if (res['success'] == true) {
-                Navigator.pop(dialogCtx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Module "${nomCtrl.text.trim()}" ajouté à ${widget.classe['nom']}.'),
-                    backgroundColor: const Color(0xFF10B981)));
-              } else {
-                setDialogState(() => envoi = false);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(res['error']?.toString() ?? 'Erreur lors de l\'ajout du module.'),
-                    backgroundColor: Colors.red));
-              }
+              if (!dialogCtx.mounted) return;
+              Navigator.pop(dialogCtx);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(res['success'] == true ? 'Module créé avec succès !' : (res['error'] ?? 'Erreur lors de la création.')),
+                backgroundColor: res['success'] == true ? const Color(0xFF10B981) : Colors.red,
+              ));
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             child: envoi
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Ajouter'),
+                : const Text('Créer'),
           ),
         ],
       ),
@@ -457,11 +457,28 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
               )),
             ]),
             const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
+            Row(children: [
+              Expanded(child: ElevatedButton.icon(
+                icon: const Icon(Icons.forum_outlined, size: 18),
+                label: const Text('Chat Classe', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C3AED), foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => GroupeFiliere(
+                    profile: widget.profile,
+                    filiereId: int.tryParse('${widget.classe['id']}'),
+                    nomFiliere: '${widget.classe['nom'] ?? ''}',
+                  )));
+                },
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: OutlinedButton.icon(
                 icon: const Icon(Icons.library_add_outlined, size: 18),
-                label: const Text('Ajouter un module', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                label: const Text('Nouveau module', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppPalette.blue,
                   side: const BorderSide(color: AppPalette.blue),
@@ -469,8 +486,8 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: _ajouterModule,
-              ),
-            ),
+              )),
+            ]),
           ]),
         ),
         const SizedBox(height: 12),

@@ -64,7 +64,15 @@ class _MessageGroupe {
 // ════════════════════════════════════════════════════════════════════════════
 class GroupeFiliere extends StatefulWidget {
   final StudentProfile profile;
-  const GroupeFiliere({super.key, required this.profile});
+  final int? filiereId;
+  final String? nomFiliere;
+
+  const GroupeFiliere({
+    super.key,
+    required this.profile,
+    this.filiereId,
+    this.nomFiliere,
+  });
 
   @override
   State<GroupeFiliere> createState() => _GroupeFiliereState();
@@ -87,8 +95,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
   late List<_MessageGroupe> _messages;
 
-  // Id de la filière côté backend (récupéré via /auth/me) ; null si hors ligne
-  // → dans ce cas l'écran reste en mode démo locale.
+  // Id de la filière côté backend
   int? _filiereId;
   String? _myUserId;
 
@@ -102,51 +109,76 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
   Future<void> _init() async {
     _myUserId = await ApiService.getUserId();
+    if (widget.filiereId != null) {
+      _filiereId = widget.filiereId;
+      await _chargerMessages();
+      await _connecterSocket();
+      return;
+    }
+
     try {
       final headers = await ApiService.getHeaders();
       final me = await http.get(
           Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
-      if (me.statusCode != 200) return;
-      final filiereId = jsonDecode(me.body)['filiere_id'];
-      if (filiereId == null) return;
-      _filiereId = filiereId is int ? filiereId : int.tryParse('$filiereId');
-      if (_filiereId == null) return;
+      if (me.statusCode == 200) {
+        final body = jsonDecode(me.body);
+        final filiereId = body['filiere_id'];
+        _filiereId = filiereId is int ? filiereId : int.tryParse('$filiereId');
+      }
+      _filiereId ??= 1;
 
       await _chargerMessages();
       await _connecterSocket();
     } catch (_) {
-      // Serveur injoignable : on reste sur la démo locale
+      _filiereId ??= 1;
+      await _chargerMessages();
     }
   }
 
   Future<void> _chargerMessages() async {
-    final headers = await ApiService.getHeaders();
-    final response = await http.get(
-      Uri.parse('${ApiService.baseUrl}/messages/groupe/$_filiereId'),
-      headers: headers,
-    );
-    if (response.statusCode != 200 || !mounted) return;
-    final data = jsonDecode(utf8.decode(response.bodyBytes))['data'] as List? ?? [];
-    setState(() {
-      _messages = data
-          .map((m) => _messageDepuisJson(m as Map<String, dynamic>))
-          .toList();
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiService.baseUrl}/messages/groupe/$_filiereId'),
+        headers: headers,
+      );
+      if (response.statusCode != 200 || !mounted) return;
+      final data = jsonDecode(utf8.decode(response.bodyBytes))['data'] as List? ?? [];
+      if (data.isNotEmpty && mounted) {
+        setState(() {
+          _messages = data
+              .map((m) => _messageDepuisJson(m as Map<String, dynamic>))
+              .toList();
+        });
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
+    } catch (_) {}
   }
 
   Future<void> _connecterSocket() async {
     await SocketService().connect();
+    // Join the filiere room for real‑time updates
+    if (_filiereId != null) {
+      SocketService().joinRoom('filiere:${_filiereId}');
+    }
+    // Register listeners for incoming messages
     SocketService().onGroupeMessage((data) {
       if (!mounted) return;
       final json = data is Map<String, dynamic>
           ? data
           : jsonDecode(data.toString()) as Map<String, dynamic>;
       if (json['filiere_id']?.toString() != _filiereId?.toString()) return;
-      // Mes propres messages sont déjà affichés à l'envoi
+      // Ignore our own messages (already displayed locally)
       if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
       setState(() => _messages.add(_messageDepuisJson(json)));
       Future.delayed(const Duration(milliseconds: 100), _scrollBas);
+    });
+    // Handle reconnection: re‑join room and refresh message history
+    SocketService().onConnect((_) async {
+      if (_filiereId != null) {
+        SocketService().joinRoom('filiere:${_filiereId}');
+        await _chargerMessages();
+      }
     });
   }
 
@@ -296,7 +328,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     setState(() => _messages.add(msgLocal));
     Future.delayed(const Duration(milliseconds: 100), _scrollBas);
 
-    if (_filiereId == null) return; // mode démo locale
+    _filiereId ??= 1;
 
     try {
       final headers = await ApiService.getHeaders();
@@ -674,9 +706,11 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
   // ════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    final filiere = widget.profile.filiere.isNotEmpty
-        ? widget.profile.filiere
-        : 'Réseaux Informatiques et Télécom';
+    final filiere = (widget.nomFiliere != null && widget.nomFiliere!.isNotEmpty)
+        ? widget.nomFiliere!
+        : (widget.profile.filiere.isNotEmpty
+            ? widget.profile.filiere
+            : 'Réseaux Informatiques et Télécom');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4F8),

@@ -12,32 +12,41 @@ const { notifierUser } = require('../socket/socketHandler');
 const CANAUX_PUBLICS = ['administration', 'admin_filiere', 'bde', 'general'];
 
 // Vérifie l'accès d'un utilisateur à un canal : membre, ou canal public.
-async function accesCanal(canalId, userId) {
+async function accesCanal(canalId, userId, userRole = null) {
   const { rows: membre } = await pool.query(
     `SELECT role FROM canal_membres WHERE canal_id = $1 AND user_id = $2`,
     [canalId, userId]
   );
   if (membre.length) return true;
   const { rows: canal } = await pool.query(
-    `SELECT 1 FROM canaux WHERE id = $1 AND type = ANY($2)`,
-    [canalId, CANAUX_PUBLICS]
+    `SELECT type FROM canaux WHERE id = $1`,
+    [canalId]
   );
-  return canal.length > 0;
+  if (!canal.length) return false;
+  const type = canal[0].type;
+  if (CANAUX_PUBLICS.includes(type)) return true;
+  if (type === 'admin_profs' && (userRole === 'professeur' || userRole === 'admin')) return true;
+  if (userRole === 'admin') return true;
+  return false;
 }
 
 // ── GET /api/messages/canaux ──────────────────────────────
 // Liste des canaux accessibles par l'utilisateur connecté
 const getCanaux = async (req, res) => {
   try {
+    const publicTypes = ['administration', 'admin_filiere', 'bde', 'general'];
+    if (req.user.role === 'professeur' || req.user.role === 'admin') {
+      publicTypes.push('admin_profs');
+    }
     const { rows } = await pool.query(
       `SELECT c.id, c.nom, c.description, c.type,
-              cm.role,
+              COALESCE(cm.role, 'membre') AS role,
               (SELECT COUNT(*) FROM messages m WHERE m.canal_id = c.id) AS nb_messages
        FROM canaux c
-       JOIN canal_membres cm ON cm.canal_id = c.id
-       WHERE cm.user_id = $1
-       ORDER BY c.nom ASC`,
-      [req.user.id]
+       LEFT JOIN canal_membres cm ON cm.canal_id = c.id AND cm.user_id = $1
+       WHERE c.type = ANY($2) OR cm.user_id = $1
+       ORDER BY c.id ASC`,
+      [req.user.id, publicTypes]
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -54,13 +63,13 @@ const getMessagesCanal = async (req, res) => {
 
   try {
     // Vérifier l'accès (membre ou canal public)
-    if (!(await accesCanal(id, req.user.id))) {
+    if (!(await accesCanal(id, req.user.id, req.user.role))) {
       return res.status(403).json({ success: false, error: 'Accès refusé à ce canal' });
     }
 
     const { rows } = await pool.query(
       `SELECT m.id, m.contenu, m.created_at,
-              u.id AS auteur_id, u.prenoms, u.nom,
+              u.id AS auteur_id, u.prenoms, u.nom, u.role AS auteur_role,
               COALESCE(
                 JSON_AGG(r.emoji) FILTER (WHERE r.emoji IS NOT NULL), '[]'
               ) AS reactions
@@ -93,7 +102,7 @@ const envoyerMessageCanal = async (req, res) => {
 
   try {
     // Vérifier les droits d'écriture (membre ou canal public)
-    if (!(await accesCanal(id, req.user.id))) {
+    if (!(await accesCanal(id, req.user.id, req.user.role))) {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
@@ -104,11 +113,16 @@ const envoyerMessageCanal = async (req, res) => {
       [id, req.user.id, contenu.trim()]
     );
 
+    const message = rows[0];
+    message.prenoms = req.user.prenoms;
+    message.nom = req.user.nom;
+    message.role = req.user.role;
+
     // Émettre via Socket.io si disponible
     const io = req.app.get('io');
-    if (io) io.to(`canal:${id}`).emit('message:canal', rows[0]);
+    if (io) io.to(`canal:${id}`).emit('message:canal', message);
 
-    res.status(201).json({ success: true, data: rows[0] });
+    res.status(201).json({ success: true, data: message });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
@@ -122,7 +136,7 @@ const getConversationsPrivees = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT DISTINCT ON (correspondant_id)
               correspondant_id,
-              u.prenoms, u.nom,
+              u.prenoms, u.nom, u.role, u.matricule,
               mp.contenu AS dernier_message,
               mp.created_at
        FROM (
@@ -136,6 +150,8 @@ const getConversationsPrivees = async (req, res) => {
        ORDER BY correspondant_id, mp.created_at DESC`,
       [req.user.id]
     );
+    // Trier par date du plus récent au plus ancien
+    rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error(err);

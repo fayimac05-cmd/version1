@@ -137,6 +137,13 @@ class _CanalScreenState extends State<CanalScreen> {
                 couleur: _brandBlue, badge: '3', tag: 'Lecture seule',
                 canalId: '1', type: 'administration'),
             const SizedBox(height: 12),
+            if (widget.profile.role == 'professeur' || widget.profile.role == 'admin') ...[
+              _carteCanal(context, icon: Icons.school_rounded, nom: 'Corps Enseignant & Administration',
+                  description: 'Communications officielles pour les professeurs',
+                  couleur: const Color(0xFF0D9488), badge: '1', tag: 'Enseignants',
+                  canalId: '4', type: 'admin_profs'),
+              const SizedBox(height: 12),
+            ],
             _carteCanal(context, icon: Icons.campaign_rounded, nom: 'Admin & Filière',
                 description: 'Messages ciblés de l\'administration et de votre délégué',
                 couleur: const Color(0xFF0891B2), badge: '1', tag: 'Broadcast',
@@ -235,15 +242,22 @@ class _CanalScreenState extends State<CanalScreen> {
 
   void _ouvrir(BuildContext context, String type, String canalId) {
     final p = widget.profile;
-    final peutEcrireAdminFiliere = (p.role == 'delegue' || p.role == 'delegue_adjoint');
-    final peutEcrireBDE = p.role == 'bde_president' || p.role == 'bde_adjoint';
+    final peutEcrireAdminFiliere = (p.role == 'delegue' || p.role == 'delegue_adjoint' || p.role == 'professeur' || p.role == 'admin');
+    final peutEcrireBDE = p.role == 'bde_president' || p.role == 'bde_adjoint' || p.role == 'admin';
+    final isProfOrAdmin = p.role == 'professeur' || p.role == 'admin';
 
     late Widget page;
     switch (type) {
       case 'administration':
         page = _CanalDetail(profile: p, nom: 'Administration', icon: Icons.account_balance_rounded,
             couleur: _brandBlue, tag: 'Lecture seule', canalId: canalId,
-            canWrite: false);
+            canWrite: p.role == 'admin');
+        break;
+      case 'admin_profs':
+        page = _CanalDetail(profile: p, nom: 'Corps Enseignant & Administration', icon: Icons.school_rounded,
+            couleur: const Color(0xFF0D9488),
+            tag: isProfOrAdmin ? 'Enseignants · Droits d\'écriture actifs' : 'Enseignants',
+            canalId: canalId, canWrite: isProfOrAdmin);
         break;
       case 'admin_filiere':
         page = _CanalDetail(profile: p, nom: 'Admin & Filière', icon: Icons.campaign_rounded,
@@ -263,7 +277,7 @@ class _CanalScreenState extends State<CanalScreen> {
       default:
         page = _CanalDetail(profile: p, nom: 'Administration', icon: Icons.account_balance_rounded,
             couleur: _brandBlue, tag: 'Lecture seule',
-            canalId: canalId, canWrite: false);
+            canalId: canalId, canWrite: p.role == 'admin');
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
@@ -706,6 +720,13 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
       if (rh.statusCode != 200 || !mounted) return;
       final data = jsonDecode(utf8.decode(rh.bodyBytes))['data'] as List? ?? [];
       setState(() {
+        _msgs.clear();
+        _msgs.add({
+          'texte': 'Bonjour, l\'administration est à votre écoute. Posez votre question de manière détaillée.',
+          'estMoi': false,
+          'heure': '08:00',
+          'lu': true,
+        });
         _msgs.addAll(data.map((m) => {
           'texte': m['contenu'] ?? '',
           'estMoi': m['expediteur_id']?.toString() == _myUserId,

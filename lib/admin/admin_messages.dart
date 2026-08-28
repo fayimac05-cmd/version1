@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../utils/snackbar_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -133,6 +137,7 @@ class _AdminMessagesState extends State<AdminMessages>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   GroupeAdmin? _groupeActif;
+  late List<GroupeAdmin> _groupes;
   final _msgCtrl           = TextEditingController();
   final _scrollCtrl        = ScrollController();
   final _keyboardFocusNode = FocusNode();
@@ -151,26 +156,189 @@ class _AdminMessagesState extends State<AdminMessages>
   // GlobalKeys pour scroll précis vers un message cité
   final Map<String, GlobalKey> _msgKeys = {};
 
-  List<GroupeAdmin> get _officiels => adminGroupes
+  List<GroupeAdmin> get _officiels => _groupes
       .where((g) => g.type == 'admin_profs' || g.type == 'admin_delegues')
       .toList();
   List<GroupeAdmin> get _filieres =>
-      adminGroupes.where((g) => g.type == 'admin_filiere').toList();
+      _groupes.where((g) => g.type == 'admin_filiere').toList();
   List<GroupeAdmin> get _prives =>
-      adminGroupes.where((g) => g.type == 'prive').toList();
+      _groupes.where((g) => g.type == 'prive').toList();
   int get _totalNonLus =>
-      adminGroupes.fold(0, (s, g) => s + g.nbNonLus);
+      _groupes.fold(0, (s, g) => s + g.nbNonLus);
 
   @override
   void initState() {
     super.initState();
+    _groupes = List.from(adminGroupes);
     _tabCtrl = TabController(length: 3, vsync: this);
     _msgCtrl.addListener(() =>
         setState(() => _hasText = _msgCtrl.text.trim().isNotEmpty));
+    _chargerDonnees();
+  }
+
+  Future<void> _chargerDonnees() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final resPrives = await http.get(
+        Uri.parse('${ApiService.baseUrl}/messages/prives'),
+        headers: headers,
+      );
+      if (resPrives.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(resPrives.bodyBytes));
+        final data = (body is Map ? body['data'] : body) as List? ?? [];
+        if (data.isNotEmpty && mounted) {
+          final privesReels = data.map<GroupeAdmin>((m) {
+            final id = m['correspondant_id']?.toString() ?? '';
+            final prenoms = m['prenoms'] ?? '';
+            final nom = m['nom'] ?? '';
+            final role = m['role'] ?? 'Étudiant';
+            final matricule = m['matricule'] ?? '';
+            final initiales = ('${prenoms.isNotEmpty ? prenoms[0] : ''}${nom.isNotEmpty ? nom[0] : ''}').toUpperCase();
+            final dernierMsg = m['dernier_message'] ?? '';
+            final createdAt = (DateTime.tryParse(m['created_at'] ?? '') ?? DateTime.now()).toLocal();
+            final heure = '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
+
+            return GroupeAdmin(
+              id: id,
+              nom: '$prenoms $nom',
+              type: 'prive',
+              avatar: initiales.isNotEmpty ? initiales : '👤',
+              description: '$role ${matricule.isNotEmpty ? '· $matricule' : ''}',
+              membres: ['Admin', '$prenoms $nom'],
+              messages: [
+                MessageAdmin(
+                  id: 'MP_${DateTime.now().millisecondsSinceEpoch}',
+                  expediteur: '$prenoms $nom',
+                  texte: dernierMsg,
+                  heure: heure,
+                  type: 'texte',
+                  estMoi: false,
+                  lu: false,
+                ),
+              ],
+            );
+          }).toList();
+
+          setState(() {
+            _groupes.removeWhere((g) => g.type == 'prive');
+            _groupes.addAll(privesReels);
+          });
+        }
+      }
+
+      await SocketService().connect();
+      SocketService().onPrivateMessage((data) {
+        if (!mounted) return;
+        final json = data is Map<String, dynamic> ? data : jsonDecode(data.toString()) as Map<String, dynamic>;
+        final expId = json['expediteur_id']?.toString();
+        final contenu = json['contenu'] ?? json['texte'] ?? '';
+        final nomExp = '${json['prenoms'] ?? ''} ${json['nom'] ?? ''}'.trim();
+        final heure = _now();
+
+        setState(() {
+          var grp = _groupes.firstWhere(
+            (g) => g.id == expId && g.type == 'prive',
+            orElse: () {
+              final newG = GroupeAdmin(
+                id: expId ?? 'P_${DateTime.now().millisecondsSinceEpoch}',
+                nom: nomExp.isNotEmpty ? nomExp : 'Nouvel utilisateur',
+                type: 'prive',
+                avatar: nomExp.isNotEmpty ? nomExp[0].toUpperCase() : '👤',
+                description: 'Message privé reçu',
+                membres: ['Admin', nomExp.isNotEmpty ? nomExp : 'Utilisateur'],
+                messages: [],
+              );
+              _groupes.add(newG);
+              return newG;
+            },
+          );
+          grp.messages.add(MessageAdmin(
+            id: json['id']?.toString() ?? 'M_${DateTime.now().millisecondsSinceEpoch}',
+            expediteur: nomExp.isNotEmpty ? nomExp : grp.nom,
+            texte: contenu,
+            heure: heure,
+            type: 'texte',
+            estMoi: false,
+            lu: _groupeActif?.id == grp.id,
+          ));
+          if (_groupeActif?.id != grp.id) grp.nbNonLus++;
+        });
+      });
+
+      SocketService().onCanalMessage((data) {
+        if (!mounted) return;
+        final json = data is Map<String, dynamic> ? data : jsonDecode(data.toString()) as Map<String, dynamic>;
+        final canalId = json['canal_id']?.toString();
+        final contenu = json['contenu'] ?? '';
+        final nomExp = '${json['prenoms'] ?? ''} ${json['nom'] ?? ''}'.trim();
+        final heure = _now();
+
+        setState(() {
+          for (final g in _groupes) {
+            if (g.id == canalId || (canalId == '4' && g.type == 'admin_profs') || (canalId == '2' && g.type == 'admin_filiere')) {
+              g.messages.add(MessageAdmin(
+                id: json['id']?.toString() ?? 'MC_${DateTime.now().millisecondsSinceEpoch}',
+                expediteur: nomExp.isNotEmpty ? nomExp : 'Utilisateur',
+                texte: contenu,
+                heure: heure,
+                type: 'texte',
+                estMoi: false,
+              ));
+            }
+          }
+        });
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _chargerHistoriqueGroupe(GroupeAdmin g) async {
+    setState(() {
+      _groupeActif = g;
+      g.nbNonLus = 0;
+      _showEmoji = false;
+      _showSticker = false;
+      _msgKeys.clear();
+    });
+
+    try {
+      final headers = await ApiService.getHeaders();
+      if (g.type == 'prive' && g.id.length > 5) {
+        final res = await http.get(
+          Uri.parse('${ApiService.baseUrl}/messages/prives/${g.id}'),
+          headers: headers,
+        );
+        if (res.statusCode == 200) {
+          final body = jsonDecode(utf8.decode(res.bodyBytes));
+          final data = (body is Map ? body['data'] : body) as List? ?? [];
+          final myId = await ApiService.getUserId();
+          if (mounted && data.isNotEmpty) {
+            setState(() {
+              g.messages.clear();
+              g.messages.addAll(data.map<MessageAdmin>((m) {
+                final dt = (DateTime.tryParse(m['created_at'] ?? '') ?? DateTime.now()).toLocal();
+                final heure = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                final estMoi = m['expediteur_id']?.toString() == myId;
+                return MessageAdmin(
+                  id: m['id']?.toString() ?? UniqueKey().toString(),
+                  expediteur: estMoi ? 'Admin' : g.nom,
+                  texte: m['contenu'] ?? '',
+                  heure: heure,
+                  type: 'texte',
+                  estMoi: estMoi,
+                  lu: true,
+                );
+              }));
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    SocketService().off('message:prive');
+    SocketService().off('message:canal');
     _tabCtrl.dispose();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
@@ -307,11 +475,7 @@ class _AdminMessagesState extends State<AdminMessages>
     final color     = _couleurType(g.type);
 
     return GestureDetector(
-      onTap: () => setState(() {
-        _groupeActif = g; g.nbNonLus = 0;
-        _showEmoji = false; _showSticker = false;
-        _msgKeys.clear();
-      }),
+      onTap: () => _chargerHistoriqueGroupe(g),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         color: active ? AdminTheme.primaryLight : Colors.transparent,
@@ -1032,14 +1196,15 @@ class _AdminMessagesState extends State<AdminMessages>
           style: TextStyle(fontSize: 13, color: AdminTheme.textSecondary)),
     ])));
 
-  void _envoyer(GroupeAdmin g) {
-    if (_msgCtrl.text.trim().isEmpty) return;
+  void _envoyer(GroupeAdmin g) async {
+    final texte = _msgCtrl.text.trim();
+    if (texte.isEmpty) return;
     final rep = _messageEnReponse;
     setState(() {
       g.messages.add(MessageAdmin(
         id: 'M${DateTime.now().millisecondsSinceEpoch}',
         expediteur: 'Admin',
-        texte: _msgCtrl.text.trim(),
+        texte: texte,
         heure: _now(),
         type: 'texte',
         estMoi: true,
@@ -1060,6 +1225,29 @@ class _AdminMessagesState extends State<AdminMessages>
         );
       }
     });
+
+    try {
+      final headers = await ApiService.getHeaders();
+      if (g.type == 'prive' && g.id.length > 5) {
+        await http.post(
+          Uri.parse('${ApiService.baseUrl}/messages/prives/${g.id}'),
+          headers: headers,
+          body: jsonEncode({'contenu': texte}),
+        );
+      } else {
+        String canalId = '1';
+        if (g.type == 'admin_profs') canalId = '4';
+        if (g.type == 'admin_filiere') canalId = '2';
+        if (g.type == 'admin_delegues') canalId = '2';
+        if (int.tryParse(g.id) != null) canalId = g.id;
+
+        await http.post(
+          Uri.parse('${ApiService.baseUrl}/messages/canal/$canalId'),
+          headers: headers,
+          body: jsonEncode({'contenu': texte}),
+        );
+      }
+    } catch (_) {}
   }
 
   void _envoyerSticker(String emoji, GroupeAdmin g) {

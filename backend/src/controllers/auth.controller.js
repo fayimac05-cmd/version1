@@ -63,7 +63,6 @@ const login = async (req, res) => {
 
     // Première connexion : pas encore de mot de passe défini en base
     if (estPremiereFois || !motDePasseExiste) {
-      // Si l'étudiant n'a pas soumis de mot de passe, on renvoie le signal de première connexion
       if (!mdp || mdp.trim() === '') {
         return res.status(200).json({
           premiereFois: true,
@@ -83,7 +82,6 @@ const login = async (req, res) => {
       }
     }
 
-    // Si mot de passe requis mais absent
     if (!mdp || mdp.trim() === '') {
       return res.status(400).json({ message: 'Veuillez saisir votre mot de passe.' });
     }
@@ -96,9 +94,7 @@ const login = async (req, res) => {
         match = false;
       }
     } else {
-      // Cas des mots de passe initialisés en clair
       match = (mdp === user.mot_de_passe);
-      // Mise à jour automatique en hash bcrypt si succès
       if (match) {
         bcrypt.hash(mdp, 10).then(h => {
           pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [h, user.id]).catch(() => {});
@@ -156,9 +152,6 @@ const setupPassword = async (req, res) => {
   }
 };
 
-// Recherche publique par matricule : renvoie les infos d'affichage (sans mot de
-// passe) + le drapeau premierLogin. Sert à l'écran de connexion pour afficher la
-// carte de l'étudiant AVANT la saisie / définition du mot de passe.
 const lookup = async (req, res) => {
   try {
     const matricule = (req.query.matricule || '').trim().toUpperCase();
@@ -232,12 +225,18 @@ const lookup = async (req, res) => {
 const me = async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.statut, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1',
+      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.statut,
+              COALESCE(e.filiere_id, (SELECT id FROM filieres WHERE LOWER(nom) = LOWER(u.filiere_nom) LIMIT 1), 1) AS filiere_id,
+              COALESCE(e.filiere_nom, u.filiere_nom, 'Général') AS filiere_nom
+       FROM users u 
+       LEFT JOIN etudiants e ON u.id = e.user_id 
+       WHERE u.id = $1`,
       [req.user.id]
     );
     if (!r.rows[0]) return res.status(404).json({ message: 'Introuvable.' });
     return res.status(200).json(r.rows[0]);
   } catch (err) {
+    console.error('me error:', err);
     return res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
@@ -371,7 +370,6 @@ const forgotPassword = async (req, res) => {
     const { identifiant } = req.body;
     if (!identifiant) return res.status(400).json({ message: 'Matricule ou email requis.' });
 
-    // Chercher l'utilisateur par matricule ou email
     const r = await pool.query(
       'SELECT id, email, nom FROM users WHERE matricule = $1 OR email = $1',
       [identifiant.trim().toUpperCase()]
@@ -386,17 +384,14 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: 'Aucune adresse email associée à ce compte.' });
     }
 
-    // Générer un code à 6 chiffres
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60000); // 15 minutes
 
-    // Sauvegarder dans la DB
     await pool.query(
       'UPDATE users SET reset_code = $1, reset_expires = $2 WHERE id = $3',
       [resetCode, expiresAt, user.id]
     );
 
-    // Envoyer l'email
     const emailResult = await emailService.envoyer(
       user.email,
       'ScolarHub - Réinitialisation de mot de passe',
@@ -407,7 +402,6 @@ const forgotPassword = async (req, res) => {
 
     if (!emailResult.success) {
       console.error('Failed to send email:', emailResult.error);
-      // We still return success so we don't block testing in dev, but ideally handle it better
     }
 
     return res.status(200).json({
@@ -428,7 +422,6 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Données manquantes.' });
     }
 
-    // Chercher l'utilisateur
     const r = await pool.query(
       'SELECT id, reset_code, reset_expires FROM users WHERE matricule = $1 OR email = $1',
       [identifiant.trim().toUpperCase()]
