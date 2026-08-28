@@ -137,21 +137,19 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
   Future<void> _chargerMessages() async {
     try {
-      final headers = await ApiService.getHeaders();
-      final response = await http.get(
-        Uri.parse('${ApiService.baseUrl}/messages/groupe/$_filiereId'),
-        headers: headers,
-      );
-      if (response.statusCode != 200 || !mounted) return;
-      final data = jsonDecode(utf8.decode(response.bodyBytes))['data'] as List? ?? [];
-      if (data.isNotEmpty && mounted) {
-        setState(() {
-          _messages = data
-              .map((m) => _messageDepuisJson(m as Map<String, dynamic>))
-              .toList();
-        });
+      final response = await ApiService.getGroupeMessages(_filiereId ?? 1);
+      if (!mounted) return;
+      if (response['success'] == true) {
+        final data = response['data'] as List? ?? [];
+        if (data.isNotEmpty && mounted) {
+          setState(() {
+            _messages = data
+                .map((m) => _messageDepuisJson(m as Map<String, dynamic>))
+                .toList();
+          });
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
       }
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
     } catch (_) {}
   }
 
@@ -159,7 +157,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     await SocketService().connect();
     // Join the filiere room for real‑time updates
     if (_filiereId != null) {
-      SocketService().joinRoom('filiere:${_filiereId}');
+      SocketService().joinRoom('filiere:$_filiereId');
     }
     // Register listeners for incoming messages
     SocketService().onGroupeMessage((data) {
@@ -176,7 +174,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     // Handle reconnection: re‑join room and refresh message history
     SocketService().onConnect((_) async {
       if (_filiereId != null) {
-        SocketService().joinRoom('filiere:${_filiereId}');
+        SocketService().joinRoom('filiere:$_filiereId');
         await _chargerMessages();
       }
     });
@@ -331,13 +329,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     _filiereId ??= 1;
 
     try {
-      final headers = await ApiService.getHeaders();
-      final response = await http.post(
-        Uri.parse('${ApiService.baseUrl}/messages/groupe/$_filiereId'),
-        headers: headers,
-        body: jsonEncode({'contenu': texte}),
-      );
-      if (response.statusCode != 201 && mounted) {
+      final response = await ApiService.sendGroupeMessage(_filiereId ?? 1, texte);
+      if (response['success'] != true && mounted) {
         setState(() => _messages.remove(msgLocal));
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Échec de l\'envoi du message')));

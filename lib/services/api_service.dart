@@ -1202,4 +1202,39 @@ class ApiService {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
+
+  // ── Groupe Filière : messages ──────────────────────────────
+  static Future<Map<String, dynamic>> getGroupeMessages(int filiereId) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/messages/groupe/$filiereId'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'] as List<dynamic>? ?? []};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> sendGroupeMessage(int filiereId, String texte) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/messages/groupe/$filiereId'),
+        headers: headers,
+        body: jsonEncode({'contenu': texte}),
+      );
+      if (response.statusCode == 201) {
+        return {'success': true};
+      }
+      return {'success': false, 'error': 'Erreur lors de l\'envoi'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
 }

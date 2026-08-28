@@ -59,6 +59,10 @@ class SocketService {
     _socket?.on('message:prive', callback);
   }
 
+  void onGroupeMessage(void Function(dynamic) callback) {
+    _socket?.on('message:groupe', callback);
+  }
+
   void onConnect(void Function(dynamic) callback) {
     _socket?.on('connect', callback);
   }
