@@ -372,7 +372,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
       context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _CreationFiliere(
-        onCreated: (f) => setState(() => adminFilieres.add(f))),
+        onCreated: (f) async => setState(() => adminFilieres.add(f))),
     );
   }
 
@@ -913,7 +913,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
 // CRÉATION FILIÈRE — Stepper 3 étapes
 // ════════════════════════════════════════════════════════════════════════════
 class _CreationFiliere extends StatefulWidget {
-  final Function(Filiere) onCreated;
+  final Future<void> Function(Filiere) onCreated;
   const _CreationFiliere({required this.onCreated});
   @override State<_CreationFiliere> createState() => _CreationFiliereState();
 }
@@ -1218,7 +1218,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
   }
 
  
-void _creer() {
+Future<void> _creer() async {
   if (_nomCtrl.text.isEmpty || _abbrCtrl.text.isEmpty) {
     _snack('Erreur : Nom et Abréviation requis !');
     return;
@@ -1238,8 +1238,28 @@ void _creer() {
       professeur: m['prof'] as String,
     )).toList(),
   );
-  widget.onCreated(f);
-  Navigator.pop(context);
+  final result = await ApiService.createFiliere(
+    nom: f.nom,
+    description: '${f.domaine} · ${f.niveau}',
+  );
+  if (!mounted) return;
+  if (result['success'] != true) {
+    _snack(result['error']?.toString() ?? 'Erreur création filière.');
+    return;
+  }
+  final data = result['data'] as Map<String, dynamic>;
+  final filierePersisted = Filiere(
+    id: 'F${data['id']}',
+    nom: data['nom']?.toString() ?? f.nom,
+    abreviation: f.abreviation,
+    niveau: f.niveau,
+    domaine: f.domaine,
+    anneeAcademique: f.anneeAcademique,
+    modules: f.modules,
+    backendId: data['id'].toString(),
+  );
+  await widget.onCreated(filierePersisted);
+  if (mounted) Navigator.pop(context);
 }
 
   Widget _label(String text) => Padding(

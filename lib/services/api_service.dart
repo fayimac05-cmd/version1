@@ -354,6 +354,21 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> createFiliere({required String nom, String? description}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/filieres'),
+        headers: await getHeaders(),
+        body: jsonEncode({'nom': nom, 'description': description}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201) return {'success': true, 'data': body};
+      return {'success': false, 'error': body['message'] ?? 'Erreur création filière.'};
+    } catch (_) {
+      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend.'};
+    }
+  }
+
   // ── Inscrire un étudiant (admin) ─────────────────────────
   static Future<Map<String, dynamic>> inscrireEtudiant(
       Map<String, dynamic> data) async {
@@ -434,6 +449,24 @@ class ApiService {
         return {'success': true, 'data': body['data']};
       }
       return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour de l\'annonce.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+    }
+  }
+
+  // ── Annonces : publier ────────────────────────────────────
+  static Future<Map<String, dynamic>> publishAnnonce(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/annonces/$id/publier'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la publication de l\'annonce.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
     }

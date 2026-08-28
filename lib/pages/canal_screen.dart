@@ -70,6 +70,9 @@ class CanalScreen extends StatefulWidget {
 }
 
 class _CanalScreenState extends State<CanalScreen> {
+  List<Map<String, dynamic>> _canauxProfesseur = [];
+  bool _chargementCanauxProfesseur = false;
+  String? _erreurCanauxProfesseur;
 
   // Couleurs de l'identité premium
   static const Color _brandBlue = Color(0xFF1E40AF);
@@ -79,7 +82,48 @@ class _CanalScreenState extends State<CanalScreen> {
   static const Color _bgPage = Color(0xFFF8FAFC);
 
   @override
+  void initState() {
+    super.initState();
+    final role = widget.profile.role.toLowerCase().trim();
+    if (['professeur', 'prof', 'enseignant', 'teacher'].contains(role)) {
+      _chargerCanauxProfesseur();
+    }
+  }
+
+  Future<void> _chargerCanauxProfesseur() async {
+    setState(() {
+      _chargementCanauxProfesseur = true;
+      _erreurCanauxProfesseur = null;
+    });
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiService.baseUrl}/canaux/professeur-filieres'),
+        headers: await ApiService.getHeaders(),
+      );
+      if (response.statusCode == 200 && mounted) {
+        final body = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() => _canauxProfesseur = (body['data'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>());
+      } else if (mounted) {
+        setState(() => _erreurCanauxProfesseur =
+            'Le serveur a répondu ${response.statusCode}.');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _erreurCanauxProfesseur =
+            'Impossible de charger les canaux. Vérifie le serveur local.');
+      }
+    } finally {
+      if (mounted) setState(() => _chargementCanauxProfesseur = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final role = widget.profile.role.toLowerCase().trim();
+    if (role == 'professeur' || role == 'prof' || role == 'enseignant' || role == 'teacher') {
+      return _buildProfessorView(context);
+    }
     return Scaffold(
       backgroundColor: _bgPage,
       body: SafeArea(
@@ -177,6 +221,72 @@ class _CanalScreenState extends State<CanalScreen> {
     );
   }
 
+  Widget _buildProfessorView(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bgPage,
+      body: SafeArea(
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: _border)),
+            ),
+            child: const Row(children: [
+              Icon(Icons.forum_rounded, color: _brandBlue, size: 26),
+              SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Espace Professeur', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _textMain)),
+                Text('Échanges professionnels et coordination pédagogique', style: TextStyle(fontSize: 13, color: _textMuted)),
+              ])),
+            ]),
+          ),
+          Expanded(child: ListView(padding: const EdgeInsets.all(20), children: [
+            _sectionLabel('COMMUNICATION ENSEIGNANTS'),
+            const SizedBox(height: 12),
+            _carteCanal(context, icon: Icons.groups_rounded, nom: 'Groupe Professeurs',
+              description: 'Échanges entre tous les professeurs de l’établissement',
+              couleur: _brandBlue, tag: 'Tous les professeurs', canalId: '4', type: 'professeurs'),
+            const SizedBox(height: 22),
+            _sectionLabel('COORDINATION PAR FILIÈRE'),
+            const SizedBox(height: 12),
+            if (_chargementCanauxProfesseur)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(),
+              ))
+            else if (_canauxProfesseur.isEmpty)
+              _erreurCanauxProfesseur != null
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(_erreurCanauxProfesseur!,
+                      style: const TextStyle(fontSize: 13, color: Colors.redAccent)),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _chargerCanauxProfesseur,
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Réessayer'),
+                    ),
+                  ])
+                : const Text('Aucun canal de filière disponible.',
+                    style: TextStyle(fontSize: 13, color: _textMuted))
+            else
+              ..._canauxProfesseur.map((canal) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _carteCanal(context,
+                  icon: Icons.hub_rounded,
+                  nom: canal['nom']?.toString() ?? 'Professeurs & Délégués',
+                  description: canal['description']?.toString() ?? 'Coordination pédagogique',
+                  couleur: const Color(0xFF0891B2),
+                  tag: '${(canal['membres'] as List? ?? []).length} membres',
+                  canalId: canal['id'].toString(),
+                  type: 'prof_delegues'),
+              )),
+          ])),
+        ]),
+      ),
+    );
+  }
+
   Widget _sectionLabel(String text) => Text(text, style: const TextStyle(
       fontSize: 11, fontWeight: FontWeight.w800, color: _textMuted, letterSpacing: 1.0));
 
@@ -245,11 +355,20 @@ class _CanalScreenState extends State<CanalScreen> {
             couleur: _brandBlue, tag: 'Lecture seule', canalId: canalId,
             canWrite: false);
         break;
+      case 'professeurs':
+        page = _CanalDetail(profile: p, nom: 'Groupe Professeurs', icon: Icons.groups_rounded,
+            couleur: _brandBlue, tag: 'Tous les professeurs', canalId: canalId, canWrite: true);
+        break;
+      case 'prof_delegues':
+        page = _CanalDetail(profile: p, nom: 'Professeurs & Délégués', icon: Icons.hub_rounded,
+            couleur: const Color(0xFF0891B2), tag: 'Coordination pédagogique',
+            canalId: canalId, canWrite: true);
+        break;
       case 'admin_filiere':
         page = _CanalDetail(profile: p, nom: 'Admin & Filière', icon: Icons.campaign_rounded,
             couleur: const Color(0xFF0891B2),
-            tag: peutEcrireAdminFiliere ? 'Broadcast · Droits d\'écriture actifs' : 'Broadcast',
-            canalId: canalId, canWrite: peutEcrireAdminFiliere);
+            tag: p.role == 'professeur' || peutEcrireAdminFiliere ? 'Droits d\'écriture actifs' : 'Broadcast',
+            canalId: canalId, canWrite: p.role == 'professeur' || peutEcrireAdminFiliere);
         break;
       case 'bde':
         page = _CanalDetail(profile: p, nom: 'Bureau des Étudiants', icon: Icons.gavel_rounded,
@@ -677,8 +796,10 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
       final json = data is Map<String, dynamic>
           ? data
           : jsonDecode(data.toString()) as Map<String, dynamic>;
-      // N'afficher que les messages venant de l'administration
-      if (_adminId != null && json['expediteur_id']?.toString() != _adminId) return;
+      final destinataireId = json['destinataire_id']?.toString();
+      final expediteurId = json['expediteur_id']?.toString();
+      if (_adminId != null && destinataireId != null && destinataireId != _adminId) return;
+      if (_adminId != null && destinataireId == null && expediteurId == _adminId) return;
       setState(() => _msgs.add({
         'texte': json['contenu'] ?? json['texte'] ?? '',
         'estMoi': false, 'heure': _now(), 'lu': true,
