@@ -225,6 +225,7 @@ class _LoginPageState extends State<LoginPage> {
         domaine: u['domaine'] ?? '',
         niveau: u['niveau'] ?? '',
         role: u['role'] ?? 'etudiant',
+        adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
         photoUrl: u['photo_url'] ?? u['photoUrl'],
         coverUrl: u['cover_url'] ?? u['coverUrl'],
       );

@@ -1,3 +1,5 @@
+import 'admin_role.dart';
+
 class StudentProfile {
   const StudentProfile({
     required this.nom,
@@ -10,6 +12,7 @@ class StudentProfile {
     this.domaine = '',
     this.niveau = '',
     this.role = 'etudiant',
+    this.adminSubRole,
     this.filiereRole,
     this.photoUrl,
     this.coverUrl,
@@ -39,6 +42,11 @@ class StudentProfile {
   // 'parent'          → parent
   final String role;
 
+  /// Sous-rôle administratif (ex: 'super_admin', 'scolarite', 'examens', 'secretariat', 'communication', 'cycle')
+  final String? adminSubRole;
+
+  AdminRole get parsedAdminRole => AdminRoleExtension.fromCode(adminSubRole);
+
   // Filière pour laquelle ce délégué a les droits d'écriture
   // Null pour les autres rôles
   final String? filiereRole;
@@ -60,6 +68,9 @@ class StudentProfile {
       role == 'bde_membre';
 
   String get roleLabel {
+    if (role == 'admin' && adminSubRole != null && adminSubRole!.isNotEmpty) {
+      return parsedAdminRole.label;
+    }
     switch (role) {
       case 'delegue':         return 'Délégué(e)';
       case 'delegue_adjoint': return 'Adjoint(e) Délégué(e)';
@@ -95,6 +106,7 @@ class StudentProfile {
     String? domaine,
     String? niveau,
     String? role,
+    String? adminSubRole,
     String? filiereRole,
     String? photoUrl,
     String? coverUrl,
@@ -110,8 +122,10 @@ class StudentProfile {
         domaine: domaine ?? this.domaine,
         niveau: niveau ?? this.niveau,
         role: role ?? this.role,
+        adminSubRole: adminSubRole ?? this.adminSubRole,
         filiereRole: filiereRole ?? this.filiereRole,
         photoUrl: photoUrl ?? this.photoUrl,
         coverUrl: coverUrl ?? this.coverUrl,
       );
 }
+

@@ -17,21 +17,75 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 
 
-/// Récupère un utilisateur (professeur ou parent) par nom, prénom et téléphone
+/// Récupère un utilisateur (admin, professeur ou parent) par nom, prénom et téléphone
 Future<Map<String, dynamic>?> _fetchByDetails(
     String nom, String prenom, String tel) async {
+  final nomClean = nom.trim();
+  final prenomClean = prenom.trim();
+  final telClean = tel.trim().replaceAll(' ', '');
+
+  // 1. Recherche via le backend (sans restriction RLS)
+  try {
+    final res = await ApiService.lookupDetails(
+      nom: nomClean,
+      prenom: prenomClean,
+      tel: telClean,
+    );
+    if (res['success'] == true && res['user'] != null) {
+      final userMap = Map<String, dynamic>.from(res['user'] as Map);
+      userMap['premiere_fois'] = res['premierLogin'];
+      userMap['id'] = res['userId'];
+      return userMap;
+    }
+  } catch (_) {}
+
+  // 2. Recherche flexible locale via Supabase SDK (si disponible et configuré)
   try {
     final response = await Supabase.instance.client
         .from('users')
         .select()
-        .ilike('nom', nom)
-        .ilike('prenoms', prenom)
-        .eq('tel', tel)
+        .ilike('nom', '%$nomClean%')
+        .ilike('prenoms', '%$prenomClean%')
         .maybeSingle();
-    return response;
-  } catch (_) {
-    return null;
+    if (response != null) return Map<String, dynamic>.from(response);
+  } catch (_) {}
+
+  // 3. Détection démo / locale pour tests
+  final nomLower = nomClean.toLowerCase();
+  if (nomLower.contains('compaor')) {
+    return {
+      'id': 'M001',
+      'nom': 'COMPAORÉ',
+      'prenoms': 'Idrissa',
+      'email': 'idrissa@ist.bf',
+      'tel': telClean,
+      'role': 'admin',
+      'admin_sub_role': 'super_admin',
+      'premierefois': false,
+    };
+  } else if (nomLower.contains('ouedraogo') || nomLower.contains('ouédraogo')) {
+    return {
+      'id': 'P001',
+      'nom': 'OUÉDRAOGO',
+      'prenoms': 'Mamadou',
+      'email': 'mamadou.ouedraogo@ist.bf',
+      'tel': telClean,
+      'role': 'professeur',
+      'premierefois': false,
+    };
+  } else if (nomLower.contains('kouraogo')) {
+    return {
+      'id': 'PAR001',
+      'nom': 'KOURAOGO',
+      'prenoms': 'Seydou',
+      'email': 'parent@ist.bf',
+      'tel': telClean,
+      'role': 'parent',
+      'premierefois': false,
+    };
   }
+
+  return null;
 }
 
 // ─── Enum étapes ─────────────────────────────────────────────────────────────
@@ -225,9 +279,12 @@ class _AuthPageState extends State<AuthPage> {
         _userId = data['id']?.toString();
         _loading = false;
         final motDePasse = data['mot_de_passe']?.toString();
-        _etape = (data['premiere_fois'] == true || data['premierefois'] == true || motDePasse == null || motDePasse.isEmpty)
-            ? _Etape.premiereFois
-            : _Etape.motDePasse;
+        final isFirstLogin = data['premiere_fois'] == true ||
+            data['premierefois'] == true ||
+            (data['premiere_fois'] == null &&
+                data['premierefois'] == null &&
+                (motDePasse == null || motDePasse.isEmpty));
+        _etape = isFirstLogin ? _Etape.premiereFois : _Etape.motDePasse;
       });
     }
   }
@@ -244,14 +301,14 @@ class _AuthPageState extends State<AuthPage> {
     }
 
     final result = await ApiService.login(
-      matricule: _tab == 0 ? _cleTrouvee : null,
-      nom: _tab == 1 ? _nomCtrl.text.trim() : null,
-      tel: _tab == 1 ? _numeroCtrl.text.trim() : null,
+      matricule: _cleTrouvee,
       motDePasse: _passCtrl.text,
     );
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
+      // DEBUG : vérifier le sous-rôle reçu du backend
+      debugPrint('[LOGIN] role=${user['role']} admin_sub_role=${user['admin_sub_role']} adminSubRole=${user['adminSubRole']}');
       _goToDashboard(StudentProfile(
         nom: user['nom'] ?? '',
         prenoms: user['prenoms'] ?? '',
@@ -262,6 +319,7 @@ class _AuthPageState extends State<AuthPage> {
         motDePasse: '',
         domaine: user['domaine'] ?? '',
         role: user['role'] ?? 'etudiant',
+        adminSubRole: user['admin_sub_role'] ?? user['adminSubRole'],
         photoUrl: user['photo_url'] ?? user['photoUrl'],
         coverUrl: user['cover_url'] ?? user['coverUrl'],
       ));
@@ -294,8 +352,13 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
+    // Vérifie si l'ID est un vrai UUID de la base de données
+    // Les IDs de démo (M001, P001, PAR001) doivent court-circuiter le backend
+    final isRealUuid = _userId != null &&
+        RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(_userId!);
+
     // Compte backend : on confirme l'inscription en définissant le mot de passe.
-    if (_userId != null) {
+    if (isRealUuid) {
       final result = await ApiService.setupPassword(
         userId: _userId!,
         email: _emailCtrl.text.trim(),
@@ -310,7 +373,7 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
-    // Repli hors-ligne (démonstration) : pas d'appel backend.
+    // Repli hors-ligne (démonstration) ou ID non-UUID : accès direct au tableau de bord.
     setState(() => _loading = false);
     _goToDashboard(_buildProfile(_newPassCtrl.text));
   }
@@ -327,6 +390,7 @@ class _AuthPageState extends State<AuthPage> {
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
       role: u['role'] ?? 'etudiant',
+      adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
     );
   }
 
@@ -604,8 +668,8 @@ class _AuthPageState extends State<AuthPage> {
         const SizedBox(height: 8),
         Text(
           _tab == 0
-              ? 'Pour : Étudiant, Administration, BDE'
-              : 'Pour : Professeur, Parent',
+              ? 'Pour : Étudiant, BDE'
+              : 'Pour : Admin, Professeur, Parent',
           style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
         ),
         const SizedBox(height: 20),
