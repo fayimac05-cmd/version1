@@ -169,9 +169,12 @@ class _AuthPageState extends State<AuthPage> {
           _userTrouve = {
             'nom': u['nom'] ?? '',
             'prenoms': u['prenoms'] ?? '',
-            'filiere': u['filiere'] ?? '',
-            'domaine': u['domaine'] ?? '',
+            // Le nom de la filière peut arriver sous 'filiere_nom' ou
+            // 'filiere' selon l'endpoint backend — jamais 'filiere_id'
+            // (identifiant numérique, pas un texte affichable).
+            'filiere': u['filiere_nom'] ?? u['filiere'] ?? '',
             'niveau': u['niveau'] ?? '',
+            'domaine': u['domaine'] ?? '',
             'role': u['role'] ?? 'etudiant',
             'premiereFois': premierLogin,
           };
@@ -252,13 +255,22 @@ class _AuthPageState extends State<AuthPage> {
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
+      // DEBUG temporaire — à retirer une fois la connexion vérifiée.
+      // Permet de voir les clés exactes renvoyées par le backend pour
+      // confirmer le bon nom de champ filière/niveau.
+      debugPrint('DEBUG login user payload: $user');
       _goToDashboard(StudentProfile(
         nom: user['nom'] ?? '',
         prenoms: user['prenoms'] ?? '',
         matricule: user['matricule'] ?? _cleTrouvee ?? '',
         email: user['email'] ?? '',
         telephone: user['tel'] ?? '',
-        filiere: (user['filiere_id'] ?? '').toString(),
+        // Le nom de la filière peut arriver sous 'filiere_nom' ou 'filiere'
+        // selon l'endpoint — jamais 'filiere_id' (c'est un identifiant
+        // numérique, pas un texte affichable ni comparable aux tables
+        // emploi_du_temps/edt).
+        filiere: user['filiere_nom'] ?? user['filiere'] ?? '',
+        niveau: user['niveau'] ?? '',
         motDePasse: '',
         domaine: user['domaine'] ?? '',
         role: user['role'] ?? 'etudiant',
@@ -324,6 +336,7 @@ class _AuthPageState extends State<AuthPage> {
       email: _emailCtrl.text,
       telephone: '',
       filiere: u['filiere'] ?? '',
+      niveau: u['niveau'] ?? '',
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
       role: u['role'] ?? 'etudiant',
@@ -339,6 +352,7 @@ class _AuthPageState extends State<AuthPage> {
         email: 'ibrahim.kouraogo@ist.bf',
         telephone: '',
         filiere: 'Réseaux Informatiques et Télécom',
+        niveau: 'Licence 2',
         motDePasse: '1851',
         domaine: 'Sciences & Technologies',
         role: 'etudiant',

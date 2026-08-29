@@ -52,4 +52,6 @@ flutter:
 
   assets:
     - .env
-    - assets/programme_semaine.png
+    - assets/images/cantine_food.png
+    - assets/images/students_group.png
+
