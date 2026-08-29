@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -47,8 +51,8 @@ class GroupeAdmin {
   });
 }
 
-// ── Données mock ─────────────────────────────────────────────────────────
-final List<GroupeAdmin> adminGroupes = [
+// ── Données initiales / mock ──────────────────────────────────────────────
+final List<GroupeAdmin> _mockGroupes = [
   GroupeAdmin(
     id: 'G001', nom: 'Administration & Professeurs',
     type: 'admin_profs', avatar: '👨‍🏫',
@@ -126,10 +130,10 @@ final List<GroupeAdmin> adminGroupes = [
 // ════════════════════════════════════════════════════════════════════════════
 class AdminMessages extends StatefulWidget {
   const AdminMessages({super.key});
-  @override State<AdminMessages> createState() => _AdminMessagesState();
+  @override State<AdminMessages> createState() => AdminMessagesState();
 }
 
-class _AdminMessagesState extends State<AdminMessages>
+class AdminMessagesState extends State<AdminMessages>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   GroupeAdmin? _groupeActif;
@@ -151,6 +155,8 @@ class _AdminMessagesState extends State<AdminMessages>
   // GlobalKeys pour scroll précis vers un message cité
   final Map<String, GlobalKey> _msgKeys = {};
 
+  List<GroupeAdmin> adminGroupes = List.from(_mockGroupes);
+
   List<GroupeAdmin> get _officiels => adminGroupes
       .where((g) => g.type == 'admin_profs' || g.type == 'admin_delegues')
       .toList();
@@ -167,10 +173,87 @@ class _AdminMessagesState extends State<AdminMessages>
     _tabCtrl = TabController(length: 3, vsync: this);
     _msgCtrl.addListener(() =>
         setState(() => _hasText = _msgCtrl.text.trim().isNotEmpty));
+    _loadGroupes();
   }
+
+  Future<void> _loadGroupes() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final resF = await http.get(Uri.parse('${ApiService.baseUrl}/canaux/professeur-filieres'), headers: headers);
+      
+      if (resF.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(resF.bodyBytes));
+        final List data = body is Map ? (body['data'] as List? ?? []) : body;
+        final newGroupes = <GroupeAdmin>[];
+        // Garder les groupes officiels et privés du mock
+        newGroupes.addAll(_mockGroupes.where((g) => g.type != 'admin_filiere'));
+        
+        for (var f in data) {
+          final fid = f['filiere_id'].toString();
+          final membres = (f['membres'] as List? ?? [])
+              .map((m) => '${m['fonction']}: ${m['prenoms'] ?? ''} ${m['nom'] ?? ''}'.trim())
+              .toList();
+          newGroupes.add(GroupeAdmin(
+            id: f['id'].toString(), nom: 'Professeurs & Délégués · ${f['nom']}',
+            type: 'prof_delegues', avatar: '🎓', filiereId: fid,
+            description: f['description'] ?? 'Coordination pédagogique',
+            membres: membres.isEmpty ? ['Aucun membre affecté'] : membres,
+            nbNonLus: 0, readonly: false,
+            messages: [],
+          ));
+        }
+        setState(() { adminGroupes = newGroupes; });
+      }
+      
+      await SocketService().connect();
+      SocketService().onGroupeMessage((data) {
+        if (!mounted) return;
+        final json = data is Map<String, dynamic> ? data : jsonDecode(data.toString()) as Map<String, dynamic>;
+        final fid = json['filiere_id']?.toString();
+        if (fid == null) return;
+        
+        final idx = adminGroupes.indexWhere((g) => g.filiereId == fid);
+        if (idx == -1) return;
+        
+        final g = adminGroupes[idx];
+        final msgId = json['id'].toString();
+        if (g.messages.any((m) => m.id == msgId)) return; // Déjà présent
+        
+        // On évite d'ajouter nos propres messages en double (déjà ajoutés dans _envoyer)
+        // Mais comme l'admin utilise des mock ids, le backend crée un nouvel ID.
+        // On simplifie en vérifiant si le contenu est le même (pour un admin c'est un patch basique)
+        if (json['auteur_id']?.toString() == 'admin' || json['role'] == 'admin') return; 
+        
+        setState(() {
+          g.messages.add(MessageAdmin(
+            id: msgId,
+            expediteur: json['nom'] != null ? '${json['prenoms']} ${json['nom']}' : 'Étudiant',
+            texte: json['contenu'] ?? '',
+            heure: _now(),
+            type: 'texte',
+            estMoi: false,
+            lu: _groupeActif?.id == g.id,
+          ));
+          if (_groupeActif?.id != g.id) g.nbNonLus++;
+        });
+        
+        if (_groupeActif?.id == g.id) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollCtrl.hasClients) _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+          });
+        }
+      });
+      
+    } catch (e) {
+      debugPrint("Erreur loadGroupes: $e");
+    }
+  }
+
+  Future<void> refreshGroupes() => _loadGroupes();
 
   @override
   void dispose() {
+    SocketService().off('message:groupe');
     _tabCtrl.dispose();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
@@ -295,6 +378,7 @@ class _AdminMessagesState extends State<AdminMessages>
       case 'admin_profs':    return Icons.school_rounded;
       case 'admin_delegues': return Icons.groups_rounded;
       case 'admin_filiere':  return Icons.apartment_rounded;
+      case 'prof_delegues':  return Icons.hub_rounded;
       default:               return Icons.person_outline_rounded;
     }
   }
@@ -303,7 +387,7 @@ class _AdminMessagesState extends State<AdminMessages>
     final active    = _groupeActif?.id == g.id;
     final dernMsg   = g.messages.isNotEmpty ? g.messages.last : null;
     final isPrive   = g.type == 'prive';
-    final isFiliere = g.type == 'admin_filiere';
+    final isFiliere = g.type == 'admin_filiere' || g.type == 'prof_delegues';
     final color     = _couleurType(g.type);
 
     return GestureDetector(
@@ -344,7 +428,7 @@ class _AdminMessagesState extends State<AdminMessages>
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(color: AdminTheme.infoLight,
                       borderRadius: BorderRadius.circular(4)),
-                  child: const Text('Broadcast', style: TextStyle(
+                  child: Text(g.type == 'prof_delegues' ? 'Coordination' : 'Broadcast', style: const TextStyle(
                       fontSize: 8, fontWeight: FontWeight.w700,
                       color: AdminTheme.info))),
               Expanded(child: Text(
@@ -1032,14 +1116,16 @@ class _AdminMessagesState extends State<AdminMessages>
           style: TextStyle(fontSize: 13, color: AdminTheme.textSecondary)),
     ])));
 
-  void _envoyer(GroupeAdmin g) {
+  Future<void> _envoyer(GroupeAdmin g) async {
     if (_msgCtrl.text.trim().isEmpty) return;
     final rep = _messageEnReponse;
+    final texte = _msgCtrl.text.trim();
+    
     setState(() {
       g.messages.add(MessageAdmin(
         id: 'M${DateTime.now().millisecondsSinceEpoch}',
         expediteur: 'Admin',
-        texte: _msgCtrl.text.trim(),
+        texte: texte,
         heure: _now(),
         type: 'texte',
         estMoi: true,
@@ -1060,6 +1146,22 @@ class _AdminMessagesState extends State<AdminMessages>
         );
       }
     });
+
+    if (g.type == 'prof_delegues' && g.id.isNotEmpty) {
+      try {
+        final headers = await ApiService.getHeaders();
+        final response = await http.post(
+          Uri.parse('${ApiService.baseUrl}/messages/canal/${g.id}'),
+          headers: headers,
+          body: jsonEncode({'contenu': texte}),
+        );
+        if (response.statusCode != 201) {
+          _snack('Échec de l\'envoi du message au serveur.');
+        }
+      } catch (e) {
+        _snack('Erreur de connexion : impossible d\'envoyer.');
+      }
+    }
   }
 
   void _envoyerSticker(String emoji, GroupeAdmin g) {
@@ -1464,7 +1566,7 @@ class _BulleAdminState extends State<_BulleAdmin>
 // ════════════════════════════════════════════════════════════════════════════
 extension GroupeAdminExtension on GroupeAdmin {
   bool get isPrive    => type == 'prive';
-  bool get isFiliere  => type == 'admin_filiere';
+  bool get isFiliere  => type == 'admin_filiere' || type == 'prof_delegues';
   bool get isProfs    => type == 'admin_profs';
   bool get isDelegues => type == 'admin_delegues';
   int  get totalMessages => messages.length;

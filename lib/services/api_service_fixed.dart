@@ -11,9 +11,9 @@ class ApiService {
   //                     PC, téléphone sur le même Wi-Fi).
   //
   // Après le premier déploiement Render, remplacer _cloudUrl par l'URL
-  // affichée dans le dashboard (https://backend-scolarhub.onrender.com).
-  static const bool _useCloud = true;
-  static const String _cloudUrl = 'https://backend-scolarhub.onrender.com/api';
+  // affichée dans le dashboard (https://scolarhub-backend.onrender.com).
+  static const bool _useCloud = false;
+  static const String _cloudUrl = 'https://scolarhub-backend.onrender.com/api';
   // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
   // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
   static const String _localUrl = 'http://localhost:5000/api';
@@ -109,7 +109,7 @@ class ApiService {
         Uri.parse('$baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 45));
+      );
 
       final data = jsonDecode(utf8.decode(response.bodyBytes));
 
@@ -203,7 +203,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/auth/lookup?matricule=${Uri.encodeQueryComponent(matricule)}'),
         headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 45));
+      );
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200 && data['found'] == true) {
         return {
@@ -214,32 +214,6 @@ class ApiService {
         };
       }
       return {'success': false, 'error': data['message'] ?? 'Matricule non reconnu.'};
-    } catch (e) {
-      return {'success': false, 'offline': true, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
-    }
-  }
-
-  // ── Recherche d'un compte par détails nom/prénom/téléphone (avant connexion) ──
-  static Future<Map<String, dynamic>> lookupDetails({
-    required String nom,
-    required String prenom,
-    required String tel,
-  }) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/auth/lookup?nom=${Uri.encodeQueryComponent(nom)}&prenom=${Uri.encodeQueryComponent(prenom)}&tel=${Uri.encodeQueryComponent(tel)}'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 45));
-      final data = jsonDecode(utf8.decode(response.bodyBytes));
-      if (response.statusCode == 200 && data['found'] == true) {
-        return {
-          'success': true,
-          'premierLogin': data['premierLogin'] == true,
-          'userId': data['userId'],
-          'user': data['user'],
-        };
-      }
-      return {'success': false, 'error': data['message'] ?? 'Utilisateur non reconnu.'};
     } catch (e) {
       return {'success': false, 'offline': true, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
@@ -380,21 +354,6 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> createFiliere({required String nom, String? description}) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/filieres'),
-        headers: await getHeaders(),
-        body: jsonEncode({'nom': nom, 'description': description}),
-      );
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      if (response.statusCode == 201) return {'success': true, 'data': body};
-      return {'success': false, 'error': body['message'] ?? 'Erreur création filière.'};
-    } catch (_) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend.'};
-    }
-  }
-
   // ── Inscrire un étudiant (admin) ─────────────────────────
   static Future<Map<String, dynamic>> inscrireEtudiant(
       Map<String, dynamic> data) async {
@@ -475,24 +434,6 @@ class ApiService {
         return {'success': true, 'data': body['data']};
       }
       return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour de l\'annonce.'};
-    } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
-    }
-  }
-
-  // ── Annonces : publier ────────────────────────────────────
-  static Future<Map<String, dynamic>> publishAnnonce(String id) async {
-    try {
-      final headers = await getHeaders();
-      final response = await http.patch(
-        Uri.parse('$baseUrl/annonces/$id/publier'),
-        headers: headers,
-      );
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      if (response.statusCode == 200) {
-        return {'success': true, 'data': body['data']};
-      }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la publication de l\'annonce.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
     }
@@ -1260,96 +1201,22 @@ class ApiService {
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
-  }
 
   // ═══════════════════════════════════════════════════════════
-  // Gestion des Membres Administrateurs (RBAC / Base de Données)
+  // Récupérer la liste des professeurs
   // ═══════════════════════════════════════════════════════════
-
-  static Future<Map<String, dynamic>> getMembresAdmin() async {
+  static Future<Map<String, dynamic>> getProfesseurs() async {
     try {
       final headers = await getHeaders();
-      final response = await http.get(Uri.parse('$baseUrl/membres'), headers: headers);
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      if (response.statusCode == 200) {
-        await _cacheSet('membres_admin', jsonEncode(body['data']));
-        return {'success': true, 'data': body['data'] as List<dynamic>};
-      }
-      return {'success': false, 'error': body['message'] ?? 'Erreur de chargement des membres.'};
-    } catch (e) {
-      final horsLigne = await _reponseHorsLigne('membres_admin');
-      if (horsLigne != null) return horsLigne;
-      return {'success': false, 'error': 'Serveur injoignable.'};
-    }
-  }
-
-  static Future<Map<String, dynamic>> creerMembreAdmin({
-    required String nom,
-    required String prenoms,
-    required String email,
-    required String role,
-    required Map<String, bool> permissions,
-  }) async {
-    try {
-      final headers = await getHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/membres'),
+      final response = await http.get(
+        Uri.parse('$baseUrl/professeurs'),
         headers: headers,
-        body: jsonEncode({
-          'nom': nom,
-          'prenoms': prenoms,
-          'email': email,
-          'role': role,
-          'admin_sub_role': role,
-          'permissions': permissions,
-        }),
       );
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return {'success': true, 'data': body['data']};
-      }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création en base.'};
-    } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable.'};
-    }
-  }
-
-  static Future<Map<String, dynamic>> updatePermissionsMembre(
-    String id, {
-    Map<String, bool>? permissions,
-    String? role,
-  }) async {
-    try {
-      final headers = await getHeaders();
-      final response = await http.patch(
-        Uri.parse('$baseUrl/membres/$id/permissions'),
-        headers: headers,
-        body: jsonEncode({
-          if (permissions != null) 'permissions': permissions,
-          if (role != null) 'role': role,
-        }),
-      );
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
-        return {'success': true, 'message': body['message']};
+        return {'success': true, 'data': jsonDecode(response.body)};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur de mise à jour.'};
+      return {'success': false, 'data': []};
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable.'};
+      return {'success': false, 'data': []};
     }
-  }
-
-  static Future<Map<String, dynamic>> deleteMembreAdmin(String id) async {
-    try {
-      final headers = await getHeaders();
-      final response = await http.delete(Uri.parse('$baseUrl/membres/$id'), headers: headers);
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      if (response.statusCode == 200) {
-        return {'success': true, 'message': body['message']};
-      }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la suppression.'};
-    } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable.'};
-    }
-  }
 }

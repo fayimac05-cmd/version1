@@ -206,6 +206,7 @@ class _AdminShellState extends State<AdminShell>
 
   // [ARCH-1] IndexedStack — instancié une seule fois, état préservé
   late final List<Widget> _pages;
+  final GlobalKey<AdminMessagesState> _messagesKey = GlobalKey<AdminMessagesState>();
 
   // [ARCH-2] Badges dynamiques (connecter à un stream Firestore/API)
   final Map<int, int> _badges = {
@@ -228,10 +229,10 @@ class _AdminShellState extends State<AdminShell>
       const AdminNotes(),
       const AdminReclamations(),
       const AdminEtudiants(),
-      const AdminProfesseurs(),
+AdminProfesseurs(profile: widget.profile),
       const AdminParents(),
       const AdminMembres(),
-      const AdminMessages(),
+      AdminMessages(key: _messagesKey),
       const AdminBDE(),
       const AdminStatistiques(),
       const AdminEvaluations(),
@@ -306,6 +307,7 @@ class _AdminShellState extends State<AdminShell>
       _prevIdx = _idx;
       _idx = index;
     });
+    if (index == 10) _messagesKey.currentState?.refreshGroupes();
     _pageAnim
       ..reset()
       ..forward();
