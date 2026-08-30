@@ -6,7 +6,8 @@ import '../services/api_service.dart';
 import '../utils/snackbar_helper.dart';
 
 class Membre {
-  final String id, nom, prenoms, email, role;
+  final String id, nom, prenoms, email, role, domaine;
+  final String? tel;
   final AdminRole adminRole;
   final Map<String, bool> droits;
   bool actif;
@@ -17,6 +18,8 @@ class Membre {
     required this.nom,
     required this.prenoms,
     required this.email,
+    this.tel,
+    this.domaine = 'Tous',
     required this.role,
     required this.droits,
     required this.dateCreation,
@@ -261,6 +264,8 @@ class _AdminMembresState extends State<AdminMembres> {
             nom: item['nom']?.toString() ?? '',
             prenoms: item['prenoms']?.toString() ?? '',
             email: item['email']?.toString() ?? '',
+            tel: item['tel']?.toString() ?? item['numero']?.toString(),
+            domaine: item['domaine']?.toString() ?? 'Tous',
             role: adminRole.label,
             adminRole: adminRole,
             droits: droitsMap,
@@ -374,7 +379,28 @@ class _AdminMembresState extends State<AdminMembres> {
                           ),
                         ],
                       ),
-                      Text(m.email, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                      Row(
+                        children: [
+                          Text(
+                            m.tel != null && m.tel!.isNotEmpty ? '${m.email} • ${m.tel}' : m.email,
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                          ),
+                          if (m.domaine != 'Tous') ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                m.domaine,
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -531,7 +557,10 @@ class _AdminMembresState extends State<AdminMembres> {
     final nomCtrl = TextEditingController();
     final prenomCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
+    final telCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
     AdminRole selectedRole = AdminRole.scolarite;
+    String selectedDomaine = 'Tous';
     Map<String, bool> droits = Map.from(_getDefaultRightsForRole(selectedRole));
 
     showModalBottomSheet(
@@ -580,6 +609,40 @@ class _AdminMembresState extends State<AdminMembres> {
                       const SizedBox(height: 10),
                       _label('Email *'),
                       _input(emailCtrl, 'exemple@ist.bf', type: TextInputType.emailAddress),
+                      const SizedBox(height: 10),
+                      _label('Téléphone *'),
+                      _input(telCtrl, '+226 70 00 00 00', type: TextInputType.phone),
+                      const SizedBox(height: 10),
+                      _label('Mot de passe *'),
+                      _input(passCtrl, 'Mot de passe sécurisé (ex: Admin@2026)', obscureText: true),
+                      const SizedBox(height: 14),
+                      _label('Domaine d\'attribution académique *'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ['Tous', 'Sciences & Technologies', 'Sciences de Gestion'].map((d) {
+                          final active = selectedDomaine == d;
+                          return GestureDetector(
+                            onTap: () => setS(() => selectedDomaine = d),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: active ? AdminTheme.iconBg : Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: active ? AdminTheme.iconBg : const Color(0xFFE5E7EB)),
+                              ),
+                              child: Text(
+                                d,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: active ? Colors.white : const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
                       const SizedBox(height: 14),
                       _label('Sous-rôle Administrateur'),
                       Wrap(
@@ -638,8 +701,17 @@ class _AdminMembresState extends State<AdminMembres> {
                     minimumSize: const Size(double.infinity, 50),
                   ),
                   onPressed: () async {
-                    if (nomCtrl.text.isEmpty || !emailCtrl.text.contains('@')) {
-                      _snack('⚠️ Veuillez remplir correctement les champs');
+                    if (nomCtrl.text.isEmpty ||
+                        prenomCtrl.text.isEmpty ||
+                        !emailCtrl.text.contains('@') ||
+                        telCtrl.text.isEmpty ||
+                        passCtrl.text.isEmpty) {
+                      _snack('⚠️ Veuillez remplir tous les champs obligatoires (Nom, Prénom, Email, Téléphone, Mot de passe)');
+                      return;
+                    }
+
+                    if (passCtrl.text.length < 6) {
+                      _snack('⚠️ Le mot de passe doit contenir au moins 6 caractères');
                       return;
                     }
 
@@ -648,6 +720,8 @@ class _AdminMembresState extends State<AdminMembres> {
                       nom: nomCtrl.text.toUpperCase(),
                       prenoms: prenomCtrl.text,
                       email: emailCtrl.text,
+                      tel: telCtrl.text,
+                      domaine: selectedDomaine,
                       role: selectedRole.label,
                       adminRole: selectedRole,
                       droits: Map.from(droits),
@@ -662,6 +736,9 @@ class _AdminMembresState extends State<AdminMembres> {
                       nom: nomCtrl.text,
                       prenoms: prenomCtrl.text,
                       email: emailCtrl.text,
+                      tel: telCtrl.text,
+                      motDePasse: passCtrl.text,
+                      domaine: selectedDomaine,
                       role: selectedRole.code,
                       permissions: droits,
                     );
@@ -688,7 +765,9 @@ class _AdminMembresState extends State<AdminMembres> {
         child: Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
       );
 
-  Widget _input(TextEditingController ctrl, String hint, {TextInputType type = TextInputType.text}) => Container(
+  Widget _input(TextEditingController ctrl, String hint,
+          {TextInputType type = TextInputType.text, bool obscureText = false}) =>
+      Container(
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(10),
@@ -697,6 +776,7 @@ class _AdminMembresState extends State<AdminMembres> {
         child: TextField(
           controller: ctrl,
           keyboardType: type,
+          obscureText: obscureText,
           style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
             hintText: hint,

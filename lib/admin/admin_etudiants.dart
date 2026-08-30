@@ -3,6 +3,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/etudiant_model.dart';
+import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../app/scolar_hub_app.dart';
 import '../admin/admin_theme.dart';
@@ -10,7 +11,8 @@ import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
 
 class AdminEtudiants extends StatefulWidget {
-  const AdminEtudiants({super.key});
+  final StudentProfile profile;
+  const AdminEtudiants({super.key, required this.profile});
   @override State<AdminEtudiants> createState() => _AdminEtudiantsState();
 }
 
@@ -19,7 +21,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
   bool _loading = true;
 
   String _filtreStatut   = 'tous';
-  String _filtredomaine  = 'tous';
+  late String _filtredomaine;
   String _filtreNiveau   = 'tous';
   String _recherche      = '';
   final TextEditingController _searchCtrl = TextEditingController();
@@ -44,6 +46,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
+    _filtredomaine = widget.profile.filtreParDomaine ? widget.profile.domaineAdmin : 'tous';
     _tabs = TabController(length: 2, vsync: this);
     _chargerEtudiants();
   }
@@ -57,13 +60,19 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
 
   Future<void> _chargerEtudiants() async {
     setState(() => _loading = true);
-    final result = await ApiService.getEtudiants();
+    final result = await ApiService.getEtudiants(
+      domaine: widget.profile.filtreParDomaine ? widget.profile.domaineAdmin : null,
+    );
     if (result['success'] == true) {
       final data = result['data'] as List<dynamic>;
+      // ignore: avoid_print
+      print('[AdminEtudiants] ${data.length} étudiant(s) chargé(s) | filtreParDomaine=${widget.profile.filtreParDomaine} | domaineAdmin=${widget.profile.domaineAdmin}');
       adminEtudiants = data
           .map((e) => etudiantFromApi(Map<String, dynamic>.from(e as Map)))
           .toList();
     } else {
+      // ignore: avoid_print
+      print('[AdminEtudiants] ERREUR chargement: ${result['error']}');
       adminEtudiants = [];
     }
     if (mounted) setState(() => _loading = false);
@@ -157,7 +166,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
                       Expanded(child: _filtreDropdown('Domaine', _filtredomaine,
                           ['tous', 'Sciences & Technologies', 'Sciences de Gestion'],
                           ['Tous', 'Sciences & Tech', 'Gestion'],
-                          (v) => setState(() => _filtredomaine = v!))),
+                          widget.profile.filtreParDomaine ? null : (v) => setState(() => _filtredomaine = v!))),
                       const SizedBox(width: 10),
                       Expanded(child: _filtreDropdown('Niveau', _filtreNiveau,
                           ['tous', 'Licence 1', 'Licence 2', 'Licence 3'],
@@ -227,7 +236,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants> with SingleTickerProvid
   );
 
   Widget _filtreDropdown(String hint, String? value, List<String> vals,
-      List<String> labels, ValueChanged<String?> onChanged) =>
+      List<String> labels, ValueChanged<String?>? onChanged) =>
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         height: 40,

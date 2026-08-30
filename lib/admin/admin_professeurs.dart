@@ -33,12 +33,37 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
       final resProfs = await ApiService.getProfesseurs();
 
       setState(() {
-        _filieres = resFils['success'] == true
+        final allFilieres = resFils['success'] == true
             ? List<Map<String, dynamic>>.from(resFils['data'])
-            : [];
-        _professeurs = resProfs['success'] == true
+            : <Map<String, dynamic>>[];
+        final allProfs = resProfs['success'] == true
             ? List<Map<String, dynamic>>.from(resProfs['data'])
-            : [];
+            : <Map<String, dynamic>>[];
+
+        if (widget.profile.filtreParDomaine) {
+          final String df = widget.profile.domaineAdmin;
+          
+          // Déduire le domaine de la filière pour le filtrage
+          bool estMemeDomaineFiliere(String filiereNom) {
+            final f = filiereNom.toLowerCase();
+            final estGestion = f.contains('marketing') || f.contains('gestion') || f.contains('finance') || f.contains('comptab');
+            final domaineFiliere = estGestion ? 'Sciences de Gestion' : 'Sciences & Technologies';
+            return domaineFiliere == df;
+          }
+
+          _filieres = allFilieres
+              .where((f) => estMemeDomaineFiliere(f['nom'] ?? ''))
+              .cast<Map<String, dynamic>>()
+              .toList();
+          _professeurs = allProfs
+              .where((p) => (p['domaine'] ?? '').toString().toLowerCase() == df.toLowerCase())
+              .cast<Map<String, dynamic>>()
+              .toList();
+        } else {
+          _filieres = allFilieres;
+          _professeurs = allProfs;
+        }
+
         _loading = false;
         _error = (_filieres.isEmpty && _professeurs.isEmpty) ? 'Erreur de chargement.' : null;
       });
@@ -56,6 +81,7 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _FormulaireProf(
+        profile: widget.profile,
         filieres: _filieres,
         prof: prof,
         onSave: (data, filieresSelectionnees) async {
@@ -344,11 +370,13 @@ class _CarteProfesseur extends StatelessWidget {
 
 // ── Formulaire ajout/modification professeur ──────────────────────────────────
 class _FormulaireProf extends StatefulWidget {
+  final StudentProfile profile;
   final List<Map<String, dynamic>> filieres;
   final Map<String, dynamic>? prof;
   final Future<void> Function(Map<String, dynamic>, List<String>) onSave;
 
   const _FormulaireProf({
+    required this.profile,
     required this.filieres,
     required this.onSave,
     this.prof,
@@ -385,6 +413,10 @@ class _FormulaireProfState extends State<_FormulaireProf> {
         for (final f in filieres) {
           _filieresSelectionnees.add(f['id'].toString());
         }
+      }
+    } else {
+      if (widget.profile.filtreParDomaine) {
+        _domaineCtrl.text = widget.profile.domaineAdmin;
       }
     }
   }
@@ -476,7 +508,8 @@ class _FormulaireProfState extends State<_FormulaireProf> {
             _champ(_emailCtrl, 'Adresse email', Icons.email_outlined,
                 type: TextInputType.emailAddress),
             const SizedBox(height: 12),
-            _champ(_domaineCtrl, 'Domaine / Spécialité', Icons.school_outlined),
+            _champ(_domaineCtrl, 'Domaine / Spécialité', Icons.school_outlined,
+                readOnly: widget.profile.filtreParDomaine),
             const SizedBox(height: 20),
 
             // Sélection multiple des filières
@@ -598,20 +631,21 @@ class _FormulaireProfState extends State<_FormulaireProf> {
   }
 
   Widget _champ(TextEditingController ctrl, String label, IconData icon,
-      {TextInputType type = TextInputType.text}) {
+      {TextInputType type = TextInputType.text, bool readOnly = false}) {
     return TextField(
       controller: ctrl,
       keyboardType: type,
+      readOnly: readOnly,
       style: const TextStyle(fontSize: 15),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: readOnly ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: BorderSide(color: readOnly ? const Color(0xFFCBD5E1) : const Color(0xFFE2E8F0)),
         ),
       ),
     );

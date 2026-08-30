@@ -18,11 +18,21 @@ const ws = require('ws');
 let _supabase = null;
 function getSupabase() {
   if (!_supabase) {
-    _supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_KEY,
-      { realtime: { transport: ws } }
-    );
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_KEY ||
+                process.env.SUPABASE_SECRET_KEY ||
+                process.env.SUPABASE_ANON_KEY ||
+                process.env.SUPABASE_KEY ||
+                process.env.SUPABASE_PUBLISHABLE_KEY;
+
+    if (!url || !key) {
+      throw new Error(
+        '[DB Config] SUPABASE_URL ou la cle Supabase (SUPABASE_SERVICE_KEY / SUPABASE_ANON_KEY) ' +
+        'est manquante dans les variables d\'environnement Render.'
+      );
+    }
+
+    _supabase = createClient(url, key, { realtime: { transport: ws } });
   }
   return _supabase;
 }
@@ -47,11 +57,15 @@ async function query(text, params) {
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
     if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
     if (Array.isArray(value)) {
+      if (value.length === 0) return `ARRAY[]::text[]`;
       return `ARRAY[${value.map((item) => `'${String(item).replace(/'/g, "''")}'`).join(', ')}]`;
     }
     if (value instanceof Date) return `'${value.toISOString().replace(/'/g, "''")}'`;
     return `'${String(value).replace(/'/g, "''")}'`;
   });
+
+  // Log query for debugging syntax errors
+  console.log('[DB QUERY]:', sql);
 
   // Tentative via RPC execute_sql (fonction SQL stockée côté Supabase)
   const { data, error } = await supabase.rpc('execute_sql', {
@@ -60,8 +74,15 @@ async function query(text, params) {
   });
 
   if (!error) {
-    const rows = Array.isArray(data) ? data : (data ? [data] : []);
-    return { rows, rowCount: rows.length };
+    // SELECT → tableau JSON ; DML → { success, rowCount }
+    if (Array.isArray(data)) {
+      return { rows: data, rowCount: data.length };
+    } else if (data && typeof data === 'object' && 'rowCount' in data) {
+      return { rows: [], rowCount: data.rowCount || 0 };
+    } else if (data) {
+      return { rows: [data], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
   }
 
   // Si la fonction RPC n'existe pas, on log l'erreur pour le debug

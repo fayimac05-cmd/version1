@@ -122,18 +122,20 @@ final List<Filiere> adminFilieres = [
 // PAGE FILIÈRES & MODULES
 // ════════════════════════════════════════════════════════════════════════════
 class AdminFilieres extends StatefulWidget {
-  const AdminFilieres({super.key});
+  final StudentProfile profile;
+  const AdminFilieres({super.key, required this.profile});
   @override State<AdminFilieres> createState() => _AdminFilieresState();
 }
 
 class _AdminFilieresState extends State<AdminFilieres> {
-  String _domaine = 'tous';
+  late String _domaine;
   String _query   = '';
   final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _domaine = widget.profile.filtreParDomaine ? widget.profile.domaineAdmin : 'tous';
     _chargerModulesReels();
   }
 
@@ -244,11 +246,20 @@ class _AdminFilieresState extends State<AdminFilieres> {
               )),
               const SizedBox(width: 12),
               // Filtres domaine
-              _domaineChip('Tous', 'tous'),
-              const SizedBox(width: 6),
-              _domaineChip('Sciences & Tech', 'Sciences & Technologies'),
-              const SizedBox(width: 6),
-              _domaineChip('Sciences Gestion', 'Sciences de Gestion'),
+              if (widget.profile.filtreParDomaine)
+                _domaineChip(
+                  widget.profile.domaineAdmin == 'Sciences & Technologies'
+                      ? 'Sciences & Tech'
+                      : 'Sciences Gestion',
+                  widget.profile.domaineAdmin,
+                )
+              else ...[
+                _domaineChip('Tous', 'tous'),
+                const SizedBox(width: 6),
+                _domaineChip('Sciences & Tech', 'Sciences & Technologies'),
+                const SizedBox(width: 6),
+                _domaineChip('Sciences Gestion', 'Sciences de Gestion'),
+              ],
             ]),
             const SizedBox(height: 16),
 
@@ -360,6 +371,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
       context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _DetailFiliere(
+        profile: widget.profile,
         filiere: f, onEdit: () => setState(() {})),
     );
   }
@@ -391,9 +403,10 @@ class _AdminFilieresState extends State<AdminFilieres> {
 // DÉTAIL FILIÈRE — Bottom Sheet
 // ════════════════════════════════════════════════════════════════════════════
 class _DetailFiliere extends StatefulWidget {
+  final StudentProfile profile;
   final Filiere filiere;
   final VoidCallback onEdit;
-  const _DetailFiliere({required this.filiere, required this.onEdit});
+  const _DetailFiliere({required this.profile, required this.filiere, required this.onEdit});
   @override State<_DetailFiliere> createState() => _DetailFiliereState();
 }
 
@@ -653,7 +666,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
       const SizedBox(height: 12),
       _actionRow(Icons.grade_rounded, 'Notes de la filière',
           'Voir toutes les notes et moyennes', color,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminNotes()))),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminNotes(profile: widget.profile)))),
     ]),
   );
 

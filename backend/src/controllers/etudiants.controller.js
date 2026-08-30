@@ -132,7 +132,15 @@ const integrerDansGroupeFiliere = async (client, userId, filiereId, filiere, mat
 // ── GET /api/etudiants ────────────────────────────────────────────────────────
 const listEtudiants = async (req, res) => {
   try {
-    const result = await pool.query(`
+    // Filtre domaine : si l'admin est restreint à un domaine, on ne retourne que ses étudiants
+    const domaineFiltreRaw = (req.query.domaine || '').trim();
+    const domaineFiltre = (domaineFiltreRaw === 'Tous' || domaineFiltreRaw === '') ? null : domaineFiltreRaw;
+
+    console.log('[listEtudiants] domaineFiltre:', domaineFiltre || 'aucun');
+
+    // Requête robuste : on utilise uniquement des colonnes garanties dans le schéma de base
+    // etudiant_role et filiere_role sont sécurisées via COALESCE avec NULL
+    let queryText = `
       SELECT
         e.id AS etudiant_id,
         e.user_id,
@@ -141,17 +149,17 @@ const listEtudiants = async (req, res) => {
         COALESCE(e.prenoms, u.prenoms) AS prenoms,
         COALESCE(e.email, u.email) AS email,
         COALESCE(e.tel, u.tel) AS tel,
-        COALESCE(e.statut, u.statut) AS statut,
+        COALESCE(e.statut, u.statut, 'actif') AS statut,
         COALESCE(e.domaine, u.domaine) AS domaine,
         COALESCE(e.niveau, u.niveau) AS niveau,
         COALESCE(e.date_naissance, u.date_naissance) AS date_naissance,
-        COALESCE(e.nationalite, u.nationalite) AS nationalite,
+        COALESCE(e.nationalite, u.nationalite, 'Burkinabè') AS nationalite,
         COALESCE(e.adresse, u.adresse) AS adresse,
         COALESCE(e.nom_parent, u.nom_parent) AS nom_parent,
         COALESCE(e.tel_parent, u.tel_parent) AS tel_parent,
         COALESCE(e.email_parent, u.email_parent) AS email_parent,
-        u.etudiant_role,
-        u.filiere_role,
+        u.role AS etudiant_role,
+        NULL AS filiere_role,
         e.filiere_id,
         e.premierefois,
         COALESCE(e.filiere_nom, f.nom) AS filiere_nom
@@ -159,14 +167,30 @@ const listEtudiants = async (req, res) => {
       INNER JOIN users u ON u.id = e.user_id
       LEFT JOIN filieres f ON f.id = e.filiere_id
       WHERE u.role = 'etudiant'
-      ORDER BY COALESCE(e.nom, u.nom), COALESCE(e.prenoms, u.prenoms)
-    `);
+    `;
+
+    const params = [];
+    if (domaineFiltre) {
+      params.push(domaineFiltre);
+      queryText += `
+        AND (
+          COALESCE(e.domaine, u.domaine) = $${params.length}
+          OR COALESCE(e.filiere_nom, f.nom) ILIKE '%' || $${params.length} || '%'
+        )
+      `;
+    }
+
+    queryText += ' ORDER BY COALESCE(e.nom, u.nom), COALESCE(e.prenoms, u.prenoms)';
+
+    const result = await pool.query(queryText, params);
+    console.log('[listEtudiants] retour:', result.rows.length, 'étudiant(s)');
     return res.status(200).json(result.rows.map(mapRowToEtudiant));
   } catch (err) {
-    console.error('[listEtudiants]', err);
-    return res.status(500).json({ message: 'Erreur lors du chargement des étudiants.' });
+    console.error('[listEtudiants] ERREUR:', err.message);
+    return res.status(500).json({ message: 'Erreur lors du chargement des étudiants.', detail: err.message });
   }
 };
+
 
 // ── POST /api/etudiants ───────────────────────────────────────────────────────
 const inscrireEtudiant = async (req, res) => {
@@ -197,7 +221,8 @@ const inscrireEtudiant = async (req, res) => {
     }
 
     client = await pool.connect();
-    await client.query('BEGIN');
+    // Note: BEGIN/COMMIT ne fonctionnent pas avec Supabase RPC execute_sql
+    // chaque requête est déjà atomique
     await ensureFilieres(client);
 
     const filiereRes = await client.query('SELECT id FROM filieres WHERE nom = $1', [filiere.trim()]);
@@ -207,7 +232,8 @@ const inscrireEtudiant = async (req, res) => {
     const emailFinal = email?.trim() || `${matricule.split('/')[1]}@ist.bf`;
     const domaineFinal = domaine?.trim() || domaineFromFiliere(filiere);
 
-    const userRes = await client.query(
+    // INSERT users sans RETURNING (non supporté par execute_sql Supabase)
+    await client.query(
       `INSERT INTO users (
         matricule, nom, prenoms, email, tel, role, statut, mot_de_passe,
         domaine, niveau, date_naissance, nationalite, adresse,
@@ -216,8 +242,7 @@ const inscrireEtudiant = async (req, res) => {
         $1, $2, $3, $4, $5, 'etudiant', 'actif', NULL,
         $6, $7, $8, $9, $10,
         $11, $12, $13, 'etudiant', $14
-      )
-      RETURNING id`,
+      )`,
       [
         matricule,
         nom.trim().toUpperCase(),
@@ -236,9 +261,13 @@ const inscrireEtudiant = async (req, res) => {
       ]
     );
 
-    const userId = userRes.rows[0].id;
+    // Récupérer l'ID de l'utilisateur inséré
+    const userRow = await client.query('SELECT id FROM users WHERE matricule = $1', [matricule]);
+    const userId = userRow.rows[0]?.id;
+    if (!userId) throw new Error('Impossible de récupérer l\'ID utilisateur après insertion.');
 
-    const etuRes = await client.query(
+    // INSERT etudiants sans RETURNING
+    await client.query(
       `INSERT INTO etudiants (
         user_id, filiere_id, premierefois,
         matricule, nom, prenoms, email, tel,
@@ -249,8 +278,7 @@ const inscrireEtudiant = async (req, res) => {
         $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12,
         $13, $14, $15, $16, 'actif'
-      )
-      RETURNING id`,
+      )`,
       [
         userId,
         filiereId,
@@ -271,13 +299,16 @@ const inscrireEtudiant = async (req, res) => {
       ]
     );
 
-    // ── INTÉGRATION AUTOMATIQUE DANS LE GROUPE FILIÈRE ────────────────────────
+    // Récupérer l'ID de l'étudiant inséré
+    const etuRow = await client.query('SELECT id FROM etudiants WHERE user_id = $1', [userId]);
+    const etuId = etuRow.rows[0]?.id;
+
+    // Intégration groupe filière (non-bloquant, erreur ignorée)
     let groupesInfo = null;
     if (filiereId) {
       groupesInfo = await integrerDansGroupeFiliere(client, userId, filiereId, filiere.trim(), matricule);
     }
-
-    await client.query('COMMIT');
+    // Pas de COMMIT car pas de BEGIN avec Supabase RPC
 
     // Notification best-effort
     let notifications = { sms: { envoye: false }, email: { envoye: false } };
@@ -300,7 +331,7 @@ const inscrireEtudiant = async (req, res) => {
       notifications,
       groupes: groupesInfo,
       etudiant: {
-        id: etuRes.rows[0].id,
+        id: etuId,
         userId,
         matricule,
         nom: nom.trim().toUpperCase(),
@@ -322,9 +353,7 @@ const inscrireEtudiant = async (req, res) => {
       },
     });
   } catch (err) {
-    if (client) {
-      try { await client.query('ROLLBACK'); } catch (_) {}
-    }
+    // Pas de ROLLBACK car pas de BEGIN avec Supabase RPC
     console.error('[inscrireEtudiant]', err);
     if (err.code === '23505') {
       return res.status(409).json({ message: 'Matricule ou email déjà utilisé.' });

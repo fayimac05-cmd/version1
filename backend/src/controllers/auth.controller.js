@@ -24,8 +24,11 @@ const login = async (req, res) => {
                   COALESCE(e.filiere_nom, u.filiere_nom) AS filiere,
                   COALESCE(e.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
-                  COALESCE(e.tel, u.tel) AS tel_etudiant
-           FROM users u LEFT JOIN etudiants e ON u.id = e.user_id
+                  COALESCE(e.tel, u.tel) AS tel_etudiant,
+                  COALESCE(m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine
+           FROM users u
+           LEFT JOIN etudiants e ON u.id = e.user_id
+           LEFT JOIN membres m ON u.id = m.user_id
            WHERE LOWER(u.matricule) = $1 OR LOWER(u.email) = $1`,
           [matClean]
         );
@@ -58,13 +61,15 @@ const login = async (req, res) => {
 
     if (!user) return res.status(404).json({ message: 'Matricule non reconnu.' });
     if (user.statut === 'suspendu') return res.status(403).json({ message: 'Compte suspendu.' });
-    if (user.statut === 'renvoye')  return res.status(403).json({ message: 'Compte desactive.' });
+    if (user.statut === 'renvoye') return res.status(403).json({ message: 'Compte desactive.' });
 
     const motDePasseExiste = user.mot_de_passe && user.mot_de_passe.trim() !== '' && user.mot_de_passe !== 'null';
-    const estPremiereFois = user.premierefois === true || user.premiere_fois === true || !motDePasseExiste;
+    // Les admins/profs/parents ne passent jamais par le flux « première connexion étudiant »
+    const isStudentRole = !user.role || user.role === 'etudiant' || user.role === 'bde';
+    const estPremiereFois = isStudentRole && (user.premierefois === true || user.premiere_fois === true || !motDePasseExiste);
 
-    // Première connexion : pas encore de mot de passe défini en base
-    if (estPremiereFois || !motDePasseExiste) {
+    // Première connexion : pas encore de mot de passe défini en base (étudiants uniquement)
+    if (estPremiereFois || (isStudentRole && !motDePasseExiste)) {
       // Si l'étudiant n'a pas soumis de mot de passe, on renvoie le signal de première connexion
       if (!mdp || mdp.trim() === '') {
         return res.status(200).json({
@@ -103,7 +108,7 @@ const login = async (req, res) => {
       // Mise à jour automatique en hash bcrypt si succès
       if (match) {
         bcrypt.hash(mdp, 10).then(h => {
-          pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [h, user.id]).catch(() => {});
+          pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [h, user.id]).catch(() => { });
         });
       }
     }
@@ -112,7 +117,18 @@ const login = async (req, res) => {
 
     const token = genToken(user);
     const { mot_de_passe, ...safeUser } = user;
-    return res.status(200).json({ token, user: safeUser });
+
+    // S'assurer que le role est bien transmis même si la colonne est aliasée différemment
+    console.log(`[LOGIN] user ${safeUser.nom} - role="${safeUser.role}" admin_sub_role="${safeUser.admin_sub_role}"`);
+
+    const responseUser = {
+      ...safeUser,
+      role: safeUser.role || 'etudiant',
+      admin_sub_role: safeUser.admin_sub_role || null,
+      admin_domaine: safeUser.admin_domaine || 'Tous',
+    };
+
+    return res.status(200).json({ token, user: responseUser });
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ message: 'Erreur serveur.' });
@@ -142,7 +158,7 @@ const setupPassword = async (req, res) => {
     }
 
     const hashed = await bcrypt.hash(motDePasse, 10);
-    
+
     try {
       await pool.query('UPDATE users SET mot_de_passe = $1, email = $2 WHERE id = $3', [hashed, email || null, userId]);
     } catch (dbErr) {
@@ -407,7 +423,7 @@ const register = async (req, res) => {
     });
   } catch (err) {
     if (client) {
-      try { await client.query('ROLLBACK'); } catch (_) {}
+      try { await client.query('ROLLBACK'); } catch (_) { }
     }
     console.error('Register error:', err);
     if (err.code === '23505') {
