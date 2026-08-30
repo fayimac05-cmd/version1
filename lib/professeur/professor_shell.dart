@@ -383,6 +383,7 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
             onPressed: envoi ? null : () async {
               if (nomCtrl.text.trim().isEmpty) return;
               setDialogState(() => envoi = true);
+              final messenger = ScaffoldMessenger.of(context);
               final res = await ApiService.createModule(
                 nom: nomCtrl.text.trim(),
                 coefficient: int.tryParse(coefCtrl.text) ?? 2,
@@ -390,15 +391,16 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                 filiereId: int.tryParse('${widget.classe['id']}'),
                 filiereNom: '${widget.classe['nom']}',
               );
+              if (!dialogCtx.mounted) return;
               if (!mounted || !dialogCtx.mounted) return;
               if (res['success'] == true) {
                 Navigator.pop(dialogCtx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                messenger.showSnackBar(SnackBar(
                     content: Text('Module "${nomCtrl.text.trim()}" ajouté à ${widget.classe['nom']}.'),
                     backgroundColor: const Color(0xFF10B981)));
               } else {
                 setDialogState(() => envoi = false);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                messenger.showSnackBar(SnackBar(
                     content: Text(res['error']?.toString() ?? 'Erreur lors de l\'ajout du module.'),
                     backgroundColor: Colors.red));
               }
