@@ -122,18 +122,20 @@ final List<Filiere> adminFilieres = [
 // PAGE FILIÈRES & MODULES
 // ════════════════════════════════════════════════════════════════════════════
 class AdminFilieres extends StatefulWidget {
-  const AdminFilieres({super.key});
+  final StudentProfile profile;
+  const AdminFilieres({super.key, required this.profile});
   @override State<AdminFilieres> createState() => _AdminFilieresState();
 }
 
 class _AdminFilieresState extends State<AdminFilieres> {
-  String _domaine = 'tous';
+  late String _domaine;
   String _query   = '';
   final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _domaine = widget.profile.filtreParDomaine ? widget.profile.domaineAdmin : 'tous';
     _chargerModulesReels();
   }
 
@@ -244,11 +246,20 @@ class _AdminFilieresState extends State<AdminFilieres> {
               )),
               const SizedBox(width: 12),
               // Filtres domaine
-              _domaineChip('Tous', 'tous'),
-              const SizedBox(width: 6),
-              _domaineChip('Sciences & Tech', 'Sciences & Technologies'),
-              const SizedBox(width: 6),
-              _domaineChip('Sciences Gestion', 'Sciences de Gestion'),
+              if (widget.profile.filtreParDomaine)
+                _domaineChip(
+                  widget.profile.domaineAdmin == 'Sciences & Technologies'
+                      ? 'Sciences & Tech'
+                      : 'Sciences Gestion',
+                  widget.profile.domaineAdmin,
+                )
+              else ...[
+                _domaineChip('Tous', 'tous'),
+                const SizedBox(width: 6),
+                _domaineChip('Sciences & Tech', 'Sciences & Technologies'),
+                const SizedBox(width: 6),
+                _domaineChip('Sciences Gestion', 'Sciences de Gestion'),
+              ],
             ]),
             const SizedBox(height: 16),
 
@@ -360,6 +371,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
       context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _DetailFiliere(
+        profile: widget.profile,
         filiere: f, onEdit: () => setState(() {})),
     );
   }
@@ -372,7 +384,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
       context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _CreationFiliere(
-        onCreated: (f) => setState(() => adminFilieres.add(f))),
+        onCreated: (f) async => setState(() => adminFilieres.add(f))),
     );
   }
 
@@ -391,9 +403,10 @@ class _AdminFilieresState extends State<AdminFilieres> {
 // DÉTAIL FILIÈRE — Bottom Sheet
 // ════════════════════════════════════════════════════════════════════════════
 class _DetailFiliere extends StatefulWidget {
+  final StudentProfile profile;
   final Filiere filiere;
   final VoidCallback onEdit;
-  const _DetailFiliere({required this.filiere, required this.onEdit});
+  const _DetailFiliere({required this.profile, required this.filiere, required this.onEdit});
   @override State<_DetailFiliere> createState() => _DetailFiliereState();
 }
 
@@ -653,7 +666,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
       const SizedBox(height: 12),
       _actionRow(Icons.grade_rounded, 'Notes de la filière',
           'Voir toutes les notes et moyennes', color,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminNotes()))),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminNotes(profile: widget.profile)))),
     ]),
   );
 
@@ -693,6 +706,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
             onPressed: envoi ? null : () async {
               if (titreCtrl.text.trim().isEmpty || contenuCtrl.text.trim().isEmpty) return;
               setDialogState(() => envoi = true);
+              final messenger = ScaffoldMessenger.of(context);
 
               final res = await ApiService.createAnnonce({
                 'titre': titreCtrl.text.trim(),
@@ -701,19 +715,30 @@ class _DetailFiliereState extends State<_DetailFiliere>
                 'niveau': f.niveau,
                 'cibleRole': 'etudiant',
               });
-              if (!mounted) return;
+              if (!dialogCtx.mounted) return;
               if (res['success'] == true) {
                 // L'annonce est créée en brouillon : on la publie aussitôt
                 // pour qu'elle atteigne les étudiants de la filière.
                 final id = res['data']?['id'];
                 if (id != null) await ApiService.publierAnnonce(id.toString());
-                if (!mounted) return;
+                if (!dialogCtx.mounted) return;
                 Navigator.pop(dialogCtx);
-                showAppSnackBar(context, 'Annonce envoyée aux étudiants de ${f.nom}.');
+                messenger.showSnackBar(SnackBar(
+                  content: Text('Annonce envoyée aux étudiants de ${f.nom}.'),
+                  backgroundColor: const Color(0xFF1A3C34),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: const Duration(seconds: 2),
+                ));
               } else {
                 setDialogState(() => envoi = false);
-                showAppSnackBar(context, res['error'] as String? ?? 'Erreur lors de l\'envoi.',
-                    backgroundColor: AdminTheme.danger);
+                messenger.showSnackBar(SnackBar(
+                  content: Text(res['error'] as String? ?? 'Erreur lors de l\'envoi.'),
+                  backgroundColor: AdminTheme.danger,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: const Duration(seconds: 2),
+                ));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
@@ -837,6 +862,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
             onPressed: envoi ? null : () async {
               if (nomCtrl.text.trim().isEmpty) return;
               setDialogState(() => envoi = true);
+              final messenger = ScaffoldMessenger.of(context);
 
               if (f.backendId != null) {
                 final result = await ApiService.createModule(
@@ -847,13 +873,19 @@ class _DetailFiliereState extends State<_DetailFiliere>
                   filiereNom: f.nom,
                   professeurUserId: profUserId,
                 );
-                if (!mounted) return;
+                if (!dialogCtx.mounted) return;
                 if (result['success'] == true) {
                   setState(() => f.modules.add(Module.fromApi(result['data'] as Map<String, dynamic>)));
                   Navigator.pop(dialogCtx);
                 } else {
                   setDialogState(() => envoi = false);
-                  showAppSnackBar(context, result['error'] as String? ?? 'Erreur lors de l\'ajout du module.', backgroundColor: AdminTheme.danger);
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(result['error'] as String? ?? 'Erreur lors de l\'ajout du module.'),
+                    backgroundColor: AdminTheme.danger,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    duration: const Duration(seconds: 2),
+                  ));
                 }
               } else {
                 // Filière non synchronisée avec le backend (ex: créée hors ligne) : ajout local uniquement.
@@ -913,7 +945,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
 // CRÉATION FILIÈRE — Stepper 3 étapes
 // ════════════════════════════════════════════════════════════════════════════
 class _CreationFiliere extends StatefulWidget {
-  final Function(Filiere) onCreated;
+  final Future<void> Function(Filiere) onCreated;
   const _CreationFiliere({required this.onCreated});
   @override State<_CreationFiliere> createState() => _CreationFiliereState();
 }
@@ -1218,7 +1250,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
   }
 
  
-void _creer() {
+Future<void> _creer() async {
   if (_nomCtrl.text.isEmpty || _abbrCtrl.text.isEmpty) {
     _snack('Erreur : Nom et Abréviation requis !');
     return;
@@ -1238,8 +1270,28 @@ void _creer() {
       professeur: m['prof'] as String,
     )).toList(),
   );
-  widget.onCreated(f);
-  Navigator.pop(context);
+  final result = await ApiService.createFiliere(
+    nom: f.nom,
+    description: '${f.domaine} · ${f.niveau}',
+  );
+  if (!mounted) return;
+  if (result['success'] != true) {
+    _snack(result['error']?.toString() ?? 'Erreur création filière.');
+    return;
+  }
+  final data = result['data'] as Map<String, dynamic>;
+  final filierePersisted = Filiere(
+    id: 'F${data['id']}',
+    nom: data['nom']?.toString() ?? f.nom,
+    abreviation: f.abreviation,
+    niveau: f.niveau,
+    domaine: f.domaine,
+    anneeAcademique: f.anneeAcademique,
+    modules: f.modules,
+    backendId: data['id'].toString(),
+  );
+  await widget.onCreated(filierePersisted);
+  if (mounted) Navigator.pop(context);
 }
 
   Widget _label(String text) => Padding(

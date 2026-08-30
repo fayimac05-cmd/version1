@@ -565,9 +565,9 @@ class _AdminAnnoncesState extends State<AdminAnnonces> with SingleTickerProvider
   }
 
   Future<void> _togglePublication(Annonce a, StatutAnnonce newStatus) async {
-    final result = await ApiService.updateAnnonce(a.id, {
-      'statut': newStatus == StatutAnnonce.publie ? 'publie' : 'brouillon',
-    });
+    final result = newStatus == StatutAnnonce.publie
+        ? await ApiService.publishAnnonce(a.id)
+        : await ApiService.updateAnnonce(a.id, {'statut': 'brouillon'});
     if (!mounted) return;
     if (result['success'] == true) {
       setState(() => a.statut = newStatus);

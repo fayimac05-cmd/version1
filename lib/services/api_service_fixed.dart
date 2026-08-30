@@ -1201,22 +1201,5 @@ class ApiService {
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
-
-  // ═══════════════════════════════════════════════════════════
-  // Récupérer la liste des professeurs
-  // ═══════════════════════════════════════════════════════════
-  static Future<Map<String, dynamic>> getProfesseurs() async {
-    try {
-      final headers = await getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/professeurs'),
-        headers: headers,
-      );
-      if (response.statusCode == 200) {
-        return {'success': true, 'data': jsonDecode(response.body)};
-      }
-      return {'success': false, 'data': []};
-    } catch (e) {
-      return {'success': false, 'data': []};
-    }
+  }
 }

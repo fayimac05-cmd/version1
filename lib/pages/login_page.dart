@@ -141,7 +141,50 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // 1. Essayer la connexion directe via Supabase
+    // 1. Essayer via le backend Node.js (ApiService) pour obtenir le token JWT
+    final result = await ApiService.login(matricule: mat, motDePasse: pass);
+
+    // Première connexion détectée par le backend
+    if (result['premiereFois'] == true && result['student'] != null) {
+      final u = result['student'] as Map<String, dynamic>? ?? {};
+      if (!mounted) return;
+      setState(() => _loading = false);
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => FirstConnectionPage(
+            matricule: u['matricule']?.toString() ?? mat,
+            nom: u['nom']?.toString() ?? '',
+            prenoms: u['prenoms']?.toString() ?? '',
+            filiereId: u['filiere_id']?.toString() ?? '',
+            filiere: u['filiere']?.toString() ?? '',
+            niveau: u['niveau']?.toString() ?? '',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (result['success'] == true && result['user'] != null) {
+      final u = result['user'];
+      final profile = StudentProfile(
+        nom: u['nom'] ?? '',
+        prenoms: u['prenoms'] ?? '',
+        matricule: u['matricule'] ?? mat,
+        email: u['email'] ?? '',
+        telephone: u['telephone'] ?? '',
+        filiere: u['filiere'] ?? '',
+        motDePasse: '',
+        domaine: u['domaine'] ?? '',
+        niveau: u['niveau'] ?? '',
+        role: u['role'] ?? 'etudiant',
+        photoUrl: u['photo_url'] ?? u['photoUrl'],
+        coverUrl: u['cover_url'] ?? u['coverUrl'],
+      );
+      _goToDashboard(profile);
+      return;
+    }
+
+    // 2. Essayer la connexion directe via Supabase si le backend est hors ligne
     try {
       final supabaseRes = await SupabaseService().loginEtudiant(
         matricule: mat,
@@ -225,6 +268,7 @@ class _LoginPageState extends State<LoginPage> {
         domaine: u['domaine'] ?? '',
         niveau: u['niveau'] ?? '',
         role: u['role'] ?? 'etudiant',
+        adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
         photoUrl: u['photo_url'] ?? u['photoUrl'],
         coverUrl: u['cover_url'] ?? u['coverUrl'],
       );

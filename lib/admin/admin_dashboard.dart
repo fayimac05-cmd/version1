@@ -82,6 +82,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
       Text('Voici un aperçu de votre établissement aujourd\'hui.',
           style: AdminTheme.bodyMedium),
     ])),
+    if (widget.profile.filtreParDomaine) ...[
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE0F2FE),
+          borderRadius: BorderRadius.circular(AdminTheme.radiusButton),
+          border: Border.all(color: const Color(0xFFBAE6FD)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.school_rounded, color: Color(0xFF0284C7), size: 14),
+          const SizedBox(width: 6),
+          Text(
+            widget.profile.domaineAdmin == 'Sciences & Technologies' ? 'Sciences & Tech' : 'Sciences Gestion',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0284C7)),
+          ),
+        ]),
+      ),
+      const SizedBox(width: 10),
+    ],
     Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(color: AdminTheme.primaryLight,

@@ -11,9 +11,9 @@ class ApiService {
   //                     PC, téléphone sur le même Wi-Fi).
   //
   // Après le premier déploiement Render, remplacer _cloudUrl par l'URL
-  // affichée dans le dashboard (https://scolarhub-backend.onrender.com).
-  static const bool _useCloud = false;
-  static const String _cloudUrl = 'https://scolarhub-backend.onrender.com/api';
+  // affichée dans le dashboard (https://backend-scolarhub.onrender.com).
+  static const bool _useCloud = true;
+  static const String _cloudUrl = 'https://backend-scolarhub.onrender.com/api';
   // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
   // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
   static const String _localUrl = 'http://localhost:5000/api';
@@ -52,7 +52,10 @@ class ApiService {
   static Future<void> _cacheSet(String key, String body) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('cache_$key', body);
-    await prefs.setInt('cache_${key}_ts', DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt(
+      'cache_${key}_ts',
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   static Future<Map<String, dynamic>?> _cacheGet(String key) async {
@@ -95,36 +98,57 @@ class ApiService {
 
   // ── Login ────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login({
+    String? userId,
     String? matricule,
+    String? email,
     String? nom,
     String? tel,
     required String motDePasse,
   }) async {
     try {
-      final body = matricule != null
-          ? {'matricule': matricule, 'password': motDePasse}
-          : {'nom': nom, 'tel': tel, 'motDePasse': motDePasse};
+      final Map<String, dynamic> body = {
+        'password': motDePasse,
+        'motDePasse': motDePasse,
+      };
+      if (userId != null && userId.isNotEmpty) body['userId'] = userId;
+      if (matricule != null && matricule.isNotEmpty) body['matricule'] = matricule;
+      if (email != null && email.isNotEmpty) body['email'] = email;
+      if (nom != null) body['nom'] = nom;
+      if (tel != null) body['tel'] = tel;
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 45));
 
       final data = jsonDecode(utf8.decode(response.bodyBytes));
 
       // Première connexion détectée par le backend
       if (data['premiereFois'] == true && data['student'] != null) {
-        return {'success': false, 'premiereFois': true, 'student': data['student']};
+        return {
+          'success': false,
+          'premiereFois': true,
+          'student': data['student'],
+        };
       }
 
       if (response.statusCode == 200 && data['token'] != null) {
         await saveToken(data['token'], userId: data['user']?['id']);
         return {'success': true, 'user': data['user']};
       } else if (data['premierLogin'] == true) {
-        return {'success': true, 'premierLogin': true, 'userId': data['userId']};
+        return {
+          'success': true,
+          'premierLogin': true,
+          'userId': data['userId'],
+        };
       } else {
-        return {'success': false, 'error': data['error'] ?? data['message'] ?? 'Erreur de connexion'};
+        return {
+          'success': false,
+          'error': data['error'] ?? data['message'] ?? 'Erreur de connexion',
+        };
       }
     } catch (e) {
       // 'offline' distingue une panne réseau (backend injoignable) d'un refus
@@ -147,7 +171,11 @@ class ApiService {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/setup-password'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': userId, 'email': email, 'motDePasse': motDePasse}),
+        body: jsonEncode({
+          'userId': userId,
+          'email': email,
+          'motDePasse': motDePasse,
+        }),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -157,9 +185,17 @@ class ApiService {
         return {'success': true, 'user': data['user']};
       }
       final data = jsonDecode(response.body);
-      return {'success': false, 'error': data['message'] ?? 'Erreur lors de la configuration du mot de passe.'};
+      return {
+        'success': false,
+        'error':
+            data['message'] ??
+            'Erreur lors de la configuration du mot de passe.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
     }
   }
 
@@ -190,9 +226,16 @@ class ApiService {
         }
         return {'success': true, 'user': data['user'] ?? {}};
       }
-      return {'success': false, 'error': data['error'] ?? data['message'] ?? 'Erreur lors de l\'activation.'};
+      return {
+        'success': false,
+        'error':
+            data['error'] ?? data['message'] ?? 'Erreur lors de l\'activation.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
     }
   }
 
@@ -200,10 +243,14 @@ class ApiService {
   // Renvoie les infos d'affichage + premierLogin, sans mot de passe.
   static Future<Map<String, dynamic>> lookupMatricule(String matricule) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/auth/lookup?matricule=${Uri.encodeQueryComponent(matricule)}'),
-        headers: {'Content-Type': 'application/json'},
-      );
+      final response = await http
+          .get(
+            Uri.parse(
+              '$baseUrl/auth/lookup?matricule=${Uri.encodeQueryComponent(matricule)}',
+            ),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 45));
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200 && data['found'] == true) {
         return {
@@ -213,14 +260,60 @@ class ApiService {
           'user': data['user'],
         };
       }
-      return {'success': false, 'error': data['message'] ?? 'Matricule non reconnu.'};
+      return {
+        'success': false,
+        'error': data['message'] ?? 'Matricule non reconnu.',
+      };
     } catch (e) {
-      return {'success': false, 'offline': true, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+      return {
+        'success': false,
+        'offline': true,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
+    }
+  }
+
+  // ── Recherche d'un compte par détails nom/prénom/téléphone (avant connexion) ──
+  static Future<Map<String, dynamic>> lookupDetails({
+    required String nom,
+    required String prenom,
+    required String tel,
+  }) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+              '$baseUrl/auth/lookup?nom=${Uri.encodeQueryComponent(nom)}&prenom=${Uri.encodeQueryComponent(prenom)}&tel=${Uri.encodeQueryComponent(tel)}',
+            ),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 45));
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && data['found'] == true) {
+        return {
+          'success': true,
+          'premierLogin': data['premierLogin'] == true,
+          'userId': data['userId'],
+          'user': data['user'],
+        };
+      }
+      return {
+        'success': false,
+        'error': data['message'] ?? 'Utilisateur non reconnu.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'offline': true,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
     }
   }
 
   // ── Mot de passe oublié ──────────────────────────────────
-  static Future<Map<String, dynamic>> forgotPassword({required String identifiant}) async {
+  static Future<Map<String, dynamic>> forgotPassword({
+    required String identifiant,
+  }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/forgot-password'),
@@ -235,7 +328,10 @@ class ApiService {
           'code': data['code']?.toString(),
         };
       }
-      return {'success': false, 'error': data['message'] ?? 'Erreur lors de la demande.'};
+      return {
+        'success': false,
+        'error': data['message'] ?? 'Erreur lors de la demande.',
+      };
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable.'};
     }
@@ -259,31 +355,62 @@ class ApiService {
       );
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
-        return {'success': true, 'message': data['message'] ?? 'Mot de passe réinitialisé.'};
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Mot de passe réinitialisé.',
+        };
       }
-      return {'success': false, 'error': data['message'] ?? 'Erreur lors de la réinitialisation.'};
+      return {
+        'success': false,
+        'error': data['message'] ?? 'Erreur lors de la réinitialisation.',
+      };
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable.'};
     }
   }
 
   // ── Liste des étudiants ──────────────────────────────────
-  static Future<Map<String, dynamic>> getEtudiants() async {
+  static Future<Map<String, dynamic>> getEtudiants({String? domaine}) async {
     try {
       final headers = await getHeaders();
+      String url = '$baseUrl/etudiants';
+      if (domaine != null && domaine.isNotEmpty && domaine != 'Tous') {
+        url += '?domaine=${Uri.encodeQueryComponent(domaine)}';
+      }
       final response = await http.get(
-        Uri.parse('$baseUrl/etudiants'),
+        Uri.parse(url),
         headers: headers,
       );
       if (response.statusCode == 200) {
-        return {'success': true, 'data': jsonDecode(response.body) as List<dynamic>};
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        List<dynamic> dataList;
+        if (decoded is List) {
+          dataList = decoded;
+        } else if (decoded is Map && decoded['data'] is List) {
+          dataList = decoded['data'] as List<dynamic>;
+        } else {
+          dataList = [];
+        }
+        return {
+          'success': true,
+          'data': dataList,
+        };
       }
       if (response.statusCode == 401) {
-        return {'success': false, 'error': 'Session expirée. Veuillez vous reconnecter.'};
+        return {
+          'success': false,
+          'error': 'Session expirée. Veuillez vous reconnecter.',
+        };
       }
-      return {'success': false, 'error': 'Erreur lors du chargement des étudiants.'};
+      return {
+        'success': false,
+        'error': 'Erreur lors du chargement des étudiants.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -343,7 +470,10 @@ class ApiService {
         await _cacheSet('filieres', body);
         return {'success': true, 'data': jsonDecode(body) as List<dynamic>};
       }
-      return {'success': false, 'error': 'Erreur lors du chargement des filières.'};
+      return {
+        'success': false,
+        'error': 'Erreur lors du chargement des filières.',
+      };
     } catch (e) {
       final horsLigne = await _reponseHorsLigne('filieres');
       if (horsLigne != null) return horsLigne;
@@ -354,9 +484,34 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> createFiliere({
+    required String nom,
+    String? description,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/filieres'),
+        headers: await getHeaders(),
+        body: jsonEncode({'nom': nom, 'description': description}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201) return {'success': true, 'data': body};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur création filière.',
+      };
+    } catch (_) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend.',
+      };
+    }
+  }
+
   // ── Inscrire un étudiant (admin) ─────────────────────────
   static Future<Map<String, dynamic>> inscrireEtudiant(
-      Map<String, dynamic> data) async {
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
@@ -385,7 +540,9 @@ class ApiService {
     try {
       final headers = await getHeaders();
       final uri = Uri.parse('$baseUrl/annonces').replace(
-        queryParameters: statut != null ? {'statut': statut, 'limit': '100'} : {'limit': '100'},
+        queryParameters: statut != null
+            ? {'statut': statut, 'limit': '100'}
+            : {'limit': '100'},
       );
       final response = await http.get(uri, headers: headers);
       final body = jsonDecode(utf8.decode(response.bodyBytes));
@@ -393,16 +550,24 @@ class ApiService {
         await _cacheSet('annonces', jsonEncode(body['data']));
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des annonces.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des annonces.',
+      };
     } catch (e) {
       final horsLigne = await _reponseHorsLigne('annonces');
       if (horsLigne != null) return horsLigne;
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Annonces : créer ──────────────────────────────────────
-  static Future<Map<String, dynamic>> createAnnonce(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> createAnnonce(
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
@@ -414,14 +579,23 @@ class ApiService {
       if (response.statusCode == 201) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création de l\'annonce.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la création de l\'annonce.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Annonces : modifier ───────────────────────────────────
-  static Future<Map<String, dynamic>> updateAnnonce(String id, Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> updateAnnonce(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.put(
@@ -433,9 +607,41 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour de l\'annonce.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors de la mise à jour de l\'annonce.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Annonces : publier ────────────────────────────────────
+  static Future<Map<String, dynamic>> publishAnnonce(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/annonces/$id/publier'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors de la publication de l\'annonce.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -451,9 +657,16 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la suppression de l\'annonce.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors de la suppression de l\'annonce.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -469,9 +682,16 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la publication de l\'annonce.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors de la publication de l\'annonce.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -479,25 +699,33 @@ class ApiService {
   static Future<Map<String, dynamic>> getEvenements({String? statut}) async {
     try {
       final headers = await getHeaders();
-      final uri = Uri.parse('$baseUrl/evenements').replace(
-        queryParameters: statut != null ? {'statut': statut} : null,
-      );
+      final uri = Uri.parse(
+        '$baseUrl/evenements',
+      ).replace(queryParameters: statut != null ? {'statut': statut} : null);
       final response = await http.get(uri, headers: headers);
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         await _cacheSet('evenements', jsonEncode(body['data']));
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des événements.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des événements.',
+      };
     } catch (e) {
       final horsLigne = await _reponseHorsLigne('evenements');
       if (horsLigne != null) return horsLigne;
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Événements : créer ────────────────────────────────────
-  static Future<Map<String, dynamic>> createEvenement(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> createEvenement(
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
@@ -509,14 +737,24 @@ class ApiService {
       if (response.statusCode == 201) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création de l\'événement.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors de la création de l\'événement.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Événements : changer le statut (admin) ────────────────
-  static Future<Map<String, dynamic>> updateEvenementStatut(String id, String statut) async {
+  static Future<Map<String, dynamic>> updateEvenementStatut(
+    String id,
+    String statut,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.patch(
@@ -528,9 +766,15 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour du statut.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la mise à jour du statut.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -546,15 +790,24 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la suppression.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la suppression.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Événements : upload de l'affiche ──────────────────────
   static Future<Map<String, dynamic>> uploadEvenementAffiche(
-      String id, List<int> bytes, String filename) async {
+    String id,
+    List<int> bytes,
+    String filename,
+  ) async {
     try {
       final token = await getToken();
       final request = http.MultipartRequest(
@@ -562,22 +815,32 @@ class ApiService {
         Uri.parse('$baseUrl/evenements/$id/affiche'),
       );
       if (token != null) request.headers['Authorization'] = 'Bearer $token';
-      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         return {'success': true, 'url': body['url'], 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'upload de l\'affiche.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'upload de l\'affiche.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Événements : fiche d'inscription ──────────────────────
   static Future<Map<String, dynamic>> inscrireEvenement(
-      String id, Map<String, dynamic> fiche) async {
+    String id,
+    Map<String, dynamic> fiche,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
@@ -589,9 +852,15 @@ class ApiService {
       if (response.statusCode == 201) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'inscription.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'inscription.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -607,14 +876,23 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement de l\'historique.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors du chargement de l\'historique.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Événements : liste des inscrits (auteur/admin) ────────
-  static Future<Map<String, dynamic>> getEvenementInscriptions(String id) async {
+  static Future<Map<String, dynamic>> getEvenementInscriptions(
+    String id,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.get(
@@ -625,32 +903,54 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des inscriptions.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors du chargement des inscriptions.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── EDT : liste (admin) ───────────────────────────────────
-  static Future<Map<String, dynamic>> getEdtAdmin({bool includeArchives = false}) async {
+  static Future<Map<String, dynamic>> getEdtAdmin({
+    bool includeArchives = false,
+  }) async {
     try {
       final headers = await getHeaders();
       final uri = Uri.parse('$baseUrl/edt/admin/all').replace(
-        queryParameters: {'includeArchives': includeArchives.toString(), 'limit': '100'},
+        queryParameters: {
+          'includeArchives': includeArchives.toString(),
+          'limit': '100',
+        },
       );
       final response = await http.get(uri, headers: headers);
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des emplois du temps.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ??
+            'Erreur lors du chargement des emplois du temps.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── EDT : créer (format grille jours/heures) ──────────────
-  static Future<Map<String, dynamic>> createEdtGrille(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> createEdtGrille(
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
@@ -662,14 +962,23 @@ class ApiService {
       if (response.statusCode == 201) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création de l\'EDT.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la création de l\'EDT.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── EDT : modifier les créneaux ────────────────────────────
-  static Future<Map<String, dynamic>> updateEdtGrille(String id, Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> updateEdtGrille(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.put(
@@ -681,9 +990,15 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour de l\'EDT.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la mise à jour de l\'EDT.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -699,9 +1014,15 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'archivage.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'archivage.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -717,7 +1038,10 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['notifications'] ?? []};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur de chargement.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur de chargement.',
+      };
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable.'};
     }
@@ -766,9 +1090,15 @@ class ApiService {
           'message': body['message'],
         };
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'envoi.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -784,9 +1114,15 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la suppression.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la suppression.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -800,11 +1136,26 @@ class ApiService {
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
-        return {'success': true, 'data': body['data'] as List<dynamic>};
+        List<dynamic> dataList;
+        if (body is List) {
+          dataList = body;
+        } else if (body is Map && body['data'] is List) {
+          dataList = body['data'] as List<dynamic>;
+        } else {
+          dataList = [];
+        }
+        return {'success': true, 'data': dataList};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des professeurs.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors du chargement des professeurs.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -820,9 +1171,16 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des disponibilités.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors du chargement des disponibilités.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -836,14 +1194,25 @@ class ApiService {
       final response = await http.get(uri, headers: headers);
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
-        await _cacheSet('modules_${filiereId ?? 'all'}', jsonEncode(body['data']));
+        await _cacheSet(
+          'modules_${filiereId ?? 'all'}',
+          jsonEncode(body['data']),
+        );
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des modules.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des modules.',
+      };
     } catch (e) {
-      final horsLigne = await _reponseHorsLigne('modules_${filiereId ?? 'all'}');
+      final horsLigne = await _reponseHorsLigne(
+        'modules_${filiereId ?? 'all'}',
+      );
       if (horsLigne != null) return horsLigne;
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -874,14 +1243,23 @@ class ApiService {
       if (response.statusCode == 201) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création du module.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la création du module.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Modules : modifier ─────────────────────────────────────
-  static Future<Map<String, dynamic>> updateModule(String id, Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> updateModule(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.put(
@@ -893,9 +1271,15 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data']};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la modification du module.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la modification du module.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -911,32 +1295,50 @@ class ApiService {
         return {'success': true};
       }
       final body = jsonDecode(utf8.decode(response.bodyBytes));
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la suppression du module.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la suppression du module.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Notes : sessions (admin, toutes confondues) ───────────
-  static Future<Map<String, dynamic>> getSessionsNotesAdmin({String? statut}) async {
+  static Future<Map<String, dynamic>> getSessionsNotesAdmin({
+    String? statut,
+  }) async {
     try {
       final headers = await getHeaders();
-      final uri = Uri.parse('$baseUrl/notes/sessions/admin/all').replace(
-        queryParameters: statut != null ? {'statut': statut} : null,
-      );
+      final uri = Uri.parse(
+        '$baseUrl/notes/sessions/admin/all',
+      ).replace(queryParameters: statut != null ? {'statut': statut} : null);
       final response = await http.get(uri, headers: headers);
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des sessions de notes.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ??
+            'Erreur lors du chargement des sessions de notes.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Notes : créer une session (saisie directe ou soumission) ──
-  static Future<Map<String, dynamic>> createSessionNotes(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> createSessionNotes(
+    Map<String, dynamic> data,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
@@ -948,14 +1350,24 @@ class ApiService {
       if (response.statusCode == 201) {
         return {'success': true, 'data': body};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création de la session de notes.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ??
+            'Erreur lors de la création de la session de notes.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Notes : valider une session (admin) ───────────────────
-  static Future<Map<String, dynamic>> validerSessionNotes(String sessionId) async {
+  static Future<Map<String, dynamic>> validerSessionNotes(
+    String sessionId,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.patch(
@@ -966,28 +1378,45 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la validation.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la validation.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
   // ── Notes : rejeter une session (admin) ───────────────────
-  static Future<Map<String, dynamic>> rejeterSessionNotes(String sessionId, {String? motif}) async {
+  static Future<Map<String, dynamic>> rejeterSessionNotes(
+    String sessionId, {
+    String? motif,
+  }) async {
     try {
       final headers = await getHeaders();
       final response = await http.patch(
         Uri.parse('$baseUrl/notes/sessions/$sessionId/rejeter'),
         headers: headers,
-        body: jsonEncode({if (motif != null && motif.isNotEmpty) 'motif': motif}),
+        body: jsonEncode({
+          if (motif != null && motif.isNotEmpty) 'motif': motif,
+        }),
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         return {'success': true};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du rejet.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du rejet.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -1003,9 +1432,15 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du calcul des moyennes.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du calcul des moyennes.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -1022,13 +1457,22 @@ class ApiService {
         return {'success': true, 'data': jsonDecode(response.body)};
       }
       if (response.statusCode == 401) {
-        return {'success': false, 'error': 'Session expirée. Veuillez vous reconnecter.'};
+        return {
+          'success': false,
+          'error': 'Session expirée. Veuillez vous reconnecter.',
+        };
       }
-      return {'success': false, 'error': 'Erreur lors de la récupération du profil.'};
+      return {
+        'success': false,
+        'error': 'Erreur lors de la récupération du profil.',
+      };
     } catch (e) {
       final horsLigne = await _reponseHorsLigne('me');
       if (horsLigne != null) return horsLigne;
-      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
     }
   }
 
@@ -1039,32 +1483,56 @@ class ApiService {
   static Future<Map<String, dynamic>> getEtudiantsARisque() async {
     try {
       final headers = await getHeaders();
-      final response = await http.get(Uri.parse('$baseUrl/risque'), headers: headers);
+      final response = await http.get(
+        Uri.parse('$baseUrl/risque'),
+        headers: headers,
+      );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
-        return {'success': true, 'data': body['data'] as List<dynamic>, 'periode_jours': body['periode_jours']};
+        return {
+          'success': true,
+          'data': body['data'] as List<dynamic>,
+          'periode_jours': body['periode_jours'],
+        };
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du calcul des risques.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du calcul des risques.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
-  static Future<Map<String, dynamic>> alerterEtudiantRisque(int etudiantId, {String? message}) async {
+  static Future<Map<String, dynamic>> alerterEtudiantRisque(
+    int etudiantId, {
+    String? message,
+  }) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/risque/$etudiantId/alerter'),
         headers: headers,
-        body: jsonEncode({if (message != null && message.isNotEmpty) 'message': message}),
+        body: jsonEncode({
+          if (message != null && message.isNotEmpty) 'message': message,
+        }),
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         return {'success': true, ...body};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi de l\'alerte.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'envoi de l\'alerte.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -1075,22 +1543,32 @@ class ApiService {
   static Future<Map<String, dynamic>> getMesPaiements() async {
     try {
       final headers = await getHeaders();
-      final response = await http.get(Uri.parse('$baseUrl/paiements'), headers: headers);
+      final response = await http.get(
+        Uri.parse('$baseUrl/paiements'),
+        headers: headers,
+      );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         await _cacheSet('paiements', utf8.decode(response.bodyBytes));
         return {'success': true, ...body};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des paiements.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des paiements.',
+      };
     } catch (e) {
       final cached = await _cacheGet('paiements');
       if (cached != null) {
         try {
-          final decoded = jsonDecode(cached['body'] as String) as Map<String, dynamic>;
+          final decoded =
+              jsonDecode(cached['body'] as String) as Map<String, dynamic>;
           return {'success': true, ...decoded, 'offline': true};
         } catch (_) {}
       }
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -1116,13 +1594,23 @@ class ApiService {
       if (response.statusCode == 201) {
         return {'success': true, ...body};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'initialisation du paiement.'};
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors de l\'initialisation du paiement.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
-  static Future<Map<String, dynamic>> confirmerPaiement(String paiementId, String code) async {
+  static Future<Map<String, dynamic>> confirmerPaiement(
+    String paiementId,
+    String code,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http.post(
@@ -1136,7 +1624,10 @@ class ApiService {
       }
       return {'success': false, 'error': body['message'] ?? 'Paiement refusé.'};
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
@@ -1147,21 +1638,33 @@ class ApiService {
   static Future<Map<String, dynamic>> getSupportsRevision() async {
     try {
       final headers = await getHeaders();
-      final response = await http.get(Uri.parse('$baseUrl/ia/supports'), headers: headers);
+      final response = await http.get(
+        Uri.parse('$baseUrl/ia/supports'),
+        headers: headers,
+      );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         await _cacheSet('supports_revision', jsonEncode(body['data']));
         return {'success': true, 'data': body['data'] as List<dynamic>};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement des cours.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des cours.',
+      };
     } catch (e) {
       final horsLigne = await _reponseHorsLigne('supports_revision');
       if (horsLigne != null) return horsLigne;
-      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
     }
   }
 
-  static Future<Map<String, dynamic>> genererRevision(String supportId, String type) async {
+  static Future<Map<String, dynamic>> genererRevision(
+    String supportId,
+    String type,
+  ) async {
     try {
       final headers = await getHeaders();
       final response = await http
@@ -1175,9 +1678,15 @@ class ApiService {
       if (response.statusCode == 200) {
         return {'success': true, ...body};
       }
-      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la génération.'};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la génération.',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Génération impossible. Vérifiez votre connexion.'};
+      return {
+        'success': false,
+        'error': 'Génération impossible. Vérifiez votre connexion.',
+      };
     }
   }
 
@@ -1199,7 +1708,126 @@ class ApiService {
       }
       return {'success': false, 'error': body['message'] ?? 'Code invalide.'};
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Gestion des Membres Administrateurs (RBAC / Base de Données)
+  // ═══════════════════════════════════════════════════════════
+
+  static Future<Map<String, dynamic>> getMembresAdmin() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/membres'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        await _cacheSet('membres_admin', jsonEncode(body['data']));
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur de chargement des membres.',
+      };
+    } catch (e) {
+      final horsLigne = await _reponseHorsLigne('membres_admin');
+      if (horsLigne != null) return horsLigne;
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> creerMembreAdmin({
+    required String nom,
+    required String prenoms,
+    required String email,
+    String? tel,
+    String? motDePasse,
+    String? domaine,
+    required String role,
+    required Map<String, bool> permissions,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/membres'),
+        headers: headers,
+        body: jsonEncode({
+          'nom': nom,
+          'prenoms': prenoms,
+          'email': email,
+          if (tel != null && tel.trim().isNotEmpty) 'tel': tel,
+          if (motDePasse != null && motDePasse.trim().isNotEmpty)
+            'motDePasse': motDePasse,
+          if (domaine != null && domaine.trim().isNotEmpty) 'domaine': domaine,
+          'role': role,
+          'admin_sub_role': role,
+          'permissions': permissions,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la création en base.',
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updatePermissionsMembre(
+    String id, {
+    Map<String, bool>? permissions,
+    String? role,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/membres/$id/permissions'),
+        headers: headers,
+        body: jsonEncode({
+          if (permissions != null) 'permissions': permissions,
+          if (role != null) 'role': role,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': body['message']};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur de mise à jour.',
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteMembreAdmin(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/membres/$id'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': body['message']};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la suppression.',
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
     }
   }
 }

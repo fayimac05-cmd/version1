@@ -24,6 +24,7 @@
 
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
+import '../models/admin_role.dart';
 import '../theme/app_palette.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_dashboard.dart';
@@ -105,8 +106,6 @@ const _menuGroups = <Map<String, Object>>[
 // SECTION 2 — AdminMenuService (permissions par rôle) [ARCH-3]
 // ═══════════════════════════════════════════════════════════════
 
-enum AdminRole { superAdmin, academic, secretariat }
-
 class AdminMenuService {
   const AdminMenuService._();
 
@@ -115,14 +114,23 @@ class AdminMenuService {
   static Set<int> allowedItems(AdminRole role) {
     switch (role) {
       case AdminRole.superAdmin:
-        // Accès total
+        // Accès total (0..16)
         return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-      case AdminRole.academic:
-        // Notes, réclamations, filières, EDT, étudiants, profs, stats, sections
-        return {0, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15, 16};
+      case AdminRole.scolarite:
+        // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
+        return {0, 2, 3, 6, 7, 12};
+      case AdminRole.examens:
+        // Tableau de bord, Notes & Moyennes, Réclamations, Statistiques, Éval. Professeurs, Élèves à risque
+        return {0, 4, 5, 12, 13, 16};
       case AdminRole.secretariat:
-        // Annonces, étudiants, parents, messages
-        return {0, 1, 6, 8, 10};
+        // Tableau de bord, Annonces, Réclamations, Étudiants, Parents
+        return {0, 1, 5, 6, 8};
+      case AdminRole.communication:
+        // Tableau de bord, Annonces, Groupes & Messages, BDE & Événements
+        return {0, 1, 10, 11};
+      case AdminRole.cycleDirecteur:
+        // Tableau de bord, Statistiques, Collège & Lycée, Primaire
+        return {0, 12, 14, 15};
     }
   }
 
@@ -169,14 +177,16 @@ class AdminShell extends StatefulWidget {
   final VoidCallback onLogout;
 
   /// Rôle de l'admin connecté — contrôle la visibilité des menus.
-  final AdminRole role;
+  final AdminRole? role;
 
   const AdminShell({
     super.key,
     required this.profile,
     required this.onLogout,
-    this.role = AdminRole.superAdmin,
+    this.role,
   });
+
+  AdminRole get activeRole => role ?? profile.parsedAdminRole;
 
   @override
   State<AdminShell> createState() => _AdminShellState();
@@ -196,6 +206,7 @@ class _AdminShellState extends State<AdminShell>
 
   // [ARCH-1] IndexedStack — instancié une seule fois, état préservé
   late final List<Widget> _pages;
+  final GlobalKey<AdminMessagesState> _messagesKey = GlobalKey<AdminMessagesState>();
 
   // [ARCH-2] Badges dynamiques (connecter à un stream Firestore/API)
   final Map<int, int> _badges = {
@@ -213,15 +224,15 @@ class _AdminShellState extends State<AdminShell>
     _pages = [
       AdminDashboard(profile: widget.profile),
       const AdminAnnonces(),
-      const AdminFilieres(),
+      AdminFilieres(profile: widget.profile),
       const AdminEDT(),
-      const AdminNotes(),
+      AdminNotes(profile: widget.profile),
       const AdminReclamations(),
-      const AdminEtudiants(),
-AdminProfesseurs(profile: widget.profile),
+      AdminEtudiants(profile: widget.profile),
+      AdminProfesseurs(profile: widget.profile),
       const AdminParents(),
       const AdminMembres(),
-      const AdminMessages(),
+      AdminMessages(key: _messagesKey),
       const AdminBDE(),
       const AdminStatistiques(),
       const AdminEvaluations(),
@@ -296,6 +307,7 @@ AdminProfesseurs(profile: widget.profile),
       _prevIdx = _idx;
       _idx = index;
     });
+    if (index == 10) _messagesKey.currentState?.refreshGroupes();
     _pageAnim
       ..reset()
       ..forward();
@@ -658,15 +670,22 @@ AdminProfesseurs(profile: widget.profile),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppPalette.yellow.a15,
+                            color: widget.activeRole == AdminRole.superAdmin
+                                ? AppPalette.yellow.a15
+                                : AppPalette.blue.a10,
                             // [UX-6] StadiumBorder premium
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text('SUPER ADMIN',
+                          child: Text(
+                              widget.activeRole == AdminRole.superAdmin
+                                  ? 'SUPER ADMIN'
+                                  : widget.profile.roleLabel.toUpperCase(),
                               style: TextStyle(
                                   fontSize: 8,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFFB7950B),
+                                  color: widget.activeRole == AdminRole.superAdmin
+                                      ? const Color(0xFFB7950B)
+                                      : AppPalette.blue,
                                   letterSpacing: 0.6)),
                         ),
                       ],
@@ -689,7 +708,7 @@ AdminProfesseurs(profile: widget.profile),
               children: [
                 for (final g in _menuGroups)
                   if ((g['items'] as List<int>).any((i) =>
-                      AdminMenuService.canAccess(widget.role, i) &&
+                      AdminMenuService.canAccess(widget.activeRole, i) &&
                       _visibleParConfig(i))) ...[
                   if (!c)
                     // [UX-4] Hiérarchie typographique renforcée
@@ -719,7 +738,7 @@ AdminProfesseurs(profile: widget.profile),
                   for (final i in (g['items'] as List<int>))
                     // [ARCH-3] Masquer les items non autorisés
                     // + filtrage selon le type d'établissement
-                    if (AdminMenuService.canAccess(widget.role, i) &&
+                    if (AdminMenuService.canAccess(widget.activeRole, i) &&
                         _visibleParConfig(i))
                       _MenuItemTile(
                         item: _items[i],

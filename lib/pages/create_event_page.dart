@@ -179,7 +179,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () async {
+                  onPressed: _isSaving ? null : () async {
                     if (_formKey.currentState!.validate()) {
                       final newEvent = EventModel(
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -197,6 +197,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       final scaffoldMessenger = ScaffoldMessenger.of(context);
                       final navigator = Navigator.of(context);
 
+                      setState(() => _isSaving = true);
+
                       // ── Upload image vers Supabase Storage ──
                       String? imageUrl;
                       if (_selectedImage != null && !kIsWeb) {
@@ -207,7 +209,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               .uploadEventImage(
                                   File(_selectedImage!.path), fileName);
                         } catch (e) {
-                          if (!mounted) return;
+                          if (mounted) setState(() => _isSaving = false);
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                                 content:
@@ -230,7 +232,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           if (imageUrl != null) 'image_url': imageUrl,
                         });
                       } catch (e) {
-                        if (!mounted) return;
+                        if (mounted) setState(() => _isSaving = false);
                         scaffoldMessenger.showSnackBar(
                           SnackBar(
                               content: Text(
@@ -239,7 +241,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                         return;
                       }
 
-                      if (!mounted) return;
+                      if (mounted) setState(() => _isSaving = false);
                       scaffoldMessenger.showSnackBar(
                         const SnackBar(
                             content:

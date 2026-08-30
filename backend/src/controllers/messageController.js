@@ -4,12 +4,15 @@
 // ============================================================
 
 const pool = require('../config/db');
+const supabase = require('../config/supabase');
 const { notifierUser } = require('../socket/socketHandler');
+
+const { resolveFiliere, normalizeNiveau } = require('../utils/filieres');
 
 // Types de canaux « publics » : lisibles par tout utilisateur authentifié,
 // sans inscription préalable dans canal_membres (les droits d'écriture
 // restent gérés par rôle côté app / canal_membres).
-const CANAUX_PUBLICS = ['administration', 'admin_filiere', 'bde', 'general'];
+const CANAUX_PUBLICS = ['administration', 'admin_filiere', 'bde', 'general', 'professeurs'];
 
 // Vérifie l'accès d'un utilisateur à un canal : membre, ou canal public.
 async function accesCanal(canalId, userId) {
@@ -19,8 +22,11 @@ async function accesCanal(canalId, userId) {
   );
   if (membre.length) return true;
   const { rows: canal } = await pool.query(
-    `SELECT 1 FROM canaux WHERE id = $1 AND type = ANY($2)`,
-    [canalId, CANAUX_PUBLICS]
+    `SELECT 1 FROM canaux
+     WHERE id = $1
+        AND (type IN ('administration', 'admin_filiere', 'bde', 'general', 'professeurs')
+          OR type LIKE 'prof_delegues:%')`,
+    [canalId]
   );
   return canal.length > 0;
 }
@@ -30,14 +36,15 @@ async function accesCanal(canalId, userId) {
 const getCanaux = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT c.id, c.nom, c.description, c.type,
-              cm.role,
+            `SELECT c.id, c.nom, c.description, c.type,
+              COALESCE(cm.role, 'membre') AS role,
               (SELECT COUNT(*) FROM messages m WHERE m.canal_id = c.id) AS nb_messages
        FROM canaux c
-       JOIN canal_membres cm ON cm.canal_id = c.id
-       WHERE cm.user_id = $1
+             LEFT JOIN canal_membres cm ON cm.canal_id = c.id AND cm.user_id = $1
+             WHERE cm.user_id IS NOT NULL
+                OR c.type IN ('administration', 'admin_filiere', 'bde', 'general', 'professeurs')
        ORDER BY c.nom ASC`,
-      [req.user.id]
+            [req.user.id]
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -58,8 +65,8 @@ const getMessagesCanal = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Accès refusé à ce canal' });
     }
 
-    const { rows } = await pool.query(
-      `SELECT m.id, m.contenu, m.created_at,
+    const { rows: msgs } = await pool.query(
+      `SELECT m.id, m.canal_id, m.contenu, m.type, m.created_at,
               u.id AS auteur_id, u.prenoms, u.nom,
               COALESCE(
                 JSON_AGG(r.emoji) FILTER (WHERE r.emoji IS NOT NULL), '[]'
@@ -67,14 +74,103 @@ const getMessagesCanal = async (req, res) => {
        FROM messages m
        JOIN users u ON u.id = m.auteur_id
        LEFT JOIN reactions r ON r.message_id = m.id
-       WHERE m.canal_id = $1
+       WHERE m.canal_id = $1 AND COALESCE(m.type, 'canal') != 'annonce'
          ${avant ? 'AND m.created_at < $3' : ''}
        GROUP BY m.id, u.id
        ORDER BY m.created_at DESC
        LIMIT $2`,
       avant ? [id, limite, avant] : [id, limite]
     );
-    res.json({ success: true, data: rows.reverse() });
+
+    // Pour le canal 1 (Administration) et 2 (Admin & Filière), inclure également les annonces publiées
+    if (id === '1' || id === '2') {
+      try {
+        const { rows: uInfo } = await pool.query(
+          `SELECT u.role, u.filiere_nom, u.niveau,
+                  e.filiere_id as e_fid, e.filiere_nom as e_fnom, e.niveau as e_niv
+           FROM users u
+           LEFT JOIN etudiants e ON e.user_id = u.id
+           WHERE u.id = $1`,
+          [req.user.id]
+        );
+        const user = uInfo[0] || req.user;
+        const role = (user.role || '').toLowerCase();
+        const isStudent = (!role || role === 'etudiant' || role === 'delegue' || role === 'delegue_adjoint');
+
+        // Résoudre l'ID de filière et le niveau
+        const rawFiliere = user.e_fid || user.filiere_nom || user.e_fnom;
+        const filiereObj = await resolveFiliere(pool, rawFiliere);
+        const userFiliereId = filiereObj.id;
+        const userNiveauNorm = normalizeNiveau(user.e_niv || user.niveau);
+
+        let annonceQuery = `
+          SELECT a.id, a.titre, a.contenu, a.filiere, a.filiere_nom, a.niveau, a."cibleRole",
+                 COALESCE(a."createdAt", a."updatedAt", NOW()) AS created_at,
+                 u.id AS auteur_id, COALESCE(u.prenoms, 'Administration') AS prenoms, COALESCE(u.nom, 'IST') AS nom
+          FROM annonces a
+          LEFT JOIN users u ON u.id = a.auteur
+          WHERE a.statut = 'publie'
+        `;
+        const params = [];
+
+        if (id === '1') {
+          // Canal Administration
+          if (isStudent) {
+            annonceQuery += ` AND (LOWER(COALESCE(a."cibleRole", 'tous')) IN ('tous', 'etudiant'))`;
+            
+            // Condition filière
+            if (userFiliereId) {
+              params.push(userFiliereId);
+              annonceQuery += ` AND (a.filiere IS NULL OR a.filiere = 0 OR a.filiere = $${params.length})`;
+            } else {
+              annonceQuery += ` AND (a.filiere IS NULL OR a.filiere = 0)`;
+            }
+
+            // Condition niveau
+            if (userNiveauNorm) {
+              params.push(userNiveauNorm);
+              annonceQuery += ` AND (a.niveau IS NULL OR a.niveau = '' OR a.niveau = $${params.length})`;
+            }
+          }
+        } else if (id === '2') {
+          // Canal Admin & Filière : uniquement les annonces de sa filière
+          if (userFiliereId) {
+            params.push(userFiliereId);
+            annonceQuery += ` AND a.filiere = $${params.length}`;
+          } else if (isStudent) {
+            annonceQuery += ` AND 1=0`;
+          }
+        }
+
+        annonceQuery += ` ORDER BY a."createdAt" DESC LIMIT 50`;
+        const { rows: annoncesRows } = await pool.query(annonceQuery, params);
+
+        const annonceMsgs = annoncesRows.map(a => {
+          let extra = '';
+          if (a.filiere_nom) extra += `\n\n📍 Filière : ${a.filiere_nom}`;
+          if (a.niveau) extra += `\n🎓 Niveau : ${a.niveau}`;
+          return {
+            id: 'ann_' + a.id,
+            canal_id: parseInt(id),
+            auteur_id: a.auteur_id,
+            prenoms: a.prenoms || 'Administration',
+            nom: a.nom || 'IST',
+            contenu: `📢 **${a.titre}**\n\n${a.contenu}${extra}`,
+            type: 'annonce',
+            created_at: a.created_at,
+            reactions: []
+          };
+        });
+
+        const allMsgs = [...msgs, ...annonceMsgs];
+        allMsgs.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        return res.json({ success: true, data: allMsgs.slice(-limite) });
+      } catch (annErr) {
+        console.warn('[getMessagesCanal] Erreur chargement annonces dans canal:', annErr.message);
+      }
+    }
+
+    res.json({ success: true, data: msgs.reverse() });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
@@ -97,18 +193,18 @@ const envoyerMessageCanal = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
-    const { rows } = await pool.query(
-      `INSERT INTO messages (canal_id, auteur_id, contenu, type, created_at)
-       VALUES ($1, $2, $3, 'canal', NOW())
-       RETURNING id, canal_id, auteur_id, contenu, created_at`,
-      [id, req.user.id, contenu.trim()]
-    );
+    const { data: message, error } = await supabase
+      .from('messages')
+      .insert({ canal_id: id, auteur_id: req.user.id, contenu: contenu.trim(), type: 'canal' })
+      .select('id, canal_id, auteur_id, contenu, created_at')
+      .single();
+    if (error) throw error;
 
     // Émettre via Socket.io si disponible
     const io = req.app.get('io');
-    if (io) io.to(`canal:${id}`).emit('message:canal', rows[0]);
+    if (io) io.to(`canal:${id}`).emit('message:canal', message);
 
-    res.status(201).json({ success: true, data: rows[0] });
+    res.status(201).json({ success: true, data: message });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
@@ -206,10 +302,14 @@ const getMessagesGroupe = async (req, res) => {
 
   try {
     // Vérifier que l'utilisateur appartient à la filière
-    const { rows: check } = await pool.query(
-      `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
-      [req.user.id, filiereId]
-    );
+    const appartientJwt = req.user.filiere_id != null &&
+      String(req.user.filiere_id) === String(filiereId);
+    const { rows: check } = appartientJwt
+      ? { rows: [{ ok: true }] }
+      : await pool.query(
+          `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
+          [req.user.id, filiereId]
+        );
     if (!check.length && req.user.role !== 'admin' && req.user.role !== 'professeur') {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
@@ -242,25 +342,35 @@ const envoyerMessageGroupe = async (req, res) => {
   }
 
   try {
-    const { rows: check } = await pool.query(
-      `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
-      [req.user.id, filiereId]
-    );
+    const appartientJwt = req.user.filiere_id != null &&
+      String(req.user.filiere_id) === String(filiereId);
+    const { rows: check } = appartientJwt
+      ? { rows: [{ ok: true }] }
+      : await pool.query(
+          `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
+          [req.user.id, filiereId]
+        );
     if (!check.length && req.user.role !== 'admin' && req.user.role !== 'professeur') {
       return res.status(403).json({ success: false, error: 'Vous n\'appartenez pas à cette filière' });
     }
 
-    const { rows } = await pool.query(
-      `INSERT INTO messages_groupe (filiere_id, auteur_id, contenu, created_at)
-       VALUES ($1, $2, $3, NOW())
-       RETURNING id, filiere_id, auteur_id, contenu, created_at`,
-      [filiereId, req.user.id, contenu.trim()]
-    );
+    const { data: message, error } = await supabase
+      .from('messages_groupe')
+      .insert({ filiere_id: filiereId, auteur_id: req.user.id, contenu: contenu.trim() })
+      .select('id, filiere_id, auteur_id, contenu, created_at, users(prenoms, nom)')
+      .single();
+    if (error) throw error;
+
+    const messageAvecAuteur = {
+      ...message,
+      prenoms: message.users?.prenoms,
+      nom: message.users?.nom,
+    };
 
     const io = req.app.get('io');
-    if (io) io.to(`filiere:${filiereId}`).emit('message:groupe', rows[0]);
+    if (io) io.to(`filiere:${filiereId}`).emit('message:groupe', messageAvecAuteur);
 
-    res.status(201).json({ success: true, data: rows[0] });
+    res.status(201).json({ success: true, data: messageAvecAuteur });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });

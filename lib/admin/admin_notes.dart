@@ -3,6 +3,7 @@ import '../admin/admin_theme.dart';
 import '../admin/admin_annonces.dart' show istNiveaux;
 import '../services/api_service.dart';
 import '../utils/snackbar_helper.dart';
+import '../models/student_profile.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -73,11 +74,14 @@ class MoyenneEtudiant {
       );
 }
 
+
+
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE NOTES & MOYENNES
 // ════════════════════════════════════════════════════════════════════════════
 class AdminNotes extends StatefulWidget {
-  const AdminNotes({super.key});
+  final StudentProfile profile;
+  const AdminNotes({super.key, required this.profile});
   @override State<AdminNotes> createState() => _AdminNotesState();
 }
 
@@ -110,15 +114,31 @@ class _AdminNotesState extends State<AdminNotes> with SingleTickerProviderStateM
     if (!mounted) return;
     final sessionsResult = results[0];
     final moyennesResult = results[1];
+    
+    // Déduire le domaine de la filière
+    bool estMemeDomaine(String filiereNom) {
+      if (!widget.profile.filtreParDomaine) return true;
+      final f = filiereNom.toLowerCase();
+      final estGestion = f.contains('marketing') || f.contains('gestion') || f.contains('finance') || f.contains('comptab');
+      final domaineFiliere = estGestion ? 'Sciences de Gestion' : 'Sciences & Technologies';
+      return domaineFiliere == widget.profile.domaineAdmin;
+    }
+
     setState(() {
       _isLoading = false;
       if (sessionsResult['success'] == true) {
-        _sessions = (sessionsResult['data'] as List<dynamic>).map((j) => NoteSession.fromJson(j as Map<String, dynamic>)).toList();
+        final List<NoteSession> parsed = (sessionsResult['data'] as List<dynamic>)
+            .map((j) => NoteSession.fromJson(j as Map<String, dynamic>))
+            .toList();
+        _sessions = parsed.where((s) => estMemeDomaine(s.filiereNom)).toList();
       } else {
         _errorMessage = sessionsResult['error'] as String?;
       }
       if (moyennesResult['success'] == true) {
-        _moyennes = (moyennesResult['data'] as List<dynamic>).map((j) => MoyenneEtudiant.fromJson(j as Map<String, dynamic>)).toList();
+        final List<MoyenneEtudiant> parsed = (moyennesResult['data'] as List<dynamic>)
+            .map((j) => MoyenneEtudiant.fromJson(j as Map<String, dynamic>))
+            .toList();
+        _moyennes = parsed.where((m) => estMemeDomaine(m.filiereNom)).toList();
       }
     });
   }
