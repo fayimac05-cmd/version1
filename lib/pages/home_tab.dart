@@ -8,37 +8,51 @@ import '../models/event.dart';
 import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 import 'event_registration_page.dart';
-import 'tickets_screen.dart';
 import 'notifications_page.dart';
-import 'chat_ia_screen.dart';
 import 'bulletin_screen.dart';
 import 'courses_tab.dart';
 import 'groupe_filiere_screen.dart';
-import 'revision_ia_screen.dart';
 import 'checkin_screen.dart';
+import 'planning_tab.dart';
 
 class HomeTab extends StatefulWidget {
-  const HomeTab({super.key, required this.profile});
+  const HomeTab({super.key, required this.profile, this.onMenuTap});
+
   final StudentProfile profile;
+  final VoidCallback? onMenuTap;
+
   @override
   State<HomeTab> createState() => _HomeTabState();
 }
 
 class _HomeTabState extends State<HomeTab> {
-  final PageController _eventsCtrl = PageController(viewportFraction: 0.82);
-  final PageController _quotesCtrl = PageController(viewportFraction: 0.90);
-  final PageController _newsCtrl   = PageController(viewportFraction: 0.92);
-  int _eventPage = 0;
-  final int _quotePage = 0;
-  Timer? _autoScroll;
-  Timer? _quoteScroll;
+  // ── Images d'illustration (noms EXACTS des fichiers dans assets/images/) ─
+  static const String _studentsGroupImageAsset =
+      'assets/images/students_group.png';
+  static const String _cantineImageAsset = 'assets/images/cantine_food.png';
 
-  // Annonces du backend
+  final PageController _eventsCtrl = PageController(viewportFraction: 1.0);
+  int _eventPage = 0;
+  Timer? _autoScroll;
+
   List<Map<String, dynamic>> _annonces = [];
   bool _annoncesLoading = true;
-
-  // Événements approuvés du backend (fallback : liste statique _events)
   List<EventModel> _evenements = [];
+
+  bool _apercuLoading = true;
+  double? _moyenne;
+  double? _tauxPresence;
+  List<Map<String, dynamic>> _coursDuJour = [];
+
+  static const _joursFr = [
+    'Lundi',
+    'Mardi',
+    'Mercredi',
+    'Jeudi',
+    'Vendredi',
+    'Samedi',
+    'Dimanche',
+  ];
 
   int get _carouselLength =>
       _evenements.isNotEmpty ? _evenements.length : _events.length;
@@ -48,18 +62,24 @@ class _HomeTabState extends State<HomeTab> {
     super.initState();
     _fetchAnnonces();
     _fetchEvenements();
-    _autoScroll = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted || _carouselLength == 0) return;
+    _fetchApercuEtProchainCours();
+
+    _autoScroll = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || _carouselLength <= 1) return;
       final next = (_eventPage + 1) % _carouselLength;
-      _eventsCtrl.animateToPage(next,
-          duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
+      _eventsCtrl.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
     });
-    _quoteScroll = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted) return;
-      final next = (_quotePage + 1) % _quotes.length;
-      _quotesCtrl.animateToPage(next,
-          duration: const Duration(milliseconds: 600), curve: Curves.easeInOut);
-    });
+  }
+
+  @override
+  void dispose() {
+    _eventsCtrl.dispose();
+    _autoScroll?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchAnnonces() async {
@@ -69,12 +89,12 @@ class _HomeTabState extends State<HomeTab> {
           .select()
           .order('created_at', ascending: false)
           .limit(10);
-      if (mounted) {
-        setState(() {
-          _annonces = List<Map<String, dynamic>>.from(data as List);
-          _annoncesLoading = false;
-        });
-      }
+
+      if (!mounted) return;
+      setState(() {
+        _annonces = List<Map<String, dynamic>>.from(data as List);
+        _annoncesLoading = false;
+      });
     } catch (_) {
       if (mounted) setState(() => _annoncesLoading = false);
     }
@@ -83,28 +103,141 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _fetchEvenements() async {
     final result = await ApiService.getEvenements(statut: 'approuve');
     if (!mounted || result['success'] != true) return;
+
     final events = (result['data'] as List<dynamic>)
         .map((j) => EventModel.fromJson(j as Map<String, dynamic>))
         .toList();
-    // Ne garder que les événements à venir (aujourd'hui inclus)
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+
     setState(() {
-      _evenements =
-          events.where((e) => !e.date.isBefore(today)).toList();
+      _evenements = events.where((e) => !e.date.isBefore(today)).toList();
       if (_eventPage >= _carouselLength) _eventPage = 0;
     });
   }
 
-  @override
-  void dispose() {
-    _eventsCtrl.dispose();
-    _quotesCtrl.dispose();
-    _newsCtrl.dispose();
-    _autoScroll?.cancel();
-    _quoteScroll?.cancel();
-    super.dispose();
+  Future<void> _fetchApercuEtProchainCours() async {
+    try {
+      final client = Supabase.instance.client;
+
+      final etudiantRow = await client
+          .from('etudiants')
+          .select('id')
+          .eq('matricule', widget.profile.matricule)
+          .maybeSingle();
+
+      final etudiantId = etudiantRow?['id'] as int?;
+      final jourAuj = _joursFr[DateTime.now().weekday - 1];
+
+      final results = await Future.wait<dynamic>([
+        etudiantId != null
+            ? client
+                .from('vue_notes_etudiants')
+                .select('valeur, coefficient, session_statut')
+                .eq('etudiant_id', etudiantId)
+                .eq('session_statut', 'validee')
+            : Future.value(<dynamic>[]),
+        etudiantId != null
+            ? client
+                .from('vue_presences_etudiants')
+                .select('presence_statut')
+                .eq('etudiant_id', etudiantId)
+            : Future.value(<dynamic>[]),
+        client
+            .from('edt')
+            .select('creneaux')
+            .ilike('filiere_nom', widget.profile.filiere.trim())
+            .ilike('niveau', widget.profile.niveau.trim())
+            .eq('archive', false)
+            .order('createdAt', ascending: false)
+            .limit(1)
+            .maybeSingle(),
+      ]);
+
+      final notes = List<Map<String, dynamic>>.from(results[0] as List);
+      final presences = List<Map<String, dynamic>>.from(results[1] as List);
+      final edtActif = results[2] as Map<String, dynamic>?;
+
+      final tousLesCreneaux = edtActif != null
+          ? (edtActif['creneaux'] as List? ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList()
+          : <Map<String, dynamic>>[];
+
+      final coursJour =
+          tousLesCreneaux.where((c) => c['jour'] == jourAuj).toList()
+            ..sort(
+              (a, b) => (a['heureDebut']?.toString() ?? '')
+                  .compareTo(b['heureDebut']?.toString() ?? ''),
+            );
+
+      double? moyenne;
+      if (notes.isNotEmpty) {
+        double sommePonderee = 0;
+        double sommeCoef = 0;
+
+        for (final n in notes) {
+          final valeur = (n['valeur'] as num?)?.toDouble() ?? 0;
+          final coef = (n['coefficient'] as num?)?.toDouble() ?? 1;
+          sommePonderee += valeur * coef;
+          sommeCoef += coef;
+        }
+
+        if (sommeCoef > 0) moyenne = sommePonderee / sommeCoef;
+      }
+
+      double? tauxPresence;
+      if (presences.isNotEmpty) {
+        final presents = presences
+            .where((p) => p['presence_statut'] == 'present')
+            .length;
+        tauxPresence = presents / presences.length * 100;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _moyenne = moyenne;
+        _tauxPresence = tauxPresence;
+        _coursDuJour = coursJour;
+        _apercuLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _apercuLoading = false);
+    }
   }
+
+  Map<String, dynamic>? get _prochainCours {
+    final now = TimeOfDay.now();
+    final nowMinutes = now.hour * 60 + now.minute;
+
+    for (final c in _coursDuJour) {
+      final fin = _parseHeure(c['heureFin'] as String?);
+      if (fin == null) continue;
+
+      if (fin.hour * 60 + fin.minute > nowMinutes) {
+        return c;
+      }
+    }
+
+    return null;
+  }
+
+  TimeOfDay? _parseHeure(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+
+    final parts = raw.split(':');
+    if (parts.length < 2) return null;
+
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _formatHeure(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}h${t.minute.toString().padLeft(2, '0')}';
 
   String get _salutation {
     final h = DateTime.now().hour;
@@ -113,84 +246,77 @@ class _HomeTabState extends State<HomeTab> {
     return 'Bonsoir';
   }
 
-  // ── Data ────────────────────────────────────────────────────────────────────
-
-  static const _quotes = [
-    _QuoteData(
-      '"La jeunesse d\'un pays est sa richesse la plus précieuse. Investir dans son éducation, c\'est construire l\'avenir.',
-      'Thomas Sankara',
-      'Président du Burkina Faso',
-    ),
-    _QuoteData(
-      '"Un peuple sans éducation est un peuple sans âme. Le savoir est la lumière qui guide nos pas vers la liberté."',
-      'Norbert Zongo',
-      'Journaliste & Écrivain burkinabé',
-    ),
-    _QuoteData(
-      '"Nabonswendé a dit : celui qui ne sème pas ne récolte pas. Le travail est la seule voie vers la dignité."',
-      'Proverbe Mossi',
-      'Tradition orale du Burkina Faso',
-    ),
-    _QuoteData(
-      '"L\'école est la forge où l\'on fabrique les artisans du changement. Chaque étudiant porte en lui l\'espoir d\'une nation."',
-      'Ablassé Ouédraogo',
-      'Diplomate & Homme politique burkinabé',
-    ),
-    _QuoteData(
-      '"Le travail honnête et l\'étude assidue sont les deux piliers sur lesquels repose la grandeur d\'un peuple."',
-      'Gérard Kango Ouédraogo',
-      'Homme d\'État burkinabé',
-    ),
-  ];
-
   static const _events = [
-    _EventData('🎓', '25 Jan', 'Journée portes ouvertes',
-        'Venez découvrir notre établissement et rencontrer les enseignants.',
-        'Amphi A · 9h00'),
-    _EventData('🤖', '30 Jan', 'Conférence IA',
-        "L'avenir de l'intelligence artificielle dans l'éducation.",
-        'Salle 101 · 14h00'),
-    _EventData('💻', '5 Fév', 'Tournoi de code',
-        'Compétition inter-filières de programmation. Inscriptions ouvertes.',
-        'Labo Info · 10h00'),
-    _EventData('🏆', '12 Fév', 'Remise des diplômes',
-        'Cérémonie de remise des diplômes de la promotion 2024.',
-        'Grand Amphi · 15h00'),
+    _EventData(
+      '🎓',
+      '25 Jan',
+      'Journée portes ouvertes',
+      'Venez découvrir notre établissement et rencontrer les enseignants.',
+      'Amphi A · 9h00',
+    ),
+    _EventData(
+      '🤖',
+      '30 Jan',
+      'Conférence IA',
+      "L'avenir de l'intelligence artificielle dans l'éducation.",
+      'Salle 101 · 14h00',
+    ),
+    _EventData(
+      '💻',
+      '5 Fév',
+      'Tournoi de code',
+      'Compétition inter-filières de programmation.',
+      'Labo Info · 10h00',
+    ),
+    _EventData(
+      '🏆',
+      '12 Fév',
+      'Remise des diplômes',
+      'Cérémonie de remise des diplômes.',
+      'Grand Amphi · 15h00',
+    ),
   ];
-
-  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEEF4FB),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildHeader(context)),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(12, 16, 12, 100),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildActionRow(context),
-                const SizedBox(height: 8),
-                _buildThreeRow(context),
-                const SizedBox(height: 16),
-                _buildCantineBtn(context),
-                const SizedBox(height: 16),
-                _buildFiliereBtn(context),
-                const SizedBox(height: 16),
-                _buildEventsCarousel(),
-                const SizedBox(height: 16),
-                _buildActualitesCarousel(),
-              ]),
+      backgroundColor: const Color(0xFFF5F7FB),
+      body: RefreshIndicator(
+        color: AppPalette.blue,
+        onRefresh: () async {
+          await Future.wait([
+            _fetchAnnonces(),
+            _fetchEvenements(),
+            _fetchApercuEtProchainCours(),
+          ]);
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: _buildHeader(context)),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 105),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  _buildProchainCours(context),
+                  const SizedBox(height: 20),
+                  _buildApercuDuJour(),
+                  const SizedBox(height: 20),
+                  _buildAccesRapides(context),
+                  const SizedBox(height: 22),
+                  _buildEventsCarousel(),
+                  const SizedBox(height: 22),
+                  _buildCantineEtFiliereRow(context),
+                  const SizedBox(height: 22),
+                  _buildActualitesCarousel(),
+                ]),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-
-  // ── Header ────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
     final initiales =
@@ -199,561 +325,438 @@ class _HomeTabState extends State<HomeTab> {
             .toUpperCase();
 
     return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 22),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0A3D91), Color(0xFF1565C0)],
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(26),
         ),
-        borderRadius:
-            BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
       ),
-      child: Stack(
-        children: [
-          // Bulles décoratives
-          Positioned(
-            top: -40,
-            right: -40,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.07)),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: widget.onMenuTap,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppPalette.lightBlue,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(
+                  Icons.menu_rounded,
+                  color: AppPalette.blue,
+                  size: 22,
+                ),
+              ),
             ),
-          ),
-          Positioned(
-            bottom: 0,
-            right: 80,
-            child: Container(
-              width: 60,
-              height: 60,
+            const SizedBox(width: 12),
+            Container(
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppPalette.yellow.withValues(alpha: 0.15)),
-            ),
-          ),
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppPalette.yellow, width: 2),
-                    ),
-                    child: Center(
-                      child: Text(initiales,
-                          style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0A3D91))),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('$_salutation,',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.white.withValues(alpha: 0.8))),
-                        Text(
-                            '${widget.profile.prenoms} ${widget.profile.nom}',
-                            style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white)),
-                        Text(
-                          widget.profile.niveau.isNotEmpty
-                              ? '${widget.profile.niveau} · ${widget.profile.filiere}'
-                              : widget.profile.filiere,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.white.withValues(alpha: 0.7)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  _headerBtn(
-                    child: Stack(children: [
-                      const Icon(Icons.notifications_outlined,
-                          color: Colors.white, size: 18),
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: AppPalette.yellow,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: const Color(0xFF0A3D91), width: 1.5),
-                          ),
+                shape: BoxShape.circle,
+                color: AppPalette.lightBlue,
+                border: Border.all(
+                  color: AppPalette.blue.withValues(alpha: 0.12),
+                  width: 2,
+                ),
+                image: widget.profile.photoUrl != null &&
+                        widget.profile.photoUrl!.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(widget.profile.photoUrl!),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: widget.profile.photoUrl == null ||
+                      widget.profile.photoUrl!.isEmpty
+                  ? Center(
+                      child: Text(
+                        initiales,
+                        style: const TextStyle(
+                          color: AppPalette.blue,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                    ]),
-                    onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => NotificationsPage())),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$_salutation,',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppPalette.grey,
+                    ),
                   ),
+                  const SizedBox(height: 1),
+                  Text(
+                    '${widget.profile.prenoms} ${widget.profile.nom}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF172033),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  if (widget.profile.filiere.isNotEmpty)
+                    Text(
+                      widget.profile.filiere,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppPalette.blue,
+                      ),
+                    ),
+                  if (widget.profile.niveau.isNotEmpty)
+                    Text(
+                      widget.profile.niveau,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppPalette.grey,
+                      ),
+                    ),
                 ],
               ),
             ),
-          ),
-        ],
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NotificationsPage(),
+                ),
+              ),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppPalette.lightGrey,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Center(
+                      child: Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF334155),
+                        size: 23,
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppPalette.yellow,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _headerBtn({required Widget child, VoidCallback? onTap}) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 40,
-          height: 40,
-          margin: const EdgeInsets.only(left: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(child: child),
-        ),
-      );
+  Widget _buildProchainCours(BuildContext context) {
+    if (_apercuLoading) {
+      return _loadingCard(height: 166);
+    }
 
-  // ── Action row ────────────────────────────────────────────────────────────
+    final cours = _prochainCours;
 
-  Widget _buildActionRow(BuildContext context) {
-    return Column(children: [
-      Row(children: [
-        Expanded(child: _actionCard(Icons.bar_chart_rounded, 'Résultats', () =>
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const BulletinScreen())))),
-        const SizedBox(width: 8),
-        Expanded(child: _actionCard(Icons.confirmation_number_outlined, 'Tickets', () =>
-            Navigator.push(context, MaterialPageRoute(builder: (_) => TicketsScreen(profile: widget.profile))))),
-      ]),
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(child: _actionCard(Icons.qr_code_scanner_rounded, 'Présence', () =>
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const CheckinScreen())))),
-        const SizedBox(width: 8),
-        Expanded(child: _actionCard(Icons.auto_awesome_rounded, 'Révisions IA', () =>
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const RevisionIAScreen())))),
-      ]),
-    ]);
-  }
-
-  Widget _actionCard(IconData icon, String label, VoidCallback onTap) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: const Color(0xFF1A3F6F).withValues(alpha: 0.12), width: 0.5),
-          ),
-          child: Row(children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                  color: AppPalette.lightBlue,
-                  borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: AppPalette.blue, size: 18),
+    if (cours == null) {
+      return Container(
+        height: 132,
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        decoration: BoxDecoration(
+          gradient: AppPalette.blueGradient,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: AppPalette.blue.withValues(alpha: 0.18),
+              blurRadius: 18,
+              offset: const Offset(0, 7),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A2A3A)))),
-            const Text('›',
-                style: TextStyle(fontSize: 18, color: Color(0xFFAABBCC))),
-          ]),
+          ],
         ),
-      );
-
-  // ── Three quick cards ─────────────────────────────────────────────────────
-
-  Widget _buildThreeRow(BuildContext context) {
-    final items = [
-      (Icons.description_outlined, 'Bulletins',
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BulletinScreen()))),
-      (Icons.menu_book_rounded, 'Cours',
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CoursesTab()))),
-      (Icons.smart_toy_outlined, 'Chat IA',
-          () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ChatIAScreen(profile: widget.profile)))),
-    ];
-    return Row(
-      children: List.generate(items.length, (i) {
-        final (icon, label, onTap) = items[i];
-        return Expanded(
-          child: GestureDetector(
-            onTap: onTap,
-            child: Container(
-              margin: EdgeInsets.only(right: i < items.length - 1 ? 8 : 0),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: const Color(0xFF1A3F6F).withValues(alpha: 0.12),
-                    width: 0.5),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -34,
+              top: -45,
+              child: Container(
+                width: 125,
+                height: 125,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.07),
+                ),
               ),
-              child: Column(children: [
+            ),
+            Positioned(
+              right: 36,
+              bottom: -35,
+              child: Container(
+                width: 78,
+                height: 78,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppPalette.yellow.withValues(alpha: 0.10),
+                ),
+              ),
+            ),
+            Row(
+              children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                      color: AppPalette.lightBlue,
-                      borderRadius: BorderRadius.circular(9)),
-                  child: Icon(icon, color: AppPalette.blue, size: 16),
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.school_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Text(label,
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A2A3A))),
-              ]),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  // ── Cantine bouton ────────────────────────────────────────────────────────
-
-  Widget _buildCantineBtn(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _showCantineSheet(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0A3D91), Color(0xFF1976D2)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color: AppPalette.blue.withValues(alpha: 0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(11)),
-            child: const Icon(Icons.restaurant_menu_rounded,
-                color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Menu de la cantine',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-                Text('Voir le menu du jour',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white70)),
-              ],
-            ),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-                color: const Color(0xFF2E7D32),
-                borderRadius: BorderRadius.circular(8)),
-            child: const Text('Ouvert',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-                color: AppPalette.yellow,
-                borderRadius: BorderRadius.circular(9)),
-            child: const Icon(Icons.arrow_forward_rounded,
-                color: Color(0xFF3A2A00), size: 16),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  // ── Ma filière bouton ─────────────────────────────────────────────────────
-
-  Widget _buildFiliereBtn(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => GroupeFiliere(profile: widget.profile))),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1565C0), Color(0xFF0A3D91)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color: AppPalette.blue.withValues(alpha: 0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(11)),
-            child: const Icon(Icons.groups_rounded,
-                color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Ma filière',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-                Text(
-                  widget.profile.filiere.isNotEmpty
-                      ? 'Canal ${widget.profile.filiere}'
-                      : 'Canal de la filière',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, color: Colors.white70),
+                const SizedBox(width: 13),
+                const Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Prochain cours',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 5),
+                      Text(
+                        "Aucun cours restant aujourd'hui",
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'Profite de ton temps libre ✨',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-                color: AppPalette.yellow,
-                borderRadius: BorderRadius.circular(9)),
-            child: const Icon(Icons.arrow_forward_rounded,
-                color: Color(0xFF3A2A00), size: 16),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  void _showCantineSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _CantineSheet(),
-    );
-  }
-
-  // ── Events carousel ───────────────────────────────────────────────────────
-
-  Widget _buildEventsCarousel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader('Événements à venir', 'Voir tout'),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 160,
-          child: PageView.builder(
-            controller: _eventsCtrl,
-            itemCount: _carouselLength,
-            onPageChanged: (i) => setState(() => _eventPage = i),
-            itemBuilder: (_, i) => _evenements.isNotEmpty
-                ? _eventCard(_toEventData(_evenements[i]), model: _evenements[i])
-                : _eventCard(_events[i]),
-          ),
+          ],
         ),
-        const SizedBox(height: 10),
-        // Dots
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(
-            _carouselLength,
-            (i) => AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: _eventPage == i ? 20 : 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: _eventPage == i
-                    ? AppPalette.blue
-                    : AppPalette.blue.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+      );
+    }
 
-  _EventData _toEventData(EventModel e) {
-    final heure =
-        '${e.time.hour.toString().padLeft(2, '0')}h${e.time.minute.toString().padLeft(2, '0')}';
-    final lieu = e.location.isNotEmpty ? e.location : 'Lieu à confirmer';
-    final desc = e.description.isNotEmpty
-        ? e.description
-        : (e.price > 0
-            ? 'Ticket : ${e.price.toStringAsFixed(0)} FCFA — inscrivez-vous !'
-            : 'Entrée gratuite — inscrivez-vous !');
-    return _EventData(
-      '🎉',
-      DateFormat('dd MMM').format(e.date),
-      e.name,
-      desc,
-      '$lieu · $heure',
-    );
-  }
+    final debut = _parseHeure(cours['heureDebut'] as String?);
+    final fin = _parseHeure(cours['heureFin'] as String?);
+    final now = TimeOfDay.now();
 
-  Widget _eventCard(_EventData ev, {EventModel? model}) {
+    final nowMinutes = now.hour * 60 + now.minute;
+    final debutMinutes =
+        debut == null ? 0 : debut.hour * 60 + debut.minute;
+    final finMinutes = fin == null ? 0 : fin.hour * 60 + fin.minute;
+
+    final badge = nowMinutes < debutMinutes
+        ? 'Dans ${debutMinutes - nowMinutes} min'
+        : nowMinutes <= finMinutes
+            ? 'En cours'
+            : '';
+
+    final matiere = cours['matiere']?.toString().trim().isNotEmpty == true
+        ? cours['matiere'].toString()
+        : 'Cours';
+
+    final salle = cours['salle']?.toString() ?? '';
+    final horaire = debut != null && fin != null
+        ? '${_formatHeure(debut)} - ${_formatHeure(fin)}'
+        : '';
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 5),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0A3D91), Color(0xFF1565C0)],
-        ),
-        borderRadius: BorderRadius.circular(18),
+        gradient: AppPalette.blueGradient,
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-              color: AppPalette.blue.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
+            color: AppPalette.blue.withValues(alpha: 0.20),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
+          ),
         ],
       ),
       child: Stack(
         children: [
-          // Bulle déco
           Positioned(
-            top: -20,
-            right: -20,
+            top: -36,
+            right: -35,
             child: Container(
-              width: 90,
-              height: 90,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.07)),
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.07),
+              ),
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(children: [
-                Text(ev.emoji, style: const TextStyle(fontSize: 24)),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6)),
-                  child: Text(ev.date,
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontWeight: FontWeight.w600)),
-                ),
-              ]),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  Text(ev.titre,
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white)),
-                  const SizedBox(height: 3),
-                  Text(ev.desc,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  const Icon(
+                    Icons.school_rounded,
+                    color: Colors.white,
+                    size: 17,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Prochain cours',
                       style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (badge.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        badge,
+                        style: const TextStyle(
+                          color: AppPalette.yellow,
                           fontSize: 10,
-                          color: Colors.white.withValues(alpha: 0.75))),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Text(
+                matiere,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 11),
+              Wrap(
+                spacing: 14,
+                runSpacing: 6,
+                children: [
+                  if (horaire.isNotEmpty)
+                    _whiteInfo(Icons.access_time_rounded, horaire),
+                  if (salle.isNotEmpty)
+                    _whiteInfo(Icons.location_on_outlined, salle),
+                ],
+              ),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(children: [
-                    Icon(Icons.location_on_outlined,
-                        size: 11,
-                        color: Colors.white.withValues(alpha: 0.7)),
-                    const SizedBox(width: 3),
-                    Text(ev.lieu,
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.white.withValues(alpha: 0.7))),
-                  ]),
+                  Container(
+                    width: 46,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Image.asset(
+                      _studentsGroupImageAsset,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.groups_rounded,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                    ),
+                  ),
                   GestureDetector(
-                    onTap: model == null
-                        ? null
-                        : () async {
-                            final registered = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    EventRegistrationPage(event: model),
-                              ),
-                            );
-                            if (registered == true) _fetchEvenements();
-                          },
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CoursesTab(),
+                      ),
+                    ),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 5),
+                        horizontal: 15,
+                        vertical: 9,
+                      ),
                       decoration: BoxDecoration(
-                          color: AppPalette.yellow,
-                          borderRadius: BorderRadius.circular(8)),
-                      child: const Text('Participer',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF3A2A00))),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Voir les cours',
+                            style: TextStyle(
+                              color: AppPalette.blue,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(width: 5),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            color: AppPalette.blue,
+                            size: 15,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -765,85 +768,798 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  // ── Actualités carousel (depuis le backend) ──────────────────────────────
+  Widget _buildApercuDuJour() {
+    final cours = _apercuLoading ? '--' : '${_coursDuJour.length}';
+    final presence = _apercuLoading || _tauxPresence == null
+        ? '--'
+        : '${_tauxPresence!.round()}%';
+    final moyenne = _apercuLoading || _moyenne == null
+        ? '--'
+        : _moyenne!.toStringAsFixed(1).replaceAll('.', ',');
 
-  static const _typeConfig = {
-    'urgent': (Icons.warning_amber_rounded, Color(0xFFEF4444), Color(0xFFFEF2F2), 'Urgent'),
-    'event':  (Icons.event_rounded,         Color(0xFF8B5CF6), Color(0xFFF5F3FF), 'Événement'),
-    'info':   (Icons.info_outline_rounded,  Color(0xFF0A4DA2), Color(0xFFEFF6FF), 'Info'),
-  };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Aperçu du jour', 'Aujourd’hui'),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _apercuCard(
+                Icons.menu_book_rounded,
+                cours,
+                'Cours',
+                AppPalette.blue,
+                AppPalette.lightBlue,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _apercuCard(
+                Icons.check_circle_rounded,
+                presence,
+                'Présence',
+                const Color(0xFF16A34A),
+                const Color(0xFFE9F8EE),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _apercuCard(
+                Icons.star_rounded,
+                moyenne,
+                'Moyenne',
+                const Color(0xFFF59E0B),
+                const Color(0xFFFFF4DF),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _apercuCard(
+    IconData icon,
+    String value,
+    String label,
+    Color color,
+    Color background,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 5),
+      decoration: _cardDecoration(radius: 16),
+      child: Column(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: background,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(height: 9),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF172033),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppPalette.grey,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccesRapides(BuildContext context) {
+    final items = [
+      _QuickAction(
+        Icons.bar_chart_rounded,
+        'Résultats',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const BulletinScreen()),
+        ),
+      ),
+      _QuickAction(
+        Icons.qr_code_scanner_rounded,
+        'Présence',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CheckinScreen()),
+        ),
+      ),
+      _QuickAction(
+        Icons.menu_book_rounded,
+        'Cours',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CoursesTab()),
+        ),
+      ),
+      _QuickAction(
+        Icons.description_outlined,
+        'Bulletins',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const BulletinScreen()),
+        ),
+      ),
+      _QuickAction(
+        Icons.calendar_month_rounded,
+        'Planning',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PlanningTab(profile: widget.profile),
+          ),
+        ),
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Accès rapides', 'Personnaliser'),
+        const SizedBox(height: 10),
+        Row(
+          children: List.generate(items.length, (index) {
+            final item = items[index];
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: index == items.length - 1 ? 0 : 7,
+                ),
+                child: _accesRapideCard(
+                  item.icon,
+                  item.label,
+                  item.onTap,
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _accesRapideCard(
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: 92,
+          padding: const EdgeInsets.symmetric(
+            vertical: 9,
+            horizontal: 3,
+          ),
+          decoration: _cardDecoration(radius: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 39,
+                height: 39,
+                decoration: BoxDecoration(
+                  color: AppPalette.lightBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: AppPalette.blue,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF172033),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCantineEtFiliereRow(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _squareActionCard(
+            gradientColors: const [
+              Color(0xFF7C3AED),
+              Color(0xFFC026D3),
+            ],
+            icon: Icons.restaurant_menu_rounded,
+            title: 'Menu cantine',
+            subtitle: 'Menu du jour',
+            badge: 'Ouvert',
+            badgeColor: const Color(0xFF2E7D32),
+            watermarkIcon: Icons.lunch_dining_rounded,
+            imageAsset: _cantineImageAsset,
+            onTap: () => _showCantineSheet(context),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _squareActionCard(
+            gradientColors: const [
+              Color(0xFF1565C0),
+              Color(0xFF0A3D91),
+            ],
+            icon: Icons.groups_rounded,
+            title: 'Ma filière',
+            subtitle: widget.profile.filiere.isNotEmpty
+                ? widget.profile.filiere
+                : 'Canal de la filière',
+            watermarkIcon: Icons.groups_rounded,
+            imageAsset: _studentsGroupImageAsset,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => GroupeFiliere(
+                  profile: widget.profile,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _blendedCardImage(
+    String asset, {
+    required double width,
+    required double height,
+  }) {
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        return const RadialGradient(
+          center: Alignment(0.20, 0.15),
+          radius: 0.78,
+          stops: [0.00, 0.55, 0.82, 1.00],
+          colors: [
+            Colors.white,
+            Colors.white,
+            Color(0xCCFFFFFF),
+            Color(0x00FFFFFF),
+          ],
+        ).createShader(bounds);
+      },
+      child: Image.asset(
+        asset,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        alignment: Alignment.center,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  Widget _squareActionCard({
+    required List<Color> gradientColors,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required IconData watermarkIcon,
+    required VoidCallback onTap,
+    String? imageAsset,
+    String? badge,
+    Color? badgeColor,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 146,
+        padding: const EdgeInsets.all(13),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradientColors,
+          ),
+          borderRadius: BorderRadius.circular(21),
+          boxShadow: [
+            BoxShadow(
+              color: gradientColors.last.withValues(alpha: 0.22),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Voile dégradé : la photo devient une partie du fond de la carte
+            // au lieu de ressembler à une image posée par-dessus.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        gradientColors.first.withValues(alpha: 0.00),
+                        gradientColors.last.withValues(alpha: 0.02),
+                        gradientColors.last.withValues(alpha: 0.08),
+                      ],
+                      stops: const [0.30, 0.70, 1.00],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Image agrandie ("allongée") par rapport à la version précédente
+            // (190x175 au lieu de 160x142) — le clipBehavior sur le Container
+            // parent la garde bien contenue dans les coins arrondis.
+            Positioned(
+              right: -26,
+              bottom: -22,
+              child: imageAsset != null
+                  ? _blendedCardImage(
+                      imageAsset,
+                      width: 255,
+                      height: 175,
+                    )
+                  : Icon(
+                      watermarkIcon,
+                      size: 82,
+                      color: Colors.white.withValues(alpha: 0.13),
+                    ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.17),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: 17,
+                      ),
+                    ),
+                    if (badge != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: badgeColor ?? Colors.green,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Text(
+                          badge,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        fontSize: 9.5,
+                        height: 1.15,
+                      ),
+                    ),
+                  ],
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    width: 20,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: AppPalette.yellow,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Color(0xFF3A2A00),
+                      size: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventsCarousel() {
+    if (_carouselLength == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Événements à venir', 'Voir tout'),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 164,
+          child: PageView.builder(
+            controller: _eventsCtrl,
+            padEnds: false,
+            itemCount: _carouselLength,
+            onPageChanged: (i) {
+              if (mounted) setState(() => _eventPage = i);
+            },
+            itemBuilder: (_, i) {
+              final data = _evenements.isNotEmpty
+                  ? _toEventData(_evenements[i])
+                  : _events[i];
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                child: _eventCard(
+                  data,
+                  model: _evenements.isNotEmpty ? _evenements[i] : null,
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 9),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            _carouselLength,
+            (i) => AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: _eventPage == i ? 20 : 6,
+              height: 5,
+              decoration: BoxDecoration(
+                color: _eventPage == i
+                    ? AppPalette.blue
+                    : AppPalette.blue.withValues(alpha: 0.20),
+                borderRadius: BorderRadius.circular(5),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  _EventData _toEventData(EventModel e) {
+    final heure =
+        '${e.time.hour.toString().padLeft(2, '0')}h${e.time.minute.toString().padLeft(2, '0')}';
+    final lieu =
+        e.location.isNotEmpty ? e.location : 'Lieu à confirmer';
+
+    final desc = e.description.isNotEmpty
+        ? e.description
+        : e.price > 0
+            ? 'Ticket : ${e.price.toStringAsFixed(0)} FCFA'
+            : 'Entrée gratuite';
+
+    return _EventData(
+      '🎉',
+      DateFormat('dd MMM').format(e.date),
+      e.name,
+      desc,
+      '$lieu · $heure',
+    );
+  }
+
+  Widget _eventCard(_EventData event, {EventModel? model}) {
+    return Container(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
+      decoration: BoxDecoration(
+        gradient: AppPalette.blueGradient,
+        borderRadius: BorderRadius.circular(19),
+        boxShadow: [
+          BoxShadow(
+            color: AppPalette.blue.withValues(alpha: 0.20),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -24,
+            right: -24,
+            child: Container(
+              width: 82,
+              height: 82,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.07),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    event.emoji,
+                    style: const TextStyle(fontSize: 21),
+                  ),
+                  const SizedBox(width: 9),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      event.date,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                event.titre,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                event.desc,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 10,
+                ),
+              ),
+              const SizedBox(height: 9),
+              Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          color: Colors.white70,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            event.lieu,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 9.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (model != null)
+                    GestureDetector(
+                      onTap: () async {
+                        final registered = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                EventRegistrationPage(event: model),
+                          ),
+                        );
+                        if (registered == true) _fetchEvenements();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppPalette.yellow,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Participer',
+                          style: TextStyle(
+                            color: Color(0xFF3A2A00),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildActualitesCarousel() {
-    final items = _annonces.isNotEmpty ? _annonces : null;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Annonces du campus',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A2A3A))),
+            const Text(
+              'Annonces du campus',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF172033),
+              ),
+            ),
             GestureDetector(
               onTap: _fetchAnnonces,
-              child: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF1A3F6F)),
+              child: const Icon(
+                Icons.refresh_rounded,
+                size: 18,
+                color: AppPalette.blue,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 10),
         if (_annoncesLoading)
-          const SizedBox(height: 130,
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
-        else if (items == null || items.isEmpty)
+          const SizedBox(
+            height: 110,
+            child: Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else if (_annonces.isEmpty)
           _annonceVide()
         else
           SizedBox(
-            height: 130,
+            height: 118,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: items.length,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _annonces.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _annonceCard(items[i]),
+              itemBuilder: (_, i) => _annonceCard(_annonces[i]),
             ),
           ),
       ],
     );
   }
 
-  Widget _annonceCard(Map<String, dynamic> a) {
-    final type = a['type'] as String? ?? 'info';
+  static const _typeConfig = {
+    'urgent': (
+      Icons.warning_amber_rounded,
+      Color(0xFFEF4444),
+      Color(0xFFFEF2F2),
+      'Urgent'
+    ),
+    'event': (
+      Icons.event_rounded,
+      Color(0xFF8B5CF6),
+      Color(0xFFF5F3FF),
+      'Événement'
+    ),
+    'info': (
+      Icons.info_outline_rounded,
+      Color(0xFF0A4DA2),
+      Color(0xFFEFF6FF),
+      'Info'
+    ),
+  };
+
+  Widget _annonceCard(Map<String, dynamic> annonce) {
+    final type = annonce['type'] as String? ?? 'info';
     final cfg = _typeConfig[type] ?? _typeConfig['info']!;
     final (icon, color, bgColor, label) = cfg;
 
-    // Formatage de la date
     String dateStr = '';
     try {
-      final dt = DateTime.parse(a['created_at'] as String);
-      final diff = DateTime.now().difference(dt);
-      if (diff.inMinutes < 60) {
-        dateStr = 'Il y a ${diff.inMinutes} min';
-      } else if (diff.inHours < 24) {
-        dateStr = 'Il y a ${diff.inHours}h';
-      } else {
-        dateStr = 'Il y a ${diff.inDays}j';
+      final raw = annonce['created_at'] as String?;
+      if (raw != null) {
+        final dt = DateTime.parse(raw);
+        final diff = DateTime.now().difference(dt);
+
+        if (diff.inMinutes < 60) {
+          dateStr = 'Il y a ${diff.inMinutes} min';
+        } else if (diff.inHours < 24) {
+          dateStr = 'Il y a ${diff.inHours}h';
+        } else {
+          dateStr = 'Il y a ${diff.inDays}j';
+        }
       }
     } catch (_) {}
 
     return Container(
       width: 260,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.15), width: 0.8),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
+      decoration: _cardDecoration(radius: 15),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(11),
+            ),
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 10),
@@ -851,21 +1567,54 @@ class _HomeTabState extends State<HomeTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(a['titre'] as String? ?? '',
-                    maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A2A3A), height: 1.3)),
-                const Spacer(),
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(5)),
-                    child: Text(label,
-                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
+                Text(
+                  annonce['titre'] as String? ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF172033),
+                    height: 1.3,
                   ),
-                  const SizedBox(width: 6),
-                  Text(dateStr, style: const TextStyle(fontSize: 9, color: Color(0xFFAABBCC))),
-                ]),
+                ),
+                const Spacer(),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (dateStr.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          dateStr,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 8.5,
+                            color: Color(0xFFA0AEC0),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -876,60 +1625,164 @@ class _HomeTabState extends State<HomeTab> {
 
   Widget _annonceVide() {
     return SizedBox(
-      height: 100,
+      height: 95,
       child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.campaign_outlined, size: 32, color: Color(0xFFCBD5E1)),
-          const SizedBox(height: 6),
-          Text('Aucune annonce pour l\'instant',
-              style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.campaign_outlined,
+              size: 30,
+              color: Color(0xFFCBD5E1),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              "Aucune annonce pour l'instant",
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[400],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  Widget _sectionHeader(String titre, String action) {
+  Widget _sectionHeader(String title, String action) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(titre,
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A2A3A))),
-        Text(action,
-            style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF1A3F6F),
-                fontWeight: FontWeight.w600)),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF172033),
+          ),
+        ),
+        Text(
+          action,
+          style: const TextStyle(
+            fontSize: 10.5,
+            color: AppPalette.blue,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _whiteInfo(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.white70, size: 14),
+        const SizedBox(width: 5),
+        Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _loadingCard({double height = 130}) {
+    return Container(
+      height: height,
+      decoration: _cardDecoration(radius: 20),
+      child: const Center(
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration({double radius = 18}) {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: const Color(0xFFE2E8F0),
+        width: 0.7,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.035),
+          blurRadius: 9,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    );
+  }
+
+  void _showCantineSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _CantineSheet(),
     );
   }
 }
 
-// ── Cantine bottom sheet ────────────────────────────────────────────────────
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAction(this.icon, this.label, this.onTap);
+}
+
+class _EventData {
+  final String emoji;
+  final String date;
+  final String titre;
+  final String desc;
+  final String lieu;
+
+  const _EventData(
+    this.emoji,
+    this.date,
+    this.titre,
+    this.desc,
+    this.lieu,
+  );
+}
 
 class _CantineSheet extends StatelessWidget {
   const _CantineSheet();
 
   static const _menu = [
-    ('☀️', 'Petit déjeuner', [
-      ['Croissant', '200 FCFA'],
-      ['Pain au chocolat', '250 FCFA'],
-      ['Café au lait', '150 FCFA'],
-    ]),
-    ('🍽️', 'Déjeuner', [
-      ['Riz gras', '500 FCFA'],
-      ['Poisson braisé', '800 FCFA'],
-      ['Salade verte', '300 FCFA'],
-    ]),
-    ('🌙', 'Dîner', [
-      ['Yassa poulet', '700 FCFA'],
-      ['Thiéboudienne', '800 FCFA'],
-      ['Soupe légumes', '400 FCFA'],
-    ]),
+    (
+      '☀️',
+      'Petit déjeuner',
+      [
+        ['Croissant', '200 FCFA'],
+        ['Pain au chocolat', '250 FCFA'],
+        ['Café au lait', '150 FCFA'],
+      ]
+    ),
+    (
+      '🍽️',
+      'Déjeuner',
+      [
+        ['Riz gras', '500 FCFA'],
+        ['Poisson braisé', '800 FCFA'],
+        ['Salade verte', '300 FCFA'],
+      ]
+    ),
+    (
+      '🌙',
+      'Dîner',
+      [
+        ['Yassa poulet', '700 FCFA'],
+        ['Thiéboudienne', '800 FCFA'],
+        ['Soupe légumes', '400 FCFA'],
+      ]
+    ),
   ];
 
   @override
@@ -937,145 +1790,186 @@ class _CantineSheet extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(2)),
-          ),
-          // Sheet header (gradient)
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0A3D91), Color(0xFF1976D2)],
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(3),
               ),
-              borderRadius: BorderRadius.circular(16),
             ),
-            child: Row(children: [
-              const Icon(Icons.restaurant_menu_rounded,
-                  color: Colors.white, size: 24),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Menu du jour',
-                        style: TextStyle(
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: AppPalette.blueGradient,
+                borderRadius: BorderRadius.circular(17),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.restaurant_menu_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Menu du jour',
+                          style: TextStyle(
+                            color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white)),
-                    Text('Jeudi 26 Juin 2026',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.white70)),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32),
-                    borderRadius: BorderRadius.circular(8)),
-                child: const Text('Ouvert',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-              ),
-            ]),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: _menu.map((m) {
-                  final (emoji, titre, plats) = m;
-                  return _mealSection(emoji, titre, plats);
-                }).toList(),
+                          ),
+                        ),
+                        Text(
+                          'Menu de la cantine',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E7D32),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Ouvert',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: _menu.map((meal) {
+                    final (emoji, title, dishes) = meal;
+                    return _mealSection(
+                      emoji,
+                      title,
+                      dishes,
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _mealSection(String emoji, String titre, List<List<String>> plats) {
+  Widget _mealSection(
+    String emoji,
+    String title,
+    List<List<String>> dishes,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFF),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.lightBlue, width: 0.5),
+        border: Border.all(
+          color: AppPalette.lightBlue,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
                   color: AppPalette.lightBlue,
-                  borderRadius: BorderRadius.circular(8)),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 14))),
-            ),
-            const SizedBox(width: 8),
-            Text(titre,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A2A3A))),
-          ]),
-          const SizedBox(height: 10),
-          ...plats.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(p[0],
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF555566))),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: AppPalette.softYellow,
-                          borderRadius: BorderRadius.circular(6)),
-                      child: Text(p[1],
-                          style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF4A3000))),
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(9),
                 ),
-              )),
+                child: Center(
+                  child: Text(
+                    emoji,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF172033),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...dishes.map(
+            (dish) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    dish[0],
+                    style: const TextStyle(
+                      color: Color(0xFF555F6F),
+                      fontSize: 12,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppPalette.softYellow,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      dish[1],
+                      style: const TextStyle(
+                        color: Color(0xFF4A3000),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
-
-// ── Data models ──────────────────────────────────────────────────────────────
-
-class _QuoteData {
-  final String citation, auteur, titre;
-  const _QuoteData(this.citation, this.auteur, this.titre);
-}
-
-class _EventData {
-  final String emoji, date, titre, desc, lieu;
-  const _EventData(this.emoji, this.date, this.titre, this.desc, this.lieu);
-}
-

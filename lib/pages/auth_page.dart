@@ -247,9 +247,12 @@ class _AuthPageState extends State<AuthPage> {
           _userTrouve = {
             'nom': u['nom'] ?? '',
             'prenoms': u['prenoms'] ?? '',
-            'filiere': u['filiere'] ?? '',
-            'domaine': u['domaine'] ?? '',
+            // Le nom de la filière peut arriver sous 'filiere_nom' ou
+            // 'filiere' selon l'endpoint backend — jamais 'filiere_id'
+            // (identifiant numérique, pas un texte affichable).
+            'filiere': u['filiere_nom'] ?? u['filiere'] ?? '',
             'niveau': u['niveau'] ?? '',
+            'domaine': u['domaine'] ?? '',
             'role': u['role'] ?? 'etudiant',
             'admin_sub_role': u['admin_sub_role'],  // ← conservé pour la redirection admin
             'premiereFois': premierLogin,
@@ -341,6 +344,28 @@ class _AuthPageState extends State<AuthPage> {
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
+      // DEBUG temporaire — à retirer une fois la connexion vérifiée.
+      // Permet de voir les clés exactes renvoyées par le backend pour
+      // confirmer le bon nom de champ filière/niveau.
+      debugPrint('DEBUG login user payload: $user');
+      _goToDashboard(StudentProfile(
+        nom: user['nom'] ?? '',
+        prenoms: user['prenoms'] ?? '',
+        matricule: user['matricule'] ?? _cleTrouvee ?? '',
+        email: user['email'] ?? '',
+        telephone: user['tel'] ?? '',
+        // Le nom de la filière peut arriver sous 'filiere_nom' ou 'filiere'
+        // selon l'endpoint — jamais 'filiere_id' (c'est un identifiant
+        // numérique, pas un texte affichable ni comparable aux tables
+        // emploi_du_temps/edt).
+        filiere: user['filiere_nom'] ?? user['filiere'] ?? '',
+        niveau: user['niveau'] ?? '',
+        motDePasse: '',
+        domaine: user['domaine'] ?? '',
+        role: user['role'] ?? 'etudiant',
+        photoUrl: user['photo_url'] ?? user['photoUrl'],
+        coverUrl: user['cover_url'] ?? user['coverUrl'],
+      ));
       // DEBUG : vérifier le sous-rôle et domaine reçus du backend
       debugPrint(
         '[LOGIN] role=${user['role']} admin_sub_role=${user['admin_sub_role']} admin_domaine=${user['admin_domaine']}',
@@ -428,6 +453,7 @@ class _AuthPageState extends State<AuthPage> {
       email: _emailCtrl.text,
       telephone: '',
       filiere: u['filiere'] ?? '',
+      niveau: u['niveau'] ?? '',
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
       role: u['role'] ?? 'etudiant',
@@ -437,6 +463,66 @@ class _AuthPageState extends State<AuthPage> {
 
   // ─── Comptes démo ──────────────────────────────────────────────────────────
 
+  void _demoBrahim() => _goToDashboard(const StudentProfile(
+        nom: 'KOURAOGO',
+        prenoms: 'Ibrahim',
+        matricule: '24IST-O2/1851',
+        email: 'ibrahim.kouraogo@ist.bf',
+        telephone: '',
+        filiere: 'Réseaux Informatiques et Télécom',
+        niveau: 'Licence 2',
+        motDePasse: '1851',
+        domaine: 'Sciences & Technologies',
+        role: 'etudiant',
+      ));
+
+  void _demoBDE() => _goToDashboard(const StudentProfile(
+        nom: 'OUÉDRAOGO',
+        prenoms: 'Aïcha',
+        matricule: '24IST-BDE/001',
+        email: 'bde@ist.bf',
+        telephone: '',
+        filiere: 'Bureau des Étudiants',
+        motDePasse: 'bde123',
+        domaine: '',
+        role: 'bde',
+      ));
+
+  void _demoAdmin() => _goToDashboard(const StudentProfile(
+        nom: 'COMPAORÉ',
+        prenoms: 'Idrissa',
+        matricule: '24IST-ADM/001',
+        email: 'admin@ist.bf',
+        telephone: '',
+        filiere: 'Direction Pédagogique',
+        motDePasse: 'admin123',
+        domaine: '',
+        role: 'admin',
+      ));
+
+  void _demoProf() => _goToDashboard(const StudentProfile(
+        nom: 'OUEDRAOGO',
+        prenoms: 'Mamadou',
+        matricule: 'PROF-70123456',
+        email: 'mamadou.ouedraogo@ist.bf',
+        telephone: '70123456',
+        filiere: 'Algorithmes & Reseaux',
+        motDePasse: 'prof123',
+        domaine: 'Sciences & Technologies',
+        role: 'professeur',
+      ));
+
+  void _demoParent() => _goToDashboard(const StudentProfile(
+        nom: 'KOURAOGO',
+        prenoms: 'Seydou',
+        matricule: 'PARENT-65001234',
+        email: 'parent@ist.bf',
+        telephone: '65001234',
+        filiere: "Parent d'élève",
+        motDePasse: 'parent123',
+        domaine: '',
+        role: 'parent',
+      ));
   void _demoBrahim() => _goToDashboard(
     const StudentProfile(
       nom: 'KOURAOGO',
