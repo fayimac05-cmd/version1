@@ -28,31 +28,32 @@ class _MessageCanal {
   }) : reactions = reactions ?? {};
 
   factory _MessageCanal.fromJson(Map<String, dynamic> json, Color color) {
+    final rawDate = json['created_at'] ?? json['createdAt'];
     final createdAt =
-        (DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now()).toLocal();
+        (rawDate != null ? DateTime.tryParse(rawDate.toString()) : null)?.toLocal() ?? DateTime.now();
     final heure =
         '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
     final now = DateTime.now();
     String date = 'Aujourd\'hui';
-    if (createdAt.day != now.day || createdAt.month != now.month) {
-      date = 'Hier';
+    if (createdAt.day != now.day || createdAt.month != now.month || createdAt.year != now.year) {
+      date = '${createdAt.day.toString().padLeft(2, '0')}/${createdAt.month.toString().padLeft(2, '0')}';
     }
     // Le backend renvoie soit un champ 'expediteur', soit 'prenoms'/'nom'
     final nomComplet = '${json['prenoms'] ?? ''} ${json['nom'] ?? ''}'.trim();
     final nom = (json['expediteur'] as String?) ??
-        (nomComplet.isNotEmpty ? nomComplet : 'Inconnu');
-    final parts = nom.split(' ');
-    final initiales = parts.length >= 2
+        (nomComplet.isNotEmpty ? nomComplet : 'Administration');
+    final parts = nom.trim().split(RegExp(r'\s+'));
+    final initiales = parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty
         ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : nom.substring(0, 1).toUpperCase();
+        : (nom.isNotEmpty ? nom[0].toUpperCase() : 'A');
     return _MessageCanal(
       id: json['id']?.toString() ?? UniqueKey().toString(),
       expediteur: nom,
       initiales: initiales,
-      texte: json['contenu'] ?? '',
+      texte: json['contenu']?.toString() ?? json['titre']?.toString() ?? '',
       heure: heure,
       date: date,
-      type: json['type'] ?? 'texte',
+      type: json['type']?.toString() ?? 'texte',
       color: color,
       reactions: {},
     );
@@ -354,7 +355,8 @@ class _CanalDetailState extends State<_CanalDetail> {
           ? data
           : jsonDecode(data.toString()) as Map<String, dynamic>;
       // Ne concerne pas ce canal, ou message déjà affiché (envoyé par moi)
-      if (json['canal_id']?.toString() != widget.canalId) return;
+      final cid = json['canal_id']?.toString() ?? json['canalId']?.toString();
+      if (cid != widget.canalId) return;
       if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
       final msg = _MessageCanal.fromJson(json, widget.couleur);
       setState(() => _msgs.add(msg));

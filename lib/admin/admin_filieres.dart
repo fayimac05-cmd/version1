@@ -693,6 +693,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
             onPressed: envoi ? null : () async {
               if (titreCtrl.text.trim().isEmpty || contenuCtrl.text.trim().isEmpty) return;
               setDialogState(() => envoi = true);
+              final messenger = ScaffoldMessenger.of(context);
 
               final res = await ApiService.createAnnonce({
                 'titre': titreCtrl.text.trim(),
@@ -701,19 +702,30 @@ class _DetailFiliereState extends State<_DetailFiliere>
                 'niveau': f.niveau,
                 'cibleRole': 'etudiant',
               });
-              if (!mounted) return;
+              if (!dialogCtx.mounted) return;
               if (res['success'] == true) {
                 // L'annonce est créée en brouillon : on la publie aussitôt
                 // pour qu'elle atteigne les étudiants de la filière.
                 final id = res['data']?['id'];
                 if (id != null) await ApiService.publierAnnonce(id.toString());
-                if (!mounted) return;
+                if (!dialogCtx.mounted) return;
                 Navigator.pop(dialogCtx);
-                showAppSnackBar(context, 'Annonce envoyée aux étudiants de ${f.nom}.');
+                messenger.showSnackBar(SnackBar(
+                  content: Text('Annonce envoyée aux étudiants de ${f.nom}.'),
+                  backgroundColor: const Color(0xFF1A3C34),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: const Duration(seconds: 2),
+                ));
               } else {
                 setDialogState(() => envoi = false);
-                showAppSnackBar(context, res['error'] as String? ?? 'Erreur lors de l\'envoi.',
-                    backgroundColor: AdminTheme.danger);
+                messenger.showSnackBar(SnackBar(
+                  content: Text(res['error'] as String? ?? 'Erreur lors de l\'envoi.'),
+                  backgroundColor: AdminTheme.danger,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: const Duration(seconds: 2),
+                ));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
@@ -837,6 +849,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
             onPressed: envoi ? null : () async {
               if (nomCtrl.text.trim().isEmpty) return;
               setDialogState(() => envoi = true);
+              final messenger = ScaffoldMessenger.of(context);
 
               if (f.backendId != null) {
                 final result = await ApiService.createModule(
@@ -847,13 +860,19 @@ class _DetailFiliereState extends State<_DetailFiliere>
                   filiereNom: f.nom,
                   professeurUserId: profUserId,
                 );
-                if (!mounted) return;
+                if (!dialogCtx.mounted) return;
                 if (result['success'] == true) {
                   setState(() => f.modules.add(Module.fromApi(result['data'] as Map<String, dynamic>)));
                   Navigator.pop(dialogCtx);
                 } else {
                   setDialogState(() => envoi = false);
-                  showAppSnackBar(context, result['error'] as String? ?? 'Erreur lors de l\'ajout du module.', backgroundColor: AdminTheme.danger);
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(result['error'] as String? ?? 'Erreur lors de l\'ajout du module.'),
+                    backgroundColor: AdminTheme.danger,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    duration: const Duration(seconds: 2),
+                  ));
                 }
               } else {
                 // Filière non synchronisée avec le backend (ex: créée hors ligne) : ajout local uniquement.
