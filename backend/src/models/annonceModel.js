@@ -30,6 +30,11 @@ const AnnonceModel = {
           const { data, error } = await query;
           if (!error && data) return data;
         } catch (_) {}
+      // Filtrer par filière si fournie
+      if (filters.filiere) {
+        query = filters.includeGlobal
+          ? query.or(`filiere.eq.${filters.filiere},filiere.is.null`)
+          : query.eq('filiere', filters.filiere);
       }
 
       // Fallback PostgreSQL pool

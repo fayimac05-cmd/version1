@@ -2,6 +2,20 @@ const AnnonceModel = require('../models/annonceModel');
 const CloudinaryService = require('../services/cloudinary.service');
 const pool = require('../config/db');
 const { resolveFiliere } = require('../utils/filieres');
+const { envoyerNotificationAuto } = require('./notifications.controller');
+
+async function notifierPublication(annonce) {
+  const roleCible = annonce.cibleRole === 'tous' ? null : annonce.cibleRole;
+  const { rows: destinataires } = await pool.query(
+    `SELECT id FROM users
+     WHERE ($2::integer IS NULL OR filiere_id = $2)
+     ${roleCible ? 'AND role = $1' : ''}`,
+    roleCible ? [roleCible, annonce.filiere || null] : [null, annonce.filiere || null],
+  );
+  await Promise.all(destinataires.map(({ id }) =>
+    envoyerNotificationAuto(id, annonce.titre, annonce.contenu),
+  ));
+}
 
 /**
  * Contrôleur pour les Annonces
@@ -26,6 +40,8 @@ exports.getAllAnnonces = async (req, res) => {
       filters.statut = 'publie';
       // Filtrer par leur filière
       filters.filiere = userFiliere;
+      // Une annonce sans filière cible tout l'établissement.
+      filters.includeGlobal = true;
     } else if (userRole === 'admin' || userRole === 'professeur') {
       // Les admins et professeurs voient tout
       if (statut) filters.statut = statut;
@@ -143,6 +159,8 @@ exports.createAnnonce = async (req, res) => {
 
     if (newAnnonce && (newAnnonce.statut === 'publie' || annonceData.statut === 'publie')) {
       syncAnnonceToCanalAndNotify(newAnnonce || annonceData, req.app);
+    if (annonceData.statut === 'publie') {
+      await notifierPublication(newAnnonce);
     }
 
     res.status(201).json({
@@ -404,6 +422,9 @@ exports.publishAnnonce = async (req, res) => {
     const publishedAnnonce = await AnnonceModel.publish(id);
 
     syncAnnonceToCanalAndNotify(publishedAnnonce || { ...annonce, statut: 'publie' }, req.app);
+    // Persister puis pousser la notification afin que le flux soit disponible
+    // même pour les étudiants qui n'étaient pas connectés au moment du push.
+    await notifierPublication(publishedAnnonce);
 
     res.status(200).json({
       success: true,
