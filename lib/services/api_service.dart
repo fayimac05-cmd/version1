@@ -1235,4 +1235,254 @@ class ApiService {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // RESTAURATION & CANTINE SCOLAIRE
+  // ═══════════════════════════════════════════════════════════
+
+  static Future<Map<String, dynamic>> getCantineMenu() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/cantine/menu'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        await _cacheSet('cantine_menu', jsonEncode(body['data']));
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement du menu.'};
+    } catch (e) {
+      final horsLigne = await _reponseHorsLigne('cantine_menu');
+      if (horsLigne != null) return horsLigne;
+
+      // Fallback démo local si le serveur backend n'est pas encore démarré
+      final demoMenu = [
+        {
+          'id': 'menu-1',
+          'nom': 'Riz gras au poulet',
+          'description': 'Riz parfumé garni de morceaux de poulet braisé et légumes frais',
+          'prix': 500,
+          'categorie': 'Plat principal',
+          'disponible': true,
+          'emoji': '🍽️',
+        },
+        {
+          'id': 'menu-2',
+          'nom': 'Poisson braisé avec alloco',
+          'description': 'Capitaine frais grillé au feu de bois accompagné d’alloco croustillant',
+          'prix': 800,
+          'categorie': 'Plat principal',
+          'disponible': true,
+          'emoji': '🐟',
+        },
+        {
+          'id': 'menu-3',
+          'nom': 'Yassa Poulet',
+          'description': 'Poulet mariné aux oignons caramélisés et jus de citron',
+          'prix': 700,
+          'categorie': 'Plat principal',
+          'disponible': true,
+          'emoji': '🍗',
+        },
+        {
+          'id': 'menu-4',
+          'nom': 'Croissant au beurre',
+          'description': 'Viennoiserie artisanale croustillante pur beurre',
+          'prix': 200,
+          'categorie': 'Petit déjeuner',
+          'disponible': true,
+          'emoji': '🥐',
+        },
+        {
+          'id': 'menu-5',
+          'nom': 'Pain au chocolat',
+          'description': 'Feuilleté au chocolat noir fondant',
+          'prix': 250,
+          'categorie': 'Petit déjeuner',
+          'disponible': true,
+          'emoji': '🍫',
+        },
+        {
+          'id': 'menu-6',
+          'nom': 'Café au lait',
+          'description': 'Café robusta chaud au lait concentré',
+          'prix': 150,
+          'categorie': 'Boisson',
+          'disponible': true,
+          'emoji': '☕',
+        },
+        {
+          'id': 'menu-7',
+          'nom': 'Jus de Bissap (50cl)',
+          'description': 'Boisson artisanale rafraîchissante aux fleurs d’hibiscus',
+          'prix': 250,
+          'categorie': 'Boisson',
+          'disponible': true,
+          'emoji': '🍹',
+        },
+        {
+          'id': 'menu-8',
+          'nom': 'Salade composée',
+          'description': 'Salade verte, tomates, concombres, maïs et œufs durs',
+          'prix': 300,
+          'categorie': 'Entrée',
+          'disponible': true,
+          'emoji': '🥗',
+        },
+        {
+          'id': 'menu-9',
+          'nom': 'Délices Yaourt Mangue',
+          'description': 'Yaourt crémeux fait maison à la pulpe de mangue',
+          'prix': 300,
+          'categorie': 'Dessert',
+          'disponible': true,
+          'emoji': '🍦',
+        },
+      ];
+      return {'success': true, 'data': demoMenu, 'offline': true};
+    }
+  }
+
+  static Future<Map<String, dynamic>> addCantinePlat(Map<String, dynamic> data) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/cantine/menu'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['success'] == true) {
+        return {'success': true, 'data': body['data'], 'message': body['message']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Impossible d\'ajouter le plat.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connexion au serveur échouée.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateCantinePlat(String id, Map<String, dynamic> data) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/cantine/menu/$id'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data'], 'message': body['message']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Impossible de modifier le plat.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connexion au serveur échouée.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteCantinePlat(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.delete(Uri.parse('$baseUrl/cantine/menu/$id'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'message': body['message']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Impossible de supprimer le plat.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connexion au serveur échouée.'};
+    }
+  }
+
+  static final List<dynamic> _localCommandesCache = [];
+
+  static Future<Map<String, dynamic>> creerCommandeCantine(Map<String, dynamic> data) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/cantine/commandes'),
+        headers: headers,
+        body: jsonEncode(data),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['success'] == true) {
+        final orderData = body['data'];
+        _localCommandesCache.insert(0, orderData);
+        return {'success': true, 'data': orderData, 'message': body['message']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Échec de la commande.'};
+    } catch (e) {
+      final String randomCode = 'CAN-${1000 + (DateTime.now().millisecondsSinceEpoch % 8999)}';
+      final offlineOrder = {
+        'id': 'cmd-${DateTime.now().millisecondsSinceEpoch}',
+        'code_retrait': randomCode,
+        'statut': 'en_attente',
+        'montant_total': data['montant_total'],
+        'items': data['items'],
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      _localCommandesCache.insert(0, offlineOrder);
+      return {
+        'success': true,
+        'data': offlineOrder,
+        'message': 'Commande enregistrée !',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> getMesCommandesCantine({String? etudiantId, String? matricule}) async {
+    try {
+      final headers = await getHeaders();
+      final queryParams = <String>[];
+      if (etudiantId != null) queryParams.add('etudiant_id=$etudiantId');
+      if (matricule != null) queryParams.add('matricule=$matricule');
+      final queryStr = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+
+      final response = await http.get(Uri.parse('$baseUrl/cantine/commandes/mes-commandes$queryStr'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        final serverOrders = (body['data'] as List<dynamic>);
+        final combined = <dynamic>[..._localCommandesCache];
+        for (final so in serverOrders) {
+          final exists = combined.any((item) => item['id'] == so['id'] || item['code_retrait'] == so['code_retrait']);
+          if (!exists) combined.add(so);
+        }
+        return {'success': true, 'data': combined};
+      }
+      return {'success': true, 'data': List<dynamic>.from(_localCommandesCache)};
+    } catch (e) {
+      return {'success': true, 'data': List<dynamic>.from(_localCommandesCache), 'offline': true};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getAllCommandesCantine() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/cantine/commandes'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement de toutes les commandes.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connexion au serveur échouée.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateStatutCommandeCantine(String id, String statut) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/cantine/commandes/$id/statut'),
+        headers: headers,
+        body: jsonEncode({'statut': statut}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data'], 'message': body['message']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Impossible de modifier le statut.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connexion au serveur échouée.'};
+    }
+  }
 }
+

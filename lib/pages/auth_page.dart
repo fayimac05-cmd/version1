@@ -9,6 +9,7 @@ import 'choose_school_page.dart';
 import 'bureau_des_etudiants.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
+import 'cantine_gestion_screen.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -133,6 +134,8 @@ class _AuthPageState extends State<AuthPage> {
       );
     } else if (r == 'bde') {
       destination = const BureauDesEtudiantsScreen();
+    } else if (r == 'cantiniere' || r == 'cantine' || r == 'restauration') {
+      destination = CantineGestionScreen(profile: profile, onLogout: logout);
     } else {
       destination = StudentShell(profile: profile, onLogout: logout);
     }
@@ -1002,6 +1005,11 @@ class _AuthPageState extends State<AuthPage> {
       case 'parent':
         rc = const Color(0xFFD97706);
         rl = 'Parent';
+        break;
+      case 'cantiniere':
+      case 'cantine':
+        rc = const Color(0xFF2E7D32);
+        rl = 'Cantinière / Restauration';
         break;
       default:
         rc = AppPalette.blue;

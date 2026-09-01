@@ -14,6 +14,7 @@ import '../professeur/professor_shell.dart';
 import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
 import 'bureau_des_etudiants.dart';
+import 'cantine_gestion_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -300,6 +301,8 @@ class _LoginPageState extends State<LoginPage> {
       );
     } else if (r == 'bde') {
       destination = const BureauDesEtudiantsScreen();
+    } else if (r == 'cantiniere' || r == 'cantine' || r == 'restauration') {
+      destination = CantineGestionScreen(profile: profile, onLogout: logout);
     } else {
       destination = StudentShell(profile: profile, onLogout: logout);
     }

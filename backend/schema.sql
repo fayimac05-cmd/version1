@@ -1,4 +1,7 @@
 -- Suppression des anciennes tables pour éviter les erreurs d'existence
+DROP TABLE IF EXISTS cantine_commande_items CASCADE;
+DROP TABLE IF EXISTS cantine_commandes CASCADE;
+DROP TABLE IF EXISTS cantine_menu CASCADE;
 DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS edt CASCADE;
 DROP TABLE IF EXISTS annonces CASCADE;
@@ -427,4 +430,41 @@ CREATE TABLE appel_qr_sessions (
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =========================================================================
+-- ─── MODULE CANTINE (RESTAURATION SCOLAIRE) ─────────────────────────────
+-- =========================================================================
+
+CREATE TABLE cantine_menu (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nom VARCHAR(255) NOT NULL,
+    description TEXT,
+    prix NUMERIC(10,2) NOT NULL DEFAULT 0,
+    categorie VARCHAR(50) DEFAULT 'Plat principal', -- Entrée | Plat principal | Dessert | Boisson | Petit déjeuner
+    disponible BOOLEAN DEFAULT TRUE,
+    emoji VARCHAR(10) DEFAULT '🍽️',
+    date_menu DATE DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE cantine_commandes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    etudiant_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    etudiant_nom VARCHAR(255),
+    etudiant_matricule VARCHAR(50),
+    montant_total NUMERIC(10,2) NOT NULL,
+    statut VARCHAR(50) DEFAULT 'en_attente', -- en_attente | en_preparation | prete | servie | annulee
+    code_retrait VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE cantine_commande_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    commande_id UUID REFERENCES cantine_commandes(id) ON DELETE CASCADE,
+    menu_id UUID REFERENCES cantine_menu(id) ON DELETE SET NULL,
+    nom_plat VARCHAR(255) NOT NULL,
+    prix_unitaire NUMERIC(10,2) NOT NULL,
+    quantite INTEGER NOT NULL DEFAULT 1
+);
+
 

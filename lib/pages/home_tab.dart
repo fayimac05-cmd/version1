@@ -16,6 +16,7 @@ import 'courses_tab.dart';
 import 'groupe_filiere_screen.dart';
 import 'revision_ia_screen.dart';
 import 'checkin_screen.dart';
+import 'cantine_student_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key, required this.profile});
@@ -580,11 +581,10 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   void _showCantineSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _CantineSheet(),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CantineStudentScreen(profile: widget.profile),
+      ),
     );
   }
 
