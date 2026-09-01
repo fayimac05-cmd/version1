@@ -1730,7 +1730,7 @@ class _ProfilEtudiant extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                contact.matricule,
+                contact.matricule ?? '',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,

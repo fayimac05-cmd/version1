@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../utils/snackbar_helper.dart';
 
@@ -8,17 +10,25 @@ import '../utils/snackbar_helper.dart';
 // MODÈLES
 // ════════════════════════════════════════════════════════════════════════════
 class ContactEtudiant {
-  final String nom, prenoms, matricule, filiere, niveau, telephone;
+  final String id; // user UUID
+  final String nom, prenoms, filiere, niveau, telephone;
+  final String? matricule;
   const ContactEtudiant({
+    required this.id,
     required this.nom,
     required this.prenoms,
-    required this.matricule,
-    required this.filiere,
-    required this.niveau,
-    required this.telephone,
+    this.matricule,
+    this.filiere = '',
+    this.niveau = '',
+    this.telephone = '',
   });
-  String get initiales => '${prenoms[0]}${nom[0]}'.toUpperCase();
-  String get nomComplet => '$prenoms $nom';
+  String get initiales {
+    if (prenoms.isEmpty && nom.isEmpty) return '?';
+    if (prenoms.isEmpty) return nom[0].toUpperCase();
+    if (nom.isEmpty) return prenoms[0].toUpperCase();
+    return '${prenoms[0]}${nom[0]}'.toUpperCase();
+  }
+  String get nomComplet => '$prenoms $nom'.trim();
 }
 
 enum TypeMessagePrive { texte, image, document, vocal, sticker, video, lien }
@@ -48,7 +58,7 @@ class MessagePrive {
 }
 
 class ConversationPrivee {
-  final String id;
+  final String id; // correspondant_id (UUID)
   final ContactEtudiant contact;
   List<MessagePrive> messages;
   bool epingle;
@@ -64,120 +74,9 @@ class ConversationPrivee {
   int get nbNonLus => messages.where((m) => !m.estMoi && !m.lu).length;
 }
 
-// ── Données mock ─────────────────────────────────────────────────────────
-final List<ContactEtudiant> tousLesEtudiants = [
-  const ContactEtudiant(
-    nom: 'TRAORÉ',
-    prenoms: 'Fatimata',
-    matricule: '24IST-O2/1234',
-    filiere: 'Réseaux Informatiques et Télécom',
-    niveau: 'Licence 2',
-    telephone: '70000002',
-  ),
-  const ContactEtudiant(
-    nom: 'OUÉDRAOGO',
-    prenoms: 'Salif',
-    matricule: '24IST-O2/1102',
-    filiere: 'Réseaux Informatiques et Télécom',
-    niveau: 'Licence 2',
-    telephone: '70000007',
-  ),
-  const ContactEtudiant(
-    nom: 'KABORÉ',
-    prenoms: 'Aminata',
-    matricule: '24IST-O2/1456',
-    filiere: 'Réseaux Informatiques et Télécom',
-    niveau: 'Licence 2',
-    telephone: '70000004',
-  ),
-  const ContactEtudiant(
-    nom: 'ZONGO',
-    prenoms: 'Daouda',
-    matricule: '24IST-O2/1789',
-    filiere: 'Réseaux Informatiques et Télécom',
-    niveau: 'Licence 2',
-    telephone: '70000005',
-  ),
-  const ContactEtudiant(
-    nom: 'SAWADOGO',
-    prenoms: 'Raïssa',
-    matricule: '24IST-O2/1320',
-    filiere: 'Réseaux Informatiques et Télécom',
-    niveau: 'Licence 2',
-    telephone: '70000008',
-  ),
-];
-
-final List<ConversationPrivee> conversationsPrivees = [
-  ConversationPrivee(
-    id: 'C001',
-    contact: tousLesEtudiants[0],
-    epingle: true,
-    messages: [
-      MessagePrive(
-        id: 'M1',
-        texte: 'Salut ! Tu as les notes du cours de BDD ?',
-        heure: '14:30',
-        type: TypeMessagePrive.texte,
-        estMoi: false,
-        lu: true,
-      ),
-      MessagePrive(
-        id: 'M2',
-        texte: 'Oui je te les envoie demain matin',
-        heure: '14:45',
-        type: TypeMessagePrive.texte,
-        estMoi: true,
-        lu: true,
-      ),
-      MessagePrive(
-        id: 'M3',
-        texte: 'Merci beaucoup ! 🙏',
-        heure: '14:46',
-        type: TypeMessagePrive.texte,
-        estMoi: false,
-        lu: false,
-        reactions: {'❤️': 1},
-      ),
-    ],
-  ),
-  ConversationPrivee(
-    id: 'C002',
-    contact: tousLesEtudiants[2],
-    messages: [
-      MessagePrive(
-        id: 'M4',
-        texte: 'On se retrouve à la biblio à 14h ?',
-        heure: '09:00',
-        type: TypeMessagePrive.texte,
-        estMoi: false,
-        lu: true,
-      ),
-      MessagePrive(
-        id: 'M5',
-        texte: 'Oui parfait !',
-        heure: '09:05',
-        type: TypeMessagePrive.texte,
-        estMoi: true,
-        lu: true,
-      ),
-    ],
-  ),
-  ConversationPrivee(
-    id: 'C003',
-    contact: tousLesEtudiants[1],
-    messages: [
-      MessagePrive(
-        id: 'M6',
-        texte: 'Tu viens à la séance de révision ?',
-        heure: '08:30',
-        type: TypeMessagePrive.texte,
-        estMoi: false,
-        lu: false,
-      ),
-    ],
-  ),
-];
+// ── Données dynamiques (chargées depuis l'API) ──────────────────────────
+final List<ContactEtudiant> tousLesEtudiants = [];
+final List<ConversationPrivee> conversationsPrivees = [];
 
 final List<String> stickersSauvegardes = ['😂', '🔥', '💯', '🎉', '👑', '💪'];
 
@@ -195,10 +94,161 @@ class _MessagesScreenState extends State<MessagesScreen> {
   ConversationPrivee? _convActive;
   final _searchCtrl = TextEditingController();
   String _query = '';
+  bool _chargement = true;
+  String? _myUserId;
 
   bool get _isDesktop => MediaQuery.of(context).size.width > 700;
   int get _totalNonLus =>
       conversationsPrivees.fold(0, (s, c) => s + c.nbNonLus);
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerConversations();
+    _ecouterSocket();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    SocketService().off('message:prive');
+    SocketService().off('message:read');
+    super.dispose();
+  }
+
+  Future<void> _chargerConversations() async {
+    try {
+      _myUserId = await ApiService.getUserId();
+      final resp = await ApiService.get('/messages/prives');
+      if (resp != null && resp['success'] == true) {
+        final data = resp['data'] as List? ?? [];
+        conversationsPrivees.clear();
+        for (final c in data) {
+          final contact = ContactEtudiant(
+            id: c['correspondant_id']?.toString() ?? '',
+            nom: c['nom']?.toString() ?? '',
+            prenoms: c['prenoms']?.toString() ?? '',
+          );
+          final isRead = c['is_read'] == true;
+          final estMoi = c['expediteur_id']?.toString() == _myUserId;
+          conversationsPrivees.add(ConversationPrivee(
+            id: contact.id,
+            contact: contact,
+            messages: c['dernier_message'] != null
+                ? [
+                    MessagePrive(
+                      id: 'last_${contact.id}',
+                      texte: c['dernier_message']?.toString() ?? '',
+                      heure: _formatHeure(c['created_at']),
+                      type: TypeMessagePrive.texte,
+                      estMoi: estMoi,
+                      lu: isRead,
+                    ),
+                  ]
+                : [],
+          ));
+        }
+      }
+
+      final etudiantsResp = await ApiService.getEtudiants();
+      if (etudiantsResp['success'] == true && etudiantsResp['data'] is List) {
+        tousLesEtudiants.clear();
+        for (final e in etudiantsResp['data']) {
+          final uId = e['user_id']?.toString() ?? e['id']?.toString() ?? '';
+          if (uId.isNotEmpty && uId != _myUserId) {
+            tousLesEtudiants.add(ContactEtudiant(
+              id: uId,
+              nom: e['nom']?.toString() ?? '',
+              prenoms: e['prenoms']?.toString() ?? '',
+              matricule: e['matricule']?.toString(),
+              filiere: e['filiere']?.toString() ?? '',
+              niveau: e['niveau']?.toString() ?? '',
+              telephone: e['telephone']?.toString() ?? '',
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessagesScreen] Erreur chargement: $e');
+    }
+    if (mounted) setState(() => _chargement = false);
+  }
+
+  void _ecouterSocket() {
+    SocketService().onPrivateMessage((data) {
+      if (!mounted) return;
+      final json = data is Map<String, dynamic> ? data : {};
+      final expediteurId = json['expediteur_id']?.toString() ?? '';
+      final contenu = json['contenu']?.toString() ?? '';
+      final estMoi = expediteurId == _myUserId;
+      final contactId = estMoi
+          ? json['destinataire_id']?.toString() ?? ''
+          : expediteurId;
+
+      setState(() {
+        final existing = conversationsPrivees
+            .where((c) => c.id == contactId)
+            .firstOrNull;
+        if (existing != null) {
+          existing.messages.add(MessagePrive(
+            id: json['id']?.toString() ?? UniqueKey().toString(),
+            texte: contenu,
+            heure: _formatHeure(json['created_at']),
+            type: TypeMessagePrive.texte,
+            estMoi: estMoi,
+            lu: false,
+          ));
+        } else {
+          // Nouvelle conversation
+          conversationsPrivees.insert(
+            0,
+            ConversationPrivee(
+              id: contactId,
+              contact: ContactEtudiant(
+                id: contactId,
+                nom: json['nom']?.toString() ?? '',
+                prenoms: json['prenoms']?.toString() ?? '',
+              ),
+              messages: [
+                MessagePrive(
+                  id: json['id']?.toString() ?? UniqueKey().toString(),
+                  texte: contenu,
+                  heure: _formatHeure(json['created_at']),
+                  type: TypeMessagePrive.texte,
+                  estMoi: estMoi,
+                  lu: false,
+                ),
+              ],
+            ),
+          );
+        }
+      });
+    });
+
+    SocketService().onMessageRead((data) {
+      if (!mounted) return;
+      final json = data is Map<String, dynamic> ? data : {};
+      final destId = json['destinataire_id']?.toString();
+      if (destId == null) return;
+      setState(() {
+        final conv = conversationsPrivees
+            .where((c) => c.id == destId)
+            .firstOrNull;
+        if (conv != null) {
+          for (final m in conv.messages) {
+            if (m.estMoi) m.lu = true;
+          }
+        }
+      });
+    });
+  }
+
+  String _formatHeure(dynamic raw) {
+    if (raw == null) return '';
+    final dt = DateTime.tryParse(raw.toString())?.toLocal();
+    if (dt == null) return '';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -319,28 +369,47 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ],
         ),
       ),
-      Container(height: 1, color: const Color(0xFFE2E8F0)),
-      Expanded(
-        child: ListView(
-          children: [
-            ..._filtres.where((c) => c.epingle).map(_itemConv),
-            if (_filtres.any((c) => c.epingle) &&
-                _filtres.any((c) => !c.epingle))
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Text(
-                  'Récentes',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF94A3B8),
+      if (_chargement)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: Center(
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppPalette.blue),
+          ),
+        )
+      else if (_filtres.isEmpty)
+        const Expanded(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Aucune conversation',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+              ),
+            ),
+          ),
+        )
+      else
+        Expanded(
+          child: ListView(
+            children: [
+              ..._filtres.where((c) => c.epingle).map(_itemConv),
+              if (_filtres.any((c) => c.epingle) &&
+                  _filtres.any((c) => !c.epingle))
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text(
+                    'Récentes',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF94A3B8),
+                    ),
                   ),
                 ),
-              ),
-            ..._filtres.where((c) => !c.epingle).map(_itemConv),
-          ],
+              ..._filtres.where((c) => !c.epingle).map(_itemConv),
+            ],
+          ),
         ),
-      ),
       Container(
         padding: const EdgeInsets.all(10),
         decoration: const BoxDecoration(
@@ -786,14 +855,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   void _ouvrirOuCreer(ContactEtudiant e) {
     final exist = conversationsPrivees
-        .where((c) => c.contact.matricule == e.matricule)
+        .where((c) => c.contact.id == e.id || (e.matricule != null && c.contact.matricule == e.matricule))
         .firstOrNull;
     if (exist != null) {
       setState(() => _convActive = exist);
       return;
     }
     final n = ConversationPrivee(
-      id: 'C${DateTime.now().millisecondsSinceEpoch}',
+      id: e.id,
       contact: e,
       messages: [],
     );
@@ -911,7 +980,47 @@ class _ConversationViewState extends State<_ConversationView> {
     _msgCtrl.addListener(
       () => setState(() => _hasText = _msgCtrl.text.trim().isNotEmpty),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
+    _chargerMessages();
+  }
+
+  Future<void> _chargerMessages() async {
+    try {
+      final myId = await ApiService.getUserId();
+      final resp = await ApiService.get('/messages/prives/${_contact.id}');
+      if (resp != null && resp['success'] == true && mounted) {
+        final list = resp['data'] as List? ?? [];
+        setState(() {
+          _conv.messages = list.map((m) {
+            final estMoi = m['expediteur_id']?.toString() == myId;
+            return MessagePrive(
+              id: m['id']?.toString() ?? UniqueKey().toString(),
+              texte: m['contenu']?.toString() ?? '',
+              heure: _formatHeure(m['created_at']),
+              type: TypeMessagePrive.texte,
+              estMoi: estMoi,
+              lu: m['is_read'] == true,
+            );
+          }).toList();
+        });
+      }
+      // Marquer les messages comme lus (Socket + API)
+      SocketService().sendReadReceipt(_contact.id);
+      await ApiService.post('/messages/prives/read/${_contact.id}');
+      for (final m in _conv.messages) {
+        if (!m.estMoi) m.lu = true;
+      }
+      widget.onUpdate();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
+    } catch (e) {
+      debugPrint('[ConversationView] Erreur: $e');
+    }
+  }
+
+  String _formatHeure(dynamic raw) {
+    if (raw == null) return _now();
+    final dt = DateTime.tryParse(raw.toString())?.toLocal();
+    if (dt == null) return _now();
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -1991,21 +2100,26 @@ class _ConversationViewState extends State<_ConversationView> {
   }
 
   void _envoyer() {
-    if (_msgCtrl.text.trim().isEmpty) return;
+    final text = _msgCtrl.text.trim();
+    if (text.isEmpty) return;
+    final newMsg = MessagePrive(
+      id: 'M${DateTime.now().millisecondsSinceEpoch}',
+      texte: text,
+      heure: _now(),
+      type: TypeMessagePrive.texte,
+      estMoi: true,
+      lu: false,
+    );
     setState(() {
-      _conv.messages.add(
-        MessagePrive(
-          id: 'M${DateTime.now().millisecondsSinceEpoch}',
-          texte: _msgCtrl.text.trim(),
-          heure: _now(),
-          type: TypeMessagePrive.texte,
-          estMoi: true,
-        ),
-      );
+      _conv.messages.add(newMsg);
     });
     _msgCtrl.clear();
     Future.delayed(const Duration(milliseconds: 100), _scrollBas);
     widget.onUpdate();
+
+    // Envoi via Socket.io et API REST
+    SocketService().sendPrivateMessage(_contact.id, {'contenu': text});
+    ApiService.post('/messages/prives/${_contact.id}', {'contenu': text});
   }
 
   void _envoyerSticker(String e) {
@@ -2109,7 +2223,7 @@ class _ConversationViewState extends State<_ConversationView> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    _contact.matricule,
+                    _contact.matricule ?? '',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
