@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
+import '../bulletin_screen.dart';
+import '../canal_screen.dart';
+import '../class_detail_screen.dart';
+import 'parent_schedule_tab.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -63,6 +67,30 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (t.contains('bienvenue') || t.contains('inscription')) return Icons.check_circle_outline;
     return Icons.notifications_none_rounded;
   }
+  void _onNotifTap(Map<String, dynamic> n, String titre) {
+final t = titre.toLowerCase();
+
+if (t.contains('emploi du temps') || t.contains('planning')) {
+Navigator.push(context,
+MaterialPageRoute(builder: (_) => const ParentScheduleTab()));
+} else if (t.contains('note') || t.contains('bulletin')) {
+Navigator.push(context,
+MaterialPageRoute(builder: (_) => const BulletinScreen()));
+} else if (t.contains('cours')) {
+Navigator.push(context, MaterialPageRoute(
+builder: (_) => ClassDetailScreen(
+className: titre,
+studentCount: 0,
+),
+));
+} else if (t.contains('message')) {
+Navigator.push(context,
+MaterialPageRoute(builder: (_) => const CanalScreen()));
+} else if (t.contains('bienvenue') || t.contains('inscription')) {
+Navigator.popUntil(context, (route) => route.isFirst);
+}
+}
+
 
   String _tempsEcoule(dynamic iso) {
     if (iso == null) return '';
@@ -136,17 +164,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
           final n = _notifs[index];
           final titre = (n['titre'] ?? '').toString();
           return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFFEFF6FF),
-              child: Icon(_iconFromTitre(titre), color: const Color(0xFF1D4ED8), size: 20),
-            ),
-            title: Text(titre,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-            subtitle: Text((n['corps'] ?? '').toString(),
-                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-            trailing: Text(_tempsEcoule(n['created_at']),
-                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-          );
+leading: CircleAvatar(
+backgroundColor: const Color(0xFFEFF6FF),
+child: Icon(_iconFromTitre(titre), color: const Color(0xFF1D4ED8), size: 20),
+),
+title: Text(titre,
+style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+subtitle: Text((n['corps'] ?? '').toString(),
+style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+trailing: Text(_tempsEcoule(n['created_at']),
+style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+onTap: () => _onNotifTap(n, titre),
+);
         },
       ),
     );
