@@ -115,8 +115,10 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final body = jsonDecode(res.body);
-        Navigator.pop(context);
+        if (!mounted) return;
+        final nav = Navigator.of(context);
         await _charger();
+        nav.pop();
         if (id == null && body['identifiants'] != null) {
           _afficherIdentifiants(body['identifiants'], body['professeur']);
         } else {
@@ -313,13 +315,13 @@ class _CarteProfesseur extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Row(children: [
         CircleAvatar(
           radius: 26,
-          backgroundColor: AppPalette.blue.withOpacity(0.15),
+          backgroundColor: AppPalette.blue.withValues(alpha: 0.15),
           child: Text(
             '${prof['prenoms']?[0] ?? ''}${prof['nom']?[0] ?? ''}',
             style: const TextStyle(fontSize: 16,
@@ -558,7 +560,7 @@ class _FormulaireProfState extends State<_FormulaireProf> {
                             ),
                             boxShadow: selected
                                 ? [BoxShadow(
-                                    color: AppPalette.blue.withOpacity(0.25),
+                                    color: AppPalette.blue.withValues(alpha: 0.25),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2))]
                                 : [],

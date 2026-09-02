@@ -1489,17 +1489,7 @@ Widget _annonceVide() {
     );
   }
 
-  Widget _iconBox(IconData icon, Color bg, Color color) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(icon, color: color, size: 22),
-    );
-  }
+
 
   Widget _loadingCard({double height = 130}) {
     return Container(

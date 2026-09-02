@@ -92,6 +92,18 @@ class SocketService {
     });
   }
 
+  /// Envoie un accusé de lecture pour une conversation privée.
+  void sendReadReceipt(String expediteurId) {
+    _socket?.emit('message:read', {
+      'expediteurId': expediteurId,
+    });
+  }
+
+  /// Écoute les accusés de lecture (l'expéditeur est notifié quand ses messages sont lus).
+  void onMessageRead(void Function(dynamic) callback) {
+    _socket?.on('message:read', callback);
+  }
+
   /// Retire les écouteurs d'un événement. Accepte les anciens noms
   /// (`new_canal_message`, …) utilisés avant la refonte.
   void off(String event) {

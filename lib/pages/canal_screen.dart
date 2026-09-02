@@ -248,6 +248,10 @@ class _CanalScreenState extends State<CanalScreen> {
             _carteCanal(context, icon: Icons.groups_rounded, nom: 'Groupe Professeurs',
               description: 'Échanges entre tous les professeurs de l’établissement',
               couleur: _brandBlue, tag: 'Tous les professeurs', canalId: '4', type: 'professeurs'),
+            const SizedBox(height: 12),
+            _carteCanal(context, icon: Icons.account_balance_rounded, nom: 'Administration & Enseignants',
+              description: 'Communications directes entre l\'administration et les enseignants',
+              couleur: const Color(0xFF059669), tag: 'Admin ↔ Enseignants', canalId: '5', type: 'prof_admin'),
             const SizedBox(height: 22),
             _sectionLabel('COORDINATION PAR FILIÈRE'),
             const SizedBox(height: 12),
@@ -359,6 +363,10 @@ class _CanalScreenState extends State<CanalScreen> {
       case 'professeurs':
         page = _CanalDetail(profile: p, nom: 'Groupe Professeurs', icon: Icons.groups_rounded,
             couleur: _brandBlue, tag: 'Tous les professeurs', canalId: canalId, canWrite: true);
+        break;
+      case 'prof_admin':
+        page = _CanalDetail(profile: p, nom: 'Administration & Enseignants', icon: Icons.account_balance_rounded,
+            couleur: const Color(0xFF059669), tag: 'Admin ↔ Enseignants', canalId: canalId, canWrite: true);
         break;
       case 'prof_delegues':
         page = _CanalDetail(profile: p, nom: 'Professeurs & Délégués', icon: Icons.hub_rounded,
