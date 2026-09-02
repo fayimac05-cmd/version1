@@ -91,7 +91,9 @@ final List<GroupeAdmin> _defaultAdminGroupes = [
 // PAGE ADMIN MESSAGES
 // ════════════════════════════════════════════════════════════════════════════
 class AdminMessages extends StatefulWidget {
-  const AdminMessages({super.key});
+  const AdminMessages({super.key, this.role = 'admin'});
+  /// 'admin' ou 'professeur' — filtre les groupes visibles
+  final String role;
   @override State<AdminMessages> createState() => AdminMessagesState();
 }
 
@@ -120,15 +122,32 @@ class AdminMessagesState extends State<AdminMessages>
   String? _myUserId;
   List<GroupeAdmin> adminGroupes = List.from(_defaultAdminGroupes);
 
-  List<GroupeAdmin> get _officiels => adminGroupes
+  bool get _estProf => widget.role == 'professeur';
+
+  /// Groupes visibles pour le rôle courant
+  List<GroupeAdmin> get _groupesVisibles {
+    if (_estProf) {
+      // Un prof voit : salle des profs, admin↔profs, coordination filière, groupes étudiants
+      return adminGroupes.where((g) =>
+          g.type == 'professeurs' ||
+          g.type == 'admin_profs' ||
+          g.type == 'prof_delegues' ||
+          g.type == 'groupe_etudiants').toList();
+    } else {
+      // Un admin voit tout sauf la salle des profs
+      return adminGroupes.where((g) => g.type != 'professeurs').toList();
+    }
+  }
+
+  List<GroupeAdmin> get _officiels => _groupesVisibles
       .where((g) => g.type == 'admin_profs' || g.type == 'admin_delegues' || g.type == 'professeurs' || g.type == 'administration')
       .toList();
   List<GroupeAdmin> get _filieres =>
-      adminGroupes.where((g) => g.type == 'admin_filiere' || g.type == 'prof_delegues' || g.type == 'groupe_etudiants').toList();
+      _groupesVisibles.where((g) => g.type == 'admin_filiere' || g.type == 'prof_delegues' || g.type == 'groupe_etudiants').toList();
   List<GroupeAdmin> get _prives =>
-      adminGroupes.where((g) => g.type == 'prive').toList();
+      _groupesVisibles.where((g) => g.type == 'prive').toList();
   int get _totalNonLus =>
-      adminGroupes.fold(0, (s, g) => s + g.nbNonLus);
+      _groupesVisibles.fold(0, (s, g) => s + g.nbNonLus);
 
   @override
   void initState() {
@@ -928,17 +947,6 @@ class AdminMessagesState extends State<AdminMessages>
           color: const Color(0xFFF0EBE3),
           padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _icnBtn(Icons.emoji_emotions_outlined, () => setState(() {
-              _showEmoji = !_showEmoji; _showSticker = false;
-            })),
-            const SizedBox(width: 4),
-            _icnBtn(Icons.gif_box_outlined,
-                () => _snack('GIF bientôt disponible')),
-            const SizedBox(width: 4),
-            _icnBtn(Icons.sticky_note_2_outlined, () => setState(() {
-              _showSticker = !_showSticker; _showEmoji = false;
-            })),
-            const SizedBox(width: 4),
             _icnBtn(Icons.add_rounded, () => _menuPieceJointe(g)),
             const SizedBox(width: 6),
             Expanded(child: Container(
