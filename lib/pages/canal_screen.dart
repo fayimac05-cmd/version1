@@ -245,13 +245,13 @@ class _CanalScreenState extends State<CanalScreen> {
           Expanded(child: ListView(padding: const EdgeInsets.all(20), children: [
             _sectionLabel('COMMUNICATION ENSEIGNANTS'),
             const SizedBox(height: 12),
-            _carteCanal(context, icon: Icons.groups_rounded, nom: 'Groupe Professeurs',
-              description: 'Échanges entre tous les professeurs de l’établissement',
-              couleur: _brandBlue, tag: 'Tous les professeurs', canalId: '4', type: 'professeurs'),
+            _carteCanal(context, icon: Icons.account_balance_rounded, nom: 'Administration & Professeurs',
+              description: 'Canal officiel Admin ↔ Tous les professeurs',
+              couleur: const Color(0xFF059669), tag: 'Admin ↔ Professeurs', canalId: '5', type: 'admin_profs'),
             const SizedBox(height: 12),
-            _carteCanal(context, icon: Icons.account_balance_rounded, nom: 'Administration & Enseignants',
-              description: 'Communications directes entre l\'administration et les enseignants',
-              couleur: const Color(0xFF059669), tag: 'Admin ↔ Enseignants', canalId: '5', type: 'prof_admin'),
+            _carteCanal(context, icon: Icons.groups_rounded, nom: 'Salle des Professeurs',
+              description: 'Canal d\'échanges entre professeurs',
+              couleur: _brandBlue, tag: 'Tous les professeurs', canalId: '4', type: 'professeurs'),
             const SizedBox(height: 22),
             _sectionLabel('COORDINATION PAR FILIÈRE'),
             const SizedBox(height: 12),
@@ -361,12 +361,14 @@ class _CanalScreenState extends State<CanalScreen> {
             canWrite: false);
         break;
       case 'professeurs':
-        page = _CanalDetail(profile: p, nom: 'Groupe Professeurs', icon: Icons.groups_rounded,
+      case 'prof_prof':
+        page = _CanalDetail(profile: p, nom: 'Salle des Professeurs', icon: Icons.groups_rounded,
             couleur: _brandBlue, tag: 'Tous les professeurs', canalId: canalId, canWrite: true);
         break;
+      case 'admin_profs':
       case 'prof_admin':
-        page = _CanalDetail(profile: p, nom: 'Administration & Enseignants', icon: Icons.account_balance_rounded,
-            couleur: const Color(0xFF059669), tag: 'Admin ↔ Enseignants', canalId: canalId, canWrite: true);
+        page = _CanalDetail(profile: p, nom: 'Administration & Professeurs', icon: Icons.account_balance_rounded,
+            couleur: const Color(0xFF059669), tag: 'Admin ↔ Professeurs', canalId: canalId, canWrite: true);
         break;
       case 'prof_delegues':
         page = _CanalDetail(profile: p, nom: 'Professeurs & Délégués', icon: Icons.hub_rounded,
@@ -510,6 +512,7 @@ class _CanalDetailState extends State<_CanalDetail> {
     _scrollBas();
 
     try {
+      SocketService().sendCanalMessage(widget.canalId, {'contenu': texte});
       final headers = await ApiService.getHeaders();
       final response = await http.post(
         Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
@@ -517,9 +520,15 @@ class _CanalDetailState extends State<_CanalDetail> {
         body: jsonEncode({'contenu': texte}),
       );
       if (response.statusCode != 201 && mounted) {
-        setState(() => _msgs.remove(msgLocal));
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Échec de l\'envoi du message')));
+        try {
+          final body = jsonDecode(utf8.decode(response.bodyBytes));
+          final err = body is Map && body['error'] != null ? body['error'].toString() : 'Échec de l\'envoi (${response.statusCode})';
+          setState(() => _msgs.remove(msgLocal));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+        } catch (_) {
+          setState(() => _msgs.remove(msgLocal));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Échec de l\'envoi du message')));
+        }
       }
     } catch (_) {
       if (!mounted) return;
