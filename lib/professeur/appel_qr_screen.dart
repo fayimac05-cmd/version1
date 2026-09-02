@@ -160,10 +160,19 @@ class _AppelQrScreenState extends State<AppelQrScreen> {
                               style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
                           const SizedBox(height: 14),
                           if (_token != null)
-                            QrImageView(
-                              data: _token!,
-                              size: 210,
-                              backgroundColor: Colors.white,
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: QrImageView(
+                                  data: _token!,
+                                  size: 250,
+                                  backgroundColor: Colors.white,
+                                ),
+                              ),
                             ),
                           const SizedBox(height: 14),
                           const Text('ou saisir le code :',

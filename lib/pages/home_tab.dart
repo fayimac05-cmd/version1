@@ -201,11 +201,6 @@ class _HomeTabState extends State<HomeTab> {
   // ── Header ────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
-    final initiales =
-        '${widget.profile.prenoms.isNotEmpty ? widget.profile.prenoms[0] : ''}'
-        '${widget.profile.nom.isNotEmpty ? widget.profile.nom[0] : ''}'
-            .toUpperCase();
-
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -248,19 +243,20 @@ class _HomeTabState extends State<HomeTab> {
               child: Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
                       border: Border.all(color: AppPalette.yellow, width: 2),
                     ),
-                    child: Center(
-                      child: Text(initiales,
-                          style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0A3D91))),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/logo.png',
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),

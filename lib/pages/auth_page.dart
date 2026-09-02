@@ -297,8 +297,12 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
+    final role = _userTrouve?['role'];
+    final isPersonLogin = role == 'professeur' || role == 'parent';
     final result = await ApiService.login(
-      matricule: _cleTrouvee,
+      matricule: isPersonLogin ? null : _cleTrouvee,
+      nom: isPersonLogin ? _userTrouve!['nom'] : null,
+      tel: isPersonLogin ? _numeroCtrl.text.trim() : null,
       motDePasse: _passCtrl.text,
     );
     if (result['success'] == true) {

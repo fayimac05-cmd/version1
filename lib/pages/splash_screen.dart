@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
@@ -33,6 +35,7 @@ class _SplashScreenState extends State<SplashScreen>
   // Feature card animations (staggered)
   final List<Animation<double>> _cardOpacities = [];
   final List<Animation<Offset>> _cardSlides = [];
+  final List<Timer> _sequenceTimers = [];
 
   @override
   void initState() {
@@ -108,26 +111,27 @@ class _SplashScreenState extends State<SplashScreen>
         .animate(CurvedAnimation(parent: _btnCtrl, curve: Curves.easeOut));
   }
 
-  Future<void> _startSequence() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-    if (!mounted) return;
-    _bgCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    _logoCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    _textCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 350));
-    if (!mounted) return;
-    _cardsCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 450));
-    if (!mounted) return;
-    _btnCtrl.forward();
+  void _scheduleSequenceStep(Duration delay, VoidCallback callback) {
+    final timer = Timer(delay, () {
+      if (!mounted) return;
+      callback();
+    });
+    _sequenceTimers.add(timer);
+  }
+
+  void _startSequence() {
+    _scheduleSequenceStep(const Duration(milliseconds: 100), () => _bgCtrl.forward());
+    _scheduleSequenceStep(const Duration(milliseconds: 400), () => _logoCtrl.forward());
+    _scheduleSequenceStep(const Duration(milliseconds: 900), () => _textCtrl.forward());
+    _scheduleSequenceStep(const Duration(milliseconds: 1250), () => _cardsCtrl.forward());
+    _scheduleSequenceStep(const Duration(milliseconds: 1700), () => _btnCtrl.forward());
   }
 
   @override
   void dispose() {
+    for (final timer in _sequenceTimers) {
+      timer.cancel();
+    }
     _bgCtrl.dispose();
     _logoCtrl.dispose();
     _textCtrl.dispose();
@@ -213,10 +217,11 @@ class _SplashScreenState extends State<SplashScreen>
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 44),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 44),
 
                   // Logo badge
                   ScaleTransition(
@@ -226,10 +231,10 @@ class _SplashScreenState extends State<SplashScreen>
                       child: ScaleTransition(
                         scale: _ringPulse,
                         child: Container(
-                          width: 56,
-                          height: 56,
+                          width: 64,
+                          height: 64,
                           decoration: BoxDecoration(
-                            color: AppPalette.yellow,
+                            color: Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -239,8 +244,14 @@ class _SplashScreenState extends State<SplashScreen>
                               )
                             ],
                           ),
-                          child: const Icon(Icons.school_rounded,
-                              color: AppPalette.blue, size: 30),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/logo.png',
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -319,7 +330,8 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }

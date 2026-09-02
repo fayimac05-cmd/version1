@@ -12,6 +12,7 @@ import '../theme/app_palette.dart';
 // ── Modèle note ──────────────────────────────────────────────────────────────
 class _NoteModule {
   final String module, code, prof;
+  final String? moduleId;
   final double? td, exam;
   final double coefTd, coefExam;
   final int coefficient;
@@ -21,6 +22,7 @@ class _NoteModule {
     required this.module, 
     required this.code, 
     required this.prof,
+    this.moduleId,
     this.td, 
     this.exam, 
     this.coefTd = 1.0, 
@@ -131,13 +133,16 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
           // Grouper par module_nom et calculer la note moyenne
           final Map<String, List<double>> grouped = {};
           final Map<String, String> typeMap = {};
+          final Map<String, String> moduleIdMap = {};
           for (final n in list) {
             final mod = n['module_nom'] as String? ?? 'Module';
             final note = (n['note'] as num?)?.toDouble();
             final type = n['type_eval'] as String? ?? 'DS';
+            final mid = n['module_id']?.toString();
             if (note != null) {
               grouped.putIfAbsent(mod, () => []).add(note);
               typeMap[mod] = type;
+              if (mid != null) moduleIdMap[mod] = mid;
             }
           }
 
@@ -152,6 +157,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
                 module: entry.key,
                 code: 'MOD${(i + 1).toString().padLeft(3, '0')}',
                 prof: 'Professeur assigné',
+                moduleId: moduleIdMap[entry.key],
                 td: type == 'TP' || type == 'Contrôle Continu' ? avg : null,
                 exam: type == 'DS' || type == 'Examen Final' ? avg : avg,
                 coefTd: 1, coefExam: 2, coefficient: 3,
@@ -515,6 +521,24 @@ class _NoteCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => onReclamer(note),
+                  icon: const Icon(Icons.report_problem_outlined, size: 16),
+                  label: const Text('Réclamation', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppPalette.blue,
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
           const Text(
             'Semestre 3',
             style: TextStyle(
@@ -809,15 +833,38 @@ class _ReclamationMoyenneSheetState extends State<_ReclamationMoyenneSheet> {
       return;
     }
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    setState(() { _loading = false; _envoye = true; });
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (mounted) Navigator.of(context).pop();
+
+    final modules = widget.notes
+        .where((n) => _modulesContestes.contains(n.module) && n.note != null)
+        .map((n) => {'nom': n.module, 'note': n.note})
+        .toList();
+
+    final result = await ApiService.creerReclamation(
+      type: 'moyenne',
+      justification: _justifCtrl.text.trim(),
+      noteActuelle: widget.moyenne,
+      semestre: 'Semestre 3',
+      annee: '2024-2025',
+      modulesContestes: modules,
+    );
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (result['success'] == true) {
+      setState(() => _envoye = true);
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted) Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result['error'] ?? 'Erreur lors de l\'envoi.'),
+        backgroundColor: const Color(0xFFC62828),
+      ));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final notees = widget.notes.where((n) => n.note != null).toList();
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
@@ -865,7 +912,7 @@ class _ReclamationMoyenneSheetState extends State<_ReclamationMoyenneSheet> {
                   ),
                   const SizedBox(height: 20),
                   _lbl('Modules contestés *'),
-                  ...notees.map((n) {
+                  ...widget.notes.where((n) => n.note != null).map((n) {
                     final sel = _modulesContestes.contains(n.module);
                     return GestureDetector(
                       onTap: () => setState(() => sel

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_bubble_bg.dart';
+import '../widgets/reclamation_form_sheet.dart';
 
 class BulletinScreen extends StatelessWidget {
   const BulletinScreen({super.key});
@@ -171,6 +172,18 @@ class BulletinScreen extends StatelessWidget {
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: mat['note'] >= 10 ? const Color(0xFF10B981) : Colors.red),
                               ),
                             ),
+                            IconButton(
+                              icon: Icon(Icons.report_problem_outlined,
+                                  size: 18, color: brandBlue.withValues(alpha: 0.7)),
+                              tooltip: 'Réclamation',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              onPressed: () => showBulletinReclamationSheet(
+                                context,
+                                bulletin: bulletinContextFromMap(b),
+                                matierePrefill: Map<String, dynamic>.from(mat),
+                              ),
+                            ),
                           ],
                         ),
                       );
@@ -194,6 +207,48 @@ class BulletinScreen extends StatelessWidget {
                           _buildStat('RÉSULTAT', b['statut'], const Color(0xFF10B981)),
                         ],
                       ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => showBulletinReclamationSheet(
+                              context,
+                              bulletin: bulletinContextFromMap(b),
+                            ),
+                            icon: const Icon(Icons.report_problem_outlined, size: 18),
+                            label: const Text('Réclamation note'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: brandBlue,
+                              side: BorderSide(color: brandBlue.withValues(alpha: 0.4)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => showBulletinReclamationSheet(
+                              context,
+                              bulletin: bulletinContextFromMap(b),
+                              contestMoyenne: true,
+                            ),
+                            icon: const Icon(Icons.balance_outlined, size: 18),
+                            label: const Text('Contester moyenne'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brandBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: 30),

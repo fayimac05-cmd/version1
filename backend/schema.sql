@@ -364,10 +364,22 @@ CREATE TABLE ia_conversations (
 CREATE TABLE reclamations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     etudiant_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    module_id UUID,
+    module_id TEXT,
+    module_nom VARCHAR(255),
     type VARCHAR(255) NOT NULL,
+    type_eval VARCHAR(100),
     statut VARCHAR(50) DEFAULT 'en_attente',
     justification TEXT NOT NULL,
+    parties_contestees TEXT,
+    note_actuelle NUMERIC(4,2),
+    semestre VARCHAR(80),
+    annee VARCHAR(20),
+    filiere VARCHAR(255),
+    photo_url TEXT,
+    reponse TEXT,
+    prof_transfere VARCHAR(255),
+    date_traitement TIMESTAMP WITH TIME ZONE,
+    modules_contestes JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

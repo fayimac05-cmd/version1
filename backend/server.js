@@ -10,7 +10,6 @@ const path = require('path');
 dotenv.config();
 
 const app = express();
-const server = http.createServer(app);
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',');
 const isLocalhostOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 const corsOriginCheck = (origin, callback) => {
@@ -19,10 +18,18 @@ const corsOriginCheck = (origin, callback) => {
   }
   return callback(new Error('Origine non autorisee par CORS.'));
 };
-const io = new Server(server, {
-  cors: { origin: corsOriginCheck, methods: ['GET', 'POST'] },
-});
-app.set('io', io);
+
+let activeServer = null;
+let activeIo = null;
+
+const attachSocket = (serverInstance) => {
+  const ioInstance = new Server(serverInstance, {
+    cors: { origin: corsOriginCheck, methods: ['GET', 'POST'] },
+  });
+  app.set('io', ioInstance);
+  require('./src/socket/socket')(ioInstance);
+  return ioInstance;
+};
 
 app.use(helmet());
 app.use(cors({
@@ -72,10 +79,48 @@ app.use((err, req, res, next) => {
   }
 });
 
-require('./src/socket/socket')(io);
+const preferredPort = Number(process.env.PORT || 3000);
+const candidatePorts = [preferredPort, preferredPort + 1, preferredPort + 2, 3000, 3001, 5000, 5001];
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('Serveur demarre sur http://localhost:' + PORT));
+const startServer = (portIndex = 0) => {
+  const port = candidatePorts[portIndex];
+  const onError = (err) => {
+    if (err.code === 'EADDRINUSE' && portIndex < candidatePorts.length - 1) {
+      console.warn(`Port ${port} indisponible, tentative sur ${candidatePorts[portIndex + 1]}...`);
+      if (activeServer && activeServer.listening) {
+        activeServer.close(() => startServer(portIndex + 1));
+      } else {
+        startServer(portIndex + 1);
+      }
+      return;
+    }
+
+    console.error('Impossible de demarrer le serveur.', err);
+    process.exit(1);
+  };
+
+  if (activeServer && activeServer.listening) {
+    activeServer.close(() => {
+      activeServer = null;
+      activeIo = null;
+      startServer(portIndex);
+    });
+    return;
+  }
+
+  activeServer = http.createServer(app);
+  activeIo = attachSocket(activeServer);
+  activeServer.once('error', onError);
+  activeServer.listen(port, () => {
+    activeServer.removeListener('error', onError);
+    console.log('Serveur demarre sur http://localhost:' + port);
+    if (port !== preferredPort) {
+      console.log(`Le port configure ${preferredPort} etait indisponible, utilisation du port ${port}.`);
+    }
+  });
+};
+
+startServer();
 
 // Prevent unhandled rejections from crashing the process
 process.on('unhandledRejection', (reason, promise) => {
@@ -88,4 +133,4 @@ process.on('uncaughtException', (err) => {
   console.error('[UncaughtException]', err);
 });
 
-module.exports = { app, io };
+module.exports = { app, get io() { return activeIo; } };

@@ -5,7 +5,7 @@ const getNotesEtudiant = async (req, res) => {
     try {
         const userId = req.user.id;
         const result = await pool.query(`
-            SELECT n.id, n.valeur AS note, m.nom AS module_nom, m.coefficient
+            SELECT n.id, n.valeur AS note, m.id AS module_id, m.nom AS module_nom, m.coefficient
             FROM notes n
             JOIN modules m ON n.module_id = m.id
             JOIN etudiants e ON n.etudiant_id = e.id
