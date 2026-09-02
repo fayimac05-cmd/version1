@@ -18,15 +18,19 @@ const login = async (req, res) => {
 
     try {
       if (matricule) {
+        const matClean = matricule.trim().toLowerCase();
         const r = await pool.query(
           `SELECT u.*, e.filiere_id, e.premierefois,
                   COALESCE(e.filiere_nom, u.filiere_nom) AS filiere,
                   COALESCE(e.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
-                  COALESCE(e.tel, u.tel) AS tel_etudiant
-           FROM users u LEFT JOIN etudiants e ON u.id = e.user_id
-           WHERE u.matricule = $1`,
-          [matricule.trim().toUpperCase()]
+                  COALESCE(e.tel, u.tel) AS tel_etudiant,
+                  COALESCE(m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine
+           FROM users u
+           LEFT JOIN etudiants e ON u.id = e.user_id
+           LEFT JOIN membres m ON u.id = m.user_id
+           WHERE LOWER(u.matricule) = $1 OR LOWER(u.email) = $1`,
+          [matClean]
         );
         user = r.rows[0];
       } else if (nom && tel) {
@@ -43,7 +47,8 @@ const login = async (req, res) => {
       if (supabase && typeof supabase.from === 'function') {
         let query = supabase.from('users').select('*');
         if (matricule) {
-          query = query.eq('matricule', matricule.trim().toUpperCase());
+          const matClean = matricule.trim().toLowerCase();
+          query = query.or(`matricule.ilike.${matClean},email.ilike.${matClean}`);
         } else if (nom && tel) {
           query = query.ilike('nom', nom.trim()).eq('tel', tel.trim());
         }
@@ -56,13 +61,15 @@ const login = async (req, res) => {
 
     if (!user) return res.status(404).json({ message: 'Matricule non reconnu.' });
     if (user.statut === 'suspendu') return res.status(403).json({ message: 'Compte suspendu.' });
-    if (user.statut === 'renvoye')  return res.status(403).json({ message: 'Compte desactive.' });
+    if (user.statut === 'renvoye') return res.status(403).json({ message: 'Compte desactive.' });
 
     const motDePasseExiste = user.mot_de_passe && user.mot_de_passe.trim() !== '' && user.mot_de_passe !== 'null';
-    const estPremiereFois = user.premierefois === true || user.premiere_fois === true || !motDePasseExiste;
+    // Les admins/profs/parents ne passent jamais par le flux « première connexion étudiant »
+    const isStudentRole = !user.role || user.role === 'etudiant' || user.role === 'bde';
+    const estPremiereFois = isStudentRole && (user.premierefois === true || user.premiere_fois === true || !motDePasseExiste);
 
-    // Première connexion : pas encore de mot de passe défini en base
-    if (estPremiereFois || !motDePasseExiste) {
+    // Première connexion : pas encore de mot de passe défini en base (étudiants uniquement)
+    if (estPremiereFois || (isStudentRole && !motDePasseExiste)) {
       // Si l'étudiant n'a pas soumis de mot de passe, on renvoie le signal de première connexion
       if (!mdp || mdp.trim() === '') {
         return res.status(200).json({
@@ -101,7 +108,7 @@ const login = async (req, res) => {
       // Mise à jour automatique en hash bcrypt si succès
       if (match) {
         bcrypt.hash(mdp, 10).then(h => {
-          pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [h, user.id]).catch(() => {});
+          pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [h, user.id]).catch(() => { });
         });
       }
     }
@@ -110,7 +117,18 @@ const login = async (req, res) => {
 
     const token = genToken(user);
     const { mot_de_passe, ...safeUser } = user;
-    return res.status(200).json({ token, user: safeUser });
+
+    // S'assurer que le role est bien transmis même si la colonne est aliasée différemment
+    console.log(`[LOGIN] user ${safeUser.nom} - role="${safeUser.role}" admin_sub_role="${safeUser.admin_sub_role}"`);
+
+    const responseUser = {
+      ...safeUser,
+      role: safeUser.role || 'etudiant',
+      admin_sub_role: safeUser.admin_sub_role || null,
+      admin_domaine: safeUser.admin_domaine || 'Tous',
+    };
+
+    return res.status(200).json({ token, user: responseUser });
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ message: 'Erreur serveur.' });
@@ -140,7 +158,7 @@ const setupPassword = async (req, res) => {
     }
 
     const hashed = await bcrypt.hash(motDePasse, 10);
-    
+
     try {
       await pool.query('UPDATE users SET mot_de_passe = $1, email = $2 WHERE id = $3', [hashed, email || null, userId]);
     } catch (dbErr) {
@@ -162,48 +180,98 @@ const setupPassword = async (req, res) => {
 const lookup = async (req, res) => {
   try {
     const matricule = (req.query.matricule || '').trim().toUpperCase();
-    if (!matricule) return res.status(400).json({ found: false, message: 'Matricule requis.' });
+    const nom = (req.query.nom || '').trim();
+    const prenom = (req.query.prenom || req.query.prenoms || '').trim();
+    const tel = (req.query.tel || req.query.telephone || req.query.numero || '').trim().replaceAll(' ', '');
 
     let row = null;
-    try {
-      const r = await pool.query(
-        `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.statut,
-                u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
-                COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
-                COALESCE(e.domaine, u.domaine)        AS domaine,
-                COALESCE(e.niveau, u.niveau)          AS niveau
-         FROM users u
-         LEFT JOIN etudiants e ON u.id = e.user_id
-         WHERE u.matricule = $1`,
-        [matricule]
-      );
-      row = r.rows[0];
-    } catch (dbErr) {
-      console.warn('Direct PG failed in lookup, fallback to Supabase SDK:', dbErr.message);
-      if (supabase && typeof supabase.from === 'function') {
-        const { data, error } = await supabase
-          .from('users')
-          .select('id, nom, prenoms, matricule, role, statut, mot_de_passe, filiere_nom, domaine, niveau')
-          .eq('matricule', matricule)
-          .maybeSingle();
-        if (!error && data) {
-          row = {
-            id: data.id,
-            nom: data.nom,
-            prenoms: data.prenoms,
-            matricule: data.matricule,
-            role: data.role,
-            statut: data.statut,
-            a_mot_de_passe: !!data.mot_de_passe,
-            filiere_nom: data.filiere_nom,
-            domaine: data.domaine,
-            niveau: data.niveau,
-          };
+
+    if (matricule) {
+      try {
+        const r = await pool.query(
+          `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.admin_sub_role, u.statut,
+                  u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
+                  COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
+                  COALESCE(e.domaine, u.domaine)        AS domaine,
+                  COALESCE(e.niveau, u.niveau)          AS niveau
+           FROM users u
+           LEFT JOIN etudiants e ON u.id = e.user_id
+           WHERE u.matricule = $1`,
+          [matricule]
+        );
+        row = r.rows[0];
+      } catch (dbErr) {
+        console.warn('Direct PG failed in lookup by matricule, fallback to Supabase SDK:', dbErr.message);
+        if (supabase && typeof supabase.from === 'function') {
+          const { data, error } = await supabase
+            .from('users')
+            .select('id, nom, prenoms, matricule, role, admin_sub_role, statut, mot_de_passe, filiere_nom, domaine, niveau')
+            .eq('matricule', matricule)
+            .maybeSingle();
+          if (!error && data) {
+            row = {
+              id: data.id,
+              nom: data.nom,
+              prenoms: data.prenoms,
+              matricule: data.matricule,
+              role: data.role,
+              admin_sub_role: data.admin_sub_role,
+              statut: data.statut,
+              a_mot_de_passe: !!data.mot_de_passe,
+              filiere_nom: data.filiere_nom,
+              domaine: data.domaine,
+              niveau: data.niveau,
+            };
+          }
         }
       }
+    } else if (nom && prenom && tel) {
+      try {
+        const r = await pool.query(
+          `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.admin_sub_role, u.statut,
+                  u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
+                  COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
+                  COALESCE(e.domaine, u.domaine)        AS domaine,
+                  COALESCE(e.niveau, u.niveau)          AS niveau
+           FROM users u
+           LEFT JOIN etudiants e ON u.id = e.user_id
+           WHERE LOWER(u.nom) = LOWER($1)
+             AND (LOWER(u.prenoms) = LOWER($2) OR LOWER(u.prenoms) LIKE LOWER($3))
+             AND (REPLACE(u.tel, ' ', '') = $4 OR REPLACE(u.tel, ' ', '') LIKE $5 OR u.tel IS NULL)`,
+          [nom, prenom, `%${prenom}%`, tel, `%${tel}%`]
+        );
+        row = r.rows[0];
+      } catch (dbErr) {
+        console.warn('Direct PG failed in lookup by details, fallback to Supabase SDK:', dbErr.message);
+        if (supabase && typeof supabase.from === 'function') {
+          const { data, error } = await supabase
+            .from('users')
+            .select('id, nom, prenoms, matricule, role, admin_sub_role, statut, mot_de_passe, filiere_nom, domaine, niveau')
+            .ilike('nom', nom)
+            .ilike('prenoms', `%${prenom}%`)
+            .maybeSingle();
+          if (!error && data) {
+            row = {
+              id: data.id,
+              nom: data.nom,
+              prenoms: data.prenoms,
+              matricule: data.matricule,
+              role: data.role,
+              admin_sub_role: data.admin_sub_role,
+              statut: data.statut,
+              a_mot_de_passe: !!data.mot_de_passe,
+              filiere_nom: data.filiere_nom,
+              domaine: data.domaine,
+              niveau: data.niveau,
+            };
+          }
+        }
+      }
+    } else {
+      return res.status(400).json({ found: false, message: 'Matricule ou détails (nom, prenom, tel) requis.' });
     }
 
-    if (!row) return res.status(404).json({ found: false, message: 'Matricule non reconnu.' });
+    if (!row) return res.status(404).json({ found: false, message: 'Utilisateur non reconnu.' });
     if (row.statut === 'suspendu' || row.statut === 'renvoye') {
       return res.status(403).json({ found: false, message: 'Compte désactivé. Contactez l\'administration.' });
     }
@@ -218,6 +286,7 @@ const lookup = async (req, res) => {
         prenoms: row.prenoms,
         matricule: row.matricule,
         role: row.role,
+        admin_sub_role: row.admin_sub_role,
         filiere: row.filiere_nom || '',
         domaine: row.domaine || '',
         niveau: row.niveau || '',
@@ -354,7 +423,7 @@ const register = async (req, res) => {
     });
   } catch (err) {
     if (client) {
-      try { await client.query('ROLLBACK'); } catch (_) {}
+      try { await client.query('ROLLBACK'); } catch (_) { }
     }
     console.error('Register error:', err);
     if (err.code === '23505') {

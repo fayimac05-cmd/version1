@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'home_tab.dart';
-import 'planning_tab.dart';
 import 'profile_tab.dart';
 import 'canal_screen.dart';
 import 'chat_ia_screen.dart';
+import 'app_drawer.dart';
 
 class StudentShell extends StatefulWidget {
   const StudentShell({
@@ -23,18 +23,24 @@ class StudentShell extends StatefulWidget {
 
 class _StudentShellState extends State<StudentShell> {
   int _currentTab = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeTab(profile: widget.profile),
+      HomeTab(
+        profile: widget.profile,
+        onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+      ),
       CanalScreen(profile: widget.profile),
-      const PlanningTab(),
       ChatIAScreen(profile: widget.profile, showBack: false),
       ProfileTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
     return Scaffold(
+      key: _scaffoldKey,
+      // Menu latéral : regroupe Planning, Chat IA, Révisions IA, Tickets
+      drawer: AppDrawer(profile: widget.profile),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         switchInCurve: Curves.easeOut,
@@ -83,19 +89,18 @@ class _StudentShellState extends State<StudentShell> {
                 index: 1,
                 activeColor: AppPalette.yellow,
               ),
-              _centerBtn(),
               _navItem(
                 icon: Icons.smart_toy_outlined,
                 activeIcon: Icons.smart_toy_rounded,
                 label: 'Chat IA',
-                index: 3,
+                index: 2,
                 activeColor: AppPalette.blue,
               ),
               _navItem(
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: 'Profil',
-                index: 4,
+                index: 3,
                 activeColor: const Color(0xFF42A5F5),
               ),
             ],
@@ -180,48 +185,6 @@ class _StudentShellState extends State<StudentShell> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _centerBtn() {
-    final isActive = _currentTab == 2;
-    return GestureDetector(
-      onTap: () => setState(() => _currentTab = 2),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: isActive ? AppPalette.darkBlue : const Color(0xFF1A3F6F),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppPalette.blue.withValues(alpha: 0.40),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.calendar_month_rounded,
-                color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 4),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 200),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: _currentTab == 2
-                  ? const Color(0xFF1A3F6F)
-                  : const Color(0xFF9CA3AF),
-            ),
-            child: const Text('Planning'),
-          ),
-        ],
       ),
     );
   }

@@ -8,6 +8,7 @@ import 'appel_tab.dart';
 import 'notes_tab.dart';
 import 'programme_screen.dart';
 import 'upload_course_screen.dart';
+import '../pages/canal_screen.dart';
 
 // ── Shell principal ────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
       _CoursTab(profile: widget.profile),
       AppelTab(initialClasse: _classePreselectionnee),
       NotesTab(initialClasse: _classePreselectionnee),
+      CanalScreen(profile: widget.profile),
       _ProfilTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
@@ -71,11 +73,12 @@ class _ProfessorShellState extends State<ProfessorShell> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _navItem(Icons.groups_outlined, Icons.groups_rounded, 'Classes', 0, AppPalette.blue),
-              _navItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'Cours', 1, AppPalette.blue),
-              _navItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 2, const Color(0xFF0EA5E9)),
-              _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 3, const Color(0xFF10B981)),
-              _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 4, const Color(0xFF42A5F5)),
+              Expanded(child: _navItem(Icons.groups_outlined, Icons.groups_rounded, 'Classes', 0, AppPalette.blue)),
+              Expanded(child: _navItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'Cours', 1, AppPalette.blue)),
+              Expanded(child: _navItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 2, const Color(0xFF0EA5E9))),
+              Expanded(child: _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 3, const Color(0xFF10B981))),
+              Expanded(child: _navItem(Icons.forum_outlined, Icons.forum_rounded, 'Canaux', 4, const Color(0xFF0891B2))),
+              Expanded(child: _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 5, const Color(0xFF42A5F5))),
             ],
           ),
         ),
@@ -91,9 +94,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
         _classePreselectionnee = null;
       }),
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 72,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             width: 48, height: 38,
@@ -113,7 +114,6 @@ class _ProfessorShellState extends State<ProfessorShell> {
             child: Text(label),
           ),
         ]),
-      ),
     );
   }
 }
@@ -383,6 +383,7 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
             onPressed: envoi ? null : () async {
               if (nomCtrl.text.trim().isEmpty) return;
               setDialogState(() => envoi = true);
+              final messenger = ScaffoldMessenger.of(context);
               final res = await ApiService.createModule(
                 nom: nomCtrl.text.trim(),
                 coefficient: int.tryParse(coefCtrl.text) ?? 2,
@@ -390,15 +391,16 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                 filiereId: int.tryParse('${widget.classe['id']}'),
                 filiereNom: '${widget.classe['nom']}',
               );
-              if (!mounted) return;
+              if (!dialogCtx.mounted) return;
+              if (!mounted || !dialogCtx.mounted) return;
               if (res['success'] == true) {
                 Navigator.pop(dialogCtx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                messenger.showSnackBar(SnackBar(
                     content: Text('Module "${nomCtrl.text.trim()}" ajouté à ${widget.classe['nom']}.'),
                     backgroundColor: const Color(0xFF10B981)));
               } else {
                 setDialogState(() => envoi = false);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                messenger.showSnackBar(SnackBar(
                     content: Text(res['error']?.toString() ?? 'Erreur lors de l\'ajout du module.'),
                     backgroundColor: Colors.red));
               }
