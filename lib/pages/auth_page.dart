@@ -524,6 +524,7 @@ class _AuthPageState extends State<AuthPage> {
         role: 'parent',
       ));
 
+
   // ─── Utilitaires ───────────────────────────────────────────────────────────
 
   void _setError(String msg) => setState(() {
