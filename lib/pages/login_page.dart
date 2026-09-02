@@ -243,19 +243,7 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (_) {}
 
-<<<<<<< HEAD
-=======
 
-    // Si le backend a répondu mais a rejeté la connexion
-    if (result['offline'] != true) {
-      setState(() {
-        _loading = false;
-        _error = result['error']?.toString() ?? 'Identifiants incorrects.';
-      });
-      return;
-    }
-
->>>>>>> 32e79f3e76b4e51e0a731c31a79452262403cfdc
     // Fallback to local mock DB (backend injoignable uniquement)
     final user = _dbEtudiants[mat];
     if (user == null) {
