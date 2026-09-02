@@ -51,8 +51,10 @@ async function ensureCanalExists(canalId) {
 async function accesCanal(canalId, userId, userRole) {
   const normRole = String(userRole || '').toLowerCase().trim();
 
-  // 1. Admin : accès complet à tous les canaux
-  if (normRole === 'admin') return true;
+  // 1. Admin ou Professeur : accès automatique à tous les canaux de communication
+  if (['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(normRole)) {
+    return true;
+  }
 
   // 2. Vérifier si membre explicite du canal
   const { rows: membre } = await pool.query(
@@ -71,14 +73,9 @@ async function accesCanal(canalId, userId, userRole) {
   // Canaux lisibles/éditables par tous
   if (['administration', 'admin_filiere', 'bde', 'general'].includes(type)) return true;
 
-  // Canaux professeurs : accessible aux professeurs ET aux admins
-  if (['professeurs', 'admin_profs', 'prof_admin', 'prof_prof'].includes(type)) {
-    return ['professeur', 'prof', 'enseignant', 'teacher', 'admin'].includes(normRole);
-  }
-
-  // Canaux délégués : accessible aux délégués, professeurs et admins
+  // Canaux délégués
   if (type === 'admin_delegues') {
-    return ['admin', 'professeur', 'prof', 'enseignant', 'delegue', 'delegue_adjoint'].includes(normRole);
+    return ['delegue', 'delegue_adjoint'].includes(normRole);
   }
 
   // Canaux prof_delegues par filière
@@ -415,22 +412,56 @@ const ajouterMembreCanal = async (req, res) => {
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 };
+// ── GET /api/messages/groupe/mes-filieres ────────────────
+// Filières enseignées par le professeur connecté
+const getProfFilieres = async (req, res) => {
+  try {
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role)) {
+      return res.status(403).json({ success: false, error: 'Accès réservé aux professeurs' });
+    }
+    // Récupère les filières via module_professeur → modules → filieres
+    const { rows } = await pool.query(
+      `SELECT DISTINCT f.id, f.nom, f.description
+       FROM filieres f
+       JOIN modules mo ON mo.filiere_id = f.id
+       JOIN module_professeur mp ON mp.module_id = mo.id
+       JOIN professeurs p ON p.id = mp.professeur_id
+       WHERE p.user_id = $1
+       ORDER BY f.nom`,
+      [req.user.id]
+    );
+    // Si aucune filière via modules, renvoyer toutes les filières (si admin ou prof sans affectation)
+    if (!rows.length && (role === 'admin' || role === 'professeur' || role === 'prof')) {
+      const { rows: all } = await pool.query('SELECT id, nom, description FROM filieres ORDER BY nom');
+      return res.json({ success: true, data: all });
+    }
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('[getProfFilieres]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
 // Messages du groupe filière
 const getMessagesGroupe = async (req, res) => {
   const { filiereId } = req.params;
   const limite = parseInt(req.query.limite) || 50;
 
   try {
-    // Vérifier que l'utilisateur appartient à la filière
+    const role = String(req.user.role || '').toLowerCase();
+    const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role);
+
+    // Vérifier que l'utilisateur appartient à la filière (étudiant) ou est staff
     const appartientJwt = req.user.filiere_id != null &&
       String(req.user.filiere_id) === String(filiereId);
-    const { rows: check } = appartientJwt
+    const { rows: check } = (appartientJwt || isStaff)
       ? { rows: [{ ok: true }] }
       : await pool.query(
           `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
           [req.user.id, filiereId]
         );
-    if (!check.length && req.user.role !== 'admin' && req.user.role !== 'professeur') {
+    if (!check.length) {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
@@ -462,29 +493,37 @@ const envoyerMessageGroupe = async (req, res) => {
   }
 
   try {
+    const role = String(req.user.role || '').toLowerCase();
+    const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role);
+
     const appartientJwt = req.user.filiere_id != null &&
       String(req.user.filiere_id) === String(filiereId);
-    const { rows: check } = appartientJwt
+    const { rows: check } = (appartientJwt || isStaff)
       ? { rows: [{ ok: true }] }
       : await pool.query(
           `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
           [req.user.id, filiereId]
         );
-    if (!check.length && req.user.role !== 'admin' && req.user.role !== 'professeur') {
+    if (!check.length) {
       return res.status(403).json({ success: false, error: 'Vous n\'appartenez pas à cette filière' });
     }
 
-    const { data: message, error } = await supabase
-      .from('messages_groupe')
-      .insert({ filiere_id: filiereId, auteur_id: req.user.id, contenu: contenu.trim() })
-      .select('id, filiere_id, auteur_id, contenu, created_at, users(prenoms, nom)')
-      .single();
-    if (error) throw error;
+    const { rows: inserted } = await pool.query(
+      `INSERT INTO messages_groupe (filiere_id, auteur_id, contenu, created_at)
+       VALUES ($1, $2, $3, NOW())
+       RETURNING id, filiere_id, auteur_id, contenu, created_at`,
+      [filiereId, req.user.id, contenu.trim()]
+    );
+
+    const { rows: userRows } = await pool.query(
+      `SELECT prenoms, nom FROM users WHERE id = $1`,
+      [req.user.id]
+    );
 
     const messageAvecAuteur = {
-      ...message,
-      prenoms: message.users?.prenoms,
-      nom: message.users?.nom,
+      ...inserted[0],
+      prenoms: userRows[0]?.prenoms,
+      nom: userRows[0]?.nom,
     };
 
     const io = req.app.get('io');
@@ -589,6 +628,7 @@ module.exports = {
   ajouterMembreCanal,
   getMessagesGroupe,
   envoyerMessageGroupe,
+  getProfFilieres,
   ajouterReaction,
   supprimerMessage,
   getAdminContact,

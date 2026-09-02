@@ -98,15 +98,20 @@ function initSocket(io) {
 
       try {
         // Vérifier que l'utilisateur a le droit d'écrire
-        const { rows: access } = await pool.query(
-           `SELECT 1 FROM canal_membres WHERE canal_id = $1 AND user_id = $2
-           UNION ALL
-           SELECT 1 FROM canaux WHERE id = $1
-             AND (type IN ('administration', 'admin_filiere', 'bde', 'general', 'professeurs', 'admin_profs', 'admin_delegues', 'prof_admin', 'prof_prof')
-               OR type LIKE 'prof_delegues:%')`,
-           [canalId, userId]
-        );
-        if (!access.length && socket.userRole !== 'admin') return callback?.({ error: 'Accès refusé à ce canal' });
+        const normRole = String(socket.userRole || '').toLowerCase().trim();
+        const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(normRole);
+
+        if (!isStaff) {
+          const { rows: access } = await pool.query(
+             `SELECT 1 FROM canal_membres WHERE canal_id = $1 AND user_id = $2
+             UNION ALL
+             SELECT 1 FROM canaux WHERE id = $1
+               AND (type IN ('administration', 'admin_filiere', 'bde', 'general', 'professeurs', 'admin_profs', 'admin_delegues', 'prof_admin', 'prof_prof')
+                 OR type LIKE 'prof_delegues:%')`,
+             [canalId, userId]
+          );
+          if (!access.length) return callback?.({ error: 'Accès refusé à ce canal' });
+        }
 
         // Persister le message
         const { rows: inserted } = await pool.query(
