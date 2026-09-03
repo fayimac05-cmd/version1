@@ -20,6 +20,13 @@
 //   [UX-5] Structure ThemeNotifier prête pour dark mode
 //   [UX-6] Badges StadiumBorder premium
 //   [UX-7] Notifications : état lu/non-lu visuel
+//
+// Ajout — Bulletins :
+//   Nouvel item de menu "Bulletins" (publication moyenne générale +
+//   statut Validé/Ajourné/Invalidé). Ajouté en FIN de liste (index 17)
+//   plutôt qu'inséré au milieu, pour ne décaler aucun des indices déjà
+//   utilisés ailleurs (permissions par rôle, groupes de menu, filtrage
+//   par config d'établissement).
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -32,6 +39,7 @@ import '../admin/admin_annonces.dart';
 import '../admin/admin_edt.dart';
 import '../admin/admin_filieres.dart';
 import '../admin/admin_notes.dart';
+import '../admin/admin_bulletins.dart';
 import '../admin/admin_reclamations.dart';
 import '../admin/admin_etudiants.dart';
 import '../admin/admin_professeurs.dart';
@@ -89,12 +97,13 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.apartment_outlined,          iconActive: Icons.apartment_rounded,          label: 'Collège & Lycée',    group: 'SECTIONS'),
   _MenuItem(icon: Icons.auto_stories_outlined,       iconActive: Icons.auto_stories_rounded,       label: 'Primaire',           group: 'SECTIONS'),
   _MenuItem(icon: Icons.warning_amber_outlined,      iconActive: Icons.warning_amber_rounded,      label: 'Élèves à risque',    group: 'RAPPORTS'),
+  _MenuItem(icon: Icons.workspace_premium_outlined,  iconActive: Icons.workspace_premium_rounded,  label: 'Bulletins',          group: 'ACADÉMIQUE'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
   {'key': 'GÉNÉRAL',    'items': [0, 1]},
   {'key': 'SECTIONS',   'items': [14, 15]},
-  {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5]},
+  {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5, 17]},
   {'key': 'PERSONNES',  'items': [6, 7, 8, 9]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
@@ -114,14 +123,14 @@ class AdminMenuService {
   static Set<int> allowedItems(AdminRole role) {
     switch (role) {
       case AdminRole.superAdmin:
-        // Accès total (0..16)
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+        // Accès total (0..17)
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
       case AdminRole.scolarite:
         // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
         return {0, 2, 3, 6, 7, 12};
       case AdminRole.examens:
-        // Tableau de bord, Notes & Moyennes, Réclamations, Statistiques, Éval. Professeurs, Élèves à risque
-        return {0, 4, 5, 12, 13, 16};
+        // Tableau de bord, Notes & Moyennes, Bulletins, Réclamations, Statistiques, Éval. Professeurs, Élèves à risque
+        return {0, 4, 17, 5, 12, 13, 16};
       case AdminRole.secretariat:
         // Tableau de bord, Annonces, Réclamations, Étudiants, Parents
         return {0, 1, 5, 6, 8};
@@ -239,6 +248,7 @@ class _AdminShellState extends State<AdminShell>
       const AdminSecondaire(),
       const AdminPrimaire(),
       const AdminRisque(),
+      AdminBulletins(profile: widget.profile),
     ];
 
     _pageAnim = AnimationController(
@@ -1515,4 +1525,3 @@ class _NotifsPanel extends StatelessWidget {
         ),
       );
 }
-

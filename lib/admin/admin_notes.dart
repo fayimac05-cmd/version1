@@ -26,11 +26,19 @@ class NoteSession {
   final double coefficient;
   String statut;
   final List<NoteEntry> notes;
+  // Vrai champ domaine renvoyé par le backend (jointure filieres.domaine) —
+  // remplace l'ancienne heuristique qui devinait le domaine à partir du
+  // texte du nom de la filière.
+  final String? domaine;
+  final String? mention;
+  final String? semestre;
+  final String? anneeAcademique;
 
   NoteSession({
     required this.id, required this.moduleNom, required this.filiereNom, required this.niveau,
     required this.profNom, required this.profPrenoms, required this.dateSession,
     required this.coefficient, required this.statut, required this.notes,
+    this.domaine, this.mention, this.semestre, this.anneeAcademique,
   });
 
   factory NoteSession.fromJson(Map<String, dynamic> j) => NoteSession(
@@ -44,6 +52,10 @@ class NoteSession {
         coefficient: double.tryParse(j['coefficient'].toString()) ?? 1.0,
         statut: j['statut'] ?? 'en_attente',
         notes: (j['notes'] as List<dynamic>? ?? []).map((n) => NoteEntry.fromJson(n as Map<String, dynamic>)).toList(),
+        domaine: j['domaine'] as String?,
+        mention: j['mention'] as String?,
+        semestre: j['semestre'] as String?,
+        anneeAcademique: j['annee_academique'] as String?,
       );
 
   String get dateFormatee {
@@ -57,10 +69,12 @@ class MoyenneEtudiant {
   final String matricule, nom, prenoms, filiereNom, niveau;
   final double moyenne;
   final int nbNotes;
+  final String? domaine;
 
   MoyenneEtudiant({
     required this.matricule, required this.nom, required this.prenoms,
     required this.filiereNom, required this.niveau, required this.moyenne, required this.nbNotes,
+    this.domaine,
   });
 
   factory MoyenneEtudiant.fromJson(Map<String, dynamic> j) => MoyenneEtudiant(
@@ -71,10 +85,17 @@ class MoyenneEtudiant {
         niveau: j['niveau'] ?? '',
         moyenne: double.tryParse(j['moyenne'].toString()) ?? 0.0,
         nbNotes: int.tryParse(j['nb_notes'].toString()) ?? 0,
+        domaine: j['domaine'] as String?,
       );
 }
 
+// Liste des mentions choisies par le professeur pour une session (module) —
+// distinctes des statuts Validé/Ajourné/Invalidé du bulletin (semestre).
+const List<String> mentionsModule = [
+  'Très Bien', 'Bien', 'Assez Bien', 'Passable', 'Insuffisant',
+];
 
+const List<String> semestresDisponibles = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE NOTES & MOYENNES
@@ -105,6 +126,23 @@ class _AdminNotesState extends State<AdminNotes> with SingleTickerProviderStateM
     super.dispose();
   }
 
+  // ✅ CORRIGÉ : compare désormais le vrai champ `domaine` renvoyé par le
+  // backend (jointure filieres.domaine côté serveur), au lieu de deviner à
+  // partir du texte du nom de la filière ("marketing", "gestion"...).
+  //
+  // ⚠️ Comportement "fail-closed" assumé : si `domaine` est absent (cas
+  // observé pour les étudiants dont `filiere_id` n'est pas encore renseigné
+  // en base — 11 sur 17 au dernier contrôle), la session/moyenne est
+  // MASQUÉE à un admin restreint à un domaine, plutôt que devinée ou
+  // affichée par défaut. C'est plus sûr côté confidentialité, mais ça
+  // signifie que ces étudiants resteront invisibles aux admins de domaine
+  // tant que le backfill de filiere_id n'est pas fait.
+  bool _estMemeDomaine(String? domaine) {
+    if (!widget.profile.filtreParDomaine) return true;
+    if (domaine == null || domaine.isEmpty) return false;
+    return domaine == widget.profile.domaineAdmin;
+  }
+
   Future<void> _loadData() async {
     setState(() { _isLoading = true; _errorMessage = null; });
     final results = await Future.wait([
@@ -114,15 +152,6 @@ class _AdminNotesState extends State<AdminNotes> with SingleTickerProviderStateM
     if (!mounted) return;
     final sessionsResult = results[0];
     final moyennesResult = results[1];
-    
-    // Déduire le domaine de la filière
-    bool estMemeDomaine(String filiereNom) {
-      if (!widget.profile.filtreParDomaine) return true;
-      final f = filiereNom.toLowerCase();
-      final estGestion = f.contains('marketing') || f.contains('gestion') || f.contains('finance') || f.contains('comptab');
-      final domaineFiliere = estGestion ? 'Sciences de Gestion' : 'Sciences & Technologies';
-      return domaineFiliere == widget.profile.domaineAdmin;
-    }
 
     setState(() {
       _isLoading = false;
@@ -130,7 +159,7 @@ class _AdminNotesState extends State<AdminNotes> with SingleTickerProviderStateM
         final List<NoteSession> parsed = (sessionsResult['data'] as List<dynamic>)
             .map((j) => NoteSession.fromJson(j as Map<String, dynamic>))
             .toList();
-        _sessions = parsed.where((s) => estMemeDomaine(s.filiereNom)).toList();
+        _sessions = parsed.where((s) => _estMemeDomaine(s.domaine)).toList();
       } else {
         _errorMessage = sessionsResult['error'] as String?;
       }
@@ -138,7 +167,7 @@ class _AdminNotesState extends State<AdminNotes> with SingleTickerProviderStateM
         final List<MoyenneEtudiant> parsed = (moyennesResult['data'] as List<dynamic>)
             .map((j) => MoyenneEtudiant.fromJson(j as Map<String, dynamic>))
             .toList();
-        _moyennes = parsed.where((m) => estMemeDomaine(m.filiereNom)).toList();
+        _moyennes = parsed.where((m) => _estMemeDomaine(m.domaine)).toList();
       }
     });
   }
@@ -259,10 +288,24 @@ class _AdminNotesState extends State<AdminNotes> with SingleTickerProviderStateM
               child: const Icon(Icons.grade_rounded, color: AdminTheme.primary, size: 22)),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(s.moduleNom, style: AdminTheme.headingSmall),
+              Row(children: [
+                Expanded(child: Text(s.moduleNom, style: AdminTheme.headingSmall)),
+                if (s.semestre != null && s.semestre!.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(color: AdminTheme.primaryLight, borderRadius: BorderRadius.circular(6)),
+                    child: Text('${s.semestre} · ${s.anneeAcademique ?? ''}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AdminTheme.primary)),
+                  ),
+                ],
+              ]),
               const SizedBox(height: 3),
               Text('${s.profPrenoms} ${s.profNom} · ${s.filiereNom} · ${s.niveau}', style: AdminTheme.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
               Text('Soumis le ${s.dateFormatee}', style: AdminTheme.caption),
+              if (s.mention != null && s.mention!.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text('Mention du professeur : ${s.mention}', style: AdminTheme.caption.copyWith(fontWeight: FontWeight.w700)),
+              ],
             ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               _statusBadge(s.statut),
@@ -586,6 +629,9 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
   String? _filiereId;
   String? _moduleId;
   String? _niveau;
+  String? _semestre;
+  String? _mention;
+  final _anneeCtrl = TextEditingController(text: '${DateTime.now().year}-${DateTime.now().year + 1}');
   bool _isLoadingBase = true;
   bool _isLoadingModules = false;
   bool _isSaving = false;
@@ -602,6 +648,7 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
     for (var ctrl in _controllers.values) {
       ctrl.dispose();
     }
+    _anneeCtrl.dispose();
     super.dispose();
   }
 
@@ -637,6 +684,12 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
     });
   }
 
+  // ✅ CORRIGÉ (round 2, confirmé par le vrai code backend) : la fonction
+  // mapRowToEtudiant() dans etudiants.controller.js transforme explicitement
+  // filiere_id (colonne SQL) en `filiereId` (camelCase) avant de renvoyer le
+  // JSON. Ma correction précédente vers `filiere_id` (snake_case) était une
+  // déduction par convention, faite avant d'avoir vu ce fichier — elle était
+  // fausse. Le code d'origine avait raison sur ce point précis.
   List<Map<String, dynamic>> get _etudiantsFiltres => _etudiants.where((e) {
         final matchFiliere = _filiereId == null || e['filiereId']?.toString() == _filiereId;
         final matchNiveau = _niveau == null || e['niveau'] == _niveau;
@@ -673,13 +726,39 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
                 ? const SizedBox(height: 44, child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))))
                 : _dropField('Module', _moduleId, _modules.map((m) => m['id'].toString()).toList(), _modules.map((m) => m['nom'] as String).toList(), (v) => setState(() => _moduleId = v))),
             const SizedBox(width: 12),
-            ElevatedButton.icon(
+            Expanded(child: _dropField('Semestre', _semestre, semestresDisponibles, semestresDisponibles, (v) => setState(() => _semestre = v))),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(color: AdminTheme.surface, borderRadius: BorderRadius.circular(AdminTheme.radiusButton), border: Border.all(color: AdminTheme.border)),
+                child: TextField(
+                  controller: _anneeCtrl,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'Année académique',
+                    labelStyle: TextStyle(fontSize: 12),
+                    border: InputBorder.none,
+                    hintText: 'ex: 2025-2026',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: _dropField('Mention (classe)', _mention, mentionsModule, mentionsModule, (v) => setState(() => _mention = v))),
+          ]),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
               onPressed: _isSaving ? null : _sauvegarder,
               icon: _isSaving ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_rounded, size: 16),
               label: const Text('Sauvegarder'),
               style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AdminTheme.radiusButton))),
             ),
-          ]),
+          ),
         ]),
       ),
       const Divider(height: 1, color: AdminTheme.border),
@@ -748,6 +827,10 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
       _snack('Sélectionnez une filière et un module.', isError: true);
       return;
     }
+    if (_semestre == null || _anneeCtrl.text.trim().isEmpty) {
+      _snack('Le semestre et l\'année académique sont requis.', isError: true);
+      return;
+    }
 
     final notesSaisies = <Map<String, dynamic>>[];
     for (final e in _etudiantsFiltres) {
@@ -777,6 +860,9 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
       'module_id': _moduleId,
       'notes': notesSaisies,
       'statut': 'validee',
+      'semestre': _semestre,
+      'annee_academique': _anneeCtrl.text.trim(),
+      if (_mention != null) 'mention': _mention,
     });
 
     if (!mounted) return;

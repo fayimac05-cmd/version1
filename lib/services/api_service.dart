@@ -1444,6 +1444,182 @@ class ApiService {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // Bulletins — publication de la moyenne générale du semestre
+  // ═══════════════════════════════════════════════════════════
+
+  // ── Bulletins : préparation (admin) ───────────────────────
+  // Calcule automatiquement la moyenne générale de chaque étudiant d'une
+  // filière/niveau/semestre/année à partir des notes déjà validées, et
+  // indique l'état d'un éventuel bulletin déjà publié pour ce semestre.
+  static Future<Map<String, dynamic>> getPreparationBulletin({
+    required String filiereId,
+    required String niveau,
+    required String semestre,
+    required String anneeAcademique,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final uri = Uri.parse('$baseUrl/bulletins/preparation').replace(
+        queryParameters: {
+          'filiere_id': filiereId,
+          'niveau': niveau,
+          'semestre': semestre,
+          'annee_academique': anneeAcademique,
+        },
+      );
+      final response = await http.get(uri, headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {
+        'success': false,
+        'error':
+            body['message'] ?? 'Erreur lors du calcul des moyennes générales.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Bulletins : publier (admin) ───────────────────────────
+  // [resultats] : liste de { 'etudiant_id': ..., 'statut': 'valide' |
+  // 'ajourne' | 'invalide' } — statut coché manuellement par l'admin pour
+  // chaque étudiant. La moyenne générale est recalculée côté serveur au
+  // moment de la publication, jamais confiée au client.
+  static Future<Map<String, dynamic>> publierBulletins({
+    required String filiereId,
+    required String niveau,
+    required String semestre,
+    required String anneeAcademique,
+    required List<Map<String, dynamic>> resultats,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/bulletins/publier'),
+        headers: headers,
+        body: jsonEncode({
+          'filiere_id': filiereId,
+          'niveau': niveau,
+          'semestre': semestre,
+          'annee_academique': anneeAcademique,
+          'resultats': resultats,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'], 'message': body['message']};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de la publication des bulletins.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Mes notes (étudiant connecté) — filtre optionnel par semestre ────────
+  // Utilisée par bulletin_screen.dart pour le détail des modules d'un
+  // semestre publié précis. Toujours scopée côté backend par le JWT
+  // (req.user.id) — jamais les notes d'un autre étudiant.
+  static Future<Map<String, dynamic>> getMesNotes({
+    String? semestre,
+    String? anneeAcademique,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final uri = Uri.parse('$baseUrl/notes/etudiant').replace(
+        queryParameters: {
+          if (semestre != null) 'semestre': semestre,
+          if (anneeAcademique != null) 'annee_academique': anneeAcademique,
+        },
+      );
+      final response = await http.get(uri, headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des notes.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Mon aperçu (moyenne + taux de présence) — étudiant connecté ─────────
+  // Remplace les requêtes Supabase directes de home_tab.dart pour ces deux
+  // chiffres, bloquées en silence par RLS (etudiants/notes/sessions_notes
+  // activé sans politique). Toujours scopé côté backend par le JWT.
+  static Future<Map<String, dynamic>> getMonApercu() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/notes/mon-apercu'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'] as Map<String, dynamic>};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement de l\'aperçu.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Bulletins : mon bulletin (étudiant connecté) ──────────
+  // Ne renvoie que les bulletins déjà publiés de l'étudiant connecté —
+  // jamais un brouillon, jamais celui d'un autre étudiant. Inclut aussi
+  // les infos étudiant (nom/prenoms/filiere_nom/niveau) pour éviter un
+  // appel Supabase direct côté Flutter (bloqué par RLS pour la clé
+  // publique — voir diagnostic du 29/08).
+  static Future<Map<String, dynamic>> getMonBulletin() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/bulletins/mon-bulletin'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'data': body['data'] as List<dynamic>,
+          'etudiant': body['etudiant'] as Map<String, dynamic>?,
+        };
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement du bulletin.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
   // ── Récupérer le profil connecté ─────────────────────────
   static Future<Map<String, dynamic>> getMe() async {
     try {
