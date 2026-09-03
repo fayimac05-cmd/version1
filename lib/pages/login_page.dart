@@ -185,6 +185,15 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    // Si le backend a répondu mais a rejeté la connexion
+    if (result['offline'] != true) {
+      setState(() {
+        _loading = false;
+        _error = result['error']?.toString() ?? 'Identifiants incorrects.';
+      });
+      return;
+    }
+
     // 2. Essayer la connexion directe via Supabase si le backend est hors ligne
     try {
       final supabaseRes = await SupabaseService().loginEtudiant(
@@ -225,6 +234,7 @@ class _LoginPageState extends State<LoginPage> {
           domaine: u['domaine'] ?? '',
           niveau: u['niveau'] ?? '',
           role: u['role'] ?? 'etudiant',
+          adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
           photoUrl: u['photo_url'] ?? u['photoUrl'],
           coverUrl: u['cover_url'] ?? u['coverUrl'],
         );
@@ -233,15 +243,6 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (_) {}
 
-
-    // Si le backend a répondu mais a rejeté la connexion
-    if (result['offline'] != true) {
-      setState(() {
-        _loading = false;
-        _error = result['error']?.toString() ?? 'Identifiants incorrects.';
-      });
-      return;
-    }
 
     // Fallback to local mock DB (backend injoignable uniquement)
     final user = _dbEtudiants[mat];
@@ -297,7 +298,11 @@ class _LoginPageState extends State<LoginPage> {
       destination = ProfessorShell(profile: profile, onLogout: logout);
     } else if (r == 'parent' || r == 'tuteur') {
       destination = ParentShell(
-        nomEnfant: '${profile.prenoms} ${profile.nom}',
+        profile: profile,
+        nomEnfant: (profile.enfantNom != null && profile.enfantNom!.trim().isNotEmpty)
+            ? profile.enfantNom!
+            : 'Étudiant suivi',
+        etudiantId: profile.matriculeEnfant,
         onLogout: logout,
       );
     } else if (r == 'bde') {
