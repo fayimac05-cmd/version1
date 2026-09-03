@@ -115,30 +115,16 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _fetchApercuEtProchainCours() async {
     try {
       final client = Supabase.instance.client;
-
-      final etudiantRow = await client
-          .from('etudiants')
-          .select('id')
-          .eq('matricule', widget.profile.matricule)
-          .maybeSingle();
-
-      final etudiantId = etudiantRow?['id'] as int?;
       final jourAuj = _joursFr[DateTime.now().weekday - 1];
 
+      // ✅ CORRIGÉ — la moyenne/présence passaient par un lookup Supabase
+      // direct sur `etudiants` (RLS activé sans politique, bloqué en
+      // silence pour la clé publique — découvert le 03/09). Remplacé par
+      // ApiService.getMonApercu(), qui passe par le backend (scopé par le
+      // JWT). `edt` reste en accès direct : table catalogue/planning, une
+      // politique de lecture publique a été ajoutée dessus.
       final results = await Future.wait<dynamic>([
-        etudiantId != null
-            ? client
-                .from('vue_notes_etudiants')
-                .select('valeur, coefficient, session_statut')
-                .eq('etudiant_id', etudiantId)
-                .eq('session_statut', 'validee')
-            : Future.value(<dynamic>[]),
-        etudiantId != null
-            ? client
-                .from('vue_presences_etudiants')
-                .select('presence_statut')
-                .eq('etudiant_id', etudiantId)
-            : Future.value(<dynamic>[]),
+        ApiService.getMonApercu(),
         client
             .from('edt')
             .select('creneaux')
@@ -150,9 +136,8 @@ class _HomeTabState extends State<HomeTab> {
             .maybeSingle(),
       ]);
 
-      final notes = List<Map<String, dynamic>>.from(results[0] as List);
-      final presences = List<Map<String, dynamic>>.from(results[1] as List);
-      final edtActif = results[2] as Map<String, dynamic>?;
+      final apercuResult = results[0] as Map<String, dynamic>;
+      final edtActif = results[1] as Map<String, dynamic>?;
 
       final tousLesCreneaux = edtActif != null
           ? (edtActif['creneaux'] as List? ?? [])
@@ -168,26 +153,15 @@ class _HomeTabState extends State<HomeTab> {
             );
 
       double? moyenne;
-      if (notes.isNotEmpty) {
-        double sommePonderee = 0;
-        double sommeCoef = 0;
-
-        for (final n in notes) {
-          final valeur = (n['valeur'] as num?)?.toDouble() ?? 0;
-          final coef = (n['coefficient'] as num?)?.toDouble() ?? 1;
-          sommePonderee += valeur * coef;
-          sommeCoef += coef;
-        }
-
-        if (sommeCoef > 0) moyenne = sommePonderee / sommeCoef;
-      }
-
       double? tauxPresence;
-      if (presences.isNotEmpty) {
-        final presents = presences
-            .where((p) => p['presence_statut'] == 'present')
-            .length;
-        tauxPresence = presents / presences.length * 100;
+      if (apercuResult['success'] == true) {
+        final data = apercuResult['data'] as Map<String, dynamic>?;
+        moyenne = data?['moyenne'] != null
+            ? double.tryParse(data!['moyenne'].toString())
+            : null;
+        tauxPresence = data?['tauxPresence'] != null
+            ? double.tryParse(data!['tauxPresence'].toString())
+            : null;
       }
 
       if (!mounted) return;

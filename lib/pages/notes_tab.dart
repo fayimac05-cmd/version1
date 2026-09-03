@@ -1,41 +1,37 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 
-
-// ── Modèle note ──────────────────────────────────────────────────────────────
+// ── Modèle : un module avec tous ses devoirs réels ────────────────────────
+// Remplace l'ancien modèle TD/Exam inventé : chaque module regroupe le
+// nombre réel de devoirs (sessions de notes validées) reçus pour ce module.
+// La moyenne du module est la moyenne simple de tous ses devoirs ; la
+// moyenne générale est pondérée par le coefficient du module.
+//
+// TODO(backend) : aucune distinction de type d'évaluation (devoir/examen/
+// TP...) n'existe encore en base — quand ce champ sera ajouté à la table
+// notes / vue_notes_etudiants, on pourra afficher le type de chaque devoir
+// au lieu d'une simple liste de valeurs.
 class _NoteModule {
-  final String module, code, prof;
-  final double? td, exam;
-  final double coefTd, coefExam;
+  final String module;
+  final String prof;
   final int coefficient;
+  final List<double> devoirs;
   final Color color;
 
   const _NoteModule({
-    required this.module, 
-    required this.code, 
+    required this.module,
     required this.prof,
-    this.td, 
-    this.exam, 
-    this.coefTd = 1.0, 
-    this.coefExam = 2.0, 
-    required this.coefficient, 
-    required this.color
+    required this.coefficient,
+    required this.devoirs,
+    required this.color,
   });
 
   double? get note {
-    if (td != null && exam != null) {
-      return (td! * coefTd + exam! * coefExam) / (coefTd + coefExam);
-    } else if (exam != null) {
-      return exam;
-    } else if (td != null) {
-      return td;
-    }
-    return null;
+    if (devoirs.isEmpty) return null;
+    return devoirs.reduce((a, b) => a + b) / devoirs.length;
   }
 
   String get statut => note == null ? 'en_attente' : note! >= 10 ? 'valide' : note! >= 5 ? 'danger' : 'blamable';
@@ -57,15 +53,6 @@ class _NoteModule {
       default:         return ' En attente';
     }
   }
-
-  String get effetIA {
-    switch (statut) {
-      case 'valide':   return 'Chat IA vous félicite !';
-      case 'danger':   return 'Chat IA propose un plan de révision.';
-      case 'blamable': return 'Alerte envoyée — Chat IA intervient.';
-      default:         return 'Note pas encore disponible.';
-    }
-  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -80,27 +67,26 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
 
   List<_NoteModule> _notes = [];
   bool _loading = true;
-  bool _fromBackend = false;
+  bool _erreur = false;
 
-  // Couleurs par index pour les modules backend
   static const _colors = [
     AppPalette.blue, Color(0xFF7C3AED), Color(0xFF0891B2),
     Color(0xFF15803D), Color(0xFFD97706), Color(0xFFE11D48),
     Color(0xFF0369A1),
   ];
 
-  double get _moyenne {
-    final notees = _notes.where((n) => n.note != null).toList();
-    if (notees.isEmpty) return 0;
-    final pts = notees.fold(0.0, (s, n) => s + n.note! * n.coefficient);
-    final cff = notees.fold(0,   (s, n) => s + n.coefficient);
-    return cff == 0 ? 0 : pts / cff;
-  }
-
   int get _nbValides  => _notes.where((n) => n.statut == 'valide').length;
   int get _nbDanger   => _notes.where((n) => n.statut == 'danger').length;
   int get _nbBlamable => _notes.where((n) => n.statut == 'blamable').length;
   int get _nbAttente  => _notes.where((n) => n.statut == 'en_attente').length;
+
+  // ⚠️ IMPORTANT : la moyenne générale n'est PAS affichée automatiquement.
+  // Même si l'étudiant voit toutes ses notes de modules (publiées une à
+  // une par l'administration), la moyenne générale est une publication
+  // séparée et distincte (le futur "Bulletin"). Tant que ce mécanisme de
+  // publication n'existe pas, on ne calcule ni n'affiche aucune moyenne
+  // générale ici — pour ne pas montrer une donnée que l'admin n'a pas
+  // encore choisi de publier.
 
   @override
   void initState() {
@@ -112,108 +98,61 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
   @override
   void dispose() { _tabCtrl.dispose(); super.dispose(); }
 
+  /// Charge les notes réelles de l'étudiant connecté via le backend
+  /// (ApiService.getMesNotes) — plus aucun accès direct à Supabase. La
+  /// table `etudiants` a RLS activé sans politique, bloquant en silence
+  /// toute lecture directe avec la clé publique (découvert le 03/09).
+  /// Le backend scope déjà par le JWT (req.user.id) — chaque étudiant ne
+  /// reçoit que ses propres notes, sessions validées uniquement.
   Future<void> _fetchNotesBackend() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final matricule = prefs.getString('matricule') ?? '';
-      if (matricule.isEmpty) throw Exception('Matricule non disponible');
+      final result = await ApiService.getMesNotes();
+      if (result['success'] != true) {
+        throw Exception(result['error'] ?? 'Erreur');
+      }
 
-      final data = await Supabase.instance.client
-          .from('notes')
-          .select()
-          .eq('matricule', matricule)
-          .order('created_at', ascending: false);
-      final List list = data as List;
+      final list = List<Map<String, dynamic>>.from(result['data'] as List);
 
-      if (list.isNotEmpty) {
-        // Grouper par module_nom
-        final Map<String, List<double>> grouped = {};
-        final Map<String, String> typeMap = {};
-        for (final n in list) {
-          final mod = n['module_nom'] as String? ?? n['module'] as String? ?? 'Module';
-          final note = (n['valeur'] as num?)?.toDouble() ?? (n['note'] as num?)?.toDouble();
-          final type = n['type_eval'] as String? ?? 'DS';
-          if (note != null) {
-            grouped.putIfAbsent(mod, () => []).add(note);
-            typeMap[mod] = type;
-          }
-        }
+      // Regroupement par module : chaque ligne = un devoir réel.
+      final Map<String, List<Map<String, dynamic>>> grouped = {};
+      for (final n in list) {
+        final mod = n['module_nom'] as String? ?? 'Module';
+        grouped.putIfAbsent(mod, () => []).add(n);
+      }
 
-        final modules = grouped.entries.toList();
-        setState(() {
-          _notes = List.generate(modules.length, (i) {
-            final entry = modules[i];
-            final notes = entry.value;
-            final avg = notes.reduce((a, b) => a + b) / notes.length;
-            final type = typeMap[entry.key] ?? 'DS';
-            return _NoteModule(
-              module: entry.key,
-              code: 'MOD${(i + 1).toString().padLeft(3, '0')}',
-              prof: 'Professeur assigné',
-              td: type == 'TP' || type == 'Contrôle Continu' ? avg : null,
-              exam: type == 'DS' || type == 'Examen Final' ? avg : avg,
-              coefTd: 1, coefExam: 2, coefficient: 3,
-              color: _colors[i % _colors.length],
-            );
-          });
-          _loading = false;
-          _fromBackend = true;
+      final modules = grouped.entries.toList();
+      if (!mounted) return;
+      setState(() {
+        _notes = List.generate(modules.length, (i) {
+          final rows = modules[i].value;
+          final devoirs = rows
+              .map((r) => (r['note'] as num?)?.toDouble())
+              .whereType<double>()
+              .toList();
+          final coef = (rows.first['coefficient'] as num?)?.toInt() ?? 1;
+          final profNom = (rows.first['prof_nom'] as String? ?? '').trim();
+          final profPrenoms = (rows.first['prof_prenoms'] as String? ?? '').trim();
+          final prof = [profPrenoms, profNom].where((s) => s.isNotEmpty).join(' ');
+          return _NoteModule(
+            module: modules[i].key,
+            prof: prof.isNotEmpty ? prof : 'Professeur non renseigné',
+            coefficient: coef,
+            devoirs: devoirs,
+            color: _colors[i % _colors.length],
+          );
         });
-        return;
-      }
-    } catch (_) {}
-
-    // Fallback : données de démonstration
-    setState(() {
-      _notes = [
-        _NoteModule(module: 'Algorithmique & Structures', code: 'INFO101',
-            prof: 'Prof Ouédraogo', td: 14.0, exam: 16.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
-        _NoteModule(module: 'Bases de Données', code: 'INFO102',
-            prof: 'Prof Traoré', td: 12.0, exam: 14.0, coefTd: 1, coefExam: 2, coefficient: 3, color: const Color(0xFF7C3AED)),
-        _NoteModule(module: 'Réseaux informatiques', code: 'INFO103',
-            prof: 'Prof Sawadogo', td: 5.0, exam: 4.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF0891B2)),
-        _NoteModule(module: 'Maths Discrètes', code: 'MATH201',
-            prof: 'Prof Kaboré', td: 11.0, exam: 13.0, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF15803D)),
-        _NoteModule(module: 'Anglais Technique', code: 'ANG101',
-            prof: 'Prof Johnson', td: 16.0, exam: 17.0, coefTd: 1, coefExam: 2, coefficient: 1, color: const Color(0xFFD97706)),
-        _NoteModule(module: 'Programmation OO', code: 'INFO104',
-            prof: 'Prof Ouédraogo', td: 10.0, exam: 9.0, coefTd: 1, coefExam: 2, coefficient: 3, color: AppPalette.blue),
-        _NoteModule(module: 'Systèmes d\'exploitation', code: 'INFO105',
-            prof: 'Prof Traoré', td: null, exam: null, coefTd: 1, coefExam: 2, coefficient: 2, color: const Color(0xFF7C3AED)),
-      ];
-      _loading = false;
-      _fromBackend = false;
-    });
-  }
-
-  bool _isDownloading = false;
-
-  Future<void> _telechargerBulletin() async {
-    setState(() => _isDownloading = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final matricule = prefs.getString('matricule') ?? '';
-      // Chercher le bulletin PDF dans Supabase Storage (bucket : bulletins)
-      final path = '$matricule/bulletin_s3.pdf';
-      final pdfBytes = await Supabase.instance.client.storage
-          .from('bulletins')
-          .download(path);
-      await Printing.layoutPdf(
-        onLayout: (_) => pdfBytes,
-        name: 'Bulletin_Semestre_3.pdf',
-      );
+        _loading = false;
+        _erreur = false;
+      });
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Bulletin non disponible — contactez l\'administration.'),
-          backgroundColor: Color(0xFFC62828),
-        ));
-      }
-    } finally {
-      if (mounted) setState(() => _isDownloading = false);
+      if (!mounted) return;
+      setState(() {
+        _notes = [];
+        _loading = false;
+        _erreur = true;
+      });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +173,6 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
         ),
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Stack(children: [
-          // Bulles décoratives
           Positioned(top: -20, right: -20,
             child: Container(width: 100, height: 100,
               decoration: BoxDecoration(shape: BoxShape.circle,
@@ -258,62 +196,15 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
                     borderRadius: BorderRadius.circular(8)),
                 child: const Icon(Icons.grade_rounded, color: Colors.white, size: 18)),
             const SizedBox(width: 8),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Mes Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
-                  color: Colors.white, letterSpacing: -0.3)),
-              const Text('Semestre 3 — 2024/2025',
-                  style: TextStyle(fontSize: 11, color: Colors.white70)),
-              if (!_fromBackend)
-                Container(
-                  margin: const EdgeInsets.only(top: 3),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppPalette.yellow.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text('Données de démonstration',
-                      style: TextStyle(fontSize: 9, color: AppPalette.yellow, fontWeight: FontWeight.w700)),
-                ),
-            ])),
-            if (_isDownloading)
-              const Padding(
-                padding: EdgeInsets.only(right: 12),
-                child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-              )
-            else
-              GestureDetector(
-                onTap: _telechargerBulletin,
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withValues(alpha:0.25))),
-                  child: const Row(children: [
-                    Icon(Icons.picture_as_pdf, color: Colors.white, size: 12),
-                    SizedBox(width: 4),
-                    Text('Bulletin', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
-                  ]),
-                ),
-              ),
-            GestureDetector(
-              onTap: () => showModalBottomSheet(context: context,
-                  isScrollControlled: true, backgroundColor: Colors.transparent,
-                  builder: (_) => _ReclamationMoyenneSheet(notes: _notes, moyenne: _moyenne)),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white.withValues(alpha:0.25))),
-                child: const Text('Contester', style: TextStyle(fontSize: 11,
-                    color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            ),
+            const Expanded(child: Text('Mes Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
+                color: Colors.white, letterSpacing: -0.3))),
+            // Le bouton "Contester la moyenne" est retiré : tant que la
+            // moyenne générale n'est pas un concept publié par l'admin
+            // (futur Bulletin), il n'y a rien de fiable à contester ici.
           ]),
 
           const SizedBox(height: 8),
 
-          // Moyenne + stats
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -322,17 +213,21 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
               border: Border.all(color: Colors.white.withValues(alpha:0.15)),
             ),
             child: Row(children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                  Text(_moyenne.toStringAsFixed(2), style: const TextStyle(fontSize: 26,
-                      fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -1)),
-                  const Text(' / 20', style: TextStyle(fontSize: 12, color: Colors.white70)),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Icon(Icons.lock_outline_rounded, color: Colors.white.withValues(alpha: 0.85), size: 14),
+                    const SizedBox(width: 5),
+                    const Expanded(
+                      child: Text('Moyenne générale — pas encore publiée',
+                          style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
+                  const SizedBox(height: 2),
+                  const Text('Disponible dans ton Bulletin une fois publié par l\'administration.',
+                      style: TextStyle(fontSize: 9.5, color: Colors.white54)),
                 ]),
-                const Text('Moyenne générale',
-                    style: TextStyle(fontSize: 10, color: Colors.white70)),
-              ]),
+              ),
               Container(width: 1, height: 32, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 12)),
               Expanded(child: Row(children: [
                 _stat('$_nbValides',  'Validés',  const Color(0xFF86EFAC)),
@@ -355,16 +250,59 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
             tabs: const [Tab(text: 'Toutes les notes'), Tab(text: 'Par statut')],
           ),
         ]),
-        ]),  // closes Stack children
+        ]),
       ),
 
       // ── Contenu ────────────────────────────────────────────────────
-      Expanded(child: TabBarView(controller: _tabCtrl, children: [
-        _ListeNotes(notes: _notes, onReclamer: _ouvrirReclamation),
-        _NotesParStatut(notes: _notes, onReclamer: _ouvrirReclamation),
-      ])),
+      Expanded(
+        child: _erreur
+            ? _etatErreur()
+            : _notes.isEmpty
+                ? _etatVide()
+                : TabBarView(controller: _tabCtrl, children: [
+                    _ListeNotes(notes: _notes, onReclamer: _ouvrirReclamation),
+                    _NotesParStatut(notes: _notes, onReclamer: _ouvrirReclamation),
+                  ]),
+      ),
     ]);
   }
+
+  Widget _etatVide() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 72, height: 72,
+          decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(20)),
+          child: const Icon(Icons.grade_outlined, color: AppPalette.blue, size: 34)),
+        const SizedBox(height: 18),
+        const Text('Aucune note publiée pour l\'instant',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+        const SizedBox(height: 8),
+        const Text('Dès que l\'administration validera et publiera tes notes, elles apparaîtront ici.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.5)),
+      ]),
+    ),
+  );
+
+  Widget _etatErreur() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 32),
+        const SizedBox(height: 12),
+        const Text('Impossible de charger tes notes pour le moment.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+        const SizedBox(height: 12),
+        ElevatedButton(
+          onPressed: () { setState(() => _loading = true); _fetchNotesBackend(); },
+          child: const Text('Réessayer'),
+        ),
+      ]),
+    ),
+  );
 
   void _ouvrirReclamation(_NoteModule note) => showModalBottomSheet(
     context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
@@ -461,52 +399,56 @@ class _NoteCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Expanded(
+                child: Text(
+                  note.module,
+                  style: const TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: sc.withValues(alpha:0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  cleanStatus,
-                  style: TextStyle(
-                    color: sc,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                decoration: BoxDecoration(color: sc.withValues(alpha:0.12), borderRadius: BorderRadius.circular(12)),
+                child: Text(cleanStatus, style: TextStyle(color: sc, fontSize: 11, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            note.module,
-            style: const TextStyle(
-              color: Color(0xFF111827),
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 3),
+          Text(note.prof, style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
+          const SizedBox(height: 14),
           Row(
             children: [
               _buildScoreBox('Coefficient', note.coefficient, false),
               const SizedBox(width: 8),
-              _buildScoreBox('TD', note.td, false),
+              _buildScoreBox('Devoirs', note.devoirs.length, false),
               const SizedBox(width: 8),
-              _buildScoreBox('Exam', note.exam, false),
-              const SizedBox(width: 8),
-              _buildScoreBox('Moy.', note.note, true),
+              _buildScoreBox('Moyenne', note.note, true),
             ],
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Semestre 3',
-            style: TextStyle(
-              color: Color(0xFF9CA3AF),
-              fontSize: 12,
+          if (note.devoirs.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: note.devoirs.map((d) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(d.toStringAsFixed(1), style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+              )).toList(),
+            ),
+          ],
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => onReclamer(note),
+            child: const Align(
+              alignment: Alignment.centerRight,
+              child: Text('Contester cette note',
+                  style: TextStyle(fontSize: 12, color: AppPalette.blue, fontWeight: FontWeight.w700)),
             ),
           ),
         ],
@@ -550,7 +492,11 @@ class _NoteCard extends StatelessWidget {
   }
 }
 
-// ── Réclamation note ────────────────────────────────────────────────────────
+// ── Réclamation note (UI seule — pas encore connectée au backend, voir note) ─
+// TODO(backend) : aucun endpoint de réclamation n'a été fourni/trouvé côté
+// ApiService. Le bouton "Envoyer" simule actuellement un délai réseau sans
+// appel réel. À connecter dès qu'un endpoint (ex. ApiService.creerReclamation)
+// existera côté backend.
 class _ReclamationNoteSheet extends StatefulWidget {
   final _NoteModule note;
   const _ReclamationNoteSheet({required this.note});
@@ -637,6 +583,8 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
       return;
     }
     setState(() => _loading = true);
+    // TODO(backend) : remplacer par un vrai appel ApiService une fois
+    // l'endpoint de réclamation disponible.
     await Future.delayed(const Duration(milliseconds: 1200));
     setState(() { _loading = false; _envoye = true; });
     await Future.delayed(const Duration(milliseconds: 1500));
@@ -670,7 +618,7 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
                 const SizedBox(height: 8),
                 _infoLigne('Professeur', widget.note.prof),
                 const SizedBox(height: 8),
-                _infoLigne('Note reçue', widget.note.note != null ? '${widget.note.note!.toStringAsFixed(1)} / 20 — ${widget.note.labelStatut}' : 'Non disponible'),
+                _infoLigne('Moyenne', widget.note.note != null ? '${widget.note.note!.toStringAsFixed(1)} / 20 — ${widget.note.labelStatut}' : 'Non disponible'),
               ]),
             ),
             const SizedBox(height: 20),
@@ -771,155 +719,6 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
               color: Color(0xFF64748B), height: 1.55)),
     ]),
   );
-}
-
-// ── Réclamation moyenne ──────────────────────────────────────────────────────
-class _ReclamationMoyenneSheet extends StatefulWidget {
-  final List<_NoteModule> notes;
-  final double moyenne;
-  const _ReclamationMoyenneSheet({required this.notes, required this.moyenne});
-  @override State<_ReclamationMoyenneSheet> createState() => _ReclamationMoyenneSheetState();
-}
-
-class _ReclamationMoyenneSheetState extends State<_ReclamationMoyenneSheet> {
-  final Set<String> _modulesContestes = {};
-  final _justifCtrl = TextEditingController();
-  bool _loading = false, _envoye = false;
-
-  @override void dispose() { _justifCtrl.dispose(); super.dispose(); }
-
-  Future<void> _envoyer() async {
-    if (_modulesContestes.isEmpty || _justifCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Sélectionnez au moins un module et ajoutez une justification.'),
-          backgroundColor: Color(0xFFC62828)));
-      return;
-    }
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    setState(() { _loading = false; _envoye = true; });
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (mounted) Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final notees = widget.notes.where((n) => n.note != null).toList();
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        decoration: const BoxDecoration(color: Colors.white,
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24))),
-        child: _envoye
-            ? Padding(padding: const EdgeInsets.all(40), child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 72, height: 72, decoration: const BoxDecoration(
-                    shape: BoxShape.circle, color: Color(0xFF1DB954)),
-                    child: const Icon(Icons.check_rounded, color: Colors.white, size: 40)),
-                const SizedBox(height: 20),
-                const Text('Réclamation envoyée !', style: TextStyle(fontSize: 20,
-                    fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                const SizedBox(height: 10),
-                const Text('Votre contestation de moyenne a été transmise à l\'administration.',
-                    textAlign: TextAlign.center, style: TextStyle(fontSize: 15,
-                        color: Color(0xFF64748B), height: 1.55)),
-              ]))
-            : SingleChildScrollView(padding: const EdgeInsets.all(24),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))),
-                  const SizedBox(height: 20),
-                  const Text('Contester ma moyenne', style: TextStyle(fontSize: 20,
-                      fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: -0.3)),
-                  const SizedBox(height: 6),
-                  const Text('Envoyée UNIQUEMENT à l\'administration.',
-                      style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4)),
-                  const SizedBox(height: 20),
-                  Container(padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: AppPalette.lightBlue,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppPalette.blue.withValues(alpha:0.2))),
-                    child: Row(children: [
-                      const Icon(Icons.info_outline, color: AppPalette.blue, size: 20),
-                      const SizedBox(width: 12),
-                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('Semestre 3 — 2024/2025',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                        Text('Moyenne actuelle : ${widget.moyenne.toStringAsFixed(2)} / 20',
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
-                                color: AppPalette.blue)),
-                      ]),
-                    ]),
-                  ),
-                  const SizedBox(height: 20),
-                  _lbl('Modules contestés *'),
-                  ...notees.map((n) {
-                    final sel = _modulesContestes.contains(n.module);
-                    return GestureDetector(
-                      onTap: () => setState(() => sel
-                          ? _modulesContestes.remove(n.module)
-                          : _modulesContestes.add(n.module)),
-                      child: Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: sel ? AppPalette.lightBlue : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: sel ? AppPalette.blue : const Color(0xFFE2E8F0),
-                              width: sel ? 1.5 : 1),
-                        ),
-                        child: Row(children: [
-                          Container(width: 22, height: 22, decoration: BoxDecoration(shape: BoxShape.circle,
-                              color: sel ? AppPalette.blue : Colors.white,
-                              border: Border.all(color: sel ? AppPalette.blue : const Color(0xFFE2E8F0), width: 1.5)),
-                              child: sel ? const Icon(Icons.check, size: 14, color: Colors.white) : null),
-                          const SizedBox(width: 12),
-                          Expanded(child: Text(n.module, style: TextStyle(fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: sel ? AppPalette.blue : const Color(0xFF0F172A)))),
-                          Text('${n.note!.toStringAsFixed(1)} / 20',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
-                                  color: n.couleurStatut)),
-                        ]),
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 18),
-                  _lbl('Justification *'),
-                  _champ(_justifCtrl, 'Pourquoi contestez-vous cette moyenne ?', maxLines: 3),
-                  const SizedBox(height: 20),
-                  Container(padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: const Color(0xFFFFFBEB),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFDE68A))),
-                    child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Icon(Icons.info_outline, color: Color(0xFFD97706), size: 18),
-                      SizedBox(width: 10),
-                      Expanded(child: Text(
-                        'Cette réclamation est envoyée UNIQUEMENT à l\'administration. '
-                        'Elle ne sera pas transmise aux professeurs.',
-                        style: TextStyle(fontSize: 13, color: Color(0xFF0F172A), height: 1.5),
-                      )),
-                    ]),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(width: double.infinity, height: 54,
-                    child: ElevatedButton.icon(
-                      onPressed: _loading ? null : _envoyer,
-                      icon: _loading ? const SizedBox(width: 20, height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                          : const Icon(Icons.send_rounded, size: 20),
-                      label: Text(_loading ? 'Envoi en cours...' : 'Envoyer la contestation',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ]),
-            ),
-      ),
-    );
-  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 
+// Mêmes constantes que côté admin (admin_notes.dart) — cohérence des
+// valeurs enregistrées en base (sessions_notes.semestre / .mention).
+const List<String> semestresDisponibles = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
+const List<String> mentionsModule = [
+  'Très Bien', 'Bien', 'Assez Bien', 'Passable', 'Insuffisant',
+];
+
 class NotesTab extends StatefulWidget {
   const NotesTab({super.key, this.initialClasse});
 
@@ -28,12 +35,24 @@ class _NotesTabState extends State<NotesTab> {
   String? _niveau;
   String? _moduleId;
 
+  // ── Nouveaux champs requis par le backend (semestre/annee_academique) ────
+  // et mention (facultative, cohérente avec le flux admin de publication).
+  String? _semestre;
+  String? _mention;
+  final _anneeCtrl = TextEditingController(text: '${DateTime.now().year}-${DateTime.now().year + 1}');
+
   final Map<String, String> _notes = {};
 
   @override
   void initState() {
     super.initState();
     _chargerDonnees();
+  }
+
+  @override
+  void dispose() {
+    _anneeCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _chargerDonnees() async {
@@ -89,6 +108,14 @@ class _NotesTabState extends State<NotesTab> {
           const SnackBar(content: Text('Veuillez sélectionner une classe et un module.')));
       return;
     }
+    // ✅ Semestre et année académique sont requis côté backend (sinon
+    // rejet 400) — validés ici avant l'envoi pour donner un message
+    // clair au professeur plutôt qu'une erreur réseau.
+    if (_semestre == null || _anneeCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Veuillez indiquer le semestre et l\'année académique.')));
+      return;
+    }
     setState(() => _saving = true);
 
     final notesData = _students
@@ -101,6 +128,9 @@ class _NotesTabState extends State<NotesTab> {
       'niveau': _niveau,
       'module_id': int.parse(_moduleId!),
       'notes': notesData,
+      'semestre': _semestre,
+      'annee_academique': _anneeCtrl.text.trim(),
+      if (_mention != null) 'mention': _mention,
     });
 
     if (!mounted) return;
@@ -113,6 +143,8 @@ class _NotesTabState extends State<NotesTab> {
         _students = [];
         _classeId = null;
         _moduleId = null;
+        _semestre = null;
+        _mention = null;
         _segment = 1;
       });
       _chargerDonnees();
@@ -298,6 +330,55 @@ class _NotesTabState extends State<NotesTab> {
               value: m['id'].toString(), child: Text('${m['nom']}', overflow: TextOverflow.ellipsis))).toList(),
           onChanged: (v) => setState(() => _moduleId = v),
         ),
+        const SizedBox(height: 10),
+        // ── Semestre + Année académique (requis par le backend) ──────────
+        Row(children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: _semestre,
+              hint: const Text('Semestre'),
+              decoration: InputDecoration(
+                labelText: 'Semestre',
+                prefixIcon: const Icon(Icons.calendar_view_week_outlined, color: AppPalette.blue),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              items: semestresDisponibles
+                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                  .toList(),
+              onChanged: (v) => setState(() => _semestre = v),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _anneeCtrl,
+              decoration: InputDecoration(
+                labelText: 'Année académique',
+                prefixIcon: const Icon(Icons.event_outlined, color: AppPalette.blue),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        // ── Mention (facultative) — qualifie la performance globale de la
+        // classe sur ce module, cohérente avec le flux admin.
+        DropdownButtonFormField<String>(
+          initialValue: _mention,
+          hint: const Text('Mention de la classe (facultatif)'),
+          decoration: InputDecoration(
+            labelText: 'Mention',
+            prefixIcon: const Icon(Icons.star_outline_rounded, color: AppPalette.blue),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          items: mentionsModule
+              .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+              .toList(),
+          onChanged: (v) => setState(() => _mention = v),
+        ),
       ]),
     );
   }
@@ -397,6 +478,8 @@ class _SessionCard extends StatelessWidget {
     final isSent = session['is_sent'] == true;
     final motif = session['motif_rejet'];
     final date = (session['date_session'] ?? '').toString().split('T').first;
+    final semestre = session['semestre'] as String?;
+    final annee = session['annee_academique'] as String?;
 
     Color statutColor;
     String statutLabel;
@@ -424,7 +507,14 @@ class _SessionCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text('${session['filiere_nom'] ?? ''} · ${session['niveau'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
             const SizedBox(height: 2),
-            Text(date, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+            Text(
+              [
+                if (semestre != null && semestre.isNotEmpty) semestre,
+                if (annee != null && annee.isNotEmpty) annee,
+                date,
+              ].join(' · '),
+              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+            ),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
