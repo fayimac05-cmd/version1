@@ -8,21 +8,36 @@ class Etudiant {
   final List<String> badges;
 
   Etudiant({
-    required this.matricule, required this.nom, required this.prenoms,
-    required this.filiere, required this.domaine, required this.niveau,
-    required this.email, required this.telephone,
-    required this.dateNaissance, required this.nationalite, required this.adresse,
-    required this.nomParent, required this.telParent, required this.emailParent,
-    this.statut = 'actif', this.role = 'etudiant', this.filiereRole,
-    this.notes = const [], this.badges = const [],
+    required this.matricule,
+    required this.nom,
+    required this.prenoms,
+    required this.filiere,
+    required this.domaine,
+    required this.niveau,
+    required this.email,
+    required this.telephone,
+    required this.dateNaissance,
+    required this.nationalite,
+    required this.adresse,
+    required this.nomParent,
+    required this.telParent,
+    required this.emailParent,
+    this.statut = 'actif',
+    this.role = 'etudiant',
+    this.filiereRole,
+    this.notes = const [],
+    this.badges = const [],
   });
 
   bool get estDelegue => role == 'delegue' || role == 'delegue_adjoint';
   String get roleLabel {
     switch (role) {
-      case 'delegue': return 'Délégué(e)';
-      case 'delegue_adjoint': return 'Adjoint(e) Délégué(e)';
-      default: return 'Étudiant(e)';
+      case 'delegue':
+        return 'Délégué(e)';
+      case 'delegue_adjoint':
+        return 'Adjoint(e) Délégué(e)';
+      default:
+        return 'Étudiant(e)';
     }
   }
 }

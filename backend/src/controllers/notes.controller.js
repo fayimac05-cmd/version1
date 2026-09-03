@@ -58,13 +58,13 @@ const generateBulletinPdf = async (req, res) => {
         }
 
         // Fetch student details
-        const studentQuery = `SELECT nom, prenoms, matricule FROM users WHERE id = $1 AND role = 'etudiant'`;
+        const studentQuery = `SELECT nom, prenoms, matricule FROM users WHERE id = $1 AND (role ILIKE '%etudiant%' OR role ILIKE '%delegue%' OR role ILIKE '%bde%')`;
         const studentResult = await pool.query(studentQuery, [etudiantId]);
-        
+
         if (studentResult.rows.length === 0) {
             return res.status(404).json({ error: "Étudiant non trouvé." });
         }
-        
+
         const etudiant = studentResult.rows[0];
 
         // Fetch notes
@@ -80,7 +80,7 @@ const generateBulletinPdf = async (req, res) => {
             JOIN sessions_notes sn ON n.session_id = sn.id
             WHERE e.user_id = $1 AND sn.statut = 'validee'
         `;
-        
+
         const notesResult = await pool.query(notesQuery, [etudiantId]);
         const notes = notesResult.rows;
 
@@ -95,7 +95,7 @@ const generateBulletinPdf = async (req, res) => {
         // Header
         doc.fontSize(20).text('ScolarHub - Bulletin de Notes', { align: 'center' });
         doc.moveDown();
-        
+
         doc.fontSize(14).text(`Étudiant: ${etudiant.prenoms} ${etudiant.nom}`);
         doc.text(`Matricule: ${etudiant.matricule}`);
         doc.moveDown(2);
@@ -105,7 +105,7 @@ const generateBulletinPdf = async (req, res) => {
         doc.text('Matière', 50, doc.y);
         doc.text('Coef', 300, doc.y - doc.currentLineHeight());
         doc.text('Note', 400, doc.y - doc.currentLineHeight());
-        
+
         let currentY = doc.y + 5;
         doc.moveTo(50, currentY).lineTo(450, currentY).stroke();
         currentY += 15;
@@ -126,7 +126,7 @@ const generateBulletinPdf = async (req, res) => {
             doc.text(row.matiere, 50, currentY, { width: 240 });
             doc.text(coefVal.toString(), 300, currentY);
             doc.text(noteVal.toFixed(2) + ' / 20', 400, currentY);
-            
+
             currentY += 25;
         }
 
@@ -422,7 +422,7 @@ const getGradeSessions = async (req, res) => {
             WHERE sn.professeur_id = $1
             ORDER BY sn.date_session DESC
         `, [professeur_id]);
-        
+
         res.json({ success: true, data: result.rows });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -433,12 +433,12 @@ const markSessionSent = async (req, res) => {
     try {
         const { session_id } = req.params;
         const professeur_id = req.user.id;
-        
+
         await pool.query(`
             UPDATE sessions_notes SET is_sent = true 
             WHERE id = $1 AND professeur_id = $2
         `, [session_id, professeur_id]);
-        
+
         res.json({ success: true, message: 'Session marquée comme envoyée' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

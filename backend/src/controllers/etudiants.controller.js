@@ -143,13 +143,13 @@ const listEtudiants = async (req, res) => {
     let queryText = `
       SELECT
         e.id AS etudiant_id,
-        e.user_id,
+        u.id AS user_id,
         COALESCE(e.matricule, u.matricule) AS matricule,
         COALESCE(e.nom, u.nom) AS nom,
         COALESCE(e.prenoms, u.prenoms) AS prenoms,
         COALESCE(e.email, u.email) AS email,
         COALESCE(e.tel, u.tel) AS tel,
-        COALESCE(e.statut, u.statut, 'actif') AS statut,
+        COALESCE(u.statut, 'actif') AS statut,
         COALESCE(e.domaine, u.domaine) AS domaine,
         COALESCE(e.niveau, u.niveau) AS niveau,
         COALESCE(e.date_naissance, u.date_naissance) AS date_naissance,
@@ -163,10 +163,10 @@ const listEtudiants = async (req, res) => {
         e.filiere_id,
         e.premierefois,
         COALESCE(e.filiere_nom, f.nom) AS filiere_nom
-      FROM etudiants e
-      INNER JOIN users u ON u.id = e.user_id
-      LEFT JOIN filieres f ON f.id = e.filiere_id
-      WHERE u.role = 'etudiant'
+      FROM users u
+      LEFT JOIN etudiants e ON u.id = e.user_id
+      LEFT JOIN filieres f ON f.id = COALESCE(e.filiere_id, u.filiere_id)
+      WHERE u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%'
     `;
 
     const params = [];

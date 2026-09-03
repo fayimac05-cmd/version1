@@ -289,14 +289,19 @@ class _AuthPageState extends State<AuthPage> {
       _loading = true;
       _error = null;
     });
-    if (_emailCtrl.text.isEmpty ||
-        _newPassCtrl.text.isEmpty ||
-        _confPassCtrl.text.isEmpty) {
-      _setError('Veuillez remplir tous les champs.');
+    final isParent = _userTrouve?['role'] == 'parent';
+    final emailText = _emailCtrl.text.trim();
+
+    if (!isParent && emailText.isEmpty) {
+      _setError('Veuillez renseigner votre adresse email.');
       return;
     }
-    if (!_emailCtrl.text.contains('@')) {
-      _setError('Email invalide.');
+    if (emailText.isNotEmpty && !emailText.contains('@')) {
+      _setError('Adresse email invalide.');
+      return;
+    }
+    if (_newPassCtrl.text.isEmpty || _confPassCtrl.text.isEmpty) {
+      _setError('Veuillez remplir les champs de mot de passe.');
       return;
     }
     if (_newPassCtrl.text.length < 4) {
@@ -312,7 +317,7 @@ class _AuthPageState extends State<AuthPage> {
     if (_userId != null) {
       final result = await ApiService.setupPassword(
         userId: _userId!,
-        email: _emailCtrl.text.trim(),
+        email: emailText.isNotEmpty ? emailText : (_userTrouve!['email']?.toString() ?? ''),
         motDePasse: _newPassCtrl.text,
       );
       if (result['success'] == true) {
@@ -332,11 +337,11 @@ class _AuthPageState extends State<AuthPage> {
   StudentProfile _buildProfile(String mdp) {
     final u = _userTrouve!;
     return StudentProfile(
-      nom: u['nom'],
-      prenoms: u['prenoms'],
+      nom: u['nom'] ?? '',
+      prenoms: u['prenoms'] ?? '',
       matricule: _cleTrouvee!,
-      email: _emailCtrl.text,
-      telephone: '',
+      email: _emailCtrl.text.trim().isNotEmpty ? _emailCtrl.text.trim() : (u['email'] ?? ''),
+      telephone: u['tel'] ?? u['telephone'] ?? '',
       filiere: u['filiere'] ?? '',
       niveau: u['niveau'] ?? '',
       motDePasse: mdp,
@@ -1088,7 +1093,6 @@ class _AuthPageState extends State<AuthPage> {
                     color: Colors.white,
                     fontWeight: FontWeight.w500,
                   ),
-                ),
                 if (domaine.isNotEmpty) ...[
                   const SizedBox(height: 5),
                   Container(
@@ -1131,7 +1135,7 @@ class _AuthPageState extends State<AuthPage> {
                         ),
                       ),
                     ),
-                    if (u['premiere_fois'] == true) ...[
+                    if (u['premiere_fois'] == true || u['premiereFois'] == true) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(

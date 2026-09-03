@@ -96,6 +96,71 @@ class ApiService {
     };
   }
 
+  // ── Méthodes HTTP génériques ──────────────────────────────
+  static Future<Map<String, dynamic>?> get(String endpoint) async {
+    try {
+      final headers = await getHeaders();
+      final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
+      final response = await http.get(Uri.parse(url), headers: headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
+      }
+      return {'success': false, 'status': response.statusCode};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>?> post(String endpoint, [dynamic body]) async {
+    try {
+      final headers = await getHeaders();
+      final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
+      final response = await http.post(
+        Uri.parse(url),
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
+      }
+      return {'success': false, 'status': response.statusCode};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>?> put(String endpoint, [dynamic body]) async {
+    try {
+      final headers = await getHeaders();
+      final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
+      final response = await http.put(
+        Uri.parse(url),
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
+      }
+      return {'success': false, 'status': response.statusCode};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>?> delete(String endpoint) async {
+    try {
+      final headers = await getHeaders();
+      final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
+      final response = await http.delete(Uri.parse(url), headers: headers);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
+      }
+      return {'success': false, 'status': response.statusCode};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   // ── Login ────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login({
     String? userId,

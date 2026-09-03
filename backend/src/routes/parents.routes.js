@@ -2,22 +2,80 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { authMiddleware, requireRole } = require('../middleware/auth.middleware');
+const parentsController = require('../controllers/parents.controller');
 
 // GET /api/parents - Liste des parents avec leurs enfants
-router.get('/', authMiddleware, requireRole('admin', 'direction'), async (req, res) => {
+router.get('/', authMiddleware, requireRole('admin', 'direction'), parentsController.getParents);
+
+// POST /api/parents - Créer un parent
+router.post('/', authMiddleware, requireRole('admin', 'direction'), parentsController.createParent);
+
+// GET /api/parents/mon-enfant - Informations de l'enfant pour le parent connecté
+router.get('/mon-enfant', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT DISTINCT
-        e.nom_parent, e.tel_parent, e.email_parent,
-        e.nom AS etudiant_nom, e.prenoms AS etudiant_prenoms, e.matricule,
-        e.filiere_nom, e.niveau
-      FROM etudiants e
-      WHERE e.nom_parent IS NOT NULL AND e.nom_parent != ''
-      ORDER BY e.nom_parent
-    `);
-    res.json({ success: true, data: result.rows });
+    const parentUserId = req.user.id;
+
+    // Stratégie 1 : liaison directe via user_id dans la table parents
+    let r = await pool.query(
+      `SELECT e.id AS etudiant_id, e.matricule, e.nom, e.prenoms, e.filiere_nom, e.niveau, e.domaine,
+              p.relation
+       FROM parents p
+       LEFT JOIN etudiants e ON (e.matricule = p.matricule_enfant OR e.id = p.etudiant_id)
+       WHERE p.user_id::text = $1 AND e.id IS NOT NULL
+       LIMIT 1`,
+      [parentUserId.toString()]
+    );
+
+    // Stratégie 2 : liaison via numéro de téléphone (user.tel = parents.telephone)
+    if (!r.rows[0]) {
+      r = await pool.query(
+        `SELECT e.id AS etudiant_id, e.matricule, e.nom, e.prenoms, e.filiere_nom, e.niveau, e.domaine,
+                p.relation
+         FROM users u
+         JOIN parents p ON REPLACE(COALESCE(p.telephone, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')
+         LEFT JOIN etudiants e ON (e.matricule = p.matricule_enfant OR e.id = p.etudiant_id)
+         WHERE u.id::text = $1 AND e.id IS NOT NULL
+         LIMIT 1`,
+        [parentUserId.toString()]
+      );
+    }
+
+    // Stratégie 3 : liaison via etudiants.tel_parent = user.tel (fallback si pas de table parents)
+    if (!r.rows[0]) {
+      r = await pool.query(
+        `SELECT e.id AS etudiant_id, e.matricule, e.nom, e.prenoms, e.filiere_nom, e.niveau, e.domaine,
+                'Parent' AS relation
+         FROM users u
+         JOIN etudiants e ON REPLACE(COALESCE(e.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')
+         WHERE u.id::text = $1 AND e.id IS NOT NULL
+         LIMIT 1`,
+        [parentUserId.toString()]
+      );
+    }
+
+    if (!r.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Aucun enfant rattache trouve.' });
+    }
+
+    const etu = r.rows[0];
+    const nomComplet = `${etu.prenoms || ''} ${etu.nom || ''}`.trim();
+
+    res.json({
+      success: true,
+      data: {
+        etudiantId: etu.etudiant_id,
+        matricule: etu.matricule,
+        nom: etu.nom,
+        prenoms: etu.prenoms,
+        nomComplet: nomComplet,
+        filiere: etu.filiere_nom || '',
+        niveau: etu.niveau || '',
+        domaine: etu.domaine || '',
+        relation: etu.relation || 'Parent',
+      }
+    });
   } catch (err) {
-    console.error('[parents] GET /', err);
+    console.error('[parents] GET /mon-enfant', err);
     res.status(500).json({ success: false, message: 'Erreur serveur.' });
   }
 });

@@ -17,6 +17,8 @@ class StudentProfile {
     this.filiereRole,
     this.photoUrl,
     this.coverUrl,
+    this.enfantNom,
+    this.matriculeEnfant,
   });
 
   final String nom;
@@ -30,6 +32,8 @@ class StudentProfile {
   final String niveau;
   final String? photoUrl;
   final String? coverUrl;
+  final String? enfantNom;
+  final String? matriculeEnfant;
 
   // ── Rôle dans l'établissement ──────────────────────────────────────
   // 'etudiant'        → étudiant normal
@@ -122,6 +126,8 @@ class StudentProfile {
     String? filiereRole,
     String? photoUrl,
     String? coverUrl,
+    String? enfantNom,
+    String? matriculeEnfant,
   }) =>
       StudentProfile(
         nom: nom ?? this.nom,
@@ -139,6 +145,8 @@ class StudentProfile {
         filiereRole: filiereRole ?? this.filiereRole,
         photoUrl: photoUrl ?? this.photoUrl,
         coverUrl: coverUrl ?? this.coverUrl,
+        enfantNom: enfantNom ?? this.enfantNom,
+        matriculeEnfant: matriculeEnfant ?? this.matriculeEnfant,
       );
 }
 

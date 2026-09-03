@@ -60,3 +60,6 @@ Desktop.ini
 analyze_output.txt
 *.log
 .env
+
+# Orkestra AI — estado local (nunca versionar)
+.sta/
