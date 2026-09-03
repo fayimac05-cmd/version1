@@ -12,31 +12,80 @@ const genToken = (user) => jwt.sign(
 
 const login = async (req, res) => {
   try {
-    const { matricule, nom, tel, motDePasse, password } = req.body;
+    const { matricule, nom, tel, motDePasse, password, userId, prenom, prenoms } = req.body;
     const mdp = password || motDePasse; // Accepter les deux formats
     let user = null;
 
     try {
-      if (matricule) {
-        const matClean = matricule.trim().toLowerCase();
+      if (userId) {
         const r = await pool.query(
-          `SELECT u.*, e.filiere_id, e.premierefois,
-                  COALESCE(e.filiere_nom, u.filiere_nom) AS filiere,
-                  COALESCE(e.niveau, u.niveau) AS niveau_etudiant,
+          `SELECT u.*, e.filiere_id,
+                  COALESCE(e.filiere_nom, p_etu.filiere_nom, u.filiere_nom) AS filiere,
+                  COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
                   COALESCE(e.tel, u.tel) AS tel_etudiant,
-                  COALESCE(m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine
+                  COALESCE(m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(p.matricule_enfant, p_etu.matricule) AS matricule_enfant,
+                  CASE 
+                    WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
+                    ELSE NULL 
+                  END AS enfant_nom
            FROM users u
            LEFT JOIN etudiants e ON u.id = e.user_id
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.telephone, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN etudiants p_etu ON (p.matricule_enfant = p_etu.matricule OR p.etudiant_id = p_etu.id OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN membres m ON u.id = m.user_id
+           WHERE u.id::text = $1`,
+          [userId.toString()]
+        );
+        user = r.rows[0];
+      } else if (matricule) {
+        const matClean = matricule.trim().toLowerCase();
+        const r = await pool.query(
+          `SELECT u.*, e.filiere_id,
+                  COALESCE(e.filiere_nom, p_etu.filiere_nom, u.filiere_nom) AS filiere,
+                  COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
+                  COALESCE(e.email, u.email) AS email_etudiant,
+                  COALESCE(e.tel, u.tel) AS tel_etudiant,
+                  COALESCE(m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(p.matricule_enfant, p_etu.matricule) AS matricule_enfant,
+                  CASE 
+                    WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
+                    ELSE NULL 
+                  END AS enfant_nom
+           FROM users u
+           LEFT JOIN etudiants e ON u.id = e.user_id
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.telephone, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN etudiants p_etu ON (p.matricule_enfant = p_etu.matricule OR p.etudiant_id = p_etu.id OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
            LEFT JOIN membres m ON u.id = m.user_id
            WHERE LOWER(u.matricule) = $1 OR LOWER(u.email) = $1`,
           [matClean]
         );
         user = r.rows[0];
-      } else if (nom && tel) {
+      } else if (nom && (tel || req.body.telephone)) {
+        const telVal = (tel || req.body.telephone).trim().replace(/\s+/g, '');
+        const prenomVal = (prenom || prenoms || req.body.prenom || req.body.prenoms || '').trim();
         const r = await pool.query(
-          'SELECT u.*, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE LOWER(u.nom) = LOWER($1) AND u.tel = $2',
-          [nom.trim(), tel.trim()]
+          `SELECT u.*, e.filiere_id,
+                  COALESCE(e.filiere_nom, p_etu.filiere_nom, u.filiere_nom) AS filiere,
+                  COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
+                  COALESCE(e.email, u.email) AS email_etudiant,
+                  COALESCE(e.tel, u.tel) AS tel_etudiant,
+                  COALESCE(p.matricule_enfant, p_etu.matricule) AS matricule_enfant,
+                  CASE 
+                    WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
+                    ELSE NULL 
+                  END AS enfant_nom
+           FROM users u 
+           LEFT JOIN etudiants e ON u.id = e.user_id 
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.telephone, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN etudiants p_etu ON (p.matricule_enfant = p_etu.matricule OR p.etudiant_id = p_etu.id OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           WHERE LOWER(TRIM(u.nom)) = LOWER(TRIM($1)) 
+             AND (REPLACE(COALESCE(u.tel, ''), ' ', '') = $2 OR REPLACE(COALESCE(u.tel, ''), ' ', '') LIKE $3)
+             ${prenomVal ? "AND (LOWER(TRIM(u.prenoms)) = LOWER(TRIM($4)) OR LOWER(u.prenoms) LIKE $5)" : ""}`,
+          prenomVal 
+            ? [nom.trim(), telVal, `%${telVal}%`, prenomVal, `%${prenomVal}%`] 
+            : [nom.trim(), telVal, `%${telVal}%`]
         );
         user = r.rows[0];
       } else {
@@ -46,11 +95,13 @@ const login = async (req, res) => {
       console.warn('Direct PG failed in login, fallback to Supabase SDK:', dbErr.message);
       if (supabase && typeof supabase.from === 'function') {
         let query = supabase.from('users').select('*');
-        if (matricule) {
+        if (userId) {
+          query = query.eq('id', userId);
+        } else if (matricule) {
           const matClean = matricule.trim().toLowerCase();
           query = query.or(`matricule.ilike.${matClean},email.ilike.${matClean}`);
         } else if (nom && tel) {
-          query = query.ilike('nom', nom.trim()).eq('tel', tel.trim());
+          query = query.ilike('nom', `%${nom.trim()}%`);
         }
         const { data, error } = await query.maybeSingle();
         if (!error && data) {
@@ -64,13 +115,12 @@ const login = async (req, res) => {
     if (user.statut === 'renvoye') return res.status(403).json({ message: 'Compte desactive.' });
 
     const motDePasseExiste = user.mot_de_passe && user.mot_de_passe.trim() !== '' && user.mot_de_passe !== 'null';
-    // Les admins/profs/parents ne passent jamais par le flux « première connexion étudiant »
-    const isStudentRole = !user.role || user.role === 'etudiant' || user.role === 'bde';
-    const estPremiereFois = isStudentRole && (user.premierefois === true || user.premiere_fois === true || !motDePasseExiste);
+    const isFirstTimeRole = !user.role || user.role === 'etudiant' || user.role === 'bde' || user.role === 'parent';
+    const estPremiereFois = isFirstTimeRole && (user.premierefois === true || user.premiere_fois === true || !motDePasseExiste);
 
-    // Première connexion : pas encore de mot de passe défini en base (étudiants uniquement)
-    if (estPremiereFois || (isStudentRole && !motDePasseExiste)) {
-      // Si l'étudiant n'a pas soumis de mot de passe, on renvoie le signal de première connexion
+    // Première connexion : pas encore de mot de passe défini en base (étudiants et parents)
+    if (estPremiereFois || (isFirstTimeRole && !motDePasseExiste)) {
+      // Si l'utilisateur n'a pas soumis de mot de passe, on renvoie le signal de première connexion
       if (!mdp || mdp.trim() === '') {
         return res.status(200).json({
           premiereFois: true,
@@ -98,7 +148,7 @@ const login = async (req, res) => {
     let match = false;
     if (user.mot_de_passe && (user.mot_de_passe.startsWith('$2a$') || user.mot_de_passe.startsWith('$2b$'))) {
       try {
-        match = await bcrypt.compare(mdp, user.mot_de_passe);
+        match = await bcrypt.compare(mdp, user.mot_de_passe); 
       } catch (_) {
         match = false;
       }
@@ -120,6 +170,19 @@ const login = async (req, res) => {
 
     // S'assurer que le role est bien transmis même si la colonne est aliasée différemment
     console.log(`[LOGIN] user ${safeUser.nom} - role="${safeUser.role}" admin_sub_role="${safeUser.admin_sub_role}"`);
+
+    // Si c'est un parent : synchroniser automatiquement le user_id dans la table parents
+    // pour que /parents/mon-enfant puisse toujours retrouver l'enfant lié
+    if (safeUser.role === 'parent' || safeUser.role === 'tuteur') {
+      const telClean = (safeUser.tel || '').trim().replace(/\s+/g, '');
+      pool.query(
+        `UPDATE parents SET user_id = $1
+         WHERE user_id IS NULL
+           AND (REPLACE(COALESCE(telephone,''),' ','') = $2
+            OR LOWER(nom) = LOWER($3))`,
+        [safeUser.id, telClean, safeUser.nom || '']
+      ).catch(e => console.warn('[LOGIN] Sync parents.user_id:', e.message));
+    }
 
     const responseUser = {
       ...safeUser,
@@ -190,13 +253,18 @@ const lookup = async (req, res) => {
       try {
         const r = await pool.query(
           `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.admin_sub_role, u.statut,
-                  u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
-                  COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
-                  COALESCE(e.domaine, u.domaine)        AS domaine,
-                  COALESCE(e.niveau, u.niveau)          AS niveau
+                  u.mot_de_passe IS NOT NULL AND u.mot_de_passe != '' AND u.mot_de_passe != 'null' AS a_mot_de_passe,
+                  COALESCE(e.filiere_nom, p_etu.filiere_nom, u.filiere_nom) AS filiere_nom,
+                  COALESCE(e.domaine, p_etu.domaine, u.domaine)        AS domaine,
+                  COALESCE(e.niveau, p_etu.niveau, u.niveau)          AS niveau,
+                  COALESCE(p.matricule_enfant, p_etu.matricule) AS matricule_enfant,
+                  p_etu.nom AS enfant_nom,
+                  p_etu.prenoms AS enfant_prenoms
            FROM users u
            LEFT JOIN etudiants e ON u.id = e.user_id
-           WHERE u.matricule = $1`,
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.telephone, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN etudiants p_etu ON (p.matricule_enfant = p_etu.matricule OR p.etudiant_id = p_etu.id OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           WHERE UPPER(TRIM(u.matricule)) = $1 OR LOWER(TRIM(u.email)) = LOWER(TRIM($1))`,
           [matricule]
         );
         row = r.rows[0];
@@ -229,16 +297,21 @@ const lookup = async (req, res) => {
       try {
         const r = await pool.query(
           `SELECT u.id, u.nom, u.prenoms, u.matricule, u.role, u.admin_sub_role, u.statut,
-                  u.mot_de_passe IS NOT NULL AS a_mot_de_passe,
-                  COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
-                  COALESCE(e.domaine, u.domaine)        AS domaine,
-                  COALESCE(e.niveau, u.niveau)          AS niveau
+                  u.mot_de_passe IS NOT NULL AND u.mot_de_passe != '' AND u.mot_de_passe != 'null' AS a_mot_de_passe,
+                  COALESCE(e.filiere_nom, p_etu.filiere_nom, u.filiere_nom) AS filiere_nom,
+                  COALESCE(e.domaine, p_etu.domaine, u.domaine)        AS domaine,
+                  COALESCE(e.niveau, p_etu.niveau, u.niveau)          AS niveau,
+                  COALESCE(p.matricule_enfant, p_etu.matricule) AS matricule_enfant,
+                  p_etu.nom AS enfant_nom,
+                  p_etu.prenoms AS enfant_prenoms
            FROM users u
            LEFT JOIN etudiants e ON u.id = e.user_id
-           WHERE LOWER(u.nom) = LOWER($1)
-             AND (LOWER(u.prenoms) = LOWER($2) OR LOWER(u.prenoms) LIKE LOWER($3))
-             AND (REPLACE(u.tel, ' ', '') = $4 OR REPLACE(u.tel, ' ', '') LIKE $5 OR u.tel IS NULL)`,
-          [nom, prenom, `%${prenom}%`, tel, `%${tel}%`]
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.telephone, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN etudiants p_etu ON (p.matricule_enfant = p_etu.matricule OR p.etudiant_id = p_etu.id OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           WHERE LOWER(TRIM(u.nom)) = LOWER(TRIM($1))
+             AND (LOWER(TRIM(u.prenoms)) = LOWER(TRIM($2)) OR LOWER(u.prenoms) LIKE LOWER($3) OR LOWER(u.nom) LIKE LOWER($3))
+             AND (REPLACE(COALESCE(u.tel, ''), ' ', '') = $4 OR REPLACE(COALESCE(u.tel, ''), ' ', '') LIKE $5 OR $4 LIKE ('%' || REPLACE(COALESCE(u.tel, ''), ' ', '') || '%'))`,
+          [nom.trim(), prenom.trim(), `%${prenom.trim()}%`, tel.trim().replace(/\s+/g, ''), `%${tel.trim().replace(/\s+/g, '')}%`]
         );
         row = r.rows[0];
       } catch (dbErr) {
@@ -276,6 +349,10 @@ const lookup = async (req, res) => {
       return res.status(403).json({ found: false, message: 'Compte désactivé. Contactez l\'administration.' });
     }
 
+    const enfantNomComplet = (row.enfant_prenoms || row.enfant_nom) 
+      ? `${row.enfant_prenoms || ''} ${row.enfant_nom || ''}`.trim() 
+      : (row.enfant_nom || '');
+
     return res.status(200).json({
       found: true,
       premierLogin: !row.a_mot_de_passe,
@@ -290,6 +367,8 @@ const lookup = async (req, res) => {
         filiere: row.filiere_nom || '',
         domaine: row.domaine || '',
         niveau: row.niveau || '',
+        enfant_nom: enfantNomComplet,
+        matricule_enfant: row.matricule_enfant || '',
       },
     });
   } catch (err) {

@@ -36,6 +36,34 @@ Future<Map<String, dynamic>?> _fetchByDetails(
       final userMap = Map<String, dynamic>.from(res['user'] as Map);
       userMap['premiere_fois'] = res['premierLogin'];
       userMap['id'] = res['userId'];
+
+      // Si c'est un parent, s'assurer que le nom et la filière de l'enfant sont bien récupérés
+      if (userMap['role'] == 'parent') {
+        final matEnfant = (userMap['matricule_enfant'] ?? userMap['matricule'] ?? '').toString();
+        if ((userMap['enfant_nom'] == null || userMap['enfant_nom'].toString().trim().isEmpty) &&
+            matEnfant.isNotEmpty &&
+            !matEnfant.startsWith('PAR-') &&
+            !matEnfant.startsWith('PARENT-')) {
+          try {
+            final etuRes = await ApiService.lookupMatricule(matEnfant);
+            if (etuRes['success'] == true && etuRes['user'] != null) {
+              final eu = etuRes['user'] as Map;
+              final eNom = '${eu['prenoms'] ?? ''} ${eu['nom'] ?? ''}'.trim();
+              if (eNom.isNotEmpty) {
+                userMap['enfant_nom'] = eNom;
+              }
+              userMap['matricule_enfant'] = matEnfant;
+              if (userMap['filiere'] == null || userMap['filiere'].toString().trim().isEmpty) {
+                userMap['filiere'] = eu['filiere_nom'] ?? eu['filiere'] ?? '';
+              }
+              if (userMap['niveau'] == null || userMap['niveau'].toString().trim().isEmpty) {
+                userMap['niveau'] = eu['niveau'] ?? '';
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
       return userMap;
     }
   } catch (_) {}
@@ -183,8 +211,36 @@ class _AuthPageState extends State<AuthPage> {
     final String sub = (profile.adminSubRole ?? '').toLowerCase().trim();
     final Widget destination;
 
-    // Toute personne avec role 'admin' OU un sous-rôle administratif va vers AdminShell
-    final isAdmin = r == 'admin' ||
+    // ── PRIORITÉ 1 : Parent/tuteur → toujours vers ParentShell,
+    //    même si admin_sub_role a une valeur résiduelle en base.
+    if (r == 'parent' || r == 'tuteur') {
+      final enfNom = (profile.enfantNom != null && profile.enfantNom!.trim().isNotEmpty)
+          ? profile.enfantNom!
+          : (_userTrouve?['enfant_nom'] != null && _userTrouve!['enfant_nom'].toString().trim().isNotEmpty)
+              ? _userTrouve!['enfant_nom'].toString()
+              : 'Étudiant suivi';
+      final enfMat = (profile.matriculeEnfant != null && profile.matriculeEnfant!.trim().isNotEmpty)
+          ? profile.matriculeEnfant!
+          : (_userTrouve?['matricule_enfant'] != null && _userTrouve!['matricule_enfant'].toString().trim().isNotEmpty)
+              ? _userTrouve!['matricule_enfant'].toString()
+              : '';
+      destination = ParentShell(
+        profile: profile,
+        nomEnfant: enfNom,
+        etudiantId: enfMat,
+        onLogout: logout,
+      );
+    }
+    // ── PRIORITÉ 2 : BDE
+    else if (r == 'bde') {
+      destination = const BureauDesEtudiantsScreen();
+    }
+    // ── PRIORITÉ 3 : Professeur
+    else if (r == 'prof' || r == 'professeur' || r == 'enseignant' || r == 'teacher') {
+      destination = ProfessorShell(profile: profile, onLogout: logout);
+    }
+    // ── PRIORITÉ 4 : Admin (rôle explicitement admin OU sous-rôle administratif)
+    else if (r == 'admin' ||
         r == 'admi' ||
         r == 'administrator' ||
         r == 'super_admin' ||
@@ -194,24 +250,11 @@ class _AuthPageState extends State<AuthPage> {
         sub == 'secretariat' ||
         sub == 'communication' ||
         sub == 'cycle' ||
-        sub == 'super_admin';
-
-    if (isAdmin) {
+        sub == 'super_admin') {
       destination = AdminShell(profile: profile, onLogout: logout);
-    } else if (r == 'prof' ||
-        r == 'professeur' ||
-        r == 'enseignant' ||
-        r == 'teacher') {
-      destination = ProfessorShell(profile: profile, onLogout: logout);
-    } else if (r == 'parent' || r == 'tuteur') {
-      destination = ParentShell(
-        nomEnfant: '${profile.prenoms} ${profile.nom}',
-        onLogout: logout,
-        etudiantId: profile.matricule,
-      );
-    } else if (r == 'bde') {
-      destination = const BureauDesEtudiantsScreen();
-    } else {
+    }
+    // ── PRIORITÉ 5 : Étudiant (défaut)
+    else {
       destination = StudentShell(profile: profile, onLogout: logout);
     }
 
@@ -255,6 +298,8 @@ class _AuthPageState extends State<AuthPage> {
             'domaine': u['domaine'] ?? '',
             'role': u['role'] ?? 'etudiant',
             'admin_sub_role': u['admin_sub_role'],  // ← conservé pour la redirection admin
+            'enfant_nom': u['enfant_nom'] ?? '',
+            'matricule_enfant': u['matricule_enfant'] ?? '',
             'premiereFois': premierLogin,
           };
           _cleTrouvee = u['matricule']?.toString() ?? mat;
@@ -334,11 +379,11 @@ class _AuthPageState extends State<AuthPage> {
     }
 
     final result = await ApiService.login(
-      userId: _userId,
-      email: (_tab == 0 && _userTrouve != null) ? _userTrouve!['email']?.toString() : null,
-      matricule: _tab == 0 ? _cleTrouvee : null,
-      nom: _tab == 1 ? _nomCtrl.text.trim() : null,
-      tel: _tab == 1 ? _numeroCtrl.text.trim() : null,
+      userId: _userId ?? _userTrouve?['id']?.toString(),
+      email: _userTrouve?['email']?.toString(),
+      matricule: _cleTrouvee ?? _userTrouve?['matricule']?.toString(),
+      nom: _tab == 1 ? _nomCtrl.text.trim() : _userTrouve?['nom']?.toString(),
+      tel: _tab == 1 ? _numeroCtrl.text.trim() : _userTrouve?['tel']?.toString(),
       motDePasse: _passCtrl.text,
     );
     if (result['success'] == true) {
@@ -346,27 +391,7 @@ class _AuthPageState extends State<AuthPage> {
       final user = result['user'];
       // DEBUG temporaire — à retirer une fois la connexion vérifiée.
       // Permet de voir les clés exactes renvoyées par le backend pour
-      // confirmer le bon nom de champ filière/niveau.
       debugPrint('DEBUG login user payload: $user');
-      _goToDashboard(StudentProfile(
-        nom: user['nom'] ?? '',
-        prenoms: user['prenoms'] ?? '',
-        matricule: user['matricule'] ?? _cleTrouvee ?? '',
-        email: user['email'] ?? '',
-        telephone: user['tel'] ?? '',
-        // Le nom de la filière peut arriver sous 'filiere_nom' ou 'filiere'
-        // selon l'endpoint — jamais 'filiere_id' (c'est un identifiant
-        // numérique, pas un texte affichable ni comparable aux tables
-        // emploi_du_temps/edt).
-        filiere: user['filiere_nom'] ?? user['filiere'] ?? '',
-        niveau: user['niveau'] ?? '',
-        motDePasse: '',
-        domaine: user['domaine'] ?? '',
-        role: user['role'] ?? 'etudiant',
-        photoUrl: user['photo_url'] ?? user['photoUrl'],
-        coverUrl: user['cover_url'] ?? user['coverUrl'],
-      ));
-      // DEBUG : vérifier le sous-rôle et domaine reçus du backend
       debugPrint(
         '[LOGIN] role=${user['role']} admin_sub_role=${user['admin_sub_role']} admin_domaine=${user['admin_domaine']}',
       );
@@ -377,7 +402,8 @@ class _AuthPageState extends State<AuthPage> {
           matricule: user['matricule'] ?? _cleTrouvee ?? '',
           email: user['email'] ?? '',
           telephone: user['tel'] ?? '',
-          filiere: (user['filiere_id'] ?? '').toString(),
+          filiere: user['filiere_nom'] ?? user['filiere'] ?? '',
+          niveau: user['niveau'] ?? '',
           motDePasse: '',
           domaine: user['domaine'] ?? '',
           role: user['role'] ?? 'etudiant',
@@ -385,6 +411,8 @@ class _AuthPageState extends State<AuthPage> {
           domaineAdmin: user['admin_domaine'] ?? 'Tous',
           photoUrl: user['photo_url'] ?? user['photoUrl'],
           coverUrl: user['cover_url'] ?? user['coverUrl'],
+          enfantNom: user['enfant_nom'] ?? _userTrouve?['enfant_nom'],
+          matriculeEnfant: user['matricule_enfant'] ?? _userTrouve?['matricule_enfant'],
         ),
       );
     } else {
@@ -397,14 +425,19 @@ class _AuthPageState extends State<AuthPage> {
       _loading = true;
       _error = null;
     });
-    if (_emailCtrl.text.isEmpty ||
-        _newPassCtrl.text.isEmpty ||
-        _confPassCtrl.text.isEmpty) {
-      _setError('Veuillez remplir tous les champs.');
+    final isParent = _userTrouve?['role'] == 'parent';
+    final emailText = _emailCtrl.text.trim();
+
+    if (!isParent && emailText.isEmpty) {
+      _setError('Veuillez renseigner votre adresse email.');
       return;
     }
-    if (!_emailCtrl.text.contains('@')) {
-      _setError('Email invalide.');
+    if (emailText.isNotEmpty && !emailText.contains('@')) {
+      _setError('Adresse email invalide.');
+      return;
+    }
+    if (_newPassCtrl.text.isEmpty || _confPassCtrl.text.isEmpty) {
+      _setError('Veuillez remplir les champs de mot de passe.');
       return;
     }
     if (_newPassCtrl.text.length < 4) {
@@ -425,7 +458,7 @@ class _AuthPageState extends State<AuthPage> {
     if (isRealUuid) {
       final result = await ApiService.setupPassword(
         userId: _userId!,
-        email: _emailCtrl.text.trim(),
+        email: emailText.isNotEmpty ? emailText : (_userTrouve!['email']?.toString() ?? ''),
         motDePasse: _newPassCtrl.text,
       );
       if (result['success'] == true) {
@@ -447,17 +480,19 @@ class _AuthPageState extends State<AuthPage> {
   StudentProfile _buildProfile(String mdp) {
     final u = _userTrouve!;
     return StudentProfile(
-      nom: u['nom'],
-      prenoms: u['prenoms'],
+      nom: u['nom'] ?? '',
+      prenoms: u['prenoms'] ?? '',
       matricule: _cleTrouvee!,
-      email: _emailCtrl.text,
-      telephone: '',
+      email: _emailCtrl.text.trim().isNotEmpty ? _emailCtrl.text.trim() : (u['email'] ?? ''),
+      telephone: u['tel'] ?? u['telephone'] ?? '',
       filiere: u['filiere'] ?? '',
       niveau: u['niveau'] ?? '',
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
       role: u['role'] ?? 'etudiant',
       adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
+      enfantNom: u['enfant_nom'],
+      matriculeEnfant: u['matricule_enfant'],
     );
   }
 
@@ -965,96 +1000,103 @@ class _AuthPageState extends State<AuthPage> {
 
   // ─── Écran 3 : Première connexion ──────────────────────────────────────────
 
-  Widget _buildPremiereFois() => Column(
-    key: const ValueKey('premier'),
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _boutonRetour(_recommencer),
-      const SizedBox(height: 24),
-      _carteUser(_userTrouve!),
-      const SizedBox(height: 28),
-      const Text(
-        'Créez votre compte',
-        style: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF0F172A),
-          letterSpacing: -0.3,
-        ),
-      ),
-      const SizedBox(height: 8),
-      const Text(
-        'Première connexion — Définissez votre email et mot de passe.',
-        style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
-      ),
-      const SizedBox(height: 24),
-      _lbl('Adresse email'),
-      _champ(
-        _emailCtrl,
-        'votre@email.com',
-        Icons.email_outlined,
-        TextInputType.emailAddress,
-      ),
-      const SizedBox(height: 18),
-      _lbl('Choisissez un mot de passe'),
-      _champPass(
-        _newPassCtrl,
-        'Minimum 4 caractères',
-        _obscure2,
-        () => setState(() => _obscure2 = !_obscure2),
-      ),
-      const SizedBox(height: 18),
-      _lbl('Confirmer le mot de passe'),
-      _champPass(
-        _confPassCtrl,
-        'Répétez votre mot de passe',
-        _obscure3,
-        () => setState(() => _obscure3 = !_obscure3),
-      ),
-      if (_error != null) ...[const SizedBox(height: 14), _erreur(_error!)],
-      const SizedBox(height: 24),
-      SizedBox(
-        width: double.infinity,
-        height: 54,
-        child: ElevatedButton.icon(
-          onPressed: _loading ? null : _creerCompte,
-          icon: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : const Icon(Icons.check_circle_outline, size: 22),
-          label: Text(
-            _loading ? 'Création...' : 'CRÉER MON COMPTE',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  Widget _buildPremiereFois() {
+    final isParent = _userTrouve?['role'] == 'parent';
+    return Column(
+      key: const ValueKey('premier'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _boutonRetour(_recommencer),
+        const SizedBox(height: 24),
+        _carteUser(_userTrouve!),
+        const SizedBox(height: 28),
+        Text(
+          isParent ? 'Définissez votre mot de passe' : 'Créez votre compte',
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
+            letterSpacing: -0.3,
           ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF15803D),
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFFE2E8F0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          isParent
+              ? 'Première connexion — Définissez votre mot de passe pour suivre la scolarité de votre enfant.'
+              : 'Première connexion — Définissez votre email et mot de passe.',
+          style: const TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
+        ),
+        const SizedBox(height: 24),
+        _lbl(isParent ? 'Adresse email (optionnel)' : 'Adresse email'),
+        _champ(
+          _emailCtrl,
+          'votre@email.com',
+          Icons.email_outlined,
+          TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 18),
+        _lbl('Nouveau mot de passe'),
+        _champPass(
+          _newPassCtrl,
+          'Minimum 4 caractères',
+          _obscure2,
+          () => setState(() => _obscure2 = !_obscure2),
+        ),
+        const SizedBox(height: 18),
+        _lbl('Confirmer le mot de passe'),
+        _champPass(
+          _confPassCtrl,
+          'Répétez votre mot de passe',
+          _obscure3,
+          () => setState(() => _obscure3 = !_obscure3),
+        ),
+        if (_error != null) ...[const SizedBox(height: 14), _erreur(_error!)],
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton.icon(
+            onPressed: _loading ? null : _creerCompte,
+            icon: _loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : const Icon(Icons.check_circle_outline, size: 22),
+            label: Text(
+              _loading
+                  ? 'Enregistrement...'
+                  : (isParent ? 'ENREGISTRER LE MOT DE PASSE' : 'CRÉER MON COMPTE'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
-            elevation: 0,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF15803D),
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFFE2E8F0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 0,
+            ),
           ),
         ),
-      ),
-      const SizedBox(height: 16),
-      Center(
-        child: TextButton(
-          onPressed: _recommencer,
-          child: const Text(
-            "Ce n'est pas moi",
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+        const SizedBox(height: 16),
+        Center(
+          child: TextButton(
+            onPressed: _recommencer,
+            child: const Text(
+              "Ce n'est pas moi",
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+            ),
           ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 
   // ─── Widgets réutilisables ─────────────────────────────────────────────────
 
@@ -1183,19 +1225,54 @@ class _AuthPageState extends State<AuthPage> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _cleTrouvee ?? '',
-                  style: const TextStyle(fontSize: 12, color: Colors.white70),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  u['filiere'] ?? '',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
+                if (role == 'parent') ...[
+                  Container(
+                    margin: const EdgeInsets.only(top: 2, bottom: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.school_rounded, color: Colors.white, size: 15),
+                        const SizedBox(width: 7),
+                        Flexible(
+                          child: Text(
+                            (u['enfant_nom'] != null && u['enfant_nom'].toString().trim().isNotEmpty)
+                                ? 'Enfant : ${u['enfant_nom']}'
+                                : (u['matricule_enfant'] != null && u['matricule_enfant'].toString().trim().isNotEmpty)
+                                    ? 'Enfant : ${u['matricule_enfant']}'
+                                    : (_cleTrouvee != null && _cleTrouvee!.isNotEmpty && !_cleTrouvee!.startsWith('PAR-') && !_cleTrouvee!.startsWith('PARENT-'))
+                                        ? 'Enfant : $_cleTrouvee'
+                                        : 'Parent d\'élève',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ] else ...[
+                  Text(
+                    _cleTrouvee ?? '',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ],
+                if ((u['filiere'] ?? '').toString().isNotEmpty)
+                  Text(
+                    u['filiere'] ?? '',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 if (domaine.isNotEmpty) ...[
                   const SizedBox(height: 5),
                   Container(
@@ -1238,7 +1315,7 @@ class _AuthPageState extends State<AuthPage> {
                         ),
                       ),
                     ),
-                    if (u['premiere_fois'] == true) ...[
+                    if (u['premiere_fois'] == true || u['premiereFois'] == true) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(

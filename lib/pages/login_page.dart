@@ -298,7 +298,11 @@ class _LoginPageState extends State<LoginPage> {
       destination = ProfessorShell(profile: profile, onLogout: logout);
     } else if (r == 'parent' || r == 'tuteur') {
       destination = ParentShell(
-        nomEnfant: '${profile.prenoms} ${profile.nom}',
+        profile: profile,
+        nomEnfant: (profile.enfantNom != null && profile.enfantNom!.trim().isNotEmpty)
+            ? profile.enfantNom!
+            : 'Étudiant suivi',
+        etudiantId: profile.matriculeEnfant,
         onLogout: logout,
       );
     } else if (r == 'bde') {
