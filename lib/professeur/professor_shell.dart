@@ -45,7 +45,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
       _CoursTab(profile: widget.profile),
       AppelTab(initialClasse: _classePreselectionnee),
       NotesTab(initialClasse: _classePreselectionnee),
-      const AdminMessages(),
+      const AdminMessages(role: 'professeur'),
       _ProfilTab(profile: widget.profile, onLogout: widget.onLogout),
     ];
 
