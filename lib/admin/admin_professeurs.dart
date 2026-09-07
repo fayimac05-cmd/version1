@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
-const String _baseUrl = 'http://localhost:5000/api';
+
+const List<String> kDomaines = ['Sciences & Technologies', 'Sciences de Gestion'];
+const List<String> kNiveaux = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
 
 class AdminProfesseurs extends StatefulWidget {
   final StudentProfile profile;
@@ -26,6 +28,12 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     _charger();
   }
 
+  String _domaineDeFiliere(String filiereNom) {
+    final f = filiereNom.toLowerCase();
+    final estGestion = f.contains('marketing') || f.contains('gestion') || f.contains('finance') || f.contains('comptab');
+    return estGestion ? 'Sciences de Gestion' : 'Sciences & Technologies';
+  }
+
   Future<void> _charger() async {
     setState(() { _loading = true; _error = null; });
     try {
@@ -42,21 +50,13 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
 
         if (widget.profile.filtreParDomaine) {
           final String df = widget.profile.domaineAdmin;
-          
-          // Déduire le domaine de la filière pour le filtrage
-          bool estMemeDomaineFiliere(String filiereNom) {
-            final f = filiereNom.toLowerCase();
-            final estGestion = f.contains('marketing') || f.contains('gestion') || f.contains('finance') || f.contains('comptab');
-            final domaineFiliere = estGestion ? 'Sciences de Gestion' : 'Sciences & Technologies';
-            return domaineFiliere == df;
-          }
 
           _filieres = allFilieres
-              .where((f) => estMemeDomaineFiliere(f['nom'] ?? ''))
+              .where((f) => _domaineDeFiliere(f['nom'] ?? '') == df)
               .cast<Map<String, dynamic>>()
               .toList();
           _professeurs = allProfs
-              .where((p) => (p['domaine'] ?? '').toString().toLowerCase() == df.toLowerCase())
+              .where((p) => (p['domaine'] ?? '').toString().toLowerCase().contains(df.toLowerCase()))
               .cast<Map<String, dynamic>>()
               .toList();
         } else {
@@ -82,10 +82,11 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
       ),
       builder: (_) => _FormulaireProf(
         profile: widget.profile,
-        filieres: _filieres,
+        allFilieres: _filieres,
+        domaineDeFiliere: _domaineDeFiliere,
         prof: prof,
-        onSave: (data, filieresSelectionnees) async {
-          await _sauvegarder(data, filieresSelectionnees, prof?['id']);
+        onSave: (data, affectations) async {
+          await _sauvegarder(data, affectations, prof?['id']);
         },
       ),
     );
@@ -93,7 +94,7 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
 
   Future<void> _sauvegarder(
     Map<String, dynamic> data,
-    List<String> filieresIds,
+    List<Map<String, String>> affectations,
     String? id,
   ) async {
     try {
@@ -103,27 +104,27 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
         res = await http.post(
           Uri.parse('${ApiService.baseUrl}/professeurs'),
           headers: headers,
-          body: jsonEncode({...data, 'filieres_ids': filieresIds}),
+          body: jsonEncode({...data, 'affectations': affectations}),
         );
       } else {
         res = await http.put(
           Uri.parse('${ApiService.baseUrl}/professeurs/$id'),
           headers: headers,
-          body: jsonEncode({...data, 'filieres_ids': filieresIds}),
+          body: jsonEncode({...data, 'affectations': affectations}),
         );
       }
 
       if (res.statusCode == 200 || res.statusCode == 201) {
-        final body = jsonDecode(res.body);
         if (!mounted) return;
         final nav = Navigator.of(context);
         await _charger();
         nav.pop();
-        if (id == null && body['identifiants'] != null) {
-          _afficherIdentifiants(body['identifiants'], body['professeur']);
-        } else {
-          _snack('Professeur mis à jour avec succès.', success: true);
-        }
+        _snack(
+          id == null
+              ? 'Professeur créé. Il pourra se connecter avec son nom, prénom et téléphone.'
+              : 'Professeur mis à jour avec succès.',
+          success: true,
+        );
       } else {
         final err = jsonDecode(res.body);
         _snack(err['error'] ?? 'Erreur lors de la sauvegarde.', success: false);
@@ -131,68 +132,6 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     } catch (e) {
       _snack('Erreur: $e', success: false);
     }
-  }
-  void _afficherIdentifiants(Map<String, dynamic> ids, Map<String, dynamic> prof) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(children: [
-          Icon(Icons.check_circle, color: Colors.green),
-          SizedBox(width: 10),
-          Text('Professeur créé !', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-        ]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${prof['prenoms']} ${prof['nom']} a été ajouté avec succès.',
-                style: const TextStyle(fontSize: 14)),
-            const SizedBox(height: 16),
-            const Text('Identifiants de connexion :', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            _ligneInfo('Matricule', ids['matricule'] ?? ''),
-            _ligneInfo('Mot de passe', ids['motDePasse'] ?? ''),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              child: Text(
-                ids['info'] ?? '',
-                style: const TextStyle(fontSize: 12, color: Colors.black87),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _ligneInfo(String label, String valeur) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(children: [
-        Text('$label : ', style: const TextStyle(fontSize: 13, color: Colors.grey)),
-        Expanded(child: Text(valeur,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-      ]),
-    );
   }
 
   Future<void> _supprimer(String id, String nom) async {
@@ -212,7 +151,11 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
     );
     if (confirm == true) {
       try {
-        final res = await http.delete(Uri.parse('$_baseUrl/professeurs/$id'));
+        final headers = await ApiService.getHeaders();
+        final res = await http.delete(
+          Uri.parse('${ApiService.baseUrl}/professeurs/$id'),
+          headers: headers,
+        );
         if (res.statusCode == 200) {
           _snack('Professeur supprimé.', success: true);
           await _charger();
@@ -233,10 +176,15 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
   }
 
   String _nomsFilieresProf(Map<String, dynamic> prof) {
-    if (prof['filieres'] == null) return 'Aucune filière';
-    final List filieres = prof['filieres'] as List;
-    if (filieres.isEmpty) return 'Aucune filière';
-    return filieres.map((f) => f['nom']).join(', ');
+    final affectations = prof['affectations'];
+    if (affectations == null || (affectations as List).isEmpty) return 'Aucune filière';
+    final Map<String, List<String>> parFiliere = {};
+    for (final a in affectations) {
+      final nom = a['filiere_nom']?.toString() ?? '';
+      final niveau = a['niveau']?.toString() ?? '';
+      parFiliere.putIfAbsent(nom, () => []).add(niveau);
+    }
+    return parFiliere.entries.map((e) => '${e.key} (${e.value.join(', ')})').join(' · ');
   }
 
   @override
@@ -334,9 +282,9 @@ class _CarteProfesseur extends StatelessWidget {
               style: const TextStyle(fontSize: 15,
                   fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
           const SizedBox(height: 4),
-          Text('Matricule : ${prof['matricule'] ?? 'Non défini'}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
           Text('Tél : ${prof['tel'] ?? '-'}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text('Domaine(s) : ${(prof['domaine'] ?? '').toString().isEmpty ? 'Non défini' : prof['domaine']}',
               style: const TextStyle(fontSize: 12, color: Colors.grey)),
           Text('Filières : $nomsFileres',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -373,13 +321,16 @@ class _CarteProfesseur extends StatelessWidget {
 // ── Formulaire ajout/modification professeur ──────────────────────────────────
 class _FormulaireProf extends StatefulWidget {
   final StudentProfile profile;
-  final List<Map<String, dynamic>> filieres;
+  final List<Map<String, dynamic>> allFilieres;
+  final String Function(String) domaineDeFiliere;
   final Map<String, dynamic>? prof;
-  final Future<void> Function(Map<String, dynamic>, List<String>) onSave;
+  // (data professeur, liste d'affectations [{filiere_id, niveau}])
+  final Future<void> Function(Map<String, dynamic>, List<Map<String, String>>) onSave;
 
   const _FormulaireProf({
     required this.profile,
-    required this.filieres,
+    required this.allFilieres,
+    required this.domaineDeFiliere,
     required this.onSave,
     this.prof,
   });
@@ -393,10 +344,10 @@ class _FormulaireProfState extends State<_FormulaireProf> {
   final _prenomsCtrl = TextEditingController();
   final _telCtrl     = TextEditingController();
   final _emailCtrl   = TextEditingController();
-  final _domaineCtrl = TextEditingController();
 
-  // Filières sélectionnées (multi-sélection)
-  final Set<String> _filieresSelectionnees = {};
+  final Set<String> _domainesSelectionnes = {};
+  // Clé = id de filière ; valeur = ensemble des niveaux choisis POUR CETTE filière.
+  final Map<String, Set<String>> _affectationsParFiliere = {};
   bool _saving = false;
 
   @override
@@ -407,19 +358,26 @@ class _FormulaireProfState extends State<_FormulaireProf> {
       _prenomsCtrl.text = widget.prof!['prenoms'] ?? '';
       _telCtrl.text     = widget.prof!['tel'] ?? '';
       _emailCtrl.text   = widget.prof!['email'] ?? '';
-      _domaineCtrl.text = widget.prof!['domaine'] ?? '';
 
-      // Pré-sélectionner les filières déjà assignées
-      if (widget.prof!['filieres'] != null) {
-        final List filieres = widget.prof!['filieres'] as List;
-        for (final f in filieres) {
-          _filieresSelectionnees.add(f['id'].toString());
+      final domaineStr = (widget.prof!['domaine'] ?? '').toString();
+      if (domaineStr.isNotEmpty) {
+        for (final d in domaineStr.split(',').map((s) => s.trim())) {
+          if (kDomaines.contains(d)) _domainesSelectionnes.add(d);
         }
       }
-    } else {
-      if (widget.profile.filtreParDomaine) {
-        _domaineCtrl.text = widget.profile.domaineAdmin;
+
+      final affectations = widget.prof!['affectations'];
+      if (affectations != null) {
+        for (final a in (affectations as List)) {
+          final fid = a['filiere_id']?.toString();
+          final niv = a['niveau']?.toString();
+          if (fid == null) continue;
+          _affectationsParFiliere.putIfAbsent(fid, () => {});
+          if (niv != null) _affectationsParFiliere[fid]!.add(niv);
+        }
       }
+    } else if (widget.profile.filtreParDomaine) {
+      _domainesSelectionnes.add(widget.profile.domaineAdmin);
     }
   }
 
@@ -427,8 +385,15 @@ class _FormulaireProfState extends State<_FormulaireProf> {
   void dispose() {
     _nomCtrl.dispose(); _prenomsCtrl.dispose();
     _telCtrl.dispose(); _emailCtrl.dispose();
-    _domaineCtrl.dispose();
     super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _filieresFiltrees {
+    if (_domainesSelectionnes.isEmpty) return [];
+    return widget.allFilieres.where((f) {
+      final d = widget.domaineDeFiliere(f['nom'] ?? '');
+      return _domainesSelectionnes.contains(d);
+    }).toList();
   }
 
   Future<void> _soumettre() async {
@@ -439,19 +404,98 @@ class _FormulaireProfState extends State<_FormulaireProf> {
       ));
       return;
     }
+    if (_domainesSelectionnes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Sélectionnez au moins un domaine.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+
+    final List<Map<String, String>> affectations = [];
+    _affectationsParFiliere.forEach((fid, niveaux) {
+      for (final niv in niveaux) {
+        affectations.add({'filiere_id': fid, 'niveau': niv});
+      }
+    });
 
     setState(() => _saving = true);
     await widget.onSave(
       {
-        'nom':     _nomCtrl.text.trim().toUpperCase(),
-        'prenoms': _prenomsCtrl.text.trim(),
-        'tel':     _telCtrl.text.trim(),
-        'email':   _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-        'domaine': _domaineCtrl.text.trim().isEmpty ? null : _domaineCtrl.text.trim(),
+        'nom':      _nomCtrl.text.trim().toUpperCase(),
+        'prenoms':  _prenomsCtrl.text.trim(),
+        'tel':      _telCtrl.text.trim(),
+        'email':    _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+        'domaines': _domainesSelectionnes.toList(),
       },
-      _filieresSelectionnees.toList(),
+      affectations,
     );
     setState(() => _saving = false);
+  }
+
+  Widget _champ(TextEditingController ctrl, String label, IconData icon,
+      {TextInputType type = TextInputType.text}) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: type,
+      style: const TextStyle(fontSize: 15),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+      ),
+    );
+  }
+
+  Widget _chipDomaine(String d, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppPalette.blue : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? AppPalette.blue : const Color(0xFFE2E8F0), width: selected ? 2 : 1),
+          boxShadow: selected
+              ? [BoxShadow(color: AppPalette.blue.withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2))]
+              : [],
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (selected) ...[const Icon(Icons.check, color: Colors.white, size: 14), const SizedBox(width: 4)],
+          Text(d, style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            color: selected ? Colors.white : const Color(0xFF0F172A),
+          )),
+        ]),
+      ),
+    );
+  }
+
+  Widget _chipNiveau(String niveau, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppPalette.blue.withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: selected ? AppPalette.blue : const Color(0xFFE2E8F0)),
+        ),
+        child: Text(niveau, style: TextStyle(
+          fontSize: 12,
+          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          color: selected ? AppPalette.blue : const Color(0xFF64748B),
+        )),
+      ),
+    );
   }
 
   @override
@@ -463,191 +507,196 @@ class _FormulaireProfState extends State<_FormulaireProf> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
       child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // En-tête
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(isEdit ? 'Modifier le professeur' : 'Ajouter un professeur',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close)),
-            ]),
-            const SizedBox(height: 16),
+        child: StatefulBuilder(
+          builder: (context, setModalState) {
+            void toggleDomaine(String d) {
+              setModalState(() {
+                if (_domainesSelectionnes.contains(d)) {
+                  _domainesSelectionnes.remove(d);
+                  _affectationsParFiliere.removeWhere((fid, _) {
+                    final f = widget.allFilieres.firstWhere(
+                      (x) => x['id'].toString() == fid,
+                      orElse: () => {},
+                    );
+                    if (f.isEmpty) return false;
+                    return !_domainesSelectionnes.contains(widget.domaineDeFiliere(f['nom'] ?? ''));
+                  });
+                } else {
+                  _domainesSelectionnes.add(d);
+                }
+              });
+            }
 
-            // Info matricule auto
-            if (!isEdit) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue.shade100),
-                ),
-                child: const Row(children: [
-                  Icon(Icons.info_outline, color: Colors.blue, size: 18),
-                  SizedBox(width: 8),
-                  Expanded(child: Text(
-                    'Un matricule PROF-XXXX sera généré automatiquement. '
-                    'Le mot de passe par défaut sera le numéro de téléphone.',
-                    style: TextStyle(fontSize: 12, color: Colors.blue),
-                  )),
+            void toggleFiliere(String fid) {
+              setModalState(() {
+                if (_affectationsParFiliere.containsKey(fid)) {
+                  _affectationsParFiliere.remove(fid);
+                } else {
+                  _affectationsParFiliere[fid] = {};
+                }
+              });
+            }
+
+            void toggleNiveauPourFiliere(String fid, String niveau) {
+              setModalState(() {
+                final set = _affectationsParFiliere[fid];
+                if (set == null) return;
+                set.contains(niveau) ? set.remove(niveau) : set.add(niveau);
+              });
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Text(isEdit ? 'Modifier le professeur' : 'Ajouter un professeur',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                 ]),
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
 
-            // Champs texte
-            _champ(_nomCtrl, 'Nom de famille *', Icons.person_outline),
-            const SizedBox(height: 12),
-            _champ(_prenomsCtrl, 'Prénom(s) *', Icons.person_outline),
-            const SizedBox(height: 12),
-            _champ(_telCtrl, 'Numéro de téléphone *', Icons.phone_outlined,
-                type: TextInputType.phone),
-            const SizedBox(height: 12),
-            _champ(_emailCtrl, 'Adresse email', Icons.email_outlined,
-                type: TextInputType.emailAddress),
-            const SizedBox(height: 12),
-            _champ(_domaineCtrl, 'Domaine / Spécialité', Icons.school_outlined,
-                readOnly: widget.profile.filtreParDomaine),
-            const SizedBox(height: 20),
+                if (!isEdit) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blue.shade100),
+                    ),
+                    child: const Row(children: [
+                      Icon(Icons.info_outline, color: Colors.blue, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(child: Text(
+                        'Le professeur se connectera avec son nom, prénom et numéro de '
+                        'téléphone, et définira son mot de passe lors de sa première connexion.',
+                        style: TextStyle(fontSize: 12, color: Colors.blue),
+                      )),
+                    ]),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
-            // Sélection multiple des filières
-            const Text('Filières assignées',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A))),
-            const SizedBox(height: 4),
-            const Text('Sélectionnez une ou plusieurs filières',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 10),
+                _champ(_nomCtrl, 'Nom de famille *', Icons.person_outline),
+                const SizedBox(height: 12),
+                _champ(_prenomsCtrl, 'Prénom(s) *', Icons.person_outline),
+                const SizedBox(height: 12),
+                _champ(_telCtrl, 'Numéro de téléphone *', Icons.phone_outlined, type: TextInputType.phone),
+                const SizedBox(height: 12),
+                _champ(_emailCtrl, 'Adresse email', Icons.email_outlined, type: TextInputType.emailAddress),
+                const SizedBox(height: 20),
 
-            widget.filieres.isEmpty
-                ? const Text('Aucune filière disponible.',
-                    style: TextStyle(color: Colors.grey))
-                : Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: widget.filieres.map((f) {
-                      final id = f['id'].toString();
+                const Text('Domaine(s)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                const SizedBox(height: 4),
+                const Text('Le professeur peut enseigner dans un ou les deux domaines',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: kDomaines.map((d) => _chipDomaine(
+                    d, _domainesSelectionnes.contains(d), () => toggleDomaine(d),
+                  )).toList(),
+                ),
+                const SizedBox(height: 20),
+
+                const Text('Filières et niveaux',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                const SizedBox(height: 4),
+                Text(
+                  _domainesSelectionnes.isEmpty
+                      ? 'Sélectionnez d\'abord un domaine'
+                      : 'Cochez une filière, puis choisissez le(s) niveau(x) pour cette filière',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 10),
+
+                if (_filieresFiltrees.isEmpty)
+                  const Text('Aucune filière disponible.', style: TextStyle(color: Colors.grey))
+                else
+                  Column(
+                    children: _filieresFiltrees.map((f) {
+                      final fid = f['id'].toString();
                       final nom = f['nom'] ?? '';
-                      final selected = _filieresSelectionnees.contains(id);
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (selected) {
-                              _filieresSelectionnees.remove(id);
-                            } else {
-                              _filieresSelectionnees.add(id);
-                            }
-                          });
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppPalette.blue
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: selected
-                                  ? AppPalette.blue
-                                  : const Color(0xFFE2E8F0),
-                              width: selected ? 2 : 1,
-                            ),
-                            boxShadow: selected
-                                ? [BoxShadow(
-                                    color: AppPalette.blue.withValues(alpha: 0.25),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2))]
-                                : [],
+                      final filiereSelectionnee = _affectationsParFiliere.containsKey(fid);
+                      final niveauxChoisis = _affectationsParFiliere[fid] ?? {};
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: filiereSelectionnee ? AppPalette.blue.withValues(alpha: 0.04) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: filiereSelectionnee ? AppPalette.blue.withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
                           ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            if (selected) ...[
-                              const Icon(Icons.check, color: Colors.white, size: 14),
-                              const SizedBox(width: 4),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: () => toggleFiliere(fid),
+                              child: Row(children: [
+                                Icon(
+                                  filiereSelectionnee ? Icons.check_box : Icons.check_box_outline_blank,
+                                  color: filiereSelectionnee ? AppPalette.blue : const Color(0xFF94A3B8),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(nom, style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: filiereSelectionnee ? FontWeight.bold : FontWeight.normal,
+                                  color: const Color(0xFF0F172A),
+                                ))),
+                              ]),
+                            ),
+                            if (filiereSelectionnee) ...[
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: kNiveaux.map((niv) => _chipNiveau(
+                                  niv, niveauxChoisis.contains(niv), () => toggleNiveauPourFiliere(fid, niv),
+                                )).toList(),
+                              ),
+                              if (niveauxChoisis.isEmpty) ...[
+                                const SizedBox(height: 6),
+                                const Text('Choisissez au moins un niveau pour cette filière.',
+                                    style: TextStyle(fontSize: 11, color: Colors.orange)),
+                              ],
                             ],
-                            Text(nom,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: selected
-                                      ? FontWeight.bold : FontWeight.normal,
-                                  color: selected
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
-                                )),
-                          ]),
+                          ],
                         ),
                       );
                     }).toList(),
                   ),
 
-            // Résumé sélection
-            if (_filieresSelectionnees.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                '${_filieresSelectionnees.length} filière(s) sélectionnée(s)',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: AppPalette.blue,
-                    fontWeight: FontWeight.w600),
-              ),
-            ],
+                const SizedBox(height: 24),
 
-            const SizedBox(height: 24),
-
-            // Bouton soumettre
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _saving ? null : _soumettre,
-                icon: _saving
-                    ? const SizedBox(width: 20, height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : Icon(isEdit ? Icons.save : Icons.add),
-                label: Text(
-                  _saving
-                      ? 'Enregistrement...'
-                      : (isEdit ? 'Enregistrer' : 'Ajouter le professeur'),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 15),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _saving ? null : _soumettre,
+                    icon: _saving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Icon(isEdit ? Icons.save : Icons.add),
+                    label: Text(
+                      _saving ? 'Enregistrement...' : (isEdit ? 'Enregistrer' : 'Ajouter le professeur'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _champ(TextEditingController ctrl, String label, IconData icon,
-      {TextInputType type = TextInputType.text, bool readOnly = false}) {
-    return TextField(
-      controller: ctrl,
-      keyboardType: type,
-      readOnly: readOnly,
-      style: const TextStyle(fontSize: 15),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        filled: true,
-        fillColor: readOnly ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: readOnly ? const Color(0xFFCBD5E1) : const Color(0xFFE2E8F0)),
+              ],
+            );
+          },
         ),
       ),
     );
