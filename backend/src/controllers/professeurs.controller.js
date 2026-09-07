@@ -253,6 +253,8 @@ exports.updateProfile = async (req, res) => {
 };
 
 // ── GET /api/professeurs/classes ──────────────────────────────────────────────
+// Une ligne par (filière, niveau) affecté au prof — pas une ligne par filière —
+// puisqu'un prof peut enseigner plusieurs niveaux d'une même filière.
 exports.getClasses = async (req, res) => {
   try {
     const result = await db.query(
@@ -265,43 +267,124 @@ exports.getClasses = async (req, res) => {
        ORDER BY f.nom, pf.niveau`,
       [req.user.id]
     );
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ success: true, data: result.rows });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
 
 // ── GET /api/professeurs/modules ──────────────────────────────────────────────
+// Modules des filières affectées au prof (via professeur_filieres), plutôt
+// que via l'ancienne table module_professeur (jamais renseignée).
 exports.getModules = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT m.* FROM modules m JOIN module_professeur mp ON m.id=mp.module_id WHERE mp.professeur_id=$1`,
+      `SELECT DISTINCT m.id, m.nom, m.coefficient, m.volume_horaire, m.filiere_id, m.filiere_nom
+       FROM modules m
+       JOIN professeur_filieres pf ON pf.filiere_id = m.filiere_id
+       WHERE pf.professeur_id = $1
+       ORDER BY m.nom`,
       [req.user.id]
     );
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ success: true, data: result.rows });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
 
 // ── GET /api/professeurs/:id/modules ──────────────────────────────────────────
 exports.getModulesByProfesseur = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT m.* FROM modules m JOIN module_professeur mp ON m.id=mp.module_id WHERE mp.professeur_id=$1`,
+      `SELECT DISTINCT m.id, m.nom, m.coefficient, m.volume_horaire, m.filiere_id, m.filiere_nom
+       FROM modules m
+       JOIN professeur_filieres pf ON pf.filiere_id = m.filiere_id
+       WHERE pf.professeur_id = $1
+       ORDER BY m.nom`,
       [req.params.id]
     );
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ success: true, data: result.rows });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
 
-// ── GET /api/professeurs/classes/:filiere_id/students ─────────────────────────
+// ── GET /api/professeurs/classes/:filiere_id/students?niveau=... ──────────────
+// Le niveau est requis en query pour ne retourner que les étudiants du bon
+// niveau (un prof peut enseigner plusieurs niveaux dans la même filière).
 exports.getStudentsByFiliere = async (req, res) => {
   try {
+    const { niveau } = req.query;
+    const params = [req.params.filiere_id];
+    let filtreNiveau = '';
+    if (niveau) {
+      params.push(niveau);
+      filtreNiveau = ` AND e.niveau = $${params.length}`;
+    }
     const result = await db.query(
       `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.statut
        FROM users u LEFT JOIN etudiants e ON e.user_id=u.id
-       WHERE e.filiere_id=$1 AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%') ORDER BY u.nom`,
-      [req.params.filiere_id]
+       WHERE e.filiere_id=$1${filtreNiveau} AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%') ORDER BY u.nom`,
+      params
     );
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ success: true, data: result.rows });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+};
+
+// ── GET /api/professeurs/classes/:filiere_id/students/pdf?niveau=... ──────────
+// Génère la liste des étudiants d'une filière/niveau en PDF, imprimable ou
+// téléchargeable directement depuis "Mes Classes" côté professeur. Le
+// matricule figure ici (document officiel de liste de classe) même s'il
+// reste masqué à l'écran dans l'app.
+exports.getStudentsByFilierePdf = async (req, res) => {
+  try {
+    const PDFDocument = require('pdfkit');
+    const { niveau, filiere_nom } = req.query;
+    const params = [req.params.filiere_id];
+    let filtreNiveau = '';
+    if (niveau) {
+      params.push(niveau);
+      filtreNiveau = ` AND e.niveau = $${params.length}`;
+    }
+    const result = await db.query(
+      `SELECT u.nom, u.prenoms, u.matricule
+       FROM users u LEFT JOIN etudiants e ON e.user_id=u.id
+       WHERE e.filiere_id=$1${filtreNiveau} AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%') ORDER BY u.nom`,
+      params
+    );
+    const students = result.rows;
+
+    const doc = new PDFDocument({ margin: 50 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=liste_etudiants.pdf');
+    doc.pipe(res);
+
+    doc.fontSize(18).font('Helvetica-Bold').text('ScolarHub - Liste des étudiants', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(12).font('Helvetica').text(
+      `Filière : ${filiere_nom || ''}    Niveau : ${niveau || 'Tous'}    Effectif : ${students.length}`,
+      { align: 'center' }
+    );
+    doc.moveDown(1.5);
+
+    doc.fontSize(11).font('Helvetica-Bold');
+    const yHeader = doc.y;
+    doc.text('N°', 50, yHeader, { width: 30 });
+    doc.text('Nom & Prénoms', 90, yHeader, { width: 230 });
+    doc.text('Matricule', 330, yHeader, { width: 150 });
+
+    let y = yHeader + 18;
+    doc.moveTo(50, y).lineTo(500, y).stroke();
+    y += 12;
+
+    doc.font('Helvetica').fontSize(10);
+    students.forEach((s, i) => {
+      if (y > 740) { doc.addPage(); y = 50; }
+      doc.text(`${i + 1}`, 50, y, { width: 30 });
+      doc.text(`${s.prenoms || ''} ${s.nom || ''}`, 90, y, { width: 230 });
+      doc.text(`${s.matricule || ''}`, 330, y, { width: 150 });
+      y += 20;
+    });
+
+    doc.end();
+  } catch (err) {
+    console.error('getStudentsByFilierePdf:', err.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
 };
 
 // ── Disponibilités ────────────────────────────────────────────────────────────

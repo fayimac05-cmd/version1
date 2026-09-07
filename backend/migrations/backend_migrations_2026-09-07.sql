@@ -46,6 +46,18 @@ ALTER TABLE professeur_filieres ADD CONSTRAINT professeur_filieres_unique
 -- -----------------------------------------------------------------------------
 NOTIFY pgrst, 'reload schema';
 
+-- -----------------------------------------------------------------------------
+-- 3. Mention PAR NOTE (par étudiant), pas par session.
+--    Le design initial mettait la mention sur sessions_notes (une seule
+--    valeur pour toute la classe/module). Corrigé : chaque note individuelle
+--    a sa propre mention, car tous les étudiants d'une même session n'ont
+--    pas la même performance.
+-- -----------------------------------------------------------------------------
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS mention TEXT;
+-- La colonne sessions_notes.mention est conservée (pas supprimée) pour ne
+-- pas casser les sessions déjà créées, mais n'est plus utilisée pour les
+-- nouvelles sessions à partir de cette migration.
+
 -- =============================================================================
 -- Notes — bugs de colonnes corrigés dans le CODE ce soir (backend), sans
 -- impact sur le schéma de la base (colonnes déjà correctes, c'était le code
