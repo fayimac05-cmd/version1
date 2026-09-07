@@ -1,29 +1,23 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 
-// ── Générer un matricule unique PROF-XXXX ─────────────────────────────────────
-const genMatricule = async () => {
-  const year = new Date().getFullYear().toString().slice(-2);
-  let matricule;
-  let exists = true;
-  while (exists) {
-    const num = Math.floor(1000 + Math.random() * 9000);
-    matricule = `PROF-${year}${num}`;
-    const check = await db.query('SELECT id FROM users WHERE matricule = $1', [matricule]);
-    exists = check.rows.length > 0;
-  }
-  return matricule;
-};
-
 // ── GET /api/professeurs ──────────────────────────────────────────────────────
+// Renvoie chaque professeur avec ses affectations (filière + niveau), agrégées.
 exports.getAllProfesseurs = async (req, res) => {
   try {
-    const db = require('../config/db');
     const result = await db.query(
-      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel,
-              u.statut, u.domaine
+      `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine,
+              COALESCE(
+                json_agg(
+                  json_build_object('filiere_id', f.id, 'filiere_nom', f.nom, 'niveau', pf.niveau)
+                  ORDER BY f.nom, pf.niveau
+                ) FILTER (WHERE pf.id IS NOT NULL), '[]'
+              ) AS affectations
        FROM users u
+       LEFT JOIN professeur_filieres pf ON pf.professeur_id = u.id
+       LEFT JOIN filieres f ON f.id = pf.filiere_id
        WHERE u.role = 'professeur'
+       GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine
        ORDER BY u.nom ASC`
     );
     res.json(result.rows);
@@ -33,7 +27,9 @@ exports.getAllProfesseurs = async (req, res) => {
   }
 };
 
-// ── GET /api/professeurs/lookup?nom=X&tel=Y ou ?matricule=X ──────────────────
+// ── GET /api/professeurs/lookup?nom=X&tel=Y ───────────────────────────────────
+// Conservé pour compatibilité mais la connexion prof passe désormais par
+// /api/auth/lookup (générique, gère nom+prénom+tel pour tous les rôles).
 exports.lookupProfesseur = async (req, res) => {
   try {
     const { nom, tel, matricule } = req.query;
@@ -41,7 +37,7 @@ exports.lookupProfesseur = async (req, res) => {
 
     if (matricule) {
       const r = await db.query(
-        `SELECT id, nom, prenoms, matricule, role, statut, filiere_id, domaine,
+        `SELECT id, nom, prenoms, matricule, role, statut, domaine,
                 mot_de_passe IS NOT NULL AS a_mot_de_passe
          FROM users WHERE matricule = $1 AND role = 'professeur'`,
         [matricule.trim().toUpperCase()]
@@ -49,7 +45,7 @@ exports.lookupProfesseur = async (req, res) => {
       user = r.rows[0];
     } else if (nom && tel) {
       const r = await db.query(
-        `SELECT id, nom, prenoms, matricule, role, statut, filiere_id, domaine,
+        `SELECT id, nom, prenoms, matricule, role, statut, domaine,
                 mot_de_passe IS NOT NULL AS a_mot_de_passe
          FROM users WHERE LOWER(nom) = LOWER($1) AND tel = $2 AND role = 'professeur'`,
         [nom.trim(), tel.trim()]
@@ -69,7 +65,7 @@ exports.lookupProfesseur = async (req, res) => {
       user: {
         id: user.id, nom: user.nom, prenoms: user.prenoms,
         matricule: user.matricule, role: user.role,
-        domaine: user.domaine || '', filiere_id: user.filiere_id,
+        domaine: user.domaine || '',
       },
     });
   } catch (err) {
@@ -78,54 +74,67 @@ exports.lookupProfesseur = async (req, res) => {
   }
 };
 
+// ── Utilitaire : remplace les affectations (filière + niveau) d'un prof ──────
+const remplacerAffectations = async (client, professeurId, affectations) => {
+  await client.query('DELETE FROM professeur_filieres WHERE professeur_id = $1', [professeurId]);
+  if (!Array.isArray(affectations) || affectations.length === 0) return;
+  for (const a of affectations) {
+    const filiereId = a.filiere_id ?? a.filiereId;
+    const niveau = a.niveau;
+    if (!filiereId || !niveau) continue;
+    await client.query(
+      `INSERT INTO professeur_filieres (professeur_id, filiere_id, niveau)
+       VALUES ($1, $2, $3) ON CONFLICT (professeur_id, filiere_id, niveau) DO NOTHING`,
+      [professeurId, filiereId, niveau]
+    );
+  }
+};
+
 // ── POST /api/professeurs ─────────────────────────────────────────────────────
+// Plus de matricule ni de mot de passe générés : le prof se connecte par
+// nom+prénom+téléphone et définit son mot de passe à sa première connexion
+// (comme les admins et les parents), via /api/auth/lookup puis /api/auth/login.
 exports.createProfesseur = async (req, res) => {
-  const { nom, prenoms, tel, email, domaine, filieres_ids } = req.body;
+  const { nom, prenoms, tel, email, domaines, affectations } = req.body;
   if (!nom || !prenoms || !tel) {
     return res.status(400).json({ error: 'nom, prenoms et tel sont obligatoires.' });
   }
   const client = await db.connect();
   try {
-    // Note: pas de BEGIN/COMMIT - ne fonctionne pas avec Supabase RPC execute_sql
-    const matricule = await genMatricule();
-    const motDePasse = await bcrypt.hash(tel.trim(), 10);
+    const domaineStr = Array.isArray(domaines) ? domaines.join(',') : (domaines || null);
 
-    // 1. Insérer dans users sans RETURNING
+    // 1. Insérer dans users — sans matricule, sans mot de passe
     await client.query(
-      `INSERT INTO users (nom, prenoms, matricule, email, tel, role, domaine, statut, mot_de_passe)
-       VALUES ($1, $2, $3, $4, $5, 'professeur', $6, 'actif', $7)`,
-      [nom.trim().toUpperCase(), prenoms.trim(), matricule,
-      email?.trim() || null, tel.trim(), domaine?.trim() || null, motDePasse]
+      `INSERT INTO users (nom, prenoms, email, tel, role, domaine, statut)
+       VALUES ($1, $2, $3, $4, 'professeur', $5, 'actif')`,
+      [nom.trim().toUpperCase(), prenoms.trim(), email?.trim() || null, tel.trim(), domaineStr]
     );
 
-    // Récupérer l'utilisateur inséré
+    // Récupérer l'utilisateur inséré (par tel, unique parmi les profs fraîchement créés)
     const userRow = await client.query(
-      `SELECT id, nom, prenoms, matricule, email, tel, role, domaine, statut FROM users WHERE matricule = $1`,
-      [matricule]
+      `SELECT id, nom, prenoms, email, tel, role, domaine, statut FROM users
+       WHERE role = 'professeur' AND tel = $1 ORDER BY id DESC LIMIT 1`,
+      [tel.trim()]
     );
     const user = userRow.rows[0];
     if (!user) throw new Error('Impossible de récupérer le professeur après insertion.');
 
-    // 2. Insérer dans professeurs
+    // 2. Table professeurs (fiche complémentaire)
     await client.query(
-      `INSERT INTO professeurs (user_id, specialite)
-       VALUES ($1, $2)`,
-      [user.id, domaine?.trim() || null]
+      `INSERT INTO professeurs (user_id, specialite) VALUES ($1, $2)`,
+      [user.id, domaineStr]
     );
 
+    // 3. Affectations filière + niveau (plusieurs possibles)
+    await remplacerAffectations(client, user.id, affectations);
+
     res.status(201).json({
-      message: 'Professeur créé avec succès.',
+      message: 'Professeur créé avec succès. Il pourra se connecter avec son nom, prénom et numéro de téléphone.',
       professeur: user,
-      identifiants: {
-        matricule,
-        motDePasse: tel.trim(),
-        info: 'Le mot de passe par défaut est le numéro de téléphone.',
-      },
     });
   } catch (err) {
-    // Pas de ROLLBACK car pas de BEGIN avec Supabase RPC
     console.error('createProfesseur:', err.message);
-    if (err.code === '23505') return res.status(409).json({ error: 'Email ou matricule déjà utilisé.' });
+    if (err.code === '23505') return res.status(409).json({ error: 'Email déjà utilisé.' });
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -135,22 +144,25 @@ exports.createProfesseur = async (req, res) => {
 // ── PUT /api/professeurs/:id ──────────────────────────────────────────────────
 exports.updateProfesseur = async (req, res) => {
   const { id } = req.params;
-  const { nom, prenoms, email, tel, domaine, statut } = req.body;
-  // Note: filieres_ids ignoré car professeur_filieres n'existe pas dans le schéma
-  const client = await require('../config/db').connect();
+  const { nom, prenoms, email, tel, domaines, statut, affectations } = req.body;
+  const client = await db.connect();
   try {
-    // Pas de BEGIN/COMMIT avec Supabase RPC
+    const domaineStr = Array.isArray(domaines) ? domaines.join(',') : (domaines !== undefined ? domaines : null);
+
     await client.query(
       `UPDATE users SET nom=COALESCE($1,nom), prenoms=COALESCE($2,prenoms),
        email=COALESCE($3,email), tel=COALESCE($4,tel),
        domaine=COALESCE($5,domaine), statut=COALESCE($6,statut)
        WHERE id=$7 AND role='professeur'`,
-      [nom, prenoms, email, tel, domaine, statut, id]
+      [nom, prenoms, email, tel, domaineStr, statut, id]
     );
 
-    // Récupérer l'utilisateur mis à jour
+    if (affectations !== undefined) {
+      await remplacerAffectations(client, id, affectations);
+    }
+
     const result = await client.query(
-      `SELECT id, nom, prenoms, matricule, email, tel, role, domaine, statut FROM users WHERE id=$1 AND role='professeur'`,
+      `SELECT id, nom, prenoms, email, tel, role, domaine, statut FROM users WHERE id=$1 AND role='professeur'`,
       [id]
     );
     if (result.rows.length === 0) {
@@ -181,8 +193,19 @@ exports.deleteProfesseur = async (req, res) => {
 exports.getProfesseurById = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, nom, prenoms, matricule, email, tel, role, filiere_id, domaine, statut
-       FROM users WHERE id=$1 AND role='professeur'`, [req.params.id]
+      `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.domaine, u.statut,
+              COALESCE(
+                json_agg(
+                  json_build_object('filiere_id', f.id, 'filiere_nom', f.nom, 'niveau', pf.niveau)
+                  ORDER BY f.nom, pf.niveau
+                ) FILTER (WHERE pf.id IS NOT NULL), '[]'
+              ) AS affectations
+       FROM users u
+       LEFT JOIN professeur_filieres pf ON pf.professeur_id = u.id
+       LEFT JOIN filieres f ON f.id = pf.filiere_id
+       WHERE u.id=$1 AND u.role='professeur'
+       GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.domaine, u.statut`,
+      [req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Professeur non trouvé.' });
     res.json(result.rows[0]);
@@ -193,8 +216,19 @@ exports.getProfesseurById = async (req, res) => {
 exports.getProfile = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, nom, prenoms, matricule, email, tel, role, filiere_id, domaine, statut
-       FROM users WHERE id=$1`, [req.user.id]
+      `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.domaine, u.statut,
+              COALESCE(
+                json_agg(
+                  json_build_object('filiere_id', f.id, 'filiere_nom', f.nom, 'niveau', pf.niveau)
+                  ORDER BY f.nom, pf.niveau
+                ) FILTER (WHERE pf.id IS NOT NULL), '[]'
+              ) AS affectations
+       FROM users u
+       LEFT JOIN professeur_filieres pf ON pf.professeur_id = u.id
+       LEFT JOIN filieres f ON f.id = pf.filiere_id
+       WHERE u.id=$1
+       GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.domaine, u.statut`,
+      [req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Profil introuvable.' });
     res.json(result.rows[0]);
@@ -211,7 +245,7 @@ exports.updateProfile = async (req, res) => {
       [email, tel, domaine, req.user.id]
     );
     const result = await db.query(
-      `SELECT id, nom, prenoms, matricule, email, tel, domaine FROM users WHERE id=$1`,
+      `SELECT id, nom, prenoms, email, tel, domaine FROM users WHERE id=$1`,
       [req.user.id]
     );
     res.json(result.rows[0]);
@@ -222,10 +256,14 @@ exports.updateProfile = async (req, res) => {
 exports.getClasses = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT f.id, f.nom, f.niveau, f.domaine, COUNT(e.id)::int AS nb_etudiants
-       FROM filieres f LEFT JOIN etudiants e ON e.filiere_id=f.id
-       WHERE ($1::uuid IS NULL OR f.id=$1) GROUP BY f.id ORDER BY f.nom`,
-      [req.user.filiere_id || null]
+      `SELECT DISTINCT f.id, f.nom, pf.niveau, f.domaine, COUNT(e.id)::int AS nb_etudiants
+       FROM professeur_filieres pf
+       JOIN filieres f ON f.id = pf.filiere_id
+       LEFT JOIN etudiants e ON e.filiere_id = f.id AND e.niveau = pf.niveau
+       WHERE pf.professeur_id = $1
+       GROUP BY f.id, f.nom, pf.niveau, f.domaine
+       ORDER BY f.nom, pf.niveau`,
+      [req.user.id]
     );
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -259,7 +297,7 @@ exports.getStudentsByFiliere = async (req, res) => {
     const result = await db.query(
       `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.statut
        FROM users u LEFT JOIN etudiants e ON e.user_id=u.id
-       WHERE (e.filiere_id=$1 OR u.filiere_id=$1) AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%') ORDER BY u.nom`,
+       WHERE e.filiere_id=$1 AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%') ORDER BY u.nom`,
       [req.params.filiere_id]
     );
     res.json(result.rows);
@@ -277,7 +315,7 @@ exports.getDisponibilites = async (req, res) => {
 exports.getAllDisponibilites = async (req, res) => {
   try {
     const r = await db.query(
-      `SELECT id, nom, prenoms, matricule, disponibilites FROM users WHERE role='professeur' AND disponibilites IS NOT NULL`
+      `SELECT id, nom, prenoms, disponibilites FROM users WHERE role='professeur' AND disponibilites IS NOT NULL`
     );
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -304,4 +342,3 @@ exports.patchModuleAssignment = async (req, res) => {
     res.json({ message: `Module ${action === 'assign' ? 'assigné' : 'retiré'} avec succès.` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
-

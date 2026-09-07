@@ -12,7 +12,7 @@ class ApiService {
   //
   // Après le premier déploiement Render, remplacer _cloudUrl par l'URL
   // affichée dans le dashboard (https://backend-scolarhub.onrender.com).
-  static const bool _useCloud = true;
+  static const bool _useCloud = false;
   static const String _cloudUrl = 'https://backend-scolarhub.onrender.com/api';
   // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
   // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
