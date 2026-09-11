@@ -120,6 +120,7 @@ class _AuthPageState extends State<AuthPage> {
         nomEnfant: '${profile.prenoms} ${profile.nom}',
         onLogout: logout,
         etudiantId: profile.matricule,
+        profile: profile,
       );
     } else if (r == 'bde') {
       destination = const BureauDesEtudiantsScreen();
