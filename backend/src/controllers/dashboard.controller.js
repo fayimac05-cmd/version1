@@ -5,10 +5,10 @@ const getAdminDashboard = async (req, res) => {
     // 1. Fetch KPI counts
     const kpisResult = await pool.query(`
       SELECT 
-        (SELECT COUNT(*) FROM users WHERE role = 'etudiant' AND statut = 'actif') as etudiants_actifs,
-        (SELECT COUNT(*) FROM users WHERE role = 'professeur' AND statut = 'actif') as professeurs_actifs,
+        (SELECT COUNT(*) FROM users WHERE role = 'etudiant' AND (statut IS NULL OR statut != 'suspendu')) as etudiants_actifs,
+        (SELECT COUNT(*) FROM users WHERE role = 'professeur' AND (statut IS NULL OR statut != 'suspendu')) as professeurs_actifs,
         (SELECT COUNT(*) FROM filieres) as filieres_ouvertes,
-        (SELECT COUNT(*) FROM evenements_inscriptions) as tickets_vendus
+        (SELECT COUNT(*) FROM evenement_inscriptions) as tickets_vendus
     `);
     const kpis = kpisResult.rows[0] || {};
 
