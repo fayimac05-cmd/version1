@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../services/professor_service.dart';
+import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/app_bubble_bg.dart';
 
@@ -21,26 +23,8 @@ class _CoursesTabState extends State<CoursesTab> {
     Color(0xFF15803D), Color(0xFFD97706), Color(0xFFE11D48),
   ];
 
-  List<Map<String, dynamic>> _cours = [
-    {'module': 'Algorithmique & Structures', 'titre': 'Chapitre 3 — Les pointeurs',
-      'prof': 'Prof Ouédraogo', 'date': 'Aujourd\'hui, 09h32', 'taille': '2.4 MB',
-      'nouveau': true, 'color': AppPalette.blue},
-    {'module': 'Base de données', 'titre': 'Chapitre 5 — Jointures SQL',
-      'prof': 'Prof Traoré', 'date': 'Hier, 14h15', 'taille': '1.8 MB',
-      'nouveau': true, 'color': Color(0xFF7C3AED)},
-    {'module': 'Réseaux informatiques', 'titre': 'TD 2 — Adressage IP',
-      'prof': 'Prof Sawadogo', 'date': '25 Avr, 10h00', 'taille': '890 KB',
-      'nouveau': false, 'color': Color(0xFF0891B2)},
-    {'module': 'Algorithmique & Structures', 'titre': 'Chapitre 2 — Récursivité',
-      'prof': 'Prof Ouédraogo', 'date': '24 Avr, 16h45', 'taille': '3.1 MB',
-      'nouveau': false, 'color': AppPalette.blue},
-    {'module': 'Mathématiques discrètes', 'titre': 'Cours 4 — Théorie des graphes',
-      'prof': 'Prof Kaboré', 'date': '23 Avr, 11h20', 'taille': '4.2 MB',
-      'nouveau': false, 'color': Color(0xFF15803D)},
-    {'module': 'Anglais technique', 'titre': 'Vocabulary — IT Terms',
-      'prof': 'Prof Johnson', 'date': '22 Avr, 08h00', 'taille': '1.1 MB',
-      'nouveau': false, 'color': Color(0xFFD97706)},
-  ];
+  List<Map<String, dynamic>> _cours = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -50,29 +34,35 @@ class _CoursesTabState extends State<CoursesTab> {
 
   Future<void> _fetchCours() async {
     try {
-      final data = await Supabase.instance.client
-          .from('cours')
-          .select()
-          .order('created_at', ascending: false);
-      final list = data as List;
-      if (list.isNotEmpty && mounted) {
+      final res = await ProfessorService.getCours();
+      if (res['success'] == true && mounted) {
+        final list = res['data'] as List;
         setState(() {
           _cours = List.generate(list.length, (i) {
             final e = list[i];
+            final nom = e['prof_nom'] ?? '';
+            final prenoms = e['prof_prenoms'] ?? '';
+            final prof = (nom.isEmpty && prenoms.isEmpty) ? 'Professeur' : 'Prof $nom $prenoms'.trim();
             return {
-              'module': e['module'] ?? 'Module',
+              'id': e['id'],
+              'module': e['module_nom'] ?? 'Module',
               'titre': e['titre'] ?? 'Sans titre',
-              'prof': e['prof'] ?? 'Professeur',
-              'date': e['created_at']?.toString().substring(0, 10) ?? '',
-              'taille': e['taille'] ?? '',
-              'nouveau': e['nouveau'] ?? false,
+              'prof': prof,
+              'date': e['date_creation'] != null ? e['date_creation'].toString().substring(0, 10) : '',
+              'taille': e['fichier_nom'] ?? '',
+              'nouveau': false,
               'color': _moduleColors[i % _moduleColors.length],
               'fichier_url': e['fichier_url'],
             };
           });
+          _isLoading = false;
         });
+      } else {
+        if (mounted) setState(() => _isLoading = false);
       }
-    } catch (_) {} // fallback sur données statiques
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   List<String> get _modules {
@@ -92,9 +82,23 @@ class _CoursesTabState extends State<CoursesTab> {
 
   int get _nbNouveaux => _cours.where((c) => c['nouveau'] == true).length;
 
-  void _telecharger(Map<String, dynamic> cours) {
-    showDialog(context: context, barrierDismissible: false,
-        builder: (_) => _DownloadDialog(cours: cours));
+  Future<void> _telecharger(Map<String, dynamic> cours) async {
+    final id = cours['id'];
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lien de téléchargement indisponible.')));
+      return;
+    }
+    final baseUrl = ApiService.baseUrl.replaceAll('/api', '');
+    final url = Uri.parse('$baseUrl/api/cours/$id/download');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible d\'ouvrir le fichier.')));
+      }
+    }
   }
 
 
@@ -196,7 +200,9 @@ class _CoursesTabState extends State<CoursesTab> {
 
         // ── Liste ───────────────────────────────────────────────────────
         Expanded(
-          child: filtered.isEmpty
+          child: _isLoading 
+            ? const Center(child: CircularProgressIndicator())
+            : filtered.isEmpty
               ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.search_off_rounded, size: 70,
                       color: const Color(0xFF64748B).withValues(alpha:0.35)),

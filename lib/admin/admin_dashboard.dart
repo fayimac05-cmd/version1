@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
 import '../admin/admin_theme.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -10,65 +11,84 @@ class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key, required this.profile});
   @override State<AdminDashboard> createState() => _AdminDashboardState();
 }
-
 class _AdminDashboardState extends State<AdminDashboard> {
+  Future<Map<String, dynamic>>? _dashboardDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _dashboardDataFuture = ApiService.getAdminDashboard();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDesktop = AdminTheme.isDesktop(context);
     return Scaffold(
       backgroundColor: AdminTheme.background,
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(isDesktop ? 28 : 16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _dashboardDataFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Erreur de chargement: ${snapshot.error}'));
+          }
 
-          // ── Salutation ──────────────────────────────────────────────
-          _greeting(),
-          const SizedBox(height: 20),
+          final data = snapshot.data ?? {};
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(isDesktop ? 28 : 16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // ── Salutation ──────────────────────────────────────────────
+              _greeting(),
+              const SizedBox(height: 20),
 
-          // ── Alertes prioritaires ────────────────────────────────────
-          _alertsBanner(),
-          const SizedBox(height: 24),
+              // ── Alertes prioritaires ────────────────────────────────────
+              _alertsBanner(data['alertes'] ?? {}),
+              const SizedBox(height: 24),
 
-          // ── KPI Cards ───────────────────────────────────────────────
-          _kpiRow(isDesktop),
-          const SizedBox(height: 28),
+              // ── KPI Cards ───────────────────────────────────────────────
+              _kpiRow(isDesktop, data['kpis'] ?? {}),
+              const SizedBox(height: 28),
 
-          // ── Ligne widgets ────────────────────────────────────────────
-          isDesktop
-              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(flex: 3, child: _reclamationsWidget()),
-                  const SizedBox(width: 20),
-                  Expanded(flex: 2, child: _eventsWidget()),
-                ])
-              : Column(children: [
-                  _reclamationsWidget(),
-                  const SizedBox(height: 16),
-                  _eventsWidget(),
-                ]),
-          const SizedBox(height: 28),
+              // ── Ligne widgets ────────────────────────────────────────────
+              isDesktop
+                  ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(flex: 3, child: _reclamationsWidget(data['reclamations'] as List? ?? [])),
+                      const SizedBox(width: 20),
+                      Expanded(flex: 2, child: _eventsWidget(data['evenements'] as List? ?? [])),
+                    ])
+                  : Column(children: [
+                      _reclamationsWidget(data['reclamations'] as List? ?? []),
+                      const SizedBox(height: 16),
+                      _eventsWidget(data['evenements'] as List? ?? []),
+                    ]),
+              const SizedBox(height: 28),
 
-          // ── Graphiques ───────────────────────────────────────────────
-          isDesktop
-              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(flex: 3, child: _inscriptionsChart()),
-                  const SizedBox(width: 20),
-                  Expanded(flex: 2, child: _donutFilieres()),
-                ])
-              : Column(children: [
-                  _inscriptionsChart(),
-                  const SizedBox(height: 16),
-                  _donutFilieres(),
-                ]),
-          const SizedBox(height: 28),
+              // ── Graphiques ───────────────────────────────────────────────
+              isDesktop
+                  ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(flex: 3, child: _inscriptionsChart()),
+                      const SizedBox(width: 20),
+                      Expanded(flex: 2, child: _donutFilieres()),
+                    ])
+                  : Column(children: [
+                      _inscriptionsChart(),
+                      const SizedBox(height: 16),
+                      _donutFilieres(),
+                    ]),
+              const SizedBox(height: 28),
 
-          // ── Publications BDE en attente ──────────────────────────────
-          _bdeWidget(),
-          const SizedBox(height: 28),
+              // ── Publications BDE en attente ──────────────────────────────
+              _bdeWidget(),
+              const SizedBox(height: 28),
 
-          // ── Majors de promo ──────────────────────────────────────────
-          _majorsWidget(),
-          const SizedBox(height: 32),
-        ]),
+              // ── Majors de promo ──────────────────────────────────────────
+              _majorsWidget(),
+              const SizedBox(height: 32),
+            ]),
+          );
+        }
       ),
     );
   }
@@ -115,35 +135,47 @@ class _AdminDashboardState extends State<AdminDashboard> {
   ]);
 
   // ── Bannière alertes ─────────────────────────────────────────────────
-  Widget _alertsBanner() => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(colors: [
-        Color(0xFFFFF8E1), Color(0xFFFFF3E0)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight),
-      borderRadius: BorderRadius.circular(AdminTheme.radiusCard),
-      border: Border.all(color: AdminTheme.accent.withValues(alpha:0.3)),
-    ),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(width: 36, height: 36,
-        decoration: BoxDecoration(color: AdminTheme.accentLight,
-            borderRadius: BorderRadius.circular(8)),
-        child: const Icon(Icons.warning_amber_rounded,
-            color: AdminTheme.accent, size: 20)),
-      const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Alertes prioritaires', style: TextStyle(fontSize: 13,
-            fontWeight: FontWeight.w800, color: AdminTheme.accent)),
-        const SizedBox(height: 6),
-        Wrap(spacing: 8, runSpacing: 6, children: [
-          _alertChip('3 réclamations non traitées', Icons.report_problem_rounded),
-          _alertChip('5 publications BDE en attente', Icons.celebration_rounded),
-          _alertChip('2 notes blâmables cette semaine', Icons.warning_rounded),
-          _alertChip('1 étudiant suspendu', Icons.person_off_rounded),
-        ]),
-      ])),
-    ]),
-  );
+  Widget _alertsBanner(Map<String, dynamic> alertes) {
+    final int reclamations = alertes['reclamationsNonTraitees'] ?? 0;
+    final int publications = alertes['publicationsEnAttente'] ?? 0;
+    final int suspendus = alertes['etudiantsSuspendus'] ?? 0;
+
+    if (reclamations == 0 && publications == 0 && suspendus == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [
+          Color(0xFFFFF8E1), Color(0xFFFFF3E0)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(AdminTheme.radiusCard),
+        border: Border.all(color: AdminTheme.accent.withValues(alpha:0.3)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(width: 36, height: 36,
+          decoration: BoxDecoration(color: AdminTheme.accentLight,
+              borderRadius: BorderRadius.circular(8)),
+          child: const Icon(Icons.warning_amber_rounded,
+              color: AdminTheme.accent, size: 20)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Alertes prioritaires', style: TextStyle(fontSize: 13,
+              fontWeight: FontWeight.w800, color: AdminTheme.accent)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 6, children: [
+            if (reclamations > 0)
+              _alertChip('$reclamations réclamations non traitées', Icons.report_problem_rounded),
+            if (publications > 0)
+              _alertChip('$publications publications BDE en attente', Icons.celebration_rounded),
+            if (suspendus > 0)
+              _alertChip('$suspendus étudiant(s) suspendu(s)', Icons.person_off_rounded),
+          ]),
+        ])),
+      ]),
+    );
+  }
 
   Widget _alertChip(String label, IconData icon) => GestureDetector(
     onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
@@ -165,18 +197,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   // ── KPI Cards ─────────────────────────────────────────────────────────
-  Widget _kpiRow(bool isDesktop) {
+  Widget _kpiRow(bool isDesktop, Map<String, dynamic> kpisData) {
     final kpis = [
-      {'label': 'Étudiants actifs', 'value': '247', 'sub': '+12 ce mois',
+      {'label': 'Étudiants actifs', 'value': (kpisData['etudiantsActifs'] ?? 0).toString(), 'sub': 'Inscrits',
        'icon': Icons.school_rounded, 'color': AdminTheme.iconFg,
        'bg': AdminTheme.iconBg, 'trend': true},
-      {'label': 'Professeurs actifs', 'value': '18', 'sub': 'Stable',
+      {'label': 'Professeurs actifs', 'value': (kpisData['professeursActifs'] ?? 0).toString(), 'sub': 'Titulaires',
        'icon': Icons.person_pin_rounded, 'color': AdminTheme.iconFgAlt,
        'bg': AdminTheme.iconBgAlt, 'trend': true},
-      {'label': 'Filières ouvertes', 'value': '8', 'sub': '2024-2025',
+      {'label': 'Filières ouvertes', 'value': (kpisData['filieresOuvertes'] ?? 0).toString(), 'sub': 'Année en cours',
        'icon': Icons.school_rounded, 'color': AdminTheme.iconFg,
        'bg': AdminTheme.iconBg, 'trend': false},
-      {'label': 'Tickets vendus', 'value': '340/500', 'sub': '68% vendus',
+      {'label': 'Tickets vendus', 'value': (kpisData['ticketsVendus'] ?? 0).toString(), 'sub': 'Événements',
        'icon': Icons.confirmation_number_rounded, 'color': AdminTheme.iconFgAlt,
        'bg': AdminTheme.iconBgAlt, 'trend': true},
     ];
@@ -233,17 +265,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   // ── Réclamations récentes ─────────────────────────────────────────────
-  Widget _reclamationsWidget() => _card(
+  Widget _reclamationsWidget(List reclamations) => _card(
     title: 'Réclamations récentes',
     icon: Icons.report_problem_rounded,
     action: 'Voir tout',
-    child: Column(children: [
-      _reclItem('KOURAOGO Ibrahim', 'RES301 — Note TD', 'en_attente', '28/04'),
-      _reclItem('TRAORÉ Fatimata', 'POO302 — Moyenne', 'transmise', '27/04'),
-      _reclItem('KABORÉ Djeneba', 'MKS301 — Note examen', 'resolue', '26/04'),
-      _reclItem('SAWADOGO Aminata', 'BDA303 — Note TP', 'en_attente', '25/04'),
-      _reclItem('OUÉDRAOGO Issouf', 'EP301 — Moyenne', 'rejetee', '24/04'),
-    ]),
+    child: Column(children: reclamations.isEmpty 
+      ? [const Padding(padding: EdgeInsets.all(16), child: Text("Aucune réclamation récente."))]
+      : reclamations.map((r) {
+        final nom = '${r['nom'] ?? ''} ${r['prenoms'] ?? ''}'.trim();
+        final type = r['type'] ?? 'Réclamation';
+        final module = r['module_nom'] ?? type;
+        final statut = r['statut'] ?? 'en_attente';
+        
+        // Formater la date (simpliste pour l'instant)
+        final dateStr = r['created_at']?.toString() ?? '';
+        final dateObj = DateTime.tryParse(dateStr);
+        final dateAffichee = dateObj != null ? '${dateObj.day.toString().padLeft(2, '0')}/${dateObj.month.toString().padLeft(2, '0')}' : '';
+        
+        return _reclItem(nom.isEmpty ? 'Inconnu' : nom, module, statut, dateAffichee);
+    }).toList()),
   );
 
   Widget _reclItem(String nom, String module, String statut, String date) {
@@ -261,7 +301,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           decoration: BoxDecoration(color: AdminTheme.iconBg,
               shape: BoxShape.circle),
           child: Center(child: Text(
-            '${nom.split(' ')[0][0]}${nom.split(' ').length > 1 ? nom.split(' ')[1][0] : ''}',
+            '${nom.isNotEmpty ? nom[0] : ''}${nom.split(' ').length > 1 ? nom.split(' ')[1][0] : ''}'.toUpperCase(),
             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
                 color: AdminTheme.iconFg)))),
         const SizedBox(width: 10),
@@ -279,17 +319,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ── Événements à venir ────────────────────────────────────────────────
-  Widget _eventsWidget() => _card(
+  Widget _eventsWidget(List evenements) => _card(
     title: 'Prochains événements',
     icon: Icons.calendar_today_rounded,
     action: 'Calendrier',
-    child: Column(children: [
-      _eventItem('Soirée étudiante BDE', '02 Mai 2025', '340/500 billets', AdminTheme.warning),
-      const Divider(height: 20, color: AdminTheme.border),
-      _eventItem('Cérémonie de remise des diplômes', '15 Juin 2025', 'Non ouvert', AdminTheme.primary),
-      const Divider(height: 20, color: AdminTheme.border),
-      _eventItem('Journée sportive', '01 Mai 2025', 'Gratuit', AdminTheme.success),
-    ]),
+    child: Column(
+      children: evenements.isEmpty 
+        ? [const Padding(padding: EdgeInsets.all(16), child: Text("Aucun événement prévu."))]
+        : evenements.asMap().entries.map((entry) {
+          final int idx = entry.key;
+          final e = entry.value;
+          final titre = e['titre'] ?? 'Événement';
+          
+          final dateStr = e['date_debut']?.toString() ?? '';
+          final dateObj = DateTime.tryParse(dateStr);
+          final dateAffichee = dateObj != null ? '${dateObj.day.toString().padLeft(2, '0')}/${dateObj.month.toString().padLeft(2, '0')}/${dateObj.year}' : '';
+          
+          final prix = e['prix']?.toString() ?? '0';
+          final info = (prix == '0' || prix.isEmpty) ? 'Gratuit' : 'Payant';
+          
+          final color = idx % 3 == 0 ? AdminTheme.warning : (idx % 3 == 1 ? AdminTheme.primary : AdminTheme.success);
+          
+          return Column(
+            children: [
+              _eventItem(titre, dateAffichee, info, color),
+              if (idx < evenements.length - 1)
+                const Divider(height: 20, color: AdminTheme.border),
+            ],
+          );
+      }).toList(),
+    ),
   );
 
   Widget _eventItem(String titre, String date, String billets, Color color) =>

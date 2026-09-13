@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
@@ -185,10 +186,38 @@ class _EventRegistrationPageState extends State<EventRegistrationPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (event.imageUrl != null && event.imageUrl!.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: event.imageUrl!.startsWith('data:image')
+                  ? Image.memory(
+                      base64Decode(event.imageUrl!.split(',').last),
+                      width: double.infinity,
+                      height: 160,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    )
+                  : Image.network(
+                      event.imageUrl!,
+                      width: double.infinity,
+                      height: 160,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+            ),
+            const SizedBox(height: 14),
+          ],
           Text(
             event.name,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark),
           ),
+          if (event.description.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              event.description,
+              style: const TextStyle(fontSize: 13, color: textDark, height: 1.4),
+            ),
+          ],
           const SizedBox(height: 12),
           _buildSummaryRow(Icons.calendar_today_outlined,
               DateFormat('dd MMM yyyy').format(event.date)),

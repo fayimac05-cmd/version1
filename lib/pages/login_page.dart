@@ -166,6 +166,32 @@ class _LoginPageState extends State<LoginPage> {
 
     if (result['success'] == true && result['user'] != null) {
       final u = result['user'];
+      final String roleUtilisateur = (u['role'] ?? 'etudiant').toString();
+
+      // Si c'est un admin et que le backend n'a pas renvoyé le domaine (ou renvoyé 'Tous')
+      String domaineAdmin = u['admin_domaine'] ?? u['domaine_admin'] ?? u['domaineAdmin'] ?? 'Tous';
+      if (roleUtilisateur == 'admin' && domaineAdmin == 'Tous') {
+        final identifiant = (u['matricule'] ?? u['email'] ?? u['telephone'] ?? u['tel'] ?? mat).toString().toLowerCase();
+        // ignore: avoid_print
+        print('[DEBUG-ADMIN] Backend n\'a pas donné le domaine. Recherche via API pour: $identifiant');
+        final res = await ApiService.getMembresAdmin();
+        if (res['success'] == true) {
+          final membres = res['data'] as List<dynamic>;
+          for (var membre in membres) {
+            final email = (membre['email'] ?? '').toString().toLowerCase();
+            final tel = (membre['tel'] ?? '').toString();
+            if (email == identifiant || tel == identifiant || (mat.isNotEmpty && tel == mat)) {
+              if (membre['domaine'] != null && membre['domaine'].toString().isNotEmpty && membre['domaine'] != 'Tous') {
+                domaineAdmin = membre['domaine'].toString();
+                break;
+              }
+            }
+          }
+        }
+        // ignore: avoid_print
+        print('[DEBUG-ADMIN] Domaine trouvé via API: $domaineAdmin');
+      }
+
       final profile = StudentProfile(
         nom: u['nom'] ?? '',
         prenoms: u['prenoms'] ?? '',
@@ -176,8 +202,9 @@ class _LoginPageState extends State<LoginPage> {
         motDePasse: '',
         domaine: u['domaine'] ?? '',
         niveau: u['niveau'] ?? '',
-        role: u['role'] ?? 'etudiant',
+        role: roleUtilisateur,
         adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
+        domaineAdmin: domaineAdmin,
         photoUrl: u['photo_url'] ?? u['photoUrl'],
         coverUrl: u['cover_url'] ?? u['coverUrl'],
       );
@@ -235,6 +262,8 @@ class _LoginPageState extends State<LoginPage> {
           niveau: u['niveau'] ?? '',
           role: u['role'] ?? 'etudiant',
           adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
+          // Domaine restreint de l'admin (ex: 'Sciences & Technologies', 'Sciences de Gestion', 'Tous')
+          domaineAdmin: u['admin_domaine'] ?? u['domaine_admin'] ?? u['domaineAdmin'] ?? 'Tous',
           photoUrl: u['photo_url'] ?? u['photoUrl'],
           coverUrl: u['cover_url'] ?? u['coverUrl'],
         );
