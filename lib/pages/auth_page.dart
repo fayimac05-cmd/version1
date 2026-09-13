@@ -116,6 +116,7 @@ class _AuthPageState extends State<AuthPage> {
       destination = ProfessorShell(profile: profile, onLogout: logout);
     } else if (r == 'parent' || r == 'tuteur') {
       destination = ParentShell(
+        profile: profile,
         nomEnfant: '${profile.prenoms} ${profile.nom}',
         onLogout: logout,
         etudiantId: profile.matricule,

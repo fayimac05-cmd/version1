@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const supabase = require('../config/supabase');
 const emailService = require('../services/email.service');
+const { resolveFiliere } = require('../utils/filieres');
 
 const genToken = (user) => jwt.sign(
   { id: user.id, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id },
@@ -380,11 +381,20 @@ const lookup = async (req, res) => {
 const me = async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.statut, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1',
+      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.statut,
+              e.filiere_id, e.filiere_nom, u.filiere_nom as u_fnom
+       FROM users u
+       LEFT JOIN etudiants e ON u.id = e.user_id
+       WHERE u.id = $1`,
       [req.user.id]
     );
     if (!r.rows[0]) return res.status(404).json({ message: 'Introuvable.' });
-    return res.status(200).json(r.rows[0]);
+    const userObj = r.rows[0];
+    if (!userObj.filiere_id && (userObj.filiere_nom || userObj.u_fnom)) {
+      const fObj = await resolveFiliere(pool, userObj.filiere_nom || userObj.u_fnom);
+      userObj.filiere_id = fObj.id;
+    }
+    return res.status(200).json(userObj);
   } catch (err) {
     return res.status(500).json({ message: 'Erreur serveur.' });
   }
