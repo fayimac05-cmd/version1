@@ -247,6 +247,8 @@ const envoyerMessageCanal = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
+    await ensureCanalExists(id);
+
     const { rows: inserted } = await pool.query(
       `INSERT INTO messages (canal_id, auteur_id, contenu, type, created_at)
        VALUES ($1, $2, $3, 'canal', NOW())
@@ -283,7 +285,7 @@ const getConversationsPrivees = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT DISTINCT ON (correspondant_id)
               correspondant_id,
-              u.prenoms, u.nom,
+              u.prenoms, u.nom, u.role,
               mp.contenu AS dernier_message,
               mp.created_at,
               mp.is_read,
@@ -316,7 +318,7 @@ const getMessagesPrives = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mp.id, mp.contenu, mp.created_at, mp.is_read,
               mp.expediteur_id, mp.destinataire_id,
-              u.prenoms, u.nom
+              u.prenoms, u.nom, u.role
        FROM messages_prives mp
        JOIN users u ON u.id = mp.expediteur_id
        WHERE (mp.expediteur_id = $1 AND mp.destinataire_id = $2)
@@ -350,11 +352,23 @@ const envoyerMessagePrive = async (req, res) => {
       [req.user.id, userId, contenu.trim()]
     );
 
+    const { rows: senderRows } = await pool.query(
+      `SELECT prenoms, nom, role FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+
+    const messageComplet = {
+      ...rows[0],
+      prenoms: senderRows[0]?.prenoms || req.user.prenoms || '',
+      nom: senderRows[0]?.nom || req.user.nom || '',
+      role: senderRows[0]?.role || req.user.role || '',
+    };
+
     // userId est un UUID : ne surtout pas le convertir en entier
     const io = req.app.get('io');
-    if (io) notifierUser(io, userId, 'message:prive', rows[0]);
+    if (io) notifierUser(io, userId, 'message:prive', messageComplet);
 
-    res.status(201).json({ success: true, data: rows[0] });
+    res.status(201).json({ success: true, data: messageComplet });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
