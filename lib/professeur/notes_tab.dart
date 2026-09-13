@@ -3,11 +3,24 @@ import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 
 // Mêmes constantes que côté admin (admin_notes.dart) — cohérence des
-// valeurs enregistrées en base (sessions_notes.semestre / .mention).
-const List<String> semestresDisponibles = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
+// valeurs enregistrées en base (sessions_notes.semestre / notes.mention).
+const List<String> semestresDisponibles = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'];
 const List<String> mentionsModule = [
   'Très Bien', 'Bien', 'Assez Bien', 'Passable', 'Insuffisant',
 ];
+
+// Correspondance niveau → semestres possibles. Une Licence 2 ne peut avoir
+// que S3 ou S4, jamais S1 ni S5 par exemple — évite les erreurs de saisie.
+const Map<String, List<String>> semestresParNiveau = {
+  'Licence 1': ['S1', 'S2'],
+  'Licence 2': ['S3', 'S4'],
+  'Licence 3': ['S5', 'S6'],
+  'Master 1': ['S7', 'S8'],
+  'Master 2': ['S9', 'S10'],
+};
+
+List<String> semestresPourNiveau(String? niveau) =>
+    semestresParNiveau[niveau] ?? semestresDisponibles;
 
 class NotesTab extends StatefulWidget {
   const NotesTab({super.key, this.initialClasse});
@@ -30,18 +43,24 @@ class _NotesTabState extends State<NotesTab> {
   bool _loadingStudents = false;
   bool _saving = false;
 
+  // Clé composite "filiereId|niveau" — une filière peut apparaître
+  // plusieurs fois dans _classes (une ligne par niveau enseigné par ce
+  // prof), donc l'id de filière seul ne suffit pas à identifier la
+  // sélection dans le dropdown.
+  String? _classeKey;
   String? _classeId;
   String? _classeNom;
   String? _niveau;
   String? _moduleId;
 
-  // ── Nouveaux champs requis par le backend (semestre/annee_academique) ────
-  // et mention (facultative, cohérente avec le flux admin de publication).
   String? _semestre;
-  String? _mention;
   final _anneeCtrl = TextEditingController(text: '${DateTime.now().year}-${DateTime.now().year + 1}');
 
+  // Chaque étudiant a désormais sa PROPRE note ET sa propre mention (tous
+  // les étudiants d'une classe n'ont pas la même performance) — plus un
+  // seul champ mention global pour toute la session.
   final Map<String, String> _notes = {};
+  final Map<String, String?> _mentionsParEtudiant = {};
 
   @override
   void initState() {
@@ -80,6 +99,7 @@ class _NotesTabState extends State<NotesTab> {
     final c = matches.first;
     setState(() {
       _segment = 0;
+      _classeKey = '${c['id']}|${c['niveau']}';
       _classeId = c['id'].toString();
       _classeNom = c['nom'];
       _niveau = c['niveau'];
@@ -93,8 +113,9 @@ class _NotesTabState extends State<NotesTab> {
       _loadingStudents = true;
       _students = [];
       _notes.clear();
+      _mentionsParEtudiant.clear();
     });
-    final result = await ProfessorService.getStudentsByFiliere(int.parse(_classeId!));
+    final result = await ProfessorService.getStudentsByFiliere(int.parse(_classeId!), niveau: _niveau);
     if (!mounted) return;
     setState(() {
       _students = result['success'] == true ? result['data'] as List<dynamic> : [];
@@ -108,9 +129,6 @@ class _NotesTabState extends State<NotesTab> {
           const SnackBar(content: Text('Veuillez sélectionner une classe et un module.')));
       return;
     }
-    // ✅ Semestre et année académique sont requis côté backend (sinon
-    // rejet 400) — validés ici avant l'envoi pour donner un message
-    // clair au professeur plutôt qu'une erreur réseau.
     if (_semestre == null || _anneeCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Veuillez indiquer le semestre et l\'année académique.')));
@@ -119,7 +137,11 @@ class _NotesTabState extends State<NotesTab> {
     setState(() => _saving = true);
 
     final notesData = _students
-        .map((s) => {'matricule': s['matricule'], 'valeur': double.tryParse(_notes[s['matricule']] ?? '') ?? 0.0})
+        .map((s) => {
+              'matricule': s['matricule'],
+              'valeur': double.tryParse(_notes[s['matricule']] ?? '') ?? 0.0,
+              if (_mentionsParEtudiant[s['matricule']] != null) 'mention': _mentionsParEtudiant[s['matricule']],
+            })
         .toList();
 
     final res = await ProfessorService.createGradeSession({
@@ -130,7 +152,6 @@ class _NotesTabState extends State<NotesTab> {
       'notes': notesData,
       'semestre': _semestre,
       'annee_academique': _anneeCtrl.text.trim(),
-      if (_mention != null) 'mention': _mention,
     });
 
     if (!mounted) return;
@@ -141,10 +162,10 @@ class _NotesTabState extends State<NotesTab> {
           const SnackBar(content: Text('Notes saisies avec succès.'), backgroundColor: Color(0xFF10B981)));
       setState(() {
         _students = [];
+        _classeKey = null;
         _classeId = null;
         _moduleId = null;
         _semestre = null;
-        _mention = null;
         _segment = 1;
       });
       _chargerDonnees();
@@ -256,7 +277,7 @@ class _NotesTabState extends State<NotesTab> {
               Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 20),
               SizedBox(width: 10),
               Expanded(child: Text(
-                'Aucun étudiant inscrit dans cette classe. Vérifiez que les étudiants ont bien une filière affectée (Admin → Étudiants).',
+                'Aucun étudiant inscrit dans cette classe/niveau. Vérifiez que les étudiants ont bien une filière et un niveau affectés (Admin → Étudiants).',
                 style: TextStyle(fontSize: 12, color: Color(0xFF92400E)))),
             ]),
           ),
@@ -264,8 +285,10 @@ class _NotesTabState extends State<NotesTab> {
           const SizedBox(height: 14),
           ..._students.map((s) => _NoteRow(
                 etudiant: s,
-                initial: _notes[s['matricule']],
-                onChanged: (v) => _notes[s['matricule']] = v,
+                initialNote: _notes[s['matricule']],
+                initialMention: _mentionsParEtudiant[s['matricule']],
+                onNoteChanged: (v) => _notes[s['matricule']] = v,
+                onMentionChanged: (v) => setState(() => _mentionsParEtudiant[s['matricule']] = v),
               )),
           const SizedBox(height: 16),
           SizedBox(
@@ -296,7 +319,7 @@ class _NotesTabState extends State<NotesTab> {
       ),
       child: Column(children: [
         DropdownButtonFormField<String>(
-          initialValue: _classeId,
+          initialValue: _classeKey,
           hint: const Text('Sélectionner une classe'),
           decoration: InputDecoration(
             labelText: 'Classe / Filière',
@@ -304,14 +327,30 @@ class _NotesTabState extends State<NotesTab> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
-          items: _classes.map<DropdownMenuItem<String>>((c) => DropdownMenuItem(
-              value: c['id'].toString(), child: Text('${c['nom']}', overflow: TextOverflow.ellipsis))).toList(),
+          // Une entrée par (filière, niveau) — pas juste par filière, sinon
+          // deux niveaux de la même filière partageraient la même valeur.
+          items: _classes.map<DropdownMenuItem<String>>((c) {
+            final key = '${c['id']}|${c['niveau']}';
+            return DropdownMenuItem(
+              value: key,
+              child: Text('${c['nom']} — ${c['niveau']}', overflow: TextOverflow.ellipsis),
+            );
+          }).toList(),
           onChanged: (v) {
-            final c = _classes.firstWhere((x) => x['id'].toString() == v);
+            if (v == null) return;
+            final parts = v.split('|');
+            final c = _classes.firstWhere((x) => '${x['id']}|${x['niveau']}' == v);
             setState(() {
-              _classeId = v;
+              _classeKey = v;
+              _classeId = parts[0];
+              _niveau = parts.length > 1 ? parts[1] : null;
               _classeNom = c['nom'];
-              _niveau = c['niveau'];
+              // Le semestre sélectionné peut ne plus être valide pour ce
+              // nouveau niveau (ex. S1 choisi puis passage à Licence 2) :
+              // on le réinitialise si besoin.
+              if (_semestre != null && !semestresPourNiveau(_niveau).contains(_semestre)) {
+                _semestre = null;
+              }
             });
             _chargerEtudiants();
           },
@@ -331,22 +370,23 @@ class _NotesTabState extends State<NotesTab> {
           onChanged: (v) => setState(() => _moduleId = v),
         ),
         const SizedBox(height: 10),
-        // ── Semestre + Année académique (requis par le backend) ──────────
         Row(children: [
           Expanded(
             child: DropdownButtonFormField<String>(
               initialValue: _semestre,
-              hint: const Text('Semestre'),
+              hint: Text(_niveau == null ? 'Choisir d\'abord une classe' : 'Semestre'),
               decoration: InputDecoration(
                 labelText: 'Semestre',
                 prefixIcon: const Icon(Icons.calendar_view_week_outlined, color: AppPalette.blue),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
-              items: semestresDisponibles
+              // Restreint aux semestres réels du niveau choisi (ex. Licence 2
+              // → S3/S4 uniquement) — évite les erreurs de saisie.
+              items: semestresPourNiveau(_niveau)
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
-              onChanged: (v) => setState(() => _semestre = v),
+              onChanged: _niveau == null ? null : (v) => setState(() => _semestre = v),
             ),
           ),
           const SizedBox(width: 10),
@@ -362,23 +402,9 @@ class _NotesTabState extends State<NotesTab> {
             ),
           ),
         ]),
-        const SizedBox(height: 10),
-        // ── Mention (facultative) — qualifie la performance globale de la
-        // classe sur ce module, cohérente avec le flux admin.
-        DropdownButtonFormField<String>(
-          initialValue: _mention,
-          hint: const Text('Mention de la classe (facultatif)'),
-          decoration: InputDecoration(
-            labelText: 'Mention',
-            prefixIcon: const Icon(Icons.star_outline_rounded, color: AppPalette.blue),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          items: mentionsModule
-              .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-              .toList(),
-          onChanged: (v) => setState(() => _mention = v),
-        ),
+        // La mention n'est plus saisie ici globalement : elle se choisit
+        // désormais individuellement, ligne par ligne, pour chaque étudiant
+        // ci-dessous (voir _NoteRow).
       ]),
     );
   }
@@ -404,10 +430,18 @@ class _NotesTabState extends State<NotesTab> {
 }
 
 class _NoteRow extends StatefulWidget {
-  const _NoteRow({required this.etudiant, required this.initial, required this.onChanged});
+  const _NoteRow({
+    required this.etudiant,
+    required this.initialNote,
+    required this.initialMention,
+    required this.onNoteChanged,
+    required this.onMentionChanged,
+  });
   final dynamic etudiant;
-  final String? initial;
-  final ValueChanged<String> onChanged;
+  final String? initialNote;
+  final String? initialMention;
+  final ValueChanged<String> onNoteChanged;
+  final ValueChanged<String?> onMentionChanged;
 
   @override
   State<_NoteRow> createState() => _NoteRowState();
@@ -415,11 +449,13 @@ class _NoteRow extends StatefulWidget {
 
 class _NoteRowState extends State<_NoteRow> {
   late TextEditingController _ctrl;
+  String? _mention;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = TextEditingController(text: widget.initial ?? '');
+    _ctrl = TextEditingController(text: widget.initialNote ?? '');
+    _mention = widget.initialMention;
   }
 
   @override
@@ -435,30 +471,55 @@ class _NoteRowState extends State<_NoteRow> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6)],
       ),
-      child: Row(children: [
-        CircleAvatar(radius: 18, backgroundColor: AppPalette.lightBlue,
-            child: Text('${widget.etudiant['prenoms']}'.isNotEmpty ? '${widget.etudiant['prenoms']}'[0] : '?',
-                style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w700, fontSize: 13))),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${widget.etudiant['prenoms']} ${widget.etudiant['nom']}',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-          Text('${widget.etudiant['matricule']}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-        ])),
-        SizedBox(
-          width: 70,
-          child: TextField(
-            controller: _ctrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            decoration: InputDecoration(
-              hintText: '/20',
-              hintStyle: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          CircleAvatar(radius: 18, backgroundColor: AppPalette.lightBlue,
+              child: Text('${widget.etudiant['prenoms']}'.isNotEmpty ? '${widget.etudiant['prenoms']}'[0] : '?',
+                  style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w700, fontSize: 13))),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${widget.etudiant['prenoms']} ${widget.etudiant['nom']}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+            // Matricule volontairement masqué côté professeur.
+          ])),
+          SizedBox(
+            width: 70,
+            child: TextField(
+              controller: _ctrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              decoration: InputDecoration(
+                hintText: '/20',
+                hintStyle: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              onChanged: widget.onNoteChanged,
             ),
-            onChanged: widget.onChanged,
+          ),
+        ]),
+        const SizedBox(height: 8),
+        // Mention individuelle — facultative, propre à cet étudiant.
+        Padding(
+          padding: const EdgeInsets.only(left: 46),
+          child: DropdownButtonFormField<String>(
+            initialValue: _mention,
+            isDense: true,
+            hint: const Text('Mention (facultatif)', style: TextStyle(fontSize: 12)),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)),
+            items: mentionsModule
+                .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12))))
+                .toList(),
+            onChanged: (v) {
+              setState(() => _mention = v);
+              widget.onMentionChanged(v);
+            },
           ),
         ),
       ]),
@@ -576,6 +637,7 @@ class _EditSessionSheet extends StatefulWidget {
 
 class _EditSessionSheetState extends State<_EditSessionSheet> {
   late Map<String, TextEditingController> _ctrls;
+  late Map<String, String?> _mentions;
   bool _saving = false;
 
   @override
@@ -584,6 +646,9 @@ class _EditSessionSheetState extends State<_EditSessionSheet> {
     _ctrls = {
       for (final n in widget.notes)
         n['matricule']: TextEditingController(text: '${n['valeur'] ?? ''}')
+    };
+    _mentions = {
+      for (final n in widget.notes) n['matricule']: n['mention'] as String?,
     };
   }
 
@@ -596,7 +661,11 @@ class _EditSessionSheetState extends State<_EditSessionSheet> {
   Future<void> _resoumettre() async {
     setState(() => _saving = true);
     final notesData = widget.notes
-        .map((n) => {'matricule': n['matricule'], 'valeur': double.tryParse(_ctrls[n['matricule']]?.text ?? '') ?? 0.0})
+        .map((n) => {
+              'matricule': n['matricule'],
+              'valeur': double.tryParse(_ctrls[n['matricule']]?.text ?? '') ?? 0.0,
+              if (_mentions[n['matricule']] != null) 'mention': _mentions[n['matricule']],
+            })
         .toList();
 
     final res = await ProfessorService.updateGradeSession(widget.session['id'].toString(), {'notes': notesData});
@@ -646,23 +715,42 @@ class _EditSessionSheetState extends State<_EditSessionSheet> {
             itemCount: widget.notes.length,
             itemBuilder: (_, i) {
               final n = widget.notes[i];
+              final matricule = n['matricule'];
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(children: [
-                  Expanded(flex: 3, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${n['prenoms']} ${n['nom']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    Text('${n['matricule']}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                  ])),
-                  SizedBox(width: 70, child: TextField(
-                    controller: _ctrls[n['matricule']],
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    textAlign: TextAlign.center,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(flex: 3, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${n['prenoms']} ${n['nom']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      // Matricule volontairement masqué côté professeur.
+                    ])),
+                    SizedBox(width: 70, child: TextField(
+                      controller: _ctrls[matricule],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        hintText: '/20',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                    )),
+                  ]),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    initialValue: _mentions[matricule],
+                    isDense: true,
+                    hint: const Text('Mention (facultatif)', style: TextStyle(fontSize: 12)),
                     decoration: InputDecoration(
-                      hintText: '/20',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                  )),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)),
+                    items: mentionsModule
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12))))
+                        .toList(),
+                    onChanged: (v) => setState(() => _mentions[matricule] = v),
+                  ),
                 ]),
               );
             },

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+ 
 import 'package:intl/intl.dart';
 import '../models/student_profile.dart';
 import '../models/event.dart';
@@ -14,31 +14,40 @@ import 'courses_tab.dart';
 import 'groupe_filiere_screen.dart';
 import 'checkin_screen.dart';
 import 'planning_tab.dart';
-
+ 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key, required this.profile, this.onMenuTap});
-
+ 
   final StudentProfile profile;
   final VoidCallback? onMenuTap;
-
+ 
   @override
   State<HomeTab> createState() => _HomeTabState();
 }
-
+ 
 class _HomeTabState extends State<HomeTab> {
   final PageController _eventsCtrl = PageController(viewportFraction: 0.88);
   int _eventPage = 0;
   Timer? _autoScroll;
-
+ 
   List<Map<String, dynamic>> _annonces = [];
   bool _annoncesLoading = true;
   List<EventModel> _evenements = [];
-
+ 
   bool _apercuLoading = true;
   double? _moyenne;
   double? _tauxPresence;
   List<Map<String, dynamic>> _coursDuJour = [];
-
+ 
+  // ── Notes publiées / historique ─────────────────────────────────────────
+  List<Map<String, dynamic>> _notesPubliees = [];
+  Set<String> _notesLues = <String>{};
+  bool _notesLoading = true;
+ 
+  int get _notesNonLues => _notesPubliees
+      .where((note) => !_notesLues.contains(_noteKey(note)))
+      .length;
+ 
   static const _joursFr = [
     'Lundi',
     'Mardi',
@@ -48,17 +57,18 @@ class _HomeTabState extends State<HomeTab> {
     'Samedi',
     'Dimanche',
   ];
-
+ 
   int get _carouselLength =>
       _evenements.isNotEmpty ? _evenements.length : _events.length;
-
+ 
   @override
   void initState() {
     super.initState();
     _fetchAnnonces();
     _fetchEvenements();
     _fetchApercuEtProchainCours();
-
+    _fetchNotesNonLues();
+ 
     _autoScroll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || _carouselLength <= 1) return;
       final next = (_eventPage + 1) % _carouselLength;
@@ -69,14 +79,14 @@ class _HomeTabState extends State<HomeTab> {
       );
     });
   }
-
+ 
   @override
   void dispose() {
     _eventsCtrl.dispose();
     _autoScroll?.cancel();
     super.dispose();
   }
-
+ 
   Future<void> _fetchAnnonces() async {
     try {
       final data = await Supabase.instance.client
@@ -84,7 +94,7 @@ class _HomeTabState extends State<HomeTab> {
           .select()
           .order('created_at', ascending: false)
           .limit(10);
-
+ 
       if (!mounted) return;
       setState(() {
         _annonces = List<Map<String, dynamic>>.from(data as List);
@@ -94,29 +104,137 @@ class _HomeTabState extends State<HomeTab> {
       if (mounted) setState(() => _annoncesLoading = false);
     }
   }
-
+ 
   Future<void> _fetchEvenements() async {
     final result = await ApiService.getEvenements(statut: 'approuve');
     if (!mounted || result['success'] != true) return;
-
+ 
     final events = (result['data'] as List<dynamic>)
         .map((j) => EventModel.fromJson(j as Map<String, dynamic>))
         .toList();
-
+ 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
+ 
     setState(() {
       _evenements = events.where((e) => !e.date.isBefore(today)).toList();
       if (_eventPage >= _carouselLength) _eventPage = 0;
     });
   }
-
+ 
+  String _noteKey(Map<String, dynamic> note) {
+    final id = note['id'] ?? note['note_id'] ?? note['evaluation_id'];
+    return id.toString();
+  }
+ 
+  // ✅ CORRIGÉ — l'ancienne version interrogeait directement
+  // `vue_notes_etudiants` SANS aucun filtre par étudiant
+  // (client.from('vue_notes_etudiants').select()), ce qui remontait les
+  // notes de TOUS les étudiants du système, pas seulement les siennes
+  // (bug découvert le 07/09 : badge "11 notes" pour un seul devoir créé).
+  // Remplacé par ApiService.getMesNotes(), déjà scopé par le JWT côté
+  // backend et déjà utilisé par le reste de cet écran (voir
+  // _fetchApercuEtProchainCours ci-dessous) et par lib/pages/notes_tab.dart.
+  Future<void> _fetchNotesNonLues() async {
+    try {
+      final result = await ApiService.getMesNotes();
+      if (result['success'] != true) {
+        if (mounted) setState(() => _notesLoading = false);
+        return;
+      }
+      final notes = List<Map<String, dynamic>>.from(result['data'] as List);
+ 
+      Set<String> lues = <String>{};
+      try {
+        final lectureRows = await Supabase.instance.client
+            .from('notes_lectures')
+            .select('note_key')
+            .eq('etudiant_matricule', widget.profile.matricule.trim());
+ 
+        lues = (lectureRows as List)
+            .map((e) => (e as Map)['note_key']?.toString())
+            .whereType<String>()
+            .toSet();
+      } catch (_) {
+        // Table de suivi "lu" absente ou injoignable : les notes restent
+        // visibles, simplement toutes marquées non lues.
+      }
+ 
+      if (!mounted) return;
+      setState(() {
+        _notesPubliees = notes;
+        _notesLues = lues;
+        _notesLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _notesLoading = false);
+    }
+  }
+ 
+  Future<void> _marquerNotesCommeLues(
+    List<Map<String, dynamic>> notes,
+  ) async {
+    if (notes.isEmpty) return;
+ 
+    final matricule = widget.profile.matricule.trim();
+    if (matricule.isEmpty) return;
+ 
+    final now = DateTime.now().toIso8601String();
+ 
+    final rows = notes.map((note) {
+      return {
+        'etudiant_matricule': matricule,
+        'note_key': _noteKey(note),
+        'lu_at': now,
+      };
+    }).toList();
+ 
+    // Mise à jour locale immédiate : le badge disparaît sans attendre le
+    // réseau. L'upsert assure ensuite la conservation dans l'historique.
+    setState(() {
+      _notesLues = {
+        ..._notesLues,
+        ...notes.map(_noteKey),
+      };
+    });
+ 
+    try {
+      await Supabase.instance.client
+          .from('notes_lectures')
+          .upsert(
+            rows,
+            onConflict: 'etudiant_matricule,note_key',
+          );
+    } catch (_) {
+      // La table peut être absente pendant la mise en place du projet.
+      // Le fonctionnement visuel reste disponible.
+    }
+  }
+ 
+  Future<void> _ouvrirNotes(BuildContext context) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _NotesPage(
+          profile: widget.profile,
+          notes: List<Map<String, dynamic>>.from(_notesPubliees),
+          notesLues: Set<String>.from(_notesLues),
+          noteKey: _noteKey,
+          onMarkRead: _marquerNotesCommeLues,
+        ),
+      ),
+    );
+ 
+    if (mounted) {
+      await _fetchNotesNonLues();
+    }
+  }
+ 
   Future<void> _fetchApercuEtProchainCours() async {
     try {
       final client = Supabase.instance.client;
       final jourAuj = _joursFr[DateTime.now().weekday - 1];
-
+ 
       // ✅ CORRIGÉ — la moyenne/présence passaient par un lookup Supabase
       // direct sur `etudiants` (RLS activé sans politique, bloqué en
       // silence pour la clé publique — découvert le 03/09). Remplacé par
@@ -135,23 +253,23 @@ class _HomeTabState extends State<HomeTab> {
             .limit(1)
             .maybeSingle(),
       ]);
-
+ 
       final apercuResult = results[0] as Map<String, dynamic>;
       final edtActif = results[1] as Map<String, dynamic>?;
-
+ 
       final tousLesCreneaux = edtActif != null
           ? (edtActif['creneaux'] as List? ?? [])
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList()
           : <Map<String, dynamic>>[];
-
+ 
       final coursJour =
           tousLesCreneaux.where((c) => c['jour'] == jourAuj).toList()
             ..sort(
               (a, b) => (a['heureDebut']?.toString() ?? '')
                   .compareTo(b['heureDebut']?.toString() ?? ''),
             );
-
+ 
       double? moyenne;
       double? tauxPresence;
       if (apercuResult['success'] == true) {
@@ -163,7 +281,7 @@ class _HomeTabState extends State<HomeTab> {
             ? double.tryParse(data!['tauxPresence'].toString())
             : null;
       }
-
+ 
       if (!mounted) return;
       setState(() {
         _moyenne = moyenne;
@@ -175,46 +293,46 @@ class _HomeTabState extends State<HomeTab> {
       if (mounted) setState(() => _apercuLoading = false);
     }
   }
-
+ 
   Map<String, dynamic>? get _prochainCours {
     final now = TimeOfDay.now();
     final nowMinutes = now.hour * 60 + now.minute;
-
+ 
     for (final c in _coursDuJour) {
       final fin = _parseHeure(c['heureFin'] as String?);
       if (fin == null) continue;
-
+ 
       if (fin.hour * 60 + fin.minute > nowMinutes) {
         return c;
       }
     }
-
+ 
     return null;
   }
-
+ 
   TimeOfDay? _parseHeure(String? raw) {
     if (raw == null || raw.isEmpty) return null;
-
+ 
     final parts = raw.split(':');
     if (parts.length < 2) return null;
-
+ 
     final h = int.tryParse(parts[0]);
     final m = int.tryParse(parts[1]);
-
+ 
     if (h == null || m == null) return null;
     return TimeOfDay(hour: h, minute: m);
   }
-
+ 
   String _formatHeure(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}h${t.minute.toString().padLeft(2, '0')}';
-
+ 
   String get _salutation {
     final h = DateTime.now().hour;
     if (h < 12) return 'Bonjour';
     if (h < 18) return 'Bon après-midi';
     return 'Bonsoir';
   }
-
+ 
   static const _events = [
     _EventData(
       '🎓',
@@ -245,7 +363,7 @@ class _HomeTabState extends State<HomeTab> {
       'Grand Amphi · 15h00',
     ),
   ];
-
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -286,13 +404,13 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
-
+ 
 Widget _buildHeader(BuildContext context) {
     final initiales =
         '${widget.profile.prenoms.isNotEmpty ? widget.profile.prenoms[0] : ''}'
         '${widget.profile.nom.isNotEmpty ? widget.profile.nom[0] : ''}'
             .toUpperCase();
-
+ 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
       decoration: const BoxDecoration(
@@ -420,12 +538,12 @@ Widget _buildHeader(BuildContext context) {
       ),
     );
   }
-
+ 
 Widget _buildProchainCours(BuildContext context) {
     if (_apercuLoading) return _loadingCard(height: 205);
-
+ 
     final cours = _prochainCours;
-
+ 
     if (cours == null) {
       return Container(
         height: 164,
@@ -481,24 +599,24 @@ Widget _buildProchainCours(BuildContext context) {
         ),
       );
     }
-
+ 
     final debut = _parseHeure(cours['heureDebut'] as String?);
     final fin = _parseHeure(cours['heureFin'] as String?);
     final now = TimeOfDay.now();
     final nowMinutes = now.hour * 60 + now.minute;
     final debutMinutes = debut == null ? 0 : debut.hour * 60 + debut.minute;
     final finMinutes = fin == null ? 0 : fin.hour * 60 + fin.minute;
-
+ 
     final badge = nowMinutes < debutMinutes
         ? 'Dans ${debutMinutes - nowMinutes} min'
         : nowMinutes <= finMinutes ? 'En cours' : '';
-
+ 
     final matiere = cours['matiere']?.toString().trim().isNotEmpty == true
         ? cours['matiere'].toString() : 'Cours';
     final salle = cours['salle']?.toString() ?? '';
     final horaire = debut != null && fin != null
         ? '${_formatHeure(debut)} - ${_formatHeure(fin)}' : '';
-
+ 
     return Container(
       height: 218,
       padding: const EdgeInsets.fromLTRB(22, 19, 15, 17),
@@ -631,7 +749,7 @@ Widget _buildProchainCours(BuildContext context) {
       ),
     );
   }
-
+ 
   Widget _courseDecoration() {
     return SizedBox(
       width: 88, height: 76,
@@ -656,7 +774,7 @@ Widget _buildProchainCours(BuildContext context) {
       ),
     );
   }
-
+ 
   Widget _buildApercuDuJour() {
     final cours = _apercuLoading ? '--' : '${_coursDuJour.length}';
     final presence = _apercuLoading || _tauxPresence == null
@@ -665,7 +783,7 @@ Widget _buildProchainCours(BuildContext context) {
     final moyenne = _apercuLoading || _moyenne == null
         ? '--'
         : _moyenne!.toStringAsFixed(1).replaceAll('.', ',');
-
+ 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -707,7 +825,7 @@ Widget _buildProchainCours(BuildContext context) {
       ],
     );
   }
-
+ 
   Widget _apercuCard(
     IconData icon,
     String value,
@@ -751,10 +869,8 @@ Widget _buildProchainCours(BuildContext context) {
       ),
     );
   }
-
+ 
   Widget _buildAccesRapides(BuildContext context) {
-    // Planning est volontairement présent ici, comme demandé.
-    // Chat IA et Tickets restent accessibles ailleurs dans l'application.
     final items = [
       _QuickAction(
         Icons.bar_chart_rounded,
@@ -798,82 +914,127 @@ Widget _buildProchainCours(BuildContext context) {
           ),
         ),
       ),
+      _QuickAction(
+        Icons.grade_rounded,
+        'Notes',
+        () => _ouvrirNotes(context),
+        badge: _notesNonLues,
+      ),
     ];
-
+ 
+    // Grille pleine largeur (3 colonnes par ligne, comme "Aperçu du jour")
+    // au lieu d'un Wrap centré à taille fixe.
+    final rows = <Widget>[];
+    for (var i = 0; i < items.length; i += 3) {
+      final rowItems = items.skip(i).take(3).toList();
+      final rowChildren = <Widget>[];
+      for (var j = 0; j < 3; j++) {
+        if (j > 0) rowChildren.add(const SizedBox(width: 9));
+        if (j < rowItems.length) {
+          rowChildren.add(
+            Expanded(
+              child: _accesRapideCard(
+                rowItems[j].icon,
+                rowItems[j].label,
+                rowItems[j].onTap,
+                badge: rowItems[j].badge,
+              ),
+            ),
+          );
+        } else {
+          rowChildren.add(const Expanded(child: SizedBox.shrink()));
+        }
+      }
+      rows.add(Row(children: rowChildren));
+      if (i + 3 < items.length) rows.add(const SizedBox(height: 9));
+    }
+ 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeader('Accès rapides', 'Personnaliser'),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 91,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, index) {
-              final item = items[index];
-              return _accesRapideCard(
-                item.icon,
-                item.label,
-                item.onTap,
-              );
-            },
-          ),
-        ),
+        const SizedBox(height: 12),
+        ...rows,
       ],
     );
   }
-
+ 
   Widget _accesRapideCard(
     IconData icon,
     String label,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    int badge = 0,
+  }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 82,
-        padding: const EdgeInsets.symmetric(
-          vertical: 10,
-          horizontal: 5,
-        ),
-        decoration: _cardDecoration(radius: 15),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 37,
-              height: 37,
-              decoration: BoxDecoration(
-                color: AppPalette.lightBlue,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(
-                icon,
-                color: AppPalette.blue,
-                size: 18,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            height: 92,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+            decoration: _cardDecoration(radius: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppPalette.lightBlue,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: AppPalette.blue,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF172033),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (badge > 0)
+            Positioned(
+              top: -6,
+              right: -6,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 24),
+                height: 24,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDC2626),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFF5F7FB), width: 2),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  badge > 99 ? '99+' : '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF172033),
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
-
+ 
 Widget _buildCantineEtFiliereRow(BuildContext context) {
     return Row(
       children: [
@@ -911,7 +1072,7 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
       ],
     );
   }
-
+ 
   Widget _squareActionCard({
     required List<Color> gradientColors,
     required IconData icon,
@@ -1074,10 +1235,10 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
       ),
     );
   }
-
+ 
 Widget _buildEventsCarousel() {
     if (_carouselLength == 0) return const SizedBox.shrink();
-
+ 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1122,19 +1283,19 @@ Widget _buildEventsCarousel() {
       ],
     );
   }
-
+ 
   _EventData _toEventData(EventModel e) {
     final heure =
         '${e.time.hour.toString().padLeft(2, '0')}h${e.time.minute.toString().padLeft(2, '0')}';
     final lieu =
         e.location.isNotEmpty ? e.location : 'Lieu à confirmer';
-
+ 
     final desc = e.description.isNotEmpty
         ? e.description
         : e.price > 0
             ? 'Ticket : ${e.price.toStringAsFixed(0)} FCFA'
             : 'Entrée gratuite';
-
+ 
     return _EventData(
       '🎉',
       DateFormat('dd MMM').format(e.date),
@@ -1143,7 +1304,7 @@ Widget _buildEventsCarousel() {
       '$lieu · $heure',
     );
   }
-
+ 
 Widget _eventCard(_EventData event, {EventModel? model}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -1227,7 +1388,7 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
       ),
     );
   }
-
+ 
   Widget _buildActualitesCarousel() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1277,7 +1438,7 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
       ],
     );
   }
-
+ 
   static const _typeConfig = {
     'urgent': (
       Icons.warning_amber_rounded,
@@ -1298,19 +1459,19 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
       'Info'
     ),
   };
-
+ 
   Widget _annonceCard(Map<String, dynamic> annonce) {
     final type = annonce['type'] as String? ?? 'info';
     final cfg = _typeConfig[type] ?? _typeConfig['info']!;
     final (icon, color, bgColor, label) = cfg;
-
+ 
     String dateStr = '';
     try {
       final raw = annonce['created_at'] as String?;
       if (raw != null) {
         final dt = DateTime.parse(raw);
         final diff = DateTime.now().difference(dt);
-
+ 
         if (diff.inMinutes < 60) {
           dateStr = 'Il y a ${diff.inMinutes} min';
         } else if (diff.inHours < 24) {
@@ -1320,7 +1481,7 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
         }
       }
     } catch (_) {}
-
+ 
     return Container(
       width: 260,
       padding: const EdgeInsets.all(12),
@@ -1397,7 +1558,7 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
       ),
     );
   }
-
+ 
 Widget _annonceVide() {
     return Container(
       height: 62,
@@ -1421,7 +1582,7 @@ Widget _annonceVide() {
       ),
     );
   }
-
+ 
   Widget _sectionHeader(String title, String action) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1445,7 +1606,7 @@ Widget _annonceVide() {
       ],
     );
   }
-
+ 
   Widget _whiteInfo(IconData icon, String text) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1462,9 +1623,9 @@ Widget _annonceVide() {
       ],
     );
   }
-
-
-
+ 
+ 
+ 
   Widget _loadingCard({double height = 130}) {
     return Container(
       height: height,
@@ -1474,7 +1635,7 @@ Widget _annonceVide() {
       ),
     );
   }
-
+ 
   BoxDecoration _cardDecoration({double radius = 18}) {
     return BoxDecoration(
       color: Colors.white,
@@ -1492,7 +1653,7 @@ Widget _annonceVide() {
       ],
     );
   }
-
+ 
   void _showCantineSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1502,22 +1663,444 @@ Widget _annonceVide() {
     );
   }
 }
-
+ 
+class _NotesPage extends StatefulWidget {
+  const _NotesPage({
+    required this.profile,
+    required this.notes,
+    required this.notesLues,
+    required this.noteKey,
+    required this.onMarkRead,
+  });
+ 
+  final StudentProfile profile;
+  final List<Map<String, dynamic>> notes;
+  final Set<String> notesLues;
+  final String Function(Map<String, dynamic>) noteKey;
+  final Future<void> Function(List<Map<String, dynamic>>) onMarkRead;
+ 
+  @override
+  State<_NotesPage> createState() => _NotesPageState();
+}
+ 
+class _NotesPageState extends State<_NotesPage> {
+  late final Set<String> _lues;
+  int _onglet = 0;
+ 
+  @override
+  void initState() {
+    super.initState();
+    _lues = Set<String>.from(widget.notesLues);
+  }
+ 
+  // Les clés reconnues correspondent désormais à celles renvoyées par
+  // ApiService.getMesNotes() (backend) : module_nom, note, date_session...
+  // — les anciennes clés Supabase (matiere_nom, date_note...) restent en
+  // repli, au cas où.
+  String _titreNote(Map<String, dynamic> note) {
+    for (final key in [
+      'module_nom',
+      'matiere_nom',
+      'matiere',
+      'cours',
+      'module',
+      'ue',
+      'intitule',
+    ]) {
+      final value = note[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return 'Note publiée';
+  }
+ 
+  String _profNote(Map<String, dynamic> note) {
+    final prenoms = (note['prof_prenoms'] ?? '').toString().trim();
+    final nom = (note['prof_nom'] ?? '').toString().trim();
+    final full = [prenoms, nom].where((s) => s.isNotEmpty).join(' ');
+    return full.isNotEmpty ? full : '';
+  }
+ 
+  String _semestreNote(Map<String, dynamic> note) {
+    return (note['semestre'] ?? '').toString().trim();
+  }
+ 
+  String _mentionNote(Map<String, dynamic> note) {
+    return (note['mention'] ?? '').toString().trim();
+  }
+ 
+  String _dateNote(Map<String, dynamic> note) {
+    for (final key in [
+      'date_session',
+      'date_note',
+      'date_evaluation',
+      'created_at',
+      'date',
+    ]) {
+      final raw = note[key]?.toString();
+      if (raw == null || raw.isEmpty) continue;
+ 
+      try {
+        return DateFormat('dd/MM/yyyy').format(DateTime.parse(raw).toLocal());
+      } catch (_) {}
+    }
+    return '';
+  }
+ 
+  String _valeur(Map<String, dynamic> note) {
+    final value = note['valeur'] ?? note['note'] ?? note['score'];
+    if (value == null) return '--';
+    final n = double.tryParse(value.toString());
+    if (n == null) return value.toString();
+    return n.toStringAsFixed(n % 1 == 0 ? 0 : 2).replaceAll('.', ',');
+  }
+ 
+  String _coefficient(Map<String, dynamic> note) {
+    final value = note['coefficient'] ?? note['coef'];
+    return value == null ? '' : 'Coef. ${value.toString()}';
+  }
+ 
+  List<Map<String, dynamic>> get _nonLues => widget.notes
+      .where((note) => !_lues.contains(widget.noteKey(note)))
+      .toList();
+ 
+  List<Map<String, dynamic>> get _historique => widget.notes
+      .where((note) => _lues.contains(widget.noteKey(note)))
+      .toList();
+ 
+  Future<void> _lireNotes(List<Map<String, dynamic>> notes) async {
+    if (notes.isEmpty) return;
+ 
+    setState(() {
+      _lues.addAll(notes.map(widget.noteKey));
+    });
+ 
+    await widget.onMarkRead(notes);
+ 
+    if (mounted) setState(() {});
+  }
+ 
+  @override
+  Widget build(BuildContext context) {
+    final notes = _onglet == 0 ? _nonLues : _historique;
+ 
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF172033),
+        title: const Text(
+          'Mes notes',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        actions: [
+          if (_nonLues.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Center(
+                child: Text(
+                  '${_nonLues.length} nouvelle${_nonLues.length > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    color: Color(0xFFDC2626),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppPalette.lightBlue,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: _tab('Nouvelles', 0, _nonLues.length)),
+                Expanded(child: _tab('Historique', 1, _historique.length)),
+              ],
+            ),
+          ),
+          if (_onglet == 0 && _nonLues.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _lireNotes(_nonLues),
+                  icon: const Icon(Icons.done_all_rounded, size: 17),
+                  label: const Text('Tout marquer comme lu'),
+                ),
+              ),
+            ),
+          Expanded(
+            child: notes.isEmpty
+                ? _emptyState()
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+                    itemCount: notes.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 9),
+                    itemBuilder: (_, index) => _noteCard(notes[index]),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+ 
+  Widget _tab(String label, int index, int count) {
+    final active = _onglet == index;
+    return GestureDetector(
+      onTap: () => setState(() => _onglet = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? AppPalette.blue : AppPalette.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: index == 0
+                      ? const Color(0xFFDC2626)
+                      : AppPalette.blue,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+ 
+  Widget _noteCard(Map<String, dynamic> note) {
+    final isRead = _lues.contains(widget.noteKey(note));
+ 
+    return GestureDetector(
+      onTap: () => _lireNotes([note]),
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isRead
+                ? const Color(0xFFE2E8F0)
+                : const Color(0xFFFECACA),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.035),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: isRead
+                    ? AppPalette.lightBlue
+                    : const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(
+                Icons.grade_rounded,
+                color: isRead
+                    ? AppPalette.blue
+                    : const Color(0xFFDC2626),
+                size: 23,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _titreNote(note),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF172033),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      if (_profNote(note).isNotEmpty) 'Prof. ${_profNote(note)}',
+                      if (_semestreNote(note).isNotEmpty) _semestreNote(note),
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppPalette.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Text(
+                        _dateNote(note),
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          color: AppPalette.grey,
+                        ),
+                      ),
+                      if (_coefficient(note).isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          _coefficient(note),
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            color: AppPalette.grey,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (_mentionNote(note).isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppPalette.lightBlue,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _mentionNote(note),
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppPalette.blue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _valeur(note),
+                  style: TextStyle(
+                    color: isRead
+                        ? const Color(0xFF172033)
+                        : const Color(0xFFDC2626),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isRead ? 'Lu' : 'Nouveau',
+                  style: TextStyle(
+                    color: isRead
+                        ? AppPalette.grey
+                        : const Color(0xFFDC2626),
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+ 
+  Widget _emptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _onglet == 0
+                  ? Icons.mark_email_read_outlined
+                  : Icons.history_rounded,
+              size: 48,
+              color: const Color(0xFFCBD5E1),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _onglet == 0
+                  ? 'Aucune nouvelle note'
+                  : 'Aucune note dans l’historique',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+ 
 class _QuickAction {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-
-  const _QuickAction(this.icon, this.label, this.onTap);
+  final int badge;
+ 
+  const _QuickAction(
+    this.icon,
+    this.label,
+    this.onTap, {
+    this.badge = 0,
+  });
 }
-
+ 
 class _EventData {
   final String emoji;
   final String date;
   final String titre;
   final String desc;
   final String lieu;
-
+ 
   const _EventData(
     this.emoji,
     this.date,
@@ -1526,10 +2109,10 @@ class _EventData {
     this.lieu,
   );
 }
-
+ 
 class _CantineSheet extends StatelessWidget {
   const _CantineSheet();
-
+ 
   static const _menu = [
     (
       '☀️',
@@ -1559,7 +2142,7 @@ class _CantineSheet extends StatelessWidget {
       ]
     ),
   ];
-
+ 
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1661,7 +2244,7 @@ class _CantineSheet extends StatelessWidget {
       ),
     );
   }
-
+ 
   Widget _mealSection(
     String emoji,
     String title,
@@ -1748,3 +2331,4 @@ class _CantineSheet extends StatelessWidget {
     );
   }
 }
+ 

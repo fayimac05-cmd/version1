@@ -102,19 +102,45 @@ class ProfessorService {
     }
   }
 
-  static Future<Map<String, dynamic>> getStudentsByFiliere(int filiereId) async {
+  // [niveau] filtre les étudiants au bon niveau (un prof peut enseigner
+  // plusieurs niveaux dans la même filière — voir ProfesseursController.getStudentsByFiliere).
+  static Future<Map<String, dynamic>> getStudentsByFiliere(int filiereId, {String? niveau}) async {
     try {
       final headers = await ApiService.getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/professeurs/classes/$filiereId/students'),
-        headers: headers,
-      );
+      final uri = Uri.parse('$baseUrl/professeurs/classes/$filiereId/students')
+          .replace(queryParameters: niveau != null ? {'niveau': niveau} : null);
+      final response = await http.get(uri, headers: headers);
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['success'] == true) return {'success': true, 'data': body['data']};
         return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
       return {'success': false, 'error': 'Erreur lors du chargement des étudiants.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  // Renvoie les octets bruts du PDF (liste de classe) — l'appelant se charge
+  // de déclencher le téléchargement/l'impression côté UI.
+  static Future<Map<String, dynamic>> telechargerListeEtudiantsPdf(
+    int filiereId, {
+    String? niveau,
+    String? filiereNom,
+  }) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final uri = Uri.parse('$baseUrl/professeurs/classes/$filiereId/students/pdf').replace(
+        queryParameters: {
+          if (niveau != null) 'niveau': niveau,
+          if (filiereNom != null) 'filiere_nom': filiereNom,
+        },
+      );
+      final response = await http.get(uri, headers: headers);
+      if (response.statusCode == 200) {
+        return {'success': true, 'bytes': response.bodyBytes};
+      }
+      return {'success': false, 'error': 'Erreur lors du téléchargement de la liste.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
@@ -138,8 +164,6 @@ class ProfessorService {
     }
   }
 
-  /// Remplace les créneaux libres du prof et les transmet à l'administration.
-  /// [creneaux] : liste de {jour, debut, fin}.
   static Future<Map<String, dynamic>> saveDisponibilites(
       List<Map<String, String>> creneaux) async {
     try {
@@ -188,21 +212,21 @@ class ProfessorService {
     try {
       final token = await ApiService.getToken();
       final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/cours'));
-      
+
       request.headers['Authorization'] = 'Bearer $token';
-      
+
       request.fields['titre'] = titre;
       request.fields['description'] = description;
       request.fields['filiere_id'] = filiereId;
       request.fields['filiere_nom'] = filiereNom;
       request.fields['niveau'] = niveau;
       request.fields['module_id'] = moduleId;
-      
+
       request.files.add(await http.MultipartFile.fromPath('file', filePath));
-      
+
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
-      
+
       if (response.statusCode == 201) {
         return {'success': true, 'data': jsonDecode(response.body)};
       } else {
