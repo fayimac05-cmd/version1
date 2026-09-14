@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../widgets/delegue_badge.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE MESSAGE CANAL
@@ -12,6 +13,7 @@ import '../services/socket_service.dart';
 class _MessageCanal {
   final String id, expediteur, initiales, texte, heure, date, type;
   final Color color;
+  final String? etudiantRole, niveau;
   Map<String, int> reactions;
   bool epingle = false;
 
@@ -24,6 +26,8 @@ class _MessageCanal {
     required this.date,
     required this.type,
     required this.color,
+    this.etudiantRole,
+    this.niveau,
     Map<String, int>? reactions,
   }) : reactions = reactions ?? {};
 
@@ -55,6 +59,8 @@ class _MessageCanal {
       date: date,
       type: json['type']?.toString() ?? 'texte',
       color: color,
+      etudiantRole: json['etudiant_role']?.toString(),
+      niveau: json['niveau']?.toString(),
       reactions: {},
     );
   }
@@ -506,6 +512,10 @@ class _CanalDetailState extends State<_CanalDetail> {
       initiales: '${p.prenoms[0]}${p.nom[0]}'.toUpperCase(),
       texte: texte, heure: heure, date: 'Aujourd\'hui',
       type: 'texte', color: widget.couleur,
+      // Rôle/niveau rafraîchis dès que le message a fait l'aller-retour
+      // serveur (WebSocket ou rechargement) — pas connus localement ici.
+      etudiantRole: null,
+      niveau: null,
     );
     setState(() { _msgs.add(msgLocal); _hasText = false; });
     _inputCtrl.clear();
@@ -735,6 +745,8 @@ class _BulleCanal extends StatelessWidget {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Text(message.expediteur, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: message.color)),
+            const SizedBox(width: 6),
+            DelegueBadge(role: message.etudiantRole, niveau: message.niveau, compact: true),
             const SizedBox(width: 8),
             Text(message.heure, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
             if (message.epingle) ...[
