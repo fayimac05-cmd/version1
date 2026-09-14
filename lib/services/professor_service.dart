@@ -200,6 +200,21 @@ class ProfessorService {
     }
   }
 
+  static Future<Map<String, dynamic>> deleteCours(String coursId) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/cours/$coursId'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) return {'success': true};
+      final body = jsonDecode(response.body);
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la suppression.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
   static Future<Map<String, dynamic>> uploadCours({
     required String titre,
     required String description,
@@ -207,7 +222,8 @@ class ProfessorService {
     required String filiereNom,
     required String niveau,
     required String moduleId,
-    required String filePath,
+    required List<int> fileBytes,
+    required String fileName,
   }) async {
     try {
       final token = await ApiService.getToken();
@@ -222,7 +238,11 @@ class ProfessorService {
       request.fields['niveau'] = niveau;
       request.fields['module_id'] = moduleId;
 
-      request.files.add(await http.MultipartFile.fromPath('file', filePath));
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        fileBytes,
+        filename: fileName,
+      ));
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
@@ -231,10 +251,10 @@ class ProfessorService {
         return {'success': true, 'data': jsonDecode(response.body)};
       } else {
         final body = jsonDecode(response.body);
-        return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi du cours.'};
+        return {'success': false, 'error': body['message'] ?? body['error'] ?? 'Erreur lors de l\'envoi du cours.'};
       }
     } catch (e) {
-      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+      return {'success': false, 'error': 'Erreur : $e'};
     }
   }
 
@@ -375,6 +395,24 @@ class ProfessorService {
         return {'success': true, 'data': body['data']};
       }
       return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement de l\'appel.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateAppel(String appelId, List<Map<String, dynamic>> presences) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/appels/$appelId'),
+        headers: headers,
+        body: jsonEncode({'presences': presences}),
+      );
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la modification de l\'appel.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }

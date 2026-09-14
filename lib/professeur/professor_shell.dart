@@ -322,7 +322,10 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
   }
 
   Future<void> _chargerEtudiants() async {
-    final res = await ProfessorService.getStudentsByFiliere(int.parse('${widget.classe['id']}'));
+    final res = await ProfessorService.getStudentsByFiliere(
+      int.parse('${widget.classe['id']}'),
+      niveau: widget.classe['niveau']?.toString(),
+    );
     if (!mounted) return;
     setState(() {
       _etudiants = res['success'] == true ? res['data'] as List<dynamic> : [];
@@ -619,7 +622,10 @@ class _CoursTabState extends State<_CoursTab> {
                         child: ListView.builder(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                           itemCount: _coursFiltres.length,
-                          itemBuilder: (_, i) => _CoursCard(cours: _coursFiltres[i]),
+                          itemBuilder: (_, i) => _CoursCard(
+                            cours: _coursFiltres[i],
+                            onDeleted: _chargerCours,
+                          ),
                         ),
                       ),
       ),
@@ -645,13 +651,49 @@ class _CoursTabState extends State<_CoursTab> {
   }
 }
 
-class _CoursCard extends StatelessWidget {
-  const _CoursCard({required this.cours});
+class _CoursCard extends StatefulWidget {
+  const _CoursCard({required this.cours, required this.onDeleted});
   final dynamic cours;
+  final VoidCallback onDeleted;
+
+  @override
+  State<_CoursCard> createState() => _CoursCardState();
+}
+
+class _CoursCardState extends State<_CoursCard> {
+  bool _deleting = false;
+
+  Future<void> _delete() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer ce cours ?'),
+        content: Text('Le cours "${widget.cours['titre']}" sera définitivement supprimé.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _deleting = true);
+    final res = await ProfessorService.deleteCours(widget.cours['id'].toString());
+    if (!mounted) return;
+    if (res['success'] == true) {
+      widget.onDeleted();
+    } else {
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['error'] ?? 'Erreur'), backgroundColor: Colors.red));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final date = (cours['date_creation'] ?? '').toString().split('T').first;
+    final date = (widget.cours['date_creation'] ?? '').toString().split('T').first;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -668,14 +710,14 @@ class _CoursCard extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${cours['titre'] ?? ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+          Text('${widget.cours['titre'] ?? ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
           const SizedBox(height: 2),
-          Text('${cours['module_nom'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          Text('${widget.cours['module_nom'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
           const SizedBox(height: 4),
           Row(children: [
             const Icon(Icons.groups_outlined, size: 12, color: Color(0xFF94A3B8)),
             const SizedBox(width: 4),
-            Flexible(child: Text('${cours['filiere_nom'] ?? ''} · ${cours['niveau'] ?? ''}',
+            Flexible(child: Text('${widget.cours['filiere_nom'] ?? ''} · ${widget.cours['niveau'] ?? ''}',
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)))),
             const SizedBox(width: 12),
@@ -684,6 +726,14 @@ class _CoursCard extends StatelessWidget {
             Text(date, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
           ]),
         ])),
+        const SizedBox(width: 8),
+        _deleting
+            ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))
+            : IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 22),
+                tooltip: 'Supprimer',
+                onPressed: _delete,
+              ),
       ]),
     );
   }

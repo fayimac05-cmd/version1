@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
  
@@ -27,8 +28,11 @@ class HomeTab extends StatefulWidget {
  
 class _HomeTabState extends State<HomeTab> {
   final PageController _eventsCtrl = PageController(viewportFraction: 0.88);
+  final PageController _annoncesCtrl = PageController(viewportFraction: 0.88);
   int _eventPage = 0;
+  int _annoncePage = 0;
   Timer? _autoScroll;
+  Timer? _annoncesAutoScroll;
  
   List<Map<String, dynamic>> _annonces = [];
   bool _annoncesLoading = true;
@@ -58,8 +62,7 @@ class _HomeTabState extends State<HomeTab> {
     'Dimanche',
   ];
  
-  int get _carouselLength =>
-      _evenements.isNotEmpty ? _evenements.length : _events.length;
+  int get _carouselLength => _evenements.length;
  
   @override
   void initState() {
@@ -78,28 +81,41 @@ class _HomeTabState extends State<HomeTab> {
         curve: Curves.easeInOut,
       );
     });
+
+    _annoncesAutoScroll = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || _annonces.length <= 1) return;
+      final next = (_annoncePage + 1) % _annonces.length;
+      if (_annoncesCtrl.hasClients) {
+        _annoncesCtrl.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
  
   @override
   void dispose() {
     _eventsCtrl.dispose();
+    _annoncesCtrl.dispose();
     _autoScroll?.cancel();
+    _annoncesAutoScroll?.cancel();
     super.dispose();
   }
  
   Future<void> _fetchAnnonces() async {
     try {
-      final data = await Supabase.instance.client
-          .from('annonces')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(10);
- 
+      final result = await ApiService.getAnnonces(statut: 'publiee');
       if (!mounted) return;
-      setState(() {
-        _annonces = List<Map<String, dynamic>>.from(data as List);
-        _annoncesLoading = false;
-      });
+      if (result['success'] == true) {
+        setState(() {
+          _annonces = List<Map<String, dynamic>>.from(result['data'] as List);
+          _annoncesLoading = false;
+        });
+      } else {
+        setState(() => _annoncesLoading = false);
+      }
     } catch (_) {
       if (mounted) setState(() => _annoncesLoading = false);
     }
@@ -1237,7 +1253,30 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
   }
  
 Widget _buildEventsCarousel() {
-    if (_carouselLength == 0) return const SizedBox.shrink();
+    if (_carouselLength == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader('Événements à venir', 'Voir tout'),
+          const SizedBox(height: 10),
+          Container(
+            height: 112,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppPalette.white,
+              borderRadius: BorderRadius.circular(17),
+              border: Border.all(color: AppPalette.borderGrey),
+            ),
+            child: const Center(
+              child: Text(
+                'Aucun événement prévu pour le moment.',
+                style: TextStyle(color: AppPalette.grey, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
  
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1251,13 +1290,10 @@ Widget _buildEventsCarousel() {
             itemCount: _carouselLength,
             onPageChanged: (i) => setState(() => _eventPage = i),
             itemBuilder: (_, i) {
-              if (_evenements.isNotEmpty) {
-                return _eventCard(
-                  _toEventData(_evenements[i]),
-                  model: _evenements[i],
-                );
-              }
-              return _eventCard(_events[i]);
+              return _eventCard(
+                _toEventData(_evenements[i]),
+                model: _evenements[i],
+              );
             },
           ),
         ),
@@ -1283,112 +1319,141 @@ Widget _buildEventsCarousel() {
       ],
     );
   }
- 
+
   _EventData _toEventData(EventModel e) {
     final heure =
         '${e.time.hour.toString().padLeft(2, '0')}h${e.time.minute.toString().padLeft(2, '0')}';
     final lieu =
         e.location.isNotEmpty ? e.location : 'Lieu à confirmer';
- 
+
     final desc = e.description.isNotEmpty
         ? e.description
         : e.price > 0
             ? 'Ticket : ${e.price.toStringAsFixed(0)} FCFA'
             : 'Entrée gratuite';
- 
+
     return _EventData(
       '🎉',
       DateFormat('dd MMM').format(e.date),
       e.name,
       desc,
       '$lieu · $heure',
+      imageUrl: e.imageUrl,
     );
   }
- 
-Widget _eventCard(_EventData event, {EventModel? model}) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: _cardDecoration(radius: 17),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 62,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(event.date.split(' ').first,
+
+  Widget _eventCard(_EventData event, {EventModel? model}) {
+    return GestureDetector(
+      onTap: () async {
+        if (model != null) {
+          final registered = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EventRegistrationPage(event: model),
+            ),
+          );
+          if (registered == true) _fetchEvenements();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: _cardDecoration(radius: 17),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 62,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(event.date.split(' ').first,
+                      style: const TextStyle(
+                        color: AppPalette.blue,
+                        fontSize: 25, fontWeight: FontWeight.w800,
+                      )),
+                  Text(
+                    event.date.split(' ').length > 1
+                        ? event.date.split(' ').sublist(1).join(' ').toUpperCase()
+                        : '',
                     style: const TextStyle(
-                      color: AppPalette.blue,
-                      fontSize: 25, fontWeight: FontWeight.w800,
-                    )),
-                Text(
-                  event.date.split(' ').length > 1
-                      ? event.date.split(' ').sublist(1).join(' ').toUpperCase()
-                      : '',
-                  style: const TextStyle(
-                    color: AppPalette.grey,
-                    fontSize: 9, fontWeight: FontWeight.w700,
+                      color: AppPalette.grey,
+                      fontSize: 9, fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Container(width: 1, height: 58, color: AppPalette.borderGrey),
-          const SizedBox(width: 12),
-          Container(
-            width: 44, height: 44,
-            decoration: const BoxDecoration(
-              color: AppPalette.lightBlue, shape: BoxShape.circle),
-            child: Center(
-              child: Text(event.emoji,
-                  style: const TextStyle(fontSize: 20)),
+            Container(width: 1, height: 58, color: AppPalette.borderGrey),
+            const SizedBox(width: 12),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                  color: AppPalette.lightBlue, shape: BoxShape.circle),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: (event.imageUrl != null && event.imageUrl!.isNotEmpty)
+                    ? (event.imageUrl!.startsWith('data:image')
+                        ? Image.memory(
+                            base64Decode(event.imageUrl!.split(',').last),
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(event.emoji,
+                                  style: const TextStyle(fontSize: 20)),
+                            ),
+                          )
+                        : Image.network(
+                            event.imageUrl!,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(event.emoji,
+                                  style: const TextStyle(fontSize: 20)),
+                            ),
+                          ))
+                    : Center(
+                        child: Text(event.emoji,
+                            style: const TextStyle(fontSize: 20)),
+                      ),
+              ),
             ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(event.titre,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF172033),
-                      fontSize: 13, fontWeight: FontWeight.w800,
-                    )),
-                const SizedBox(height: 4),
-                Text(event.desc,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppPalette.grey, fontSize: 9.5)),
-                const SizedBox(height: 5),
-                Text(event.lieu,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppPalette.grey, fontSize: 9)),
-              ],
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(event.titre,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF172033),
+                        fontSize: 13, fontWeight: FontWeight.w800,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(event.desc,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppPalette.grey, fontSize: 9.5)),
+                  const SizedBox(height: 5),
+                  Text(event.lieu,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppPalette.grey, fontSize: 9)),
+                ],
+              ),
             ),
-          ),
-          if (model != null)
-            GestureDetector(
-              onTap: () async {
-                final registered = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EventRegistrationPage(event: model),
-                  ),
-                );
-                if (registered == true) _fetchEvenements();
-              },
-              child: const Icon(Icons.chevron_right_rounded,
+            if (model != null)
+              const Icon(Icons.chevron_right_rounded,
                   color: Color(0xFF64748B), size: 24),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
- 
+
   Widget _buildActualitesCarousel() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1427,18 +1492,20 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
         else
           SizedBox(
             height: 118,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
+            child: PageView.builder(
+              controller: _annoncesCtrl,
+              onPageChanged: (i) => setState(() => _annoncePage = i),
               itemCount: _annonces.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _annonceCard(_annonces[i]),
+              itemBuilder: (_, i) => Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: _annonceCard(_annonces[i]),
+              ),
             ),
           ),
       ],
     );
   }
- 
+
   static const _typeConfig = {
     'urgent': (
       Icons.warning_amber_rounded,
@@ -1459,19 +1526,181 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
       'Info'
     ),
   };
- 
+
+  void _afficherDetailsAnnonce(Map<String, dynamic> annonce) {
+    final type = annonce['type'] as String? ?? 'info';
+    final cfg = _typeConfig[type] ?? _typeConfig['info']!;
+    final (icon, color, bgColor, label) = cfg;
+
+    final titre = annonce['titre'] as String? ?? 'Annonce';
+    final contenu = annonce['contenu'] as String? ??
+        annonce['description'] as String? ??
+        'Aucun détail disponible pour cette annonce.';
+    final auteurNom = annonce['auteur_nom'] ?? annonce['auteur']?['nom'] ?? '';
+    final auteurPrenom = annonce['auteur_prenoms'] ?? annonce['auteur']?['prenoms'] ?? '';
+    final auteurStr = '$auteurPrenom $auteurNom'.trim();
+
+    String dateStr = '';
+    try {
+      final raw = annonce['created_at'] as String? ?? annonce['createdAt'] as String?;
+      if (raw != null) {
+        final dt = DateTime.parse(raw);
+        dateStr = DateFormat('dd/MM/yyyy à HH:mm').format(dt);
+      }
+    } catch (_) {}
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: color, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: bgColor,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (dateStr.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                dateStr,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (auteurStr.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Par $auteurStr',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                titre,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Text(
+                    contenu,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF334155),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.blue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Fermer', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _annonceCard(Map<String, dynamic> annonce) {
     final type = annonce['type'] as String? ?? 'info';
     final cfg = _typeConfig[type] ?? _typeConfig['info']!;
     final (icon, color, bgColor, label) = cfg;
- 
+
     String dateStr = '';
     try {
-      final raw = annonce['created_at'] as String?;
+      final raw = annonce['created_at'] as String? ?? annonce['createdAt'] as String?;
       if (raw != null) {
         final dt = DateTime.parse(raw);
         final diff = DateTime.now().difference(dt);
- 
+
         if (diff.inMinutes < 60) {
           dateStr = 'Il y a ${diff.inMinutes} min';
         } else if (diff.inHours < 24) {
@@ -1481,80 +1710,102 @@ Widget _eventCard(_EventData event, {EventModel? model}) {
         }
       }
     } catch (_) {}
- 
-    return Container(
-      width: 260,
-      padding: const EdgeInsets.all(12),
-      decoration: _cardDecoration(radius: 15),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(11),
+
+    final titre = annonce['titre'] as String? ?? '';
+    final contenu = (annonce['contenu'] as String? ?? annonce['description'] as String? ?? '').trim();
+
+    return GestureDetector(
+      onTap: () => _afficherDetailsAnnonce(annonce),
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.all(12),
+        decoration: _cardDecoration(radius: 15),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: color, size: 20),
             ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  annonce['titre'] as String? ?? '',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF172033),
-                    height: 1.3,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titre,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF172033),
+                      height: 1.2,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: bgColor,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
+                  if (contenu.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Expanded(
                       child: Text(
-                        label,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w800,
+                        contenu,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                          height: 1.3,
                         ),
                       ),
                     ),
-                    if (dateStr.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      Expanded(
+                  ] else
+                    const Spacer(),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
                         child: Text(
-                          dateStr,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          label,
+                          style: TextStyle(
+                            color: color,
                             fontSize: 8.5,
-                            color: Color(0xFFA0AEC0),
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
+                      if (dateStr.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            dateStr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 8.5,
+                              color: Color(0xFFA0AEC0),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2100,14 +2351,16 @@ class _EventData {
   final String titre;
   final String desc;
   final String lieu;
+  final String? imageUrl;
  
   const _EventData(
     this.emoji,
     this.date,
     this.titre,
     this.desc,
-    this.lieu,
-  );
+    this.lieu, {
+    this.imageUrl,
+  });
 }
  
 class _CantineSheet extends StatelessWidget {

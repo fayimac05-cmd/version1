@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
 import '../models/event.dart';
 import '../services/supabase_service.dart';
+import '../services/api_service.dart';
 class CreateEventPage extends StatefulWidget {
   const CreateEventPage({super.key});
 
@@ -199,44 +200,48 @@ class _CreateEventPageState extends State<CreateEventPage> {
 
                       setState(() => _isSaving = true);
 
-                      // ── Upload image vers Supabase Storage ──
-                      String? imageUrl;
-                      if (_selectedImage != null && !kIsWeb) {
-                        try {
-                          final fileName =
-                              '${DateTime.now().millisecondsSinceEpoch}_event.jpg';
-                          imageUrl = await SupabaseService()
-                              .uploadEventImage(
-                                  File(_selectedImage!.path), fileName);
-                        } catch (e) {
-                          if (mounted) setState(() => _isSaving = false);
-                          scaffoldMessenger.showSnackBar(
-                            SnackBar(
-                                content:
-                                    Text('Erreur upload image : $e')),
-                          );
-                          return;
-                        }
-                      }
-
-                      // ── Insérer l'événement dans Supabase ──
+                      // ── Insérer l'événement via ApiService ──
                       try {
-                        await SupabaseService().createEvent({
-                          'name': _nameController.text,
-                          'location': _locationController.text,
-                          'date': (_selectedDate ?? DateTime.now())
-                              .toIso8601String(),
-                          'time': timeFormatted,
-                          'price':
-                              double.tryParse(_priceController.text) ?? 0,
-                          if (imageUrl != null) 'image_url': imageUrl,
+                        final dt = _selectedDate ?? DateTime.now();
+                        final t = _selectedTime ?? TimeOfDay.now();
+                        final dateTime = DateTime(dt.year, dt.month, dt.day, t.hour, t.minute);
+
+                        final res = await ApiService.createEvenement({
+                          'titre': _nameController.text,
+                          'description': '', // TODO: add description field later if needed
+                          'lieu': _locationController.text,
+                          'dateDebut': dateTime.toIso8601String(),
+                          'prix': double.tryParse(_priceController.text) ?? 0,
+                          'capacite': int.tryParse(_capaciteController.text) ?? 0,
                         });
+
+                        if (res['success'] != true) {
+                          throw Exception(res['message'] ?? 'Erreur inconnue');
+                        }
+
+                        final eventId = res['data']['id'].toString();
+
+                        // ── Upload de l'affiche ──
+                        if (_selectedImage != null) {
+                          final imageBytes = await _selectedImage!.readAsBytes();
+                          final uploadRes = await ApiService.uploadEvenementAffiche(
+                              eventId, imageBytes, _selectedImage!.name);
+                          if (uploadRes['success'] != true) {
+                            if (mounted) setState(() => _isSaving = false);
+                            final err = uploadRes['error'] ?? uploadRes['message'] ?? 'Erreur image';
+                            scaffoldMessenger.showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      'Événement créé, mais erreur image: $err')),
+                            );
+                            navigator.pop(newEvent);
+                            return;
+                          }
+                        }
                       } catch (e) {
                         if (mounted) setState(() => _isSaving = false);
                         scaffoldMessenger.showSnackBar(
-                          SnackBar(
-                              content: Text(
-                                  'Erreur création événement : $e')),
+                          SnackBar(content: Text('Erreur création événement : $e')),
                         );
                         return;
                       }
@@ -244,8 +249,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       if (mounted) setState(() => _isSaving = false);
                       scaffoldMessenger.showSnackBar(
                         const SnackBar(
-                            content:
-                                Text('Événement créé avec succès !')),
+                            content: Text('Événement créé avec succès !')),
                       );
                       navigator.pop(newEvent);
                     }

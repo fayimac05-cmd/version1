@@ -296,8 +296,7 @@ class _AdminShellState extends State<AdminShell>
       case 2:
         return config.sectionActive(SectionEnseignement.superieur);
       case 11:
-        return config.sectionActive(SectionEnseignement.superieur) &&
-            config.options.bde;
+        return true;
       default:
         return true;
     }

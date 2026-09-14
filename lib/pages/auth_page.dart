@@ -11,6 +11,7 @@ import 'parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../services/supabase_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ─── Enum étapes ─────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ class _AuthPageState extends State<AuthPage> {
 
   Map<String, dynamic>? _userTrouve;
   String? _cleTrouvee;
+  String? _matriculeReel; // vrai matricule (null si généré artificiellement)
   String? _userId; // id backend, requis pour setupPassword (1ère connexion)
 
   @override
@@ -116,10 +118,10 @@ class _AuthPageState extends State<AuthPage> {
       destination = ProfessorShell(profile: profile, onLogout: logout);
     } else if (r == 'parent' || r == 'tuteur') {
       destination = ParentShell(
+        profile: profile,
         nomEnfant: '${profile.prenoms} ${profile.nom}',
         onLogout: logout,
         etudiantId: profile.matricule,
-        profile: profile,
       );
     } else if (r == 'bde') {
       destination = const BureauDesEtudiantsScreen();
@@ -169,6 +171,7 @@ class _AuthPageState extends State<AuthPage> {
             'premiereFois': premierLogin,
           };
           _cleTrouvee = u['matricule']?.toString() ?? mat;
+          _matriculeReel = _cleTrouvee;
           _userId = result['userId']?.toString();
           _loading = false;
           _etape = premierLogin ? _Etape.premiereFois : _Etape.motDePasse;
@@ -226,9 +229,14 @@ class _AuthPageState extends State<AuthPage> {
             'premiereFois': premierLogin,
           };
           _cleTrouvee = u['matricule']?.toString();
+          // Si le backend n'a pas retourné de vrai matricule,
+          // on génère un identifiant d'affichage uniquement (ne pas utiliser pour le login)
           if (_cleTrouvee == null || _cleTrouvee!.isEmpty) {
             final role = (u['role']?.toString() ?? 'USER').toUpperCase();
-            _cleTrouvee = '$role-$tel';
+            _cleTrouvee = '$role-$tel'; // affichage seulement
+            _matriculeReel = null; // pas de vrai matricule
+          } else {
+            _matriculeReel = _cleTrouvee;
           }
           _userId = result['userId']?.toString();
           _loading = false;
@@ -253,15 +261,50 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
+    // Si l'admin n'a pas de vrai matricule, on utilise nom+tel pour le login
+    // (le _cleTrouvee comme ADMIN-78444746 est juste pour l'affichage)
+    final bool aVraiMatricule = _matriculeReel != null && _matriculeReel!.isNotEmpty;
     final result = await ApiService.login(
-      matricule: _tab == 0 ? _cleTrouvee : null,
-      nom: _tab == 1 ? _nomCtrl.text.trim() : null,
-      tel: _tab == 1 ? _numeroCtrl.text.trim() : null,
+      matricule: aVraiMatricule ? _matriculeReel : null,
+      nom: (!aVraiMatricule || _tab == 1) ? _nomCtrl.text.trim() : null,
+      tel: (!aVraiMatricule || _tab == 1) ? _numeroCtrl.text.trim() : null,
       motDePasse: _passCtrl.text,
     );
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
+      final roleUtilisateur = (user['role'] ?? 'etudiant').toString();
+      
+      String domaineAdmin = user['admin_domaine'] ?? user['domaine_admin'] ?? user['domaineAdmin'] ?? 'Tous';
+      // ignore: avoid_print
+      print('[DEBUG] role=$roleUtilisateur | domaineAdmin_backend=$domaineAdmin | cleTrouvee=$_cleTrouvee | user_keys=${user.keys.toList()}');
+      // ignore: avoid_print
+      print('[DEBUG] user complet = $user');
+      if (roleUtilisateur == 'admin' && domaineAdmin == 'Tous') {
+        final String telSaisi = _tab == 1 ? _numeroCtrl.text.trim() : '';
+        final identifiant = (user['email'] ?? user['matricule'] ?? user['telephone'] ?? user['tel'] ?? (telSaisi.isNotEmpty ? telSaisi : null) ?? _cleTrouvee ?? '').toString().toLowerCase();
+        
+        // ignore: avoid_print
+        print('[DEBUG] Recherche domaine via API Membres avec identifiant=$identifiant | tel=$telSaisi');
+        final res = await ApiService.getMembresAdmin();
+        if (res['success'] == true) {
+          final membres = res['data'] as List<dynamic>;
+          for (var membre in membres) {
+            final email = (membre['email'] ?? '').toString().toLowerCase();
+            final tel = (membre['tel'] ?? '').toString();
+            
+            if (email == identifiant || tel == identifiant || (telSaisi.isNotEmpty && tel == telSaisi)) {
+              if (membre['domaine'] != null && membre['domaine'].toString().isNotEmpty && membre['domaine'] != 'Tous') {
+                domaineAdmin = membre['domaine'].toString();
+                break;
+              }
+            }
+          }
+        }
+        // ignore: avoid_print
+        print('[DEBUG] domaineAdmin après lookup API = $domaineAdmin');
+      }
+
       _goToDashboard(StudentProfile(
         nom: user['nom'] ?? '',
         prenoms: user['prenoms'] ?? '',
@@ -276,7 +319,9 @@ class _AuthPageState extends State<AuthPage> {
         niveau: user['niveau'] ?? '',
         motDePasse: '',
         domaine: user['domaine'] ?? '',
-        role: user['role'] ?? 'etudiant',
+        role: roleUtilisateur,
+        adminSubRole: user['admin_sub_role'] ?? user['adminSubRole'],
+        domaineAdmin: domaineAdmin,
         photoUrl: user['photo_url'] ?? user['photoUrl'],
         coverUrl: user['cover_url'] ?? user['coverUrl'],
       ));
@@ -348,6 +393,9 @@ class _AuthPageState extends State<AuthPage> {
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
       role: u['role'] ?? 'etudiant',
+      adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
+      // Domaine restreint de l'admin (ex: 'Sciences & Technologies', 'Sciences de Gestion', 'Tous')
+      domaineAdmin: u['admin_domaine'] ?? u['domaine_admin'] ?? u['domaineAdmin'] ?? 'Tous',
     );
   }
 

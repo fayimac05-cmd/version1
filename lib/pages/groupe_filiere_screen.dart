@@ -142,6 +142,9 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
   Future<void> _connecterSocket() async {
     await SocketService().connect();
+    if (_filiereId != null) {
+      SocketService().joinRoom('filiere:$_filiereId');
+    }
     SocketService().onGroupeMessage((data) {
       if (!mounted) return;
       final json = data is Map<String, dynamic>

@@ -3,6 +3,7 @@ import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
+import '../services/supabase_service.dart';
 import '../utils/snackbar_helper.dart';
 
 class Membre {
@@ -744,10 +745,21 @@ class _AdminMembresState extends State<AdminMembres> {
                     );
 
                     if (res['success'] == true) {
-                      _snack('✅ Administrateur enregistré avec succès en base de données !');
-                      _chargerMembresDepuisBDD();
+                      // Synchroniser domaine_admin dans la table 'administrateurs'
+                      try {
+                        await SupabaseService().client
+                            .from('administrateurs')
+                            .update({'domaine_admin': selectedDomaine})
+                            .eq('email', emailCtrl.text.trim());
+                      } catch (_) {}
+                      if (mounted) {
+                        _snack('✅ Administrateur enregistré avec succès en base de données !');
+                        _chargerMembresDepuisBDD();
+                      }
                     } else {
-                      _snack('⚠️ ${res['error'] ?? 'Enregistrement local uniquement'}');
+                      if (mounted) {
+                        _snack('⚠️ ${res['error'] ?? 'Enregistrement local uniquement'}');
+                      }
                     }
                   },
                   child: const Text('Créer le compte et enregistrer', style: TextStyle(color: Colors.white)),

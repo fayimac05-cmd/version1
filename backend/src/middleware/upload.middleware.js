@@ -11,14 +11,24 @@ const fileFilter = (req, file, cb) => {
     'image/jpeg',
     'image/png',
     'image/jpg',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/octet-stream', // Flutter Web envoie ce type générique
   ];
 
-  if (allowedMimes.includes(file.mimetype)) {
+  const allowedExtensions = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png'];
+  const ext = (file.originalname || '').toLowerCase().slice(file.originalname.lastIndexOf('.'));
+
+  if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
     cb(
       new Error(
-        `Format de fichier non autorisé. Acceptés : PDF, JPG, JPEG, PNG. Reçu : ${file.mimetype}`
+        `Format de fichier non autorisé. Acceptés : PDF, images, Word, PowerPoint, Excel. Reçu : ${file.mimetype} (${ext})`
       ),
       false
     );
@@ -50,11 +60,12 @@ const uploadToCloudinary = (folder = 'scolarhub') => {
       // Génération d'un nom unique pour le fichier
       const fileName = `${Date.now()}-${req.file.originalname}`;
 
-      // Upload sur Cloudinary
+      // Upload sur Cloudinary (ou Fallback Base64)
       const url = await CloudinaryService.uploadFile(
         req.file.buffer,
         fileName,
-        folder
+        folder,
+        req.file.mimetype
       );
 
       // Stocker l'URL et le public_id dans req pour l'utiliser dans le contrôleur

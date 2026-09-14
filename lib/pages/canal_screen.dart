@@ -447,7 +447,7 @@ class _CanalDetailState extends State<_CanalDetail> {
 
   @override
   void dispose() {
-    SocketService().off('new_canal_message');
+    SocketService().off('message:canal');
     _inputCtrl.dispose();
     _scroll.dispose();
     super.dispose();
@@ -522,7 +522,6 @@ class _CanalDetailState extends State<_CanalDetail> {
     _scrollBas();
 
     try {
-      SocketService().sendCanalMessage(widget.canalId, {'contenu': texte});
       final headers = await ApiService.getHeaders();
       final response = await http.post(
         Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
@@ -829,8 +828,8 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
           : jsonDecode(data.toString()) as Map<String, dynamic>;
       final destinataireId = json['destinataire_id']?.toString();
       final expediteurId = json['expediteur_id']?.toString();
-      if (_adminId != null && destinataireId != null && destinataireId != _adminId) return;
-      if (_adminId != null && destinataireId == null && expediteurId == _adminId) return;
+      if (_adminId != null && expediteurId != _adminId && destinataireId != _adminId) return;
+      if (_myUserId != null && expediteurId == _myUserId) return;
       setState(() => _msgs.add({
         'texte': json['contenu'] ?? json['texte'] ?? '',
         'estMoi': false, 'heure': _now(), 'lu': true,
@@ -873,7 +872,7 @@ class _MessagePriveAdminState extends State<_MessagePriveAdmin> {
 
   @override
   void dispose() {
-    SocketService().off('new_private_message');
+    SocketService().off('message:prive');
     _ctrl.dispose();
     _scroll.dispose();
     super.dispose();

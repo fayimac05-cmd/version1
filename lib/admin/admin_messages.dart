@@ -59,7 +59,7 @@ class GroupeAdmin {
 final List<GroupeAdmin> _defaultAdminGroupes = [
   GroupeAdmin(
     id: '5', nom: 'Administration & Professeurs',
-    type: 'admin_profs', avatar: '👨‍🏫',
+    type: 'admin_profs', avatar: '',
     description: 'Canal officiel Admin ↔ Tous les professeurs',
     membres: ['Administration', 'Tous les professeurs'],
     nbNonLus: 0, readonly: false,
@@ -67,7 +67,7 @@ final List<GroupeAdmin> _defaultAdminGroupes = [
   ),
   GroupeAdmin(
     id: '4', nom: 'Salle des Professeurs',
-    type: 'professeurs', avatar: '👥',
+    type: 'professeurs', avatar: '',
     description: 'Canal d\'échanges entre professeurs',
     membres: ['Tous les professeurs'],
     nbNonLus: 0, readonly: false,
@@ -75,7 +75,7 @@ final List<GroupeAdmin> _defaultAdminGroupes = [
   ),
   GroupeAdmin(
     id: '6', nom: 'Administration & Délégués',
-    type: 'admin_delegues', avatar: '🎓',
+    type: 'admin_delegues', avatar: '',
     description: 'Canal Admin ↔ Délégués de toutes les filières',
     membres: ['Administration', 'Délégués de filières'],
     nbNonLus: 0, readonly: false,
@@ -83,10 +83,26 @@ final List<GroupeAdmin> _defaultAdminGroupes = [
   ),
   GroupeAdmin(
     id: '1', nom: 'Administration (Général)',
-    type: 'administration', avatar: '📢',
+    type: 'administration', avatar: '',
     description: 'Annonces officielles et informations pédagogiques',
     membres: ['Administration', 'Tous les étudiants'],
     nbNonLus: 0, readonly: true,
+    messages: [],
+  ),
+  GroupeAdmin(
+    id: '2', nom: 'Admin & Filière',
+    type: 'admin_filiere', avatar: '',
+    description: 'Échanges entre l\'administration et les délégués de filière',
+    membres: ['Administration', 'Délégués de filières'],
+    nbNonLus: 0, readonly: false,
+    messages: [],
+  ),
+  GroupeAdmin(
+    id: '3', nom: 'Bureau des Étudiants',
+    type: 'bde', avatar: '',
+    description: 'Annonces et activités du BDE',
+    membres: ['Administration', 'BDE', 'Tous les étudiants'],
+    nbNonLus: 0, readonly: false,
     messages: [],
   ),
 ];
@@ -131,12 +147,13 @@ class AdminMessagesState extends State<AdminMessages>
   /// Groupes visibles pour le rôle courant
   List<GroupeAdmin> get _groupesVisibles {
     if (_estProf) {
-      // Un prof voit : salle des profs, admin↔profs, coordination filière, groupes étudiants
+      // Un prof voit : salle des profs, admin↔profs, coordination filière, groupes étudiants, privés
       return adminGroupes.where((g) =>
           g.type == 'professeurs' ||
           g.type == 'admin_profs' ||
           g.type == 'prof_delegues' ||
-          g.type == 'groupe_etudiants').toList();
+          g.type == 'groupe_etudiants' ||
+          g.type == 'prive').toList();
     } else {
       // Un admin voit tout sauf la salle des profs
       return adminGroupes.where((g) => g.type != 'professeurs').toList();
@@ -144,7 +161,7 @@ class AdminMessagesState extends State<AdminMessages>
   }
 
   List<GroupeAdmin> get _officiels => _groupesVisibles
-      .where((g) => g.type == 'admin_profs' || g.type == 'admin_delegues' || g.type == 'professeurs' || g.type == 'administration')
+      .where((g) => g.type == 'admin_profs' || g.type == 'admin_delegues' || g.type == 'professeurs' || g.type == 'administration' || g.type == 'bde')
       .toList();
   List<GroupeAdmin> get _filieres =>
       _groupesVisibles.where((g) => g.type == 'admin_filiere' || g.type == 'prof_delegues' || g.type == 'groupe_etudiants').toList();
@@ -192,7 +209,7 @@ class AdminMessagesState extends State<AdminMessages>
               .toList();
           newGroupes.add(GroupeAdmin(
             id: f['id'].toString(), nom: 'Professeurs & Délégués · ${f['nom']}',
-            type: 'prof_delegues', avatar: '🎓', filiereId: fid,
+            type: 'prof_delegues', avatar: '', filiereId: fid,
             description: f['description'] ?? 'Coordination pédagogique',
             membres: membres.isEmpty ? ['Aucun membre affecté'] : membres,
             nbNonLus: 0, readonly: false,
@@ -209,13 +226,41 @@ class AdminMessagesState extends State<AdminMessages>
         for (var f in data) {
           newGroupes.add(GroupeAdmin(
             id: 'grp_${f['id']}', nom: f['nom'] ?? 'Filière',
-            type: 'groupe_etudiants', avatar: '👨‍🎓', filiereId: f['id'].toString(),
+            type: 'groupe_etudiants', avatar: '', filiereId: f['id'].toString(),
             description: f['description'] ?? 'Groupe de discussion avec vos étudiants',
             membres: ['Tous les étudiants de la filière'],
             nbNonLus: 0, readonly: false,
             messages: [],
           ));
         }
+      }
+
+      // ── Conversations privées ──
+      try {
+        final resP = await http.get(Uri.parse('${ApiService.baseUrl}/messages/prives'), headers: headers);
+        if (resP.statusCode == 200) {
+          final body = jsonDecode(utf8.decode(resP.bodyBytes));
+          final List data = body is Map ? (body['data'] as List? ?? []) : (body is List ? body : []);
+          for (var p in data) {
+            final correspId = p['correspondant_id']?.toString();
+            if (correspId == null || correspId.isEmpty) continue;
+            final nom = '${p['prenoms'] ?? ''} ${p['nom'] ?? ''}'.trim();
+            final nonLu = (p['is_read'] == false && p['expediteur_id']?.toString() != _myUserId);
+            newGroupes.add(GroupeAdmin(
+              id: correspId,
+              nom: nom.isNotEmpty ? nom : 'Étudiant',
+              type: 'prive',
+              avatar: '',
+              description: p['dernier_message']?.toString() ?? 'Conversation privée',
+              membres: [nom.isNotEmpty ? nom : 'Utilisateur'],
+              nbNonLus: nonLu ? 1 : 0,
+              readonly: false,
+              messages: [],
+            ));
+          }
+        }
+      } catch (errP) {
+        debugPrint("[AdminMessages] Erreur chargement messages privés: $errP");
       }
 
       setState(() { adminGroupes = newGroupes; });
@@ -304,6 +349,67 @@ class AdminMessagesState extends State<AdminMessages>
           });
         }
       });
+
+      SocketService().onPrivateMessage((data) {
+        if (!mounted) return;
+        final json = data is Map<String, dynamic> ? data : jsonDecode(data.toString()) as Map<String, dynamic>;
+        final expediteurId = json['expediteur_id']?.toString();
+        if (expediteurId == null) return;
+        if (_myUserId != null && expediteurId == _myUserId) return;
+
+        final correspId = expediteurId;
+        final rawDate = json['created_at'] ?? json['createdAt'];
+        final createdAt = (rawDate != null ? DateTime.tryParse(rawDate.toString()) : null)?.toLocal() ?? DateTime.now();
+        final heure = '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
+        final nomComplet = '${json['prenoms'] ?? ''} ${json['nom'] ?? ''}'.trim();
+        final auteur = nomComplet.isNotEmpty ? nomComplet : (json['role'] == 'professeur' ? 'Professeur' : 'Étudiant');
+
+        setState(() {
+          var idx = adminGroupes.indexWhere((g) => g.type == 'prive' && g.id == correspId);
+          if (idx == -1) {
+            final nouveauPrive = GroupeAdmin(
+              id: correspId,
+              nom: auteur,
+              type: 'prive',
+              avatar: '',
+              description: json['contenu']?.toString() ?? '',
+              membres: [auteur],
+              nbNonLus: _groupeActif?.id == correspId ? 0 : 1,
+              readonly: false,
+              messages: [],
+            );
+            adminGroupes.add(nouveauPrive);
+            idx = adminGroupes.length - 1;
+          }
+
+          final g = adminGroupes[idx];
+          final msgId = json['id']?.toString() ?? UniqueKey().toString();
+          if (g.messages.any((m) => m.id == msgId)) return;
+
+          g.messages.add(MessageAdmin(
+            id: msgId,
+            expediteur: auteur,
+            texte: json['contenu']?.toString() ?? '',
+            heure: heure,
+            type: 'texte',
+            estMoi: false,
+            lu: _groupeActif?.id == g.id,
+          ));
+          if (_groupeActif?.id != g.id) g.nbNonLus++;
+        });
+
+        if (_groupeActif?.id == correspId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollCtrl.hasClients) {
+              _scrollCtrl.animateTo(
+                _scrollCtrl.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        }
+      });
       
     } catch (e) {
       debugPrint("Erreur loadGroupes: $e");
@@ -315,6 +421,8 @@ class AdminMessagesState extends State<AdminMessages>
   @override
   void dispose() {
     SocketService().off('message:groupe');
+    SocketService().off('message:canal');
+    SocketService().off('message:prive');
     _tabCtrl.dispose();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
@@ -438,7 +546,8 @@ class AdminMessagesState extends State<AdminMessages>
     switch (type) {
       case 'admin_profs':      return Icons.school_rounded;
       case 'admin_delegues':   return Icons.groups_rounded;
-      case 'admin_filiere':    return Icons.apartment_rounded;
+      case 'admin_filiere':    return Icons.campaign_rounded;
+      case 'bde':              return Icons.gavel_rounded;
       case 'prof_delegues':    return Icons.hub_rounded;
       case 'groupe_etudiants': return Icons.chat_bubble_rounded;
       default:                 return Icons.person_outline_rounded;
@@ -464,9 +573,11 @@ class AdminMessagesState extends State<AdminMessages>
 
     try {
       final headers = await ApiService.getHeaders();
-      final url = g.type == 'groupe_etudiants'
-          ? '${ApiService.baseUrl}/messages/groupe/${g.filiereId}'
-          : '${ApiService.baseUrl}/messages/canal/${g.id}';
+      final url = g.type == 'prive'
+          ? '${ApiService.baseUrl}/messages/prives/${g.id}'
+          : g.type == 'groupe_etudiants'
+              ? '${ApiService.baseUrl}/messages/groupe/${g.filiereId}'
+              : '${ApiService.baseUrl}/messages/canal/${g.id}';
       
       final res = await http.get(
         Uri.parse(url),
@@ -481,7 +592,8 @@ class AdminMessagesState extends State<AdminMessages>
             final rawDate = m['created_at'] ?? m['createdAt'];
             final createdAt = (rawDate != null ? DateTime.tryParse(rawDate.toString()) : null)?.toLocal() ?? DateTime.now();
             final heure = '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
-            final estMoi = _myUserId != null && m['auteur_id']?.toString() == _myUserId;
+            final senderId = (m['expediteur_id'] ?? m['auteur_id'])?.toString();
+            final estMoi = _myUserId != null && senderId == _myUserId;
             final nomComplet = '${m['prenoms'] ?? ''} ${m['nom'] ?? ''}'.trim();
             final auteur = estMoi ? 'Moi' : (nomComplet.isNotEmpty ? nomComplet : (m['role'] == 'professeur' ? 'Professeur' : 'Utilisateur'));
 
@@ -1267,16 +1379,23 @@ class AdminMessagesState extends State<AdminMessages>
     });
 
     try {
-      if (g.type == 'groupe_etudiants') {
-        final headers = await ApiService.getHeaders();
+      final headers = await ApiService.getHeaders();
+      if (g.type == 'prive') {
+        // Envoi privé via HTTP (le serveur persiste et notifie le destinataire par socket)
+        await http.post(
+          Uri.parse('${ApiService.baseUrl}/messages/prives/${g.id}'),
+          headers: headers,
+          body: jsonEncode({'contenu': texte}),
+        );
+      } else if (g.type == 'groupe_etudiants') {
+        // Envoi via HTTP (le serveur persiste et diffuse dans filiere:X par socket)
         await http.post(
           Uri.parse('${ApiService.baseUrl}/messages/groupe/${g.filiereId}'),
           headers: headers,
           body: jsonEncode({'contenu': texte}),
         );
       } else {
-        SocketService().sendCanalMessage(g.id, {'contenu': texte});
-        final headers = await ApiService.getHeaders();
+        // Canaux officiels : envoi via HTTP (le serveur persiste et diffuse dans canal:X par socket)
         await http.post(
           Uri.parse('${ApiService.baseUrl}/messages/canal/${g.id}'),
           headers: headers,
@@ -1311,6 +1430,7 @@ class AdminMessagesState extends State<AdminMessages>
       case 'admin_profs':      return AdminTheme.primary;
       case 'admin_delegues':   return AdminTheme.warning;
       case 'admin_filiere':    return AdminTheme.info;
+      case 'bde':              return const Color(0xFF7C3AED); // Matching canal_screen.dart BDE color
       case 'prive':            return AdminTheme.success;
       case 'groupe_etudiants': return const Color(0xFFF59E0B);
       case 'prof_delegues':    return const Color(0xFF7C3AED);
