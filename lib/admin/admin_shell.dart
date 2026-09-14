@@ -56,6 +56,7 @@ import '../config/etablissement_config.dart';
 import '../pages/choose_etablissement_type_page.dart';
 import '../pages/splash_screen.dart';
 import '../widgets/profile_header_cover.dart';
+import '../admin/admin_delegues.dart';
 // TODO: décommenter quand les services sont prêts
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
@@ -98,13 +99,14 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.auto_stories_outlined,       iconActive: Icons.auto_stories_rounded,       label: 'Primaire',           group: 'SECTIONS'),
   _MenuItem(icon: Icons.warning_amber_outlined,      iconActive: Icons.warning_amber_rounded,      label: 'Élèves à risque',    group: 'RAPPORTS'),
   _MenuItem(icon: Icons.workspace_premium_outlined,  iconActive: Icons.workspace_premium_rounded,  label: 'Bulletins',          group: 'ACADÉMIQUE'),
+  _MenuItem(icon: Icons.groups_2_outlined, iconActive: Icons.groups_2_rounded, label: 'Délégués', group: 'PERSONNES'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
   {'key': 'GÉNÉRAL',    'items': [0, 1]},
   {'key': 'SECTIONS',   'items': [14, 15]},
   {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5, 17]},
-  {'key': 'PERSONNES',  'items': [6, 7, 8, 9]},
+  {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
   {'key': 'RAPPORTS',   'items': [12, 13, 16]},
@@ -123,8 +125,8 @@ class AdminMenuService {
   static Set<int> allowedItems(AdminRole role) {
     switch (role) {
       case AdminRole.superAdmin:
-        // Accès total (0..17)
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+        // Accès total (0..18)
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18};
       case AdminRole.scolarite:
         // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
         return {0, 2, 3, 6, 7, 12};
@@ -133,7 +135,7 @@ class AdminMenuService {
         return {0, 4, 17, 5, 12, 13, 16};
       case AdminRole.secretariat:
         // Tableau de bord, Annonces, Réclamations, Étudiants, Parents
-        return {0, 1, 5, 6, 8};
+        return {0, 1, 5, 6, 8, 18};
       case AdminRole.communication:
         // Tableau de bord, Annonces, Groupes & Messages, BDE & Événements
         return {0, 1, 10, 11};
@@ -249,6 +251,8 @@ class _AdminShellState extends State<AdminShell>
       const AdminPrimaire(),
       const AdminRisque(),
       AdminBulletins(profile: widget.profile),
+      const AdminDelegues(),
+      
     ];
 
     _pageAnim = AnimationController(

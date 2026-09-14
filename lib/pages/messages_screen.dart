@@ -5,7 +5,7 @@ import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../utils/snackbar_helper.dart';
-
+import '../widgets/delegue_badge.dart';
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
 // ════════════════════════════════════════════════════════════════════════════
@@ -13,6 +13,7 @@ class ContactEtudiant {
   final String id; // user UUID
   final String nom, prenoms, filiere, niveau, telephone;
   final String? matricule;
+  final String? etudiantRole; // 'delegue' | 'delegue_adjoint' | null
   const ContactEtudiant({
     required this.id,
     required this.nom,
@@ -21,6 +22,7 @@ class ContactEtudiant {
     this.filiere = '',
     this.niveau = '',
     this.telephone = '',
+    this.etudiantRole,
   });
   String get initiales {
     if (prenoms.isEmpty && nom.isEmpty) return '?';
@@ -164,6 +166,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               filiere: e['filiere']?.toString() ?? '',
               niveau: e['niveau']?.toString() ?? '',
               telephone: e['telephone']?.toString() ?? '',
+              etudiantRole: e['role']?.toString(),
             ));
           }
         }
@@ -1122,13 +1125,20 @@ class _ConversationViewState extends State<_ConversationView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _contact.nomComplet,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(
+                    child: Text(
+                      _contact.nomComplet,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  DelegueBadge(role: _contact.etudiantRole, niveau: _contact.niveau, compact: true),
+                ]),
                 const Text(
                   'en ligne',
                   style: TextStyle(fontSize: 10, color: Colors.white70),
@@ -2197,6 +2207,8 @@ class _ConversationViewState extends State<_ConversationView> {
               _contact.nomComplet,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
+            const SizedBox(height: 6),
+            DelegueBadge(role: _contact.etudiantRole, niveau: _contact.niveau),
             const SizedBox(height: 4),
             Text(
               _contact.filiere,

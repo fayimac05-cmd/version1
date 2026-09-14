@@ -5,6 +5,7 @@ import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
+import '../widgets/delegue_badge.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -15,11 +16,15 @@ class _Membre {
   final String nom;
   final String prenoms;
   final String matricule;
+  final String? etudiantRole;
+  final String? niveau;
 
   const _Membre({
     required this.nom,
     required this.prenoms,
     required this.matricule,
+    this.etudiantRole,
+    this.niveau,
   });
 
   String get initiales =>
@@ -161,6 +166,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               nom: (json['nom'] ?? '') as String,
               prenoms: (json['prenoms'] ?? '') as String,
               matricule: json['auteur_id']?.toString() ?? '',
+              etudiantRole: json['etudiant_role']?.toString(),
+              niveau: json['niveau']?.toString(),
             ),
       contenu: (json['contenu'] ?? '') as String,
       type: TypeMessage.texte,
@@ -183,6 +190,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     nom: widget.profile.nom,
     prenoms: widget.profile.prenoms,
     matricule: widget.profile.matricule,
+    etudiantRole: widget.profile.role,
+    niveau: widget.profile.niveau,
   );
 
   List<_MessageGroupe> _messagesSimules() {
@@ -1081,14 +1090,18 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                   if (!estMoi)
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 4),
-                      child: Text(
-                        msg.auteur.prenoms,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppPalette.blue,
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(
+                          msg.auteur.prenoms,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppPalette.blue,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        DelegueBadge(role: msg.auteur.etudiantRole, niveau: msg.auteur.niveau, compact: true),
+                      ]),
                     ),
 
                   Container(

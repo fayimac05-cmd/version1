@@ -54,4 +54,5 @@ flutter:
     - .env
     - assets/images/cantine_food.png
     - assets/images/students_group.png
+    - assets/images/etudiant_ist.png
 

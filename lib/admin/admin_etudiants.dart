@@ -9,7 +9,7 @@ import '../app/scolar_hub_app.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
-
+import '../widgets/delegue_badge.dart';
 class AdminEtudiants extends StatefulWidget {
   final StudentProfile profile;
   const AdminEtudiants({super.key, required this.profile});
@@ -506,14 +506,19 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${e.prenoms} ${e.nom}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A2E),
-                  ),
-                ),
+                Row(children: [
+                  Flexible(child: Text(
+                    '${e.prenoms} ${e.nom}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A2E),
+                    ),
+                  )),
+                  const SizedBox(width: 6),
+                  DelegueBadge(role: e.role, niveau: e.niveau, compact: true),
+                ]),
                 Text(
                   e.matricule,
                   style: const TextStyle(

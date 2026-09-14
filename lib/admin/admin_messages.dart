@@ -8,6 +8,7 @@ import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../widgets/delegue_badge.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -15,6 +16,7 @@ import '../services/socket_service.dart';
 class MessageAdmin {
   final String id, expediteur, texte, heure, type;
   final bool estMoi;
+  final String? etudiantRole, niveau;
   // ID du message cité
   final String? idMessageRepondu;
   // Texte + expéditeur du message cité (pour l'affichage sans chercher dans la liste)
@@ -27,6 +29,8 @@ class MessageAdmin {
   MessageAdmin({
     required this.id, required this.expediteur, required this.texte,
     required this.heure, required this.type, required this.estMoi,
+    this.etudiantRole,
+    this.niveau,
     this.lu = true, Map<String, int>? reactions,
     this.epingle = false, this.important = false,
     this.idMessageRepondu,
@@ -245,6 +249,8 @@ class AdminMessagesState extends State<AdminMessages>
             heure: heure,
             type: json['type']?.toString() ?? 'texte',
             estMoi: false,
+            etudiantRole: json['etudiant_role']?.toString(),
+            niveau: json['niveau']?.toString(),
             lu: _groupeActif?.id == g.id,
           ));
           if (_groupeActif?.id != g.id) g.nbNonLus++;
@@ -285,6 +291,8 @@ class AdminMessagesState extends State<AdminMessages>
             heure: heure,
             type: 'texte',
             estMoi: false,
+            etudiantRole: json['etudiant_role']?.toString(),
+            niveau: json['niveau']?.toString(),
             lu: _groupeActif?.id == g.id,
           ));
           if (_groupeActif?.id != g.id) g.nbNonLus++;
@@ -484,6 +492,8 @@ class AdminMessagesState extends State<AdminMessages>
               heure: heure,
               type: m['type']?.toString() ?? 'texte',
               estMoi: estMoi,
+              etudiantRole: m['etudiant_role']?.toString(),
+              niveau: m['niveau']?.toString(),
               lu: true,
             ));
           }
@@ -1511,11 +1521,15 @@ class _BulleAdminState extends State<_BulleAdmin>
                             if (!estMoi)
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(9, 5, 9, 0),
-                                child: Text(msg.expediteur,
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: AdminTheme.primary))),
+                                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                  Text(msg.expediteur,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AdminTheme.primary)),
+                                  const SizedBox(width: 6),
+                                  DelegueBadge(role: msg.etudiantRole, niveau: msg.niveau, compact: true),
+                                ])),
 
                             // ── Citation WhatsApp style ────────────────
                             if (widget.msgCite != null)

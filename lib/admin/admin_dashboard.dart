@@ -1,9 +1,8 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/student_profile.dart';
 import '../admin/admin_theme.dart';
+import '../services/api_service.dart';
 
 class AdminDashboard extends StatefulWidget {
   final StudentProfile profile;
@@ -12,6 +11,164 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
+  bool _loadingKpis = true;
+  int _nbEtudiants = 0;
+  int _nbProfesseurs = 0;
+  int _nbFilieres = 0;
+  int _nbSciencesTech = 0;
+  int _nbSciencesGestion = 0;
+  int _nbSuspendus = 0;
+
+  bool _loadingRecl = true;
+  List<dynamic> _reclamations = [];
+
+  bool _loadingEvents = true;
+  List<dynamic> _evenements = [];
+
+  bool _loadingMajors = true;
+  List<dynamic> _majors = [];
+
+  bool _loadingBlamables = true;
+  int _nbNotesBlamables = 0;
+
+  bool _loadingInscriptions = true;
+  List<dynamic> _inscriptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerKpis();
+    _chargerReclamations();
+    _chargerEvenements();
+    _chargerMajors();
+    _chargerNotesBlamables();
+    _chargerInscriptions();
+  }
+
+  Future<void> _chargerNotesBlamables() async {
+    final res = await ApiService.getNotesBlamables();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        final data = res['data'] as List<dynamic>;
+        _nbNotesBlamables = data.length;
+      }
+      _loadingBlamables = false;
+    });
+  }
+
+  Future<void> _chargerInscriptions() async {
+    final res = await ApiService.getInscriptionsParMois();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        _inscriptions = res['data'] as List<dynamic>;
+      }
+      _loadingInscriptions = false;
+    });
+  }
+
+  Future<void> _chargerMajors() async {
+    final res = await ApiService.getMoyennesAdmin();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        final data = res['data'] as List<dynamic>;
+        _majors = data.take(3).toList();
+      }
+      _loadingMajors = false;
+    });
+  }
+
+  Future<void> _chargerReclamations() async {
+    final res = await ApiService.getReclamations();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        _reclamations = res['data'] as List<dynamic>;
+      }
+      _loadingRecl = false;
+    });
+  }
+
+  int get _nbReclamationsEnAttente =>
+      _reclamations.where((r) => (r['statut'] ?? '') == 'en_attente').length;
+
+  Future<void> _chargerEvenements() async {
+    final res = await ApiService.getEvenements();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        _evenements = res['data'] as List<dynamic>;
+      }
+      _loadingEvents = false;
+    });
+  }
+
+  List<dynamic> get _evenementsAVenir {
+    final maintenant = DateTime.now();
+    final list = _evenements.where((e) {
+      if (e['statut'] != 'approuve') return false;
+      final d = DateTime.tryParse(e['date_debut']?.toString() ?? '');
+      return d != null && d.isAfter(maintenant);
+    }).toList();
+    list.sort((a, b) {
+      final da = DateTime.tryParse(a['date_debut']?.toString() ?? '') ?? maintenant;
+      final db = DateTime.tryParse(b['date_debut']?.toString() ?? '') ?? maintenant;
+      return da.compareTo(db);
+    });
+    return list;
+  }
+
+  List<dynamic> get _evenementsEnAttente =>
+      _evenements.where((e) => e['statut'] == 'en_attente').toList();
+
+  Future<void> _validerEvenement(dynamic id, String statut) async {
+    final res = await ApiService.updateEvenementStatut(id.toString(), statut);
+    if (!mounted) return;
+    if (res['success'] == true) {
+      _chargerEvenements();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['error']?.toString() ?? 'Erreur lors de la mise à jour.')),
+      );
+    }
+  }
+
+  Future<void> _chargerKpis() async {
+    final results = await Future.wait([
+      ApiService.getEtudiants(),
+      ApiService.getProfesseurs(),
+      ApiService.getFilieres(),
+    ]);
+
+    final etudiantsRes = results[0];
+    final professeursRes = results[1];
+    final filieresRes = results[2];
+
+    if (!mounted) return;
+    setState(() {
+      if (etudiantsRes['success'] == true) {
+        final data = etudiantsRes['data'] as List<dynamic>;
+        _nbEtudiants = data.where((e) => (e['statut'] ?? 'actif') == 'actif').length;
+        // Répartition par domaine — calculée à partir de la même liste,
+        // pas d'appel réseau supplémentaire.
+        _nbSciencesTech = data.where((e) => (e['domaine'] ?? '') == 'Sciences & Technologies').length;
+        _nbSciencesGestion = data.where((e) => (e['domaine'] ?? '') == 'Sciences de Gestion').length;
+        _nbSuspendus = data.where((e) => (e['statut'] ?? '') == 'suspendu').length;
+      }
+      if (professeursRes['success'] == true) {
+        final data = professeursRes['data'] as List<dynamic>;
+        _nbProfesseurs = data.length;
+      }
+      if (filieresRes['success'] == true) {
+        final data = filieresRes['data'] as List<dynamic>;
+        _nbFilieres = data.length;
+      }
+      _loadingKpis = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDesktop = AdminTheme.isDesktop(context);
@@ -136,10 +293,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
             fontWeight: FontWeight.w800, color: AdminTheme.accent)),
         const SizedBox(height: 6),
         Wrap(spacing: 8, runSpacing: 6, children: [
-          _alertChip('3 réclamations non traitées', Icons.report_problem_rounded),
-          _alertChip('5 publications BDE en attente', Icons.celebration_rounded),
-          _alertChip('2 notes blâmables cette semaine', Icons.warning_rounded),
-          _alertChip('1 étudiant suspendu', Icons.person_off_rounded),
+          _alertChip(
+            _loadingRecl
+                ? 'Chargement des réclamations...'
+                : '$_nbReclamationsEnAttente réclamation${_nbReclamationsEnAttente > 1 ? 's' : ''} non traitée${_nbReclamationsEnAttente > 1 ? 's' : ''}',
+            Icons.report_problem_rounded,
+          ),
+          _alertChip(
+            _loadingEvents
+                ? 'Chargement des publications...'
+                : '${_evenementsEnAttente.length} publication${_evenementsEnAttente.length > 1 ? 's' : ''} BDE en attente',
+            Icons.celebration_rounded,
+          ),
+          if (!_loadingKpis && _nbSuspendus > 0)
+            _alertChip(
+              '$_nbSuspendus étudiant${_nbSuspendus > 1 ? 's' : ''} suspendu${_nbSuspendus > 1 ? 's' : ''}',
+              Icons.person_off_rounded,
+            ),
+          if (!_loadingBlamables && _nbNotesBlamables > 0)
+            _alertChip(
+              '$_nbNotesBlamables note${_nbNotesBlamables > 1 ? 's' : ''} blâmable${_nbNotesBlamables > 1 ? 's' : ''} cette semaine',
+              Icons.warning_rounded,
+            ),
         ]),
       ])),
     ]),
@@ -167,18 +342,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // ── KPI Cards ─────────────────────────────────────────────────────────
   Widget _kpiRow(bool isDesktop) {
     final kpis = [
-      {'label': 'Étudiants actifs', 'value': '247', 'sub': '+12 ce mois',
-       'icon': Icons.school_rounded, 'color': AdminTheme.iconFg,
-       'bg': AdminTheme.iconBg, 'trend': true},
-      {'label': 'Professeurs actifs', 'value': '18', 'sub': 'Stable',
-       'icon': Icons.person_pin_rounded, 'color': AdminTheme.iconFgAlt,
-       'bg': AdminTheme.iconBgAlt, 'trend': true},
-      {'label': 'Filières ouvertes', 'value': '8', 'sub': '2024-2025',
+      {'label': 'Étudiants actifs', 'value': _loadingKpis ? '…' : '$_nbEtudiants',
+       'sub': 'Total actifs',
        'icon': Icons.school_rounded, 'color': AdminTheme.iconFg,
        'bg': AdminTheme.iconBg, 'trend': false},
-      {'label': 'Tickets vendus', 'value': '340/500', 'sub': '68% vendus',
-       'icon': Icons.confirmation_number_rounded, 'color': AdminTheme.iconFgAlt,
-       'bg': AdminTheme.iconBgAlt, 'trend': true},
+      {'label': 'Professeurs', 'value': _loadingKpis ? '…' : '$_nbProfesseurs',
+       'sub': 'Total inscrits',
+       'icon': Icons.person_pin_rounded, 'color': AdminTheme.iconFgAlt,
+       'bg': AdminTheme.iconBgAlt, 'trend': false},
+      {'label': 'Filières ouvertes', 'value': _loadingKpis ? '…' : '$_nbFilieres',
+       'sub': 'Total',
+       'icon': Icons.school_rounded, 'color': AdminTheme.iconFg,
+       'bg': AdminTheme.iconBg, 'trend': false},
+      // TODO: brancher sur le schéma evenements/inscriptions quand disponible
+      // (quel événement afficher — le prochain à venir ? tous cumulés ?)
     ];
 
     if (isDesktop) {
@@ -223,8 +400,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ])),
       ]),
       const SizedBox(height: 12),
-      Text(k['value'] as String, style: TextStyle(fontSize: 26,
-          fontWeight: FontWeight.w800, color: k['color'] as Color)),
+      Text(k['value'] as String, style: const TextStyle(fontSize: 26,
+          fontWeight: FontWeight.w800, color: AdminTheme.textPrimary)),
       const SizedBox(height: 2),
       Text(k['label'] as String, style: AdminTheme.headingSmall),
       const SizedBox(height: 2),
@@ -233,18 +410,54 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   // ── Réclamations récentes ─────────────────────────────────────────────
-  Widget _reclamationsWidget() => _card(
-    title: 'Réclamations récentes',
-    icon: Icons.report_problem_rounded,
-    action: 'Voir tout',
-    child: Column(children: [
-      _reclItem('KOURAOGO Ibrahim', 'RES301 — Note TD', 'en_attente', '28/04'),
-      _reclItem('TRAORÉ Fatimata', 'POO302 — Moyenne', 'transmise', '27/04'),
-      _reclItem('KABORÉ Djeneba', 'MKS301 — Note examen', 'resolue', '26/04'),
-      _reclItem('SAWADOGO Aminata', 'BDA303 — Note TP', 'en_attente', '25/04'),
-      _reclItem('OUÉDRAOGO Issouf', 'EP301 — Moyenne', 'rejetee', '24/04'),
-    ]),
-  );
+  Widget _reclamationsWidget() {
+    if (_loadingRecl) {
+      return _card(
+        title: 'Réclamations récentes',
+        icon: Icons.report_problem_rounded,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    if (_reclamations.isEmpty) {
+      return _card(
+        title: 'Réclamations récentes',
+        icon: Icons.report_problem_rounded,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text('Aucune réclamation pour le moment.',
+              style: AdminTheme.caption),
+        ),
+      );
+    }
+    final recentes = _reclamations.take(5).toList();
+    return _card(
+      title: 'Réclamations récentes',
+      icon: Icons.report_problem_rounded,
+      action: 'Voir tout',
+      child: Column(
+        children: recentes.map((r) {
+          final nom = '${r['prenoms'] ?? ''} ${r['nom'] ?? ''}'.trim();
+          final module = r['module_nom'] ?? r['type'] ?? '';
+          final statut = r['statut'] ?? 'en_attente';
+          final date = _formaterDateCourte(r['created_at']?.toString());
+          return _reclItem(nom.isEmpty ? '—' : nom, module.toString(), statut, date);
+        }).toList(),
+      ),
+    );
+  }
+
+  String _formaterDateCourte(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    try {
+      final d = DateTime.parse(iso);
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return '';
+    }
+  }
 
   Widget _reclItem(String nom, String module, String statut, String date) {
     Color sc; String sl;
@@ -279,18 +492,69 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ── Événements à venir ────────────────────────────────────────────────
-  Widget _eventsWidget() => _card(
-    title: 'Prochains événements',
-    icon: Icons.calendar_today_rounded,
-    action: 'Calendrier',
-    child: Column(children: [
-      _eventItem('Soirée étudiante BDE', '02 Mai 2025', '340/500 billets', AdminTheme.warning),
-      const Divider(height: 20, color: AdminTheme.border),
-      _eventItem('Cérémonie de remise des diplômes', '15 Juin 2025', 'Non ouvert', AdminTheme.primary),
-      const Divider(height: 20, color: AdminTheme.border),
-      _eventItem('Journée sportive', '01 Mai 2025', 'Gratuit', AdminTheme.success),
-    ]),
-  );
+  Widget _eventsWidget() {
+    if (_loadingEvents) {
+      return _card(
+        title: 'Prochains événements',
+        icon: Icons.calendar_today_rounded,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    final aVenir = _evenementsAVenir.take(3).toList();
+    if (aVenir.isEmpty) {
+      return _card(
+        title: 'Prochains événements',
+        icon: Icons.calendar_today_rounded,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text('Aucun événement à venir.', style: AdminTheme.caption),
+        ),
+      );
+    }
+    final colors = [AdminTheme.warning, AdminTheme.primary, AdminTheme.success];
+    return _card(
+      title: 'Prochains événements',
+      icon: Icons.calendar_today_rounded,
+      action: 'Calendrier',
+      child: Column(
+        children: List.generate(aVenir.length, (i) {
+          final e = aVenir[i];
+          final titre = e['titre']?.toString() ?? '';
+          final date = _formaterDateLongue(e['date_debut']?.toString());
+          final capacite = int.tryParse('${e['capacite'] ?? 0}') ?? 0;
+          final inscrits = int.tryParse('${e['inscrits'] ?? 0}') ?? 0;
+          final prix = num.tryParse('${e['prix'] ?? 0}') ?? 0;
+          String sousTitre;
+          if (capacite > 0) {
+            sousTitre = '$inscrits/$capacite billets';
+          } else if (prix == 0) {
+            sousTitre = 'Gratuit';
+          } else {
+            sousTitre = 'Places illimitées';
+          }
+          return Column(children: [
+            _eventItem(titre, date, sousTitre, colors[i % colors.length]),
+            if (i < aVenir.length - 1)
+              const Divider(height: 20, color: AdminTheme.border),
+          ]);
+        }),
+      ),
+    );
+  }
+
+  String _formaterDateLongue(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    try {
+      final d = DateTime.parse(iso);
+      const mois = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+      return '${d.day.toString().padLeft(2, '0')} ${mois[d.month - 1]} ${d.year}';
+    } catch (_) {
+      return '';
+    }
+  }
 
   Widget _eventItem(String titre, String date, String billets, Color color) =>
       Row(children: [
@@ -307,79 +571,147 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ]);
 
   // ── Graphique inscriptions ────────────────────────────────────────────
-  Widget _inscriptionsChart() => _card(
-    title: 'Évolution des inscriptions',
-    icon: Icons.show_chart_rounded,
-    action: 'Détails',
-    child: SizedBox(height: 200, child: LineChart(
-      LineChartData(
-        gridData: FlGridData(
-          show: true, drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) => FlLine(
-              color: AdminTheme.border, strokeWidth: 1),
+  Widget _inscriptionsChart() {
+    if (_loadingInscriptions) {
+      return _card(
+        title: 'Évolution des inscriptions',
+        icon: Icons.show_chart_rounded,
+        child: const SizedBox(
+          height: 200,
+          child: Center(child: CircularProgressIndicator()),
         ),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
-              reservedSize: 36,
-              getTitlesWidget: (v, _) => Text(v.toInt().toString(),
-                  style: AdminTheme.caption))),
-          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
-              getTitlesWidget: (v, _) {
-                const months = ['Sep','Oct','Nov','Déc','Jan','Fév',
-                    'Mar','Avr','Mai','Jun','Jul','Aoû'];
-                final i = v.toInt();
-                if (i < 0 || i >= months.length) return const SizedBox();
-                return Text(months[i], style: AdminTheme.caption);
-              })),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      );
+    }
+    if (_inscriptions.isEmpty) {
+      return _card(
+        title: 'Évolution des inscriptions',
+        icon: Icons.show_chart_rounded,
+        child: SizedBox(
+          height: 80,
+          child: Center(child: Text('Aucune donnée disponible.', style: AdminTheme.caption)),
         ),
-        borderData: FlBorderData(show: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: const [
-              FlSpot(0, 180), FlSpot(1, 195), FlSpot(2, 200), FlSpot(3, 205),
-              FlSpot(4, 210), FlSpot(5, 215), FlSpot(6, 220), FlSpot(7, 235),
-              FlSpot(8, 240), FlSpot(9, 245), FlSpot(10, 247), FlSpot(11, 247),
-            ],
-            isCurved: true, color: AdminTheme.primary,
-            barWidth: 2.5,
-            belowBarData: BarAreaData(show: true,
-                color: AdminTheme.primaryLight.withValues(alpha:0.5)),
-            dotData: const FlDotData(show: false),
-          ),
-        ],
-        minX: 0, maxX: 11, minY: 150, maxY: 270,
-      ),
-    )),
-  );
+      );
+    }
 
-  // ── Donut filières ────────────────────────────────────────────────────
-  Widget _donutFilieres() => _card(
-    title: 'Répartition par domaine',
-    icon: Icons.donut_large_rounded,
-    child: Column(children: [
-      SizedBox(height: 160, child: PieChart(
-        PieChartData(
-          sectionsSpace: 3, centerSpaceRadius: 45,
-          sections: [
-            PieChartSectionData(value: 60, color: AdminTheme.primary,
-                title: '60%', radius: 55, titleStyle: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-            PieChartSectionData(value: 40, color: AdminTheme.info,
-                title: '40%', radius: 55, titleStyle: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+    const moisAbrege = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    final spots = <FlSpot>[];
+    final labels = <String>[];
+    for (var i = 0; i < _inscriptions.length; i++) {
+      final row = _inscriptions[i];
+      final cumule = (num.tryParse('${row['cumule'] ?? 0}') ?? 0).toDouble();
+      spots.add(FlSpot(i.toDouble(), cumule));
+      final moisStr = row['mois']?.toString() ?? ''; // 'YYYY-MM'
+      final parts = moisStr.split('-');
+      final moisIdx = parts.length == 2 ? (int.tryParse(parts[1]) ?? 1) - 1 : 0;
+      labels.add(moisAbrege[moisIdx.clamp(0, 11)]);
+    }
+    final maxY = spots.map((s) => s.y).fold<double>(0, (a, b) => a > b ? a : b);
+    final minY = spots.map((s) => s.y).fold<double>(maxY, (a, b) => a < b ? a : b);
+
+    return _card(
+      title: 'Évolution des inscriptions',
+      icon: Icons.show_chart_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: 200, child: LineChart(
+        LineChartData(
+          gridData: FlGridData(
+            show: true, drawVerticalLine: false,
+            getDrawingHorizontalLine: (_) => FlLine(
+                color: AdminTheme.border, strokeWidth: 1),
+          ),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
+                reservedSize: 36,
+                getTitlesWidget: (v, _) => Text(v.toInt().toString(),
+                    style: AdminTheme.caption))),
+            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
+                getTitlesWidget: (v, _) {
+                  final i = v.toInt();
+                  if (i < 0 || i >= labels.length) return const SizedBox();
+                  return Text(labels[i], style: AdminTheme.caption);
+                })),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          borderData: FlBorderData(show: false),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true, color: AdminTheme.primary,
+              barWidth: 2.5,
+              belowBarData: BarAreaData(show: true,
+                  color: AdminTheme.primaryLight.withValues(alpha:0.5)),
+              dotData: const FlDotData(show: false),
+            ),
           ],
+          minX: 0, maxX: (spots.length - 1).toDouble(),
+          minY: (minY - 5).clamp(0, double.infinity), maxY: maxY + 10,
         ),
       )),
-      const SizedBox(height: 16),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        _legend(AdminTheme.primary, 'Sciences & Technologies', '148 étudiants'),
-        const SizedBox(width: 20),
-        _legend(AdminTheme.info, 'Sciences de Gestion', '99 étudiants'),
+          const SizedBox(height: 8),
+          Text(
+            "Historique détaillé disponible à partir de la mise en place du suivi des inscriptions — "
+            "les inscriptions antérieures apparaissent regroupées sur le premier mois.",
+            style: AdminTheme.caption,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Donut filières ────────────────────────────────────────────────────
+  Widget _donutFilieres() {
+    final total = _nbSciencesTech + _nbSciencesGestion;
+    if (_loadingKpis) {
+      return _card(
+        title: 'Répartition par domaine',
+        icon: Icons.donut_large_rounded,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    if (total == 0) {
+      return _card(
+        title: 'Répartition par domaine',
+        icon: Icons.donut_large_rounded,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text('Aucun étudiant enregistré.', style: AdminTheme.caption),
+        ),
+      );
+    }
+    final pctTech = (_nbSciencesTech / total * 100).round();
+    final pctGestion = 100 - pctTech;
+    return _card(
+      title: 'Répartition par domaine',
+      icon: Icons.donut_large_rounded,
+      child: Column(children: [
+        SizedBox(height: 160, child: PieChart(
+          PieChartData(
+            sectionsSpace: 3, centerSpaceRadius: 45,
+            sections: [
+              PieChartSectionData(value: _nbSciencesTech.toDouble(), color: AdminTheme.primary,
+                  title: '$pctTech%', radius: 55, titleStyle: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+              PieChartSectionData(value: _nbSciencesGestion.toDouble(), color: AdminTheme.info,
+                  title: '$pctGestion%', radius: 55, titleStyle: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+            ],
+          ),
+        )),
+        const SizedBox(height: 16),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          _legend(AdminTheme.primary, 'Sciences & Technologies', '$_nbSciencesTech étudiants'),
+          const SizedBox(width: 20),
+          _legend(AdminTheme.info, 'Sciences de Gestion', '$_nbSciencesGestion étudiants'),
+        ]),
       ]),
-    ]),
-  );
+    );
+  }
 
   Widget _legend(Color color, String label, String sub) => Row(
     mainAxisSize: MainAxisSize.min, children: [
@@ -394,17 +726,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
   ]);
 
   // ── Publications BDE ──────────────────────────────────────────────────
-  Widget _bdeWidget() => _card(
-    title: 'Publications BDE en attente',
-    icon: Icons.celebration_rounded,
-    action: 'Voir tout',
-    child: Column(children: [
-      _bdeItem('Soirée étudiante vendredi 02 Mai !', 'BDE — Aïcha S.', '28/04'),
-      _bdeItem('Tournoi de foot inter-filières', 'BDE — Sport', '27/04'),
-    ]),
-  );
+  Widget _bdeWidget() {
+    if (_loadingEvents) {
+      return _card(
+        title: 'Publications BDE en attente',
+        icon: Icons.celebration_rounded,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    final enAttente = _evenementsEnAttente;
+    if (enAttente.isEmpty) {
+      return _card(
+        title: 'Publications BDE en attente',
+        icon: Icons.celebration_rounded,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text('Aucune publication en attente.', style: AdminTheme.caption),
+        ),
+      );
+    }
+    return _card(
+      title: 'Publications BDE en attente',
+      icon: Icons.celebration_rounded,
+      action: 'Voir tout',
+      child: Column(
+        children: enAttente.map((e) {
+          final titre = e['titre']?.toString() ?? '';
+          final auteur = '${e['auteur_prenoms'] ?? ''} ${e['auteur_nom'] ?? ''}'.trim();
+          final date = _formaterDateCourte(e['createdAt']?.toString() ?? e['date_debut']?.toString());
+          return _bdeItem(titre, auteur.isEmpty ? 'Auteur inconnu' : auteur, date, e['id']);
+        }).toList(),
+      ),
+    );
+  }
 
-  Widget _bdeItem(String titre, String auteur, String date) => Padding(
+  Widget _bdeItem(String titre, String auteur, String date, dynamic id) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Row(children: [
       Container(width: 36, height: 36,
@@ -419,15 +778,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ])),
       const SizedBox(width: 8),
       Row(children: [
-        _actionBtn('Approuver', AdminTheme.success, AdminTheme.successLight),
+        _actionBtn('Approuver', AdminTheme.success, AdminTheme.successLight,
+            onTap: () => _validerEvenement(id, 'approuve')),
         const SizedBox(width: 6),
-        _actionBtn('Rejeter', AdminTheme.danger, AdminTheme.dangerLight),
+        _actionBtn('Rejeter', AdminTheme.danger, AdminTheme.dangerLight,
+            onTap: () => _validerEvenement(id, 'annule')),
       ]),
     ]),
   );
 
-  Widget _actionBtn(String label, Color fg, Color bg) => GestureDetector(
-    onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
+  Widget _actionBtn(String label, Color fg, Color bg, {VoidCallback? onTap}) => GestureDetector(
+    onTap: onTap ?? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En cours de développement...'))),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: bg,
@@ -439,15 +800,43 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   // ── Majors de promo ───────────────────────────────────────────────────
-  Widget _majorsWidget() => _card(
-    title: 'Majors de promotion',
-    icon: Icons.emoji_events_rounded,
-    child: Column(children: [
-      _majorItem(1, 'TRAORÉ Fatimata', 'RIT L2', '17.8/20', '🥇'),
-      _majorItem(2, 'SAWADOGO Aminata', 'RIT L2', '16.2/20', '🥈'),
-      _majorItem(3, 'KABORÉ Djeneba', 'Marketing L2', '15.9/20', '🥉'),
-    ]),
-  );
+  Widget _majorsWidget() {
+    if (_loadingMajors) {
+      return _card(
+        title: 'Majors de promotion',
+        icon: Icons.emoji_events_rounded,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    if (_majors.isEmpty) {
+      return _card(
+        title: 'Majors de promotion',
+        icon: Icons.emoji_events_rounded,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text('Aucune note validée pour le moment.', style: AdminTheme.caption),
+        ),
+      );
+    }
+    const medailles = ['🥇', '🥈', '🥉'];
+    return _card(
+      title: 'Majors de promotion',
+      icon: Icons.emoji_events_rounded,
+      child: Column(
+        children: List.generate(_majors.length, (i) {
+          final m = _majors[i];
+          final nom = '${m['prenoms'] ?? ''} ${m['nom'] ?? ''}'.trim();
+          final filiereNiveau = '${m['filiere_nom'] ?? ''} ${m['niveau'] ?? ''}'.trim();
+          final moyenne = num.tryParse('${m['moyenne'] ?? 0}') ?? 0;
+          return _majorItem(i + 1, nom.isEmpty ? '—' : nom, filiereNiveau,
+              '${moyenne.toStringAsFixed(1)}/20', medailles[i % medailles.length]);
+        }),
+      ),
+    );
+  }
 
   Widget _majorItem(int rank, String nom, String filiere, String moy, String medal) =>
       Padding(padding: const EdgeInsets.symmetric(vertical: 8),
