@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../admin/admin_edt.dart';
@@ -630,12 +631,70 @@ class _DetailFiliereState extends State<_DetailFiliere>
 
   Future<void> _exporterListePdf(Filiere f) async {
     final doc = pw.Document();
+    
+    // Header
+    final titleStyle = pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: const PdfColor(0.1, 0.3, 0.6));
+    final subtitleStyle = pw.TextStyle(fontSize: 14, color: const PdfColor(0.3, 0.3, 0.3));
+
     doc.addPage(pw.MultiPage(
-      build: (_) => [
-        pw.Header(level: 0, text: 'Liste des étudiants — ${f.nom} (${f.niveau})'),
-        pw.Paragraph(text: 'Année académique : ${f.anneeAcademique} · ${_etudiants.length} étudiant(s)'),
+      pageFormat: const PdfPageFormat(21.0 * PdfPageFormat.cm, 29.7 * PdfPageFormat.cm, marginAll: 2.0 * PdfPageFormat.cm),
+      build: (context) => [
+        // En-tête
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('ScolarHub', style: titleStyle),
+                pw.Text('Institut Supérieur de Technologie', style: subtitleStyle),
+              ]
+            ),
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text('Année académique', style: subtitleStyle.copyWith(fontSize: 10)),
+                pw.Text(f.anneeAcademique, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              ]
+            )
+          ]
+        ),
+        pw.SizedBox(height: 30),
+        
+        // Titre du document
+        pw.Center(
+          child: pw.Text('LISTE DES ÉTUDIANTS', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline))
+        ),
+        pw.SizedBox(height: 20),
+        
+        // Infos Filière
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(color: const PdfColor(0.95, 0.95, 0.95), borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5))),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Filière : ${f.nom} (${f.abreviation})', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text('Niveau : ${f.niveau}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text('Effectif : ${_etudiants.length}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            ]
+          )
+        ),
+        pw.SizedBox(height: 20),
+
+        // Tableau
         pw.TableHelper.fromTextArray(
-          headers: ['N°', 'Matricule', 'Nom', 'Prénoms'],
+          headers: ['N°', 'Matricule', 'Nom', 'Prénoms', 'Filière'],
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+          headerDecoration: const pw.BoxDecoration(color: PdfColor(0.1, 0.3, 0.6)),
+          cellHeight: 30,
+          cellAlignments: {
+            0: pw.Alignment.center,
+            1: pw.Alignment.centerLeft,
+            2: pw.Alignment.centerLeft,
+            3: pw.Alignment.centerLeft,
+            4: pw.Alignment.centerLeft,
+          },
           data: [
             for (var i = 0; i < _etudiants.length; i++)
               [
@@ -643,12 +702,18 @@ class _DetailFiliereState extends State<_DetailFiliere>
                 '${_etudiants[i]['matricule'] ?? ''}',
                 '${_etudiants[i]['nom'] ?? ''}',
                 '${_etudiants[i]['prenoms'] ?? ''}',
+                f.abreviation,
               ],
           ],
         ),
       ],
+      footer: (context) => pw.Container(
+        alignment: pw.Alignment.centerRight,
+        margin: const pw.EdgeInsets.only(top: 10),
+        child: pw.Text('Page ${context.pageNumber} sur ${context.pagesCount}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+      ),
     ));
-    await Printing.layoutPdf(onLayout: (format) async => doc.save());
+    await Printing.layoutPdf(name: 'Liste_${f.abreviation}_${f.niveau}.pdf', onLayout: (format) async => doc.save());
   }
 
   Widget _tabActions(Filiere f, Color color) => Padding(

@@ -59,7 +59,10 @@ class _GradeSessionScreenState extends State<GradeSessionScreen> {
       _students = [];
       _notes.clear();
     });
-    final result = await ProfessorService.getStudentsByFiliere(int.parse(_selectedClassId!));
+    final result = await ProfessorService.getStudentsByFiliere(
+      int.parse(_selectedClassId!),
+      niveau: _selectedNiveau,
+    );
     setState(() {
       _students = result['success'] == true ? (result['data'] as List<dynamic>) : [];
       _isLoading = false;
@@ -120,14 +123,14 @@ class _GradeSessionScreenState extends State<GradeSessionScreen> {
                         decoration: const InputDecoration(labelText: 'Classe / Filière', border: OutlineInputBorder()),
                         items: _classes.map<DropdownMenuItem<String>>((c) {
                           return DropdownMenuItem<String>(
-                            value: c['id'].toString(),
+                            value: '${c['id']}_${c['niveau']}',
                             child: Text('${c['nom']} - ${c['niveau']}'),
                           );
                         }).toList(),
                         onChanged: (val) {
-                          final c = _classes.firstWhere((x) => x['id'].toString() == val);
+                          final c = _classes.firstWhere((x) => '${x['id']}_${x['niveau']}' == val);
                           setState(() {
-                            _selectedClassId = val;
+                            _selectedClassId = c['id'].toString();
                             _selectedClassName = c['nom'];
                             _selectedNiveau = c['niveau'];
                           });

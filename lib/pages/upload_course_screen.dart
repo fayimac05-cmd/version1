@@ -17,7 +17,7 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
   String? _selectedFiliereId;
   String? _selectedFiliereNom;
   String? _selectedModuleId;
-  String? _filePath;
+  PlatformFile? _selectedFile;
 
   List<dynamic> _filieres = [];
   List<dynamic> _modules = [];
@@ -54,24 +54,35 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles();
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx'],
+      withData: true,
+    );
     if (result != null && result.files.isNotEmpty) {
-      setState(() => _filePath = result.files.first.path);
+      setState(() => _selectedFile = result.files.first);
     }
   }
 
   Future<void> _upload() async {
-    if (!(_formKey.currentState?.validate() ?? false) || _filePath == null) return;
+    if (!(_formKey.currentState?.validate() ?? false) || _selectedFile == null) return;
     _formKey.currentState?.save();
+    final fileBytes = _selectedFile!.bytes ?? <int>[];
+    if (fileBytes.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de lire le fichier. Réessayez.'), backgroundColor: Colors.red));
+      return;
+    }
     setState(() => _isLoading = true);
     final response = await ProfessorService.uploadCours(
       titre: _title!,
-      description: _description!,
+      description: _description ?? '',
       filiereId: _selectedFiliereId!,
       filiereNom: _selectedFiliereNom!,
-      niveau: '', // you can extend to choose level if needed
+      niveau: '',
       moduleId: _selectedModuleId!,
-      filePath: _filePath!,
+      fileBytes: fileBytes,
+      fileName: _selectedFile!.name,
     );
     setState(() => _isLoading = false);
     if (mounted) {
@@ -144,7 +155,7 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.attach_file),
-                      label: Text(_filePath == null ? 'Choisir un fichier' : 'Fichier sélectionné'),
+                      label: Text(_selectedFile == null ? 'Choisir un fichier' : _selectedFile!.name),
                       onPressed: _pickFile,
                     ),
                     const SizedBox(height: 24),

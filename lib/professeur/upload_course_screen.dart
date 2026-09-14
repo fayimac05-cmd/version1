@@ -58,6 +58,7 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx'],
+      withData: true, // important pour le web : charge les bytes en mémoire
     );
     if (result != null) {
       setState(() {
@@ -83,6 +84,13 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
 
     setState(() => _isUploading = true);
 
+    final fileBytes = (_selectedFile!.bytes ?? <int>[]) as List<int>;
+    if (fileBytes.isEmpty) {
+      setState(() => _isUploading = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible de lire le fichier. Réessayez.'), backgroundColor: Colors.red));
+      return;
+    }
+
     final res = await ProfessorService.uploadCours(
       titre: _titreCtrl.text.trim(),
       description: _descCtrl.text.trim(),
@@ -90,7 +98,8 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
       filiereNom: _selectedClassName!,
       niveau: _selectedNiveau!,
       moduleId: _selectedModuleId!,
-      filePath: _selectedFile!.path!,
+      fileBytes: fileBytes,
+      fileName: _selectedFile!.name,
     );
 
     setState(() => _isUploading = false);
@@ -132,14 +141,14 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
                       decoration: const InputDecoration(labelText: 'Classe / Filière', border: OutlineInputBorder()),
                       items: _classes.map<DropdownMenuItem<String>>((c) {
                         return DropdownMenuItem<String>(
-                          value: c['id'].toString(),
+                          value: '${c['id']}_${c['niveau']}',
                           child: Text('${c['nom']} - ${c['niveau']}'),
                         );
                       }).toList(),
                       onChanged: (val) {
-                        final c = _classes.firstWhere((x) => x['id'].toString() == val);
+                        final c = _classes.firstWhere((x) => '${x['id']}_${x['niveau']}' == val);
                         setState(() {
-                          _selectedClassId = val;
+                          _selectedClassId = c['id'].toString();
                           _selectedClassName = c['nom'];
                           _selectedNiveau = c['niveau'];
                         });

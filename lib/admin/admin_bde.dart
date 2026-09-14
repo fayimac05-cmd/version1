@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_palette.dart';
@@ -249,6 +250,27 @@ class _AdminBDEState extends State<AdminBDE> with SingleTickerProviderStateMixin
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (e['affiche_url'] != null && e['affiche_url'].toString().isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: e['affiche_url'].toString().startsWith('data:image')
+                      ? Image.memory(
+                          base64Decode(e['affiche_url'].toString().split(',').last),
+                          width: 52,
+                          height: 52,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        )
+                      : Image.network(
+                          e['affiche_url'].toString(),
+                          width: 52,
+                          height: 52,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        ),
+                ),
+                const SizedBox(width: 14),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

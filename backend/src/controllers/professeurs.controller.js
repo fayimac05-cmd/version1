@@ -230,9 +230,9 @@ exports.getProfile = async (req, res) => {
        GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.domaine, u.statut`,
       [req.user.id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Profil introuvable.' });
-    res.json(result.rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Profil introuvable.' });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
 
 // ── PUT /api/professeurs/profile ──────────────────────────────────────────────
@@ -316,7 +316,8 @@ exports.getStudentsByFiliere = async (req, res) => {
       filtreNiveau = ` AND e.niveau = $${params.length}`;
     }
     const result = await db.query(
-      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.statut
+      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.statut,
+              (SELECT COUNT(*) FROM appel_presences ap WHERE ap.etudiant_id = e.id AND ap.statut = 'absent')::int AS total_absences
        FROM users u LEFT JOIN etudiants e ON e.user_id=u.id
        WHERE e.filiere_id=$1${filtreNiveau} AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%') ORDER BY u.nom`,
       params
@@ -391,8 +392,10 @@ exports.getStudentsByFilierePdf = async (req, res) => {
 exports.getDisponibilites = async (req, res) => {
   try {
     const r = await db.query('SELECT disponibilites FROM users WHERE id=$1', [req.user.id]);
-    res.json(r.rows[0]?.disponibilites || []);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    // Retourne { success, data } cohérent avec tous les autres endpoints
+    const data = r.rows[0]?.disponibilites || [];
+    res.json({ success: true, data: Array.isArray(data) ? data : [] });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
 
 exports.getAllDisponibilites = async (req, res) => {
@@ -400,15 +403,17 @@ exports.getAllDisponibilites = async (req, res) => {
     const r = await db.query(
       `SELECT id, nom, prenoms, disponibilites FROM users WHERE role='professeur' AND disponibilites IS NOT NULL`
     );
-    res.json(r.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    res.json({ success: true, data: r.rows });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
 
 exports.saveDisponibilites = async (req, res) => {
   try {
-    await db.query('UPDATE users SET disponibilites=$1 WHERE id=$2', [JSON.stringify(req.body.disponibilites), req.user.id]);
-    res.json({ message: 'Disponibilités enregistrées.' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    // Flutter envoie { creneaux: [...] } (voir professor_service.dart)
+    const creneaux = req.body.creneaux ?? req.body.disponibilites ?? [];
+    await db.query('UPDATE users SET disponibilites=$1 WHERE id=$2', [JSON.stringify(creneaux), req.user.id]);
+    res.json({ success: true, message: 'Disponibilités enregistrées.' });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
 
 // ── PATCH /api/professeurs/assign-module ──────────────────────────────────────

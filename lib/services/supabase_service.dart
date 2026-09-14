@@ -76,6 +76,65 @@ class SupabaseService {
     return {'success': true, 'user': newStudent};
   }
 
+  // ── Récupérer le domaine d'un admin ─────────────────────────────────────────
+  Future<String> fetchDomaineAdmin(String identifiant, {String tel = ''}) async {
+    try {
+      final idClean = identifiant.trim();
+      final telClean = tel.trim();
+
+      // Construire la liste d'identifiants à essayer (email, matricule, tel)
+      final List<String> ids = [
+        if (idClean.isNotEmpty) idClean,
+        if (telClean.isNotEmpty && telClean != idClean) telClean,
+      ];
+
+      // 1. Essayer dans 'administrateurs' en PRIORITÉ (JSONB permissions)
+      for (final id in ids) {
+        final row = await client
+            .from('administrateurs')
+            .select('domaine_admin, permissions')
+            .or('tel.eq.$id,email.eq.$id,matricule.eq.$id')
+            .maybeSingle();
+
+        // ignore: avoid_print
+        print('[fetchDomaineAdmin] administrateurs lookup id=$id → row=$row');
+
+        if (row != null) {
+          if (row['domaine_admin'] != null && row['domaine_admin'].toString().isNotEmpty && row['domaine_admin'] != 'Tous') {
+            return row['domaine_admin'].toString();
+          }
+          if (row['permissions'] != null) {
+            final Map<String, dynamic> perms =
+                (row['permissions'] is Map) ? Map<String, dynamic>.from(row['permissions']) : {};
+            if (perms['domaine'] != null && perms['domaine'].toString().isNotEmpty) {
+              return perms['domaine'].toString();
+            }
+          }
+        }
+      }
+
+      // 2. Essayer dans 'users'
+      for (final id in ids) {
+        try {
+          final row = await client
+              .from('users')
+              .select('domaine_admin')
+              .or('matricule.eq.$id,email.eq.$id,tel.eq.$id,telephone.eq.$id')
+              .maybeSingle();
+          // ignore: avoid_print
+          print('[fetchDomaineAdmin] users lookup id=$id → row=$row');
+          if (row != null && row['domaine_admin'] != null && row['domaine_admin'] != 'Tous') {
+            return row['domaine_admin'].toString();
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('[SupabaseService] Erreur fetchDomaineAdmin: $e');
+    }
+    return 'Tous';
+  }
+
   // ── Connexion Étudiant Supabase ───────────────────────────────────────────
 
   Future<Map<String, dynamic>> loginEtudiant({
@@ -94,7 +153,33 @@ class SupabaseService {
           .maybeSingle();
     } catch (_) {}
 
-    // 2. Chercher dans la table 'users'
+    // 2. Chercher dans la table 'administrateurs' (domaine stocké dans permissions JSONB)
+    if (user == null) {
+      try {
+        // Recherche par tel, email ou matricule
+        final adminRow = await client
+            .from('administrateurs')
+            .select()
+            .or('tel.eq.$matClean,tel.eq.$matricule,email.eq.$matricule,matricule.eq.$matClean')
+            .maybeSingle();
+        if (adminRow != null) {
+          // Aplatir les permissions JSONB dans la map utilisateur
+          final perms = adminRow['permissions'];
+          final Map<String, dynamic> permsMap =
+              (perms is Map) ? Map<String, dynamic>.from(perms) : {};
+
+          user = {
+            ...adminRow,
+            'role': 'admin',
+            'admin_sub_role': adminRow['admin_sub_role'] ?? adminRow['adminSubRole'],
+            // Extraire le domaine depuis permissions.domaine
+            'domaine_admin': permsMap['domaine'] ?? 'Tous',
+          };
+        }
+      } catch (_) {}
+    }
+
+    // 3. Chercher dans la table 'users'
     if (user == null) {
       try {
         user = await client
