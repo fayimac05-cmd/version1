@@ -3,7 +3,6 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../admin/admin_theme.dart';
-import '../services/api_service.dart';
 
 class AdminDashboard extends StatefulWidget {
   final StudentProfile profile;
@@ -174,70 +173,58 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final isDesktop = AdminTheme.isDesktop(context);
     return Scaffold(
       backgroundColor: AdminTheme.background,
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _dashboardDataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Erreur de chargement: ${snapshot.error}'));
-          }
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(isDesktop ? 28 : 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-          final data = snapshot.data ?? {};
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(isDesktop ? 28 : 16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // ── Salutation ──────────────────────────────────────────────
-              _greeting(),
-              const SizedBox(height: 20),
+          // ── Salutation ──────────────────────────────────────────────
+          _greeting(),
+          const SizedBox(height: 20),
 
-              // ── Alertes prioritaires ────────────────────────────────────
-              _alertsBanner(data['alertes'] ?? {}),
-              const SizedBox(height: 24),
+          // ── Alertes prioritaires ────────────────────────────────────
+          _alertsBanner(),
+          const SizedBox(height: 24),
 
-              // ── KPI Cards ───────────────────────────────────────────────
-              _kpiRow(isDesktop, data['kpis'] ?? {}),
-              const SizedBox(height: 28),
+          // ── KPI Cards ───────────────────────────────────────────────
+          _kpiRow(isDesktop),
+          const SizedBox(height: 28),
 
-              // ── Ligne widgets ────────────────────────────────────────────
-              isDesktop
-                  ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(flex: 3, child: _reclamationsWidget(data['reclamations'] as List? ?? [])),
-                      const SizedBox(width: 20),
-                      Expanded(flex: 2, child: _eventsWidget(data['evenements'] as List? ?? [])),
-                    ])
-                  : Column(children: [
-                      _reclamationsWidget(data['reclamations'] as List? ?? []),
-                      const SizedBox(height: 16),
-                      _eventsWidget(data['evenements'] as List? ?? []),
-                    ]),
-              const SizedBox(height: 28),
+          // ── Ligne widgets ────────────────────────────────────────────
+          isDesktop
+              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(flex: 3, child: _reclamationsWidget()),
+                  const SizedBox(width: 20),
+                  Expanded(flex: 2, child: _eventsWidget()),
+                ])
+              : Column(children: [
+                  _reclamationsWidget(),
+                  const SizedBox(height: 16),
+                  _eventsWidget(),
+                ]),
+          const SizedBox(height: 28),
 
-              // ── Graphiques ───────────────────────────────────────────────
-              isDesktop
-                  ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(flex: 3, child: _inscriptionsChart()),
-                      const SizedBox(width: 20),
-                      Expanded(flex: 2, child: _donutFilieres()),
-                    ])
-                  : Column(children: [
-                      _inscriptionsChart(),
-                      const SizedBox(height: 16),
-                      _donutFilieres(),
-                    ]),
-              const SizedBox(height: 28),
+          // ── Graphiques ───────────────────────────────────────────────
+          isDesktop
+              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(flex: 3, child: _inscriptionsChart()),
+                  const SizedBox(width: 20),
+                  Expanded(flex: 2, child: _donutFilieres()),
+                ])
+              : Column(children: [
+                  _inscriptionsChart(),
+                  const SizedBox(height: 16),
+                  _donutFilieres(),
+                ]),
+          const SizedBox(height: 28),
 
-              // ── Publications BDE en attente ──────────────────────────────
-              _bdeWidget(),
-              const SizedBox(height: 28),
+          // ── Publications BDE en attente ──────────────────────────────
+          _bdeWidget(),
+          const SizedBox(height: 28),
 
-              // ── Majors de promo ──────────────────────────────────────────
-              _majorsWidget(),
-              const SizedBox(height: 32),
-            ]),
-          );
-        }
+          // ── Majors de promo ──────────────────────────────────────────
+          _majorsWidget(),
+          const SizedBox(height: 32),
+        ]),
       ),
     );
   }
@@ -352,7 +339,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   // ── KPI Cards ─────────────────────────────────────────────────────────
-  Widget _kpiRow(bool isDesktop, Map<String, dynamic> kpisData) {
+  Widget _kpiRow(bool isDesktop) {
     final kpis = [
       {'label': 'Étudiants actifs', 'value': _loadingKpis ? '…' : '$_nbEtudiants',
        'sub': 'Total actifs',
