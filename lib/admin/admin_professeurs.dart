@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 
 const List<String> kDomaines = ['Sciences & Technologies', 'Sciences de Gestion'];
 const List<String> kNiveaux = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
+const List<int> kSemestres = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 class AdminProfesseurs extends StatefulWidget {
   final StudentProfile profile;
@@ -85,14 +86,28 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
         allFilieres: _filieres,
         domaineDeFiliere: _domaineDeFiliere,
         prof: prof,
-        onSave: (data, affectations) async {
-          await _sauvegarder(data, affectations, prof?['id']);
+        onSaveProfesseur: (data, affectations) async {
+          return await _sauvegarderProfesseur(data, affectations, prof?['id']);
         },
+        onSauvegardeTerminee: () async {
+          if (!mounted) return;
+          final nav = Navigator.of(context);
+          await _charger();
+          nav.pop();
+          _snack(
+            prof == null
+                ? 'Professeur créé. Il pourra se connecter avec son nom, prénom et téléphone.'
+                : 'Professeur mis à jour avec succès.',
+            success: true,
+          );
+        },
+        onErreur: (msg) => _snack(msg, success: false),
       ),
     );
   }
 
-  Future<void> _sauvegarder(
+  // Renvoie l'id du professeur créé/modifié, ou null en cas d'échec.
+  Future<String?> _sauvegarderProfesseur(
     Map<String, dynamic> data,
     List<Map<String, String>> affectations,
     String? id,
@@ -115,22 +130,18 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
       }
 
       if (res.statusCode == 200 || res.statusCode == 201) {
-        if (!mounted) return;
-        final nav = Navigator.of(context);
-        await _charger();
-        nav.pop();
-        _snack(
-          id == null
-              ? 'Professeur créé. Il pourra se connecter avec son nom, prénom et téléphone.'
-              : 'Professeur mis à jour avec succès.',
-          success: true,
-        );
+        final body = jsonDecode(res.body);
+        // Création : { message, professeur: {id, ...} } — Modification : l'objet prof directement.
+        final returnedId = id ?? body['professeur']?['id']?.toString();
+        return returnedId;
       } else {
         final err = jsonDecode(res.body);
         _snack(err['error'] ?? 'Erreur lors de la sauvegarde.', success: false);
+        return null;
       }
     } catch (e) {
       _snack('Erreur: $e', success: false);
+      return null;
     }
   }
 
@@ -324,14 +335,19 @@ class _FormulaireProf extends StatefulWidget {
   final List<Map<String, dynamic>> allFilieres;
   final String Function(String) domaineDeFiliere;
   final Map<String, dynamic>? prof;
-  // (data professeur, liste d'affectations [{filiere_id, niveau}])
-  final Future<void> Function(Map<String, dynamic>, List<Map<String, String>>) onSave;
+  // Sauvegarde les infos + affectations filière/niveau ; renvoie l'id du prof (création ou modification).
+  final Future<String?> Function(Map<String, dynamic>, List<Map<String, String>>) onSaveProfesseur;
+  // Appelé une fois TOUT sauvegardé (prof + modules) avec succès.
+  final Future<void> Function() onSauvegardeTerminee;
+  final void Function(String) onErreur;
 
   const _FormulaireProf({
     required this.profile,
     required this.allFilieres,
     required this.domaineDeFiliere,
-    required this.onSave,
+    required this.onSaveProfesseur,
+    required this.onSauvegardeTerminee,
+    required this.onErreur,
     this.prof,
   });
 
@@ -348,7 +364,20 @@ class _FormulaireProfState extends State<_FormulaireProf> {
   final Set<String> _domainesSelectionnes = {};
   // Clé = id de filière ; valeur = ensemble des niveaux choisis POUR CETTE filière.
   final Map<String, Set<String>> _affectationsParFiliere = {};
+
+  // Modules de chaque filière (cache, chargés à la demande) : fid -> liste de modules.
+  final Map<String, List<Map<String, dynamic>>> _modulesParFiliere = {};
+  final Set<String> _modulesEnChargement = {};
+
+  // Modules cochés : fid -> niveau -> moduleId -> semestre choisi.
+  final Map<String, Map<String, Map<int, int>>> _modulesSelectionnes = {};
+
+  // Affectations déjà existantes en base (mode édition), pour calculer les
+  // suppressions : liste de {affectation_id, filiere_id, niveau, id(module)}.
+  List<Map<String, dynamic>> _affectationsModulesExistantes = [];
+
   bool _saving = false;
+  bool _chargementInitial = false;
 
   @override
   void initState() {
@@ -376,9 +405,34 @@ class _FormulaireProfState extends State<_FormulaireProf> {
           if (niv != null) _affectationsParFiliere[fid]!.add(niv);
         }
       }
+
+      _chargerAffectationsModulesExistantes();
     } else if (widget.profile.filtreParDomaine) {
       _domainesSelectionnes.add(widget.profile.domaineAdmin);
     }
+  }
+
+  Future<void> _chargerAffectationsModulesExistantes() async {
+    final profId = widget.prof!['id'].toString();
+    setState(() => _chargementInitial = true);
+    final res = await ApiService.getModulesAffectesProfesseur(profId);
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        _affectationsModulesExistantes = List<Map<String, dynamic>>.from(res['data']);
+        for (final a in _affectationsModulesExistantes) {
+          final fid = a['filiere_id'].toString();
+          final niv = a['niveau'].toString();
+          final modId = int.tryParse(a['id'].toString());
+          final sem = int.tryParse(a['semestre'].toString()) ?? 1;
+          if (modId == null) continue;
+          _modulesSelectionnes.putIfAbsent(fid, () => {});
+          _modulesSelectionnes[fid]!.putIfAbsent(niv, () => {});
+          _modulesSelectionnes[fid]![niv]![modId] = sem;
+        }
+      }
+      _chargementInitial = false;
+    });
   }
 
   @override
@@ -394,6 +448,19 @@ class _FormulaireProfState extends State<_FormulaireProf> {
       final d = widget.domaineDeFiliere(f['nom'] ?? '');
       return _domainesSelectionnes.contains(d);
     }).toList();
+  }
+
+  Future<void> _chargerModulesPourFiliere(String fid) async {
+    if (_modulesParFiliere.containsKey(fid) || _modulesEnChargement.contains(fid)) return;
+    _modulesEnChargement.add(fid);
+    final res = await ApiService.getModules(filiereId: fid);
+    if (!mounted) return;
+    setState(() {
+      _modulesParFiliere[fid] = res['success'] == true
+          ? List<Map<String, dynamic>>.from(res['data'])
+          : [];
+      _modulesEnChargement.remove(fid);
+    });
   }
 
   Future<void> _soumettre() async {
@@ -420,7 +487,8 @@ class _FormulaireProfState extends State<_FormulaireProf> {
     });
 
     setState(() => _saving = true);
-    await widget.onSave(
+
+    final profId = await widget.onSaveProfesseur(
       {
         'nom':      _nomCtrl.text.trim().toUpperCase(),
         'prenoms':  _prenomsCtrl.text.trim(),
@@ -430,7 +498,56 @@ class _FormulaireProfState extends State<_FormulaireProf> {
       },
       affectations,
     );
-    setState(() => _saving = false);
+
+    if (profId == null) {
+      // L'erreur a déjà été affichée par le parent (onSaveProfesseur).
+      setState(() => _saving = false);
+      return;
+    }
+
+    // ── Synchroniser les affectations de modules (professeur_modules) ──────
+    try {
+      // 1. Ajouter/mettre à jour chaque module coché.
+      for (final fid in _modulesSelectionnes.keys) {
+        final filiereIdInt = int.tryParse(fid);
+        if (filiereIdInt == null) continue;
+        for (final niv in _modulesSelectionnes[fid]!.keys) {
+          for (final entry in _modulesSelectionnes[fid]![niv]!.entries) {
+            final moduleId = entry.key;
+            final semestre = entry.value;
+            final res = await ApiService.assignerModuleProfesseur(
+              professeurId: profId,
+              moduleId: moduleId,
+              filiereId: filiereIdInt,
+              niveau: niv,
+              semestre: semestre,
+            );
+            if (res['success'] != true) {
+              widget.onErreur(res['error']?.toString() ?? 'Erreur lors de l\'affectation d\'un module.');
+            }
+          }
+        }
+      }
+
+      // 2. Retirer les affectations existantes qui ne sont plus cochées (mode édition).
+      for (final ancienne in _affectationsModulesExistantes) {
+        final fid = ancienne['filiere_id'].toString();
+        final niv = ancienne['niveau'].toString();
+        final modId = int.tryParse(ancienne['id'].toString());
+        final affectationId = int.tryParse(ancienne['affectation_id'].toString());
+        if (modId == null || affectationId == null) continue;
+        final toujoursCoche = _modulesSelectionnes[fid]?[niv]?.containsKey(modId) ?? false;
+        if (!toujoursCoche) {
+          await ApiService.retirerModuleProfesseur(professeurId: profId, affectationId: affectationId);
+        }
+      }
+
+      await widget.onSauvegardeTerminee();
+    } catch (e) {
+      widget.onErreur('Erreur lors de la synchronisation des modules : $e');
+    }
+
+    if (mounted) setState(() => _saving = false);
   }
 
   Widget _champ(TextEditingController ctrl, String label, IconData icon,
@@ -498,6 +615,96 @@ class _FormulaireProfState extends State<_FormulaireProf> {
     );
   }
 
+  // ── Bloc modules pour un (filière, niveau) donné ────────────────────────
+  Widget _blocModulesPourNiveau(
+    String fid,
+    String niveau,
+    void Function(void Function()) setModalState,
+  ) {
+    // Déclenche le chargement des modules de cette filière si pas déjà fait.
+    if (!_modulesParFiliere.containsKey(fid) && !_modulesEnChargement.contains(fid)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _chargerModulesPourFiliere(fid));
+    }
+
+    final modules = _modulesParFiliere[fid];
+    final selection = _modulesSelectionnes[fid]?[niveau] ?? {};
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Modules — $niveau',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
+          const SizedBox(height: 6),
+          if (modules == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+            )
+          else if (modules.isEmpty)
+            const Text('Aucun module pour cette filière.', style: TextStyle(fontSize: 12, color: Colors.grey))
+          else
+            Column(
+              children: modules.map((m) {
+                final moduleId = int.tryParse(m['id'].toString());
+                if (moduleId == null) return const SizedBox.shrink();
+                final coche = selection.containsKey(moduleId);
+                final semestre = selection[moduleId] ?? 1;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: coche,
+                        activeColor: AppPalette.blue,
+                        onChanged: (v) {
+                          setModalState(() {
+                            _modulesSelectionnes.putIfAbsent(fid, () => {});
+                            _modulesSelectionnes[fid]!.putIfAbsent(niveau, () => {});
+                            if (v == true) {
+                              _modulesSelectionnes[fid]![niveau]![moduleId] = semestre;
+                            } else {
+                              _modulesSelectionnes[fid]![niveau]!.remove(moduleId);
+                            }
+                          });
+                        },
+                      ),
+                      Expanded(
+                        child: Text(m['nom'] ?? '', style: const TextStyle(fontSize: 13)),
+                      ),
+                      if (coche) ...[
+                        const Text('S', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        const SizedBox(width: 2),
+                        DropdownButton<int>(
+                          value: semestre,
+                          underline: const SizedBox.shrink(),
+                          style: const TextStyle(fontSize: 12, color: AppPalette.blue, fontWeight: FontWeight.bold),
+                          items: kSemestres.map((s) => DropdownMenuItem(value: s, child: Text('$s'))).toList(),
+                          onChanged: (v) {
+                            if (v == null) return;
+                            setModalState(() {
+                              _modulesSelectionnes[fid]![niveau]![moduleId] = v;
+                            });
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.prof != null;
@@ -531,6 +738,7 @@ class _FormulaireProfState extends State<_FormulaireProf> {
               setModalState(() {
                 if (_affectationsParFiliere.containsKey(fid)) {
                   _affectationsParFiliere.remove(fid);
+                  _modulesSelectionnes.remove(fid);
                 } else {
                   _affectationsParFiliere[fid] = {};
                 }
@@ -541,7 +749,12 @@ class _FormulaireProfState extends State<_FormulaireProf> {
               setModalState(() {
                 final set = _affectationsParFiliere[fid];
                 if (set == null) return;
-                set.contains(niveau) ? set.remove(niveau) : set.add(niveau);
+                if (set.contains(niveau)) {
+                  set.remove(niveau);
+                  _modulesSelectionnes[fid]?.remove(niveau);
+                } else {
+                  set.add(niveau);
+                }
               });
             }
 
@@ -577,6 +790,14 @@ class _FormulaireProfState extends State<_FormulaireProf> {
                   const SizedBox(height: 16),
                 ],
 
+                if (isEdit && _chargementInitial) ...[
+                  const Center(child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Chargement des modules déjà affectés...',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  )),
+                ],
+
                 _champ(_nomCtrl, 'Nom de famille *', Icons.person_outline),
                 const SizedBox(height: 12),
                 _champ(_prenomsCtrl, 'Prénom(s) *', Icons.person_outline),
@@ -601,13 +822,13 @@ class _FormulaireProfState extends State<_FormulaireProf> {
                 ),
                 const SizedBox(height: 20),
 
-                const Text('Filières et niveaux',
+                const Text('Filières, niveaux et modules',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                 const SizedBox(height: 4),
                 Text(
                   _domainesSelectionnes.isEmpty
                       ? 'Sélectionnez d\'abord un domaine'
-                      : 'Cochez une filière, puis choisissez le(s) niveau(x) pour cette filière',
+                      : 'Cochez une filière, un niveau, puis les modules que ce professeur y dispense',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 10),
@@ -665,6 +886,8 @@ class _FormulaireProfState extends State<_FormulaireProf> {
                                 const Text('Choisissez au moins un niveau pour cette filière.',
                                     style: TextStyle(fontSize: 11, color: Colors.orange)),
                               ],
+                              // Un bloc "Modules — <niveau>" par niveau coché.
+                              ...niveauxChoisis.map((niv) => _blocModulesPourNiveau(fid, niv, setModalState)),
                             ],
                           ],
                         ),

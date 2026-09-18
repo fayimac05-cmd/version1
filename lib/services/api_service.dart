@@ -16,7 +16,7 @@ class ApiService {
   static const String _cloudUrl = 'https://backend-scolarhub.onrender.com/api';
   // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
   // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
-  static const String _localUrl = 'http://localhost:3000/api';
+  static const String _localUrl = 'http://localhost:5000/api';
   static const String baseUrl = _useCloud ? _cloudUrl : _localUrl;
 
   // ── Sauvegarder le token ─────────────────────────────────
@@ -103,8 +103,7 @@ class ApiService {
       final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
       final response = await http.get(Uri.parse(url), headers: headers);
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(utf8.decode(response.bodyBytes))
-            as Map<String, dynamic>?;
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
       }
       return {'success': false, 'status': response.statusCode};
     } catch (e) {
@@ -112,10 +111,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> post(
-    String endpoint, [
-    dynamic body,
-  ]) async {
+  static Future<Map<String, dynamic>?> post(String endpoint, [dynamic body]) async {
     try {
       final headers = await getHeaders();
       final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
@@ -125,8 +121,7 @@ class ApiService {
         body: body != null ? jsonEncode(body) : null,
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(utf8.decode(response.bodyBytes))
-            as Map<String, dynamic>?;
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
       }
       return {'success': false, 'status': response.statusCode};
     } catch (e) {
@@ -134,10 +129,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> put(
-    String endpoint, [
-    dynamic body,
-  ]) async {
+  static Future<Map<String, dynamic>?> put(String endpoint, [dynamic body]) async {
     try {
       final headers = await getHeaders();
       final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
@@ -147,8 +139,7 @@ class ApiService {
         body: body != null ? jsonEncode(body) : null,
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(utf8.decode(response.bodyBytes))
-            as Map<String, dynamic>?;
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
       }
       return {'success': false, 'status': response.statusCode};
     } catch (e) {
@@ -162,25 +153,11 @@ class ApiService {
       final url = endpoint.startsWith('http') ? endpoint : '$baseUrl$endpoint';
       final response = await http.delete(Uri.parse(url), headers: headers);
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(utf8.decode(response.bodyBytes))
-            as Map<String, dynamic>?;
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>?;
       }
       return {'success': false, 'status': response.statusCode};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  // ── Dashboard Admin ──────────────────────────────────────
-  static Future<Map<String, dynamic>> getAdminDashboard() async {
-    try {
-      final response = await get('/dashboard/admin');
-      if (response != null && response['success'] == true) {
-        return response['data'] ?? {};
-      }
-      return {};
-    } catch (e) {
-      return {};
     }
   }
 
@@ -199,8 +176,7 @@ class ApiService {
         'motDePasse': motDePasse,
       };
       if (userId != null && userId.isNotEmpty) body['userId'] = userId;
-      if (matricule != null && matricule.isNotEmpty)
-        body['matricule'] = matricule;
+      if (matricule != null && matricule.isNotEmpty) body['matricule'] = matricule;
       if (email != null && email.isNotEmpty) body['email'] = email;
       if (nom != null) body['nom'] = nom;
       if (tel != null) body['tel'] = tel;
@@ -466,7 +442,10 @@ class ApiService {
       if (domaine != null && domaine.isNotEmpty && domaine != 'Tous') {
         url += '?domaine=${Uri.encodeQueryComponent(domaine)}';
       }
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await http.get(
+        Uri.parse(url),
+        headers: headers,
+      );
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         List<dynamic> dataList;
@@ -477,7 +456,10 @@ class ApiService {
         } else {
           dataList = [];
         }
-        return {'success': true, 'data': dataList};
+        return {
+          'success': true,
+          'data': dataList,
+        };
       }
       if (response.statusCode == 401) {
         return {
@@ -1339,6 +1321,165 @@ class ApiService {
     }
   }
 
+  // ── Sous-fils "Professeurs & Délégués" du délégué/adjoint connecté ────
+  static Future<Map<String, dynamic>> getMesCoordinationsDelegue() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/canaux/mes-coordinations'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des canaux de coordination.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Affectation module précis à un professeur (module + niveau + semestre) ──
+  static Future<Map<String, dynamic>> assignerModuleProfesseur({
+    required String professeurId,
+    required int moduleId,
+    required int filiereId,
+    required String niveau,
+    required int semestre,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/professeurs/$professeurId/modules'),
+        headers: headers,
+        body: jsonEncode({
+          'module_id': moduleId,
+          'filiere_id': filiereId,
+          'niveau': niveau,
+          'semestre': semestre,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'affectation du module.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Retirer une affectation module précise d'un professeur ───────────────
+  static Future<Map<String, dynamic>> retirerModuleProfesseur({
+    required String professeurId,
+    required int affectationId,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/professeurs/$professeurId/modules/$affectationId'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du retrait du module.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Modules déjà affectés à un professeur (module + niveau + semestre) ───
+  static Future<Map<String, dynamic>> getModulesAffectesProfesseur(String professeurId) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/professeurs/$professeurId/modules'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des modules affectés.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Canal "Admin Filière" de l'étudiant connecté (sa propre filière/niveau) ──
+  static Future<Map<String, dynamic>> getMonCanalAdminFiliere() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/canaux/mon-admin-filiere'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data'] as Map<String, dynamic>};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement du canal Admin Filière.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
+  // ── Hiérarchie Admin Filière (admin) : filières → niveaux → canaux ────
+  static Future<Map<String, dynamic>> getCanauxAdminFilieres() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/canaux/admin-filieres'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data'] as List<dynamic>};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors du chargement des canaux Admin Filière.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+
   // ── Modules : liste (optionnellement par filière) ─────────
   static Future<Map<String, dynamic>> getModules({String? filiereId}) async {
     try {
@@ -1668,16 +1809,11 @@ class ApiService {
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'data': body['data'],
-          'message': body['message'],
-        };
+        return {'success': true, 'data': body['data'], 'message': body['message']};
       }
       return {
         'success': false,
-        'error':
-            body['message'] ?? 'Erreur lors de la publication des bulletins.',
+        'error': body['message'] ?? 'Erreur lors de la publication des bulletins.',
       };
     } catch (e) {
       return {

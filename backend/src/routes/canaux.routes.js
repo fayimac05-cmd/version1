@@ -2,6 +2,83 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { authMiddleware, requireRole } = require('../middleware/auth.middleware');
+const { getOrCreateCanalAdminFiliereNiveau } = require('../utils/canauxProfDelegue');
+
+// GET /api/canaux/mes-coordinations — pour un délégué/adjoint connecté :
+// liste ses sous-fils "Professeurs & Délégués" (un par professeur qui lui
+// enseigne, dans sa propre filière/niveau) — auto-peuplé via canal_membres
+// au moment où chaque sous-fil a été créé (voir getOrCreateCanalProfDelegue).
+router.get('/mes-coordinations', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.id AS canal_id, c.niveau, c.filiere_id, f.nom AS filiere_nom,
+              u.nom AS prof_nom, u.prenoms AS prof_prenoms
+       FROM canal_membres cm
+       JOIN canaux c ON c.id = cm.canal_id AND c.type = 'prof_delegue_niveau'
+       JOIN filieres f ON f.id = c.filiere_id
+       JOIN users u ON u.id = c.professeur_id
+       WHERE cm.user_id = $1
+       ORDER BY u.nom, u.prenoms`,
+      [req.user.id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('[canaux] mes-coordinations', err);
+    res.status(500).json({ success: false, message: 'Erreur chargement des canaux de coordination.' });
+  }
+});
+
+// GET /api/canaux/mon-admin-filiere — pour un étudiant connecté : résout
+// (et crée si besoin) le canal "Admin Filière" de SA propre filière/niveau.
+router.get('/mon-admin-filiere', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT e.filiere_id, f.nom AS filiere_nom, e.niveau
+       FROM etudiants e JOIN filieres f ON f.id = e.filiere_id
+       WHERE e.user_id = $1`,
+      [req.user.id]
+    );
+    if (!rows[0]) {
+      return res.status(404).json({ success: false, message: 'Profil étudiant introuvable.' });
+    }
+    const { filiere_id, filiere_nom, niveau } = rows[0];
+    const canalId = await getOrCreateCanalAdminFiliereNiveau(filiere_id, niveau);
+    res.json({ success: true, data: { canal_id: canalId, filiere_nom, niveau } });
+  } catch (err) {
+    console.error('[canaux] mon-admin-filiere', err);
+    res.status(500).json({ success: false, message: 'Erreur chargement du canal Admin Filière.' });
+  }
+});
+
+// GET /api/canaux/admin-filieres — hiérarchie Admin Filière : pour chaque
+// filière réellement enregistrée en base, la liste de ses niveaux (ceux qui
+// comptent au moins un étudiant), chacun rattaché à son canal dédié
+// (créé automatiquement au premier accès si besoin).
+router.get('/admin-filieres', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const combos = await pool.query(
+      `SELECT DISTINCT f.id AS filiere_id, f.nom AS filiere_nom, e.niveau
+       FROM etudiants e
+       JOIN filieres f ON f.id = e.filiere_id
+       WHERE e.niveau IS NOT NULL AND e.niveau != ''
+       ORDER BY f.nom, e.niveau`
+    );
+
+    const parFiliere = {};
+    for (const c of combos.rows) {
+      const canalId = await getOrCreateCanalAdminFiliereNiveau(c.filiere_id, c.niveau);
+      if (!parFiliere[c.filiere_id]) {
+        parFiliere[c.filiere_id] = { filiere_id: c.filiere_id, filiere_nom: c.filiere_nom, niveaux: [] };
+      }
+      parFiliere[c.filiere_id].niveaux.push({ niveau: c.niveau, canal_id: canalId });
+    }
+
+    res.json({ success: true, data: Object.values(parFiliere) });
+  } catch (err) {
+    console.error('[canaux] admin-filieres', err);
+    res.status(500).json({ success: false, message: 'Erreur chargement des canaux Admin Filière.' });
+  }
+});
 
 router.get('/professeur-filieres', authMiddleware, async (req, res) => {
   const role = String(req.user.role || '').toLowerCase().trim();

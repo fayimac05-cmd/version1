@@ -83,6 +83,17 @@ class _CanalScreenState extends State<CanalScreen> {
   bool _chargementCanauxProfesseur = false;
   String? _erreurCanauxProfesseur;
 
+  // ✅ NOUVEAU — canal "Admin Filière" réel de CET étudiant (sa propre
+  // filière/niveau), résolu dynamiquement — remplace l'ancien canal global
+  // fixe id='2' (toutes filières/niveaux mélangés).
+  Map<String, dynamic>? _monCanalAdminFiliere;
+  bool _chargementMonCanal = false;
+
+  // ✅ NOUVEAU (étape 5) — sous-fils "Professeurs & Délégués" du délégué/
+  // adjoint connecté : un par professeur qui enseigne dans sa filière/niveau.
+  List<Map<String, dynamic>> _mesCoordinations = [];
+  bool _chargementCoordinations = false;
+
   // Couleurs de l'identité premium
   static const Color _brandBlue = Color(0xFF1E40AF);
   static const Color _textMain = Color(0xFF0F172A);
@@ -96,7 +107,36 @@ class _CanalScreenState extends State<CanalScreen> {
     final role = widget.profile.role.toLowerCase().trim();
     if (['professeur', 'prof', 'enseignant', 'teacher'].contains(role)) {
       _chargerCanauxProfesseur();
+    } else {
+      _chargerMonCanalAdminFiliere();
+      if (widget.profile.estDelegue) {
+        _chargerMesCoordinations();
+      }
     }
+  }
+
+  Future<void> _chargerMesCoordinations() async {
+    setState(() => _chargementCoordinations = true);
+    final res = await ApiService.getMesCoordinationsDelegue();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        _mesCoordinations = List<Map<String, dynamic>>.from(res['data']);
+      }
+      _chargementCoordinations = false;
+    });
+  }
+
+  Future<void> _chargerMonCanalAdminFiliere() async {
+    setState(() => _chargementMonCanal = true);
+    final res = await ApiService.getMonCanalAdminFiliere();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) {
+        _monCanalAdminFiliere = res['data'] as Map<String, dynamic>;
+      }
+      _chargementMonCanal = false;
+    });
   }
 
   Future<void> _chargerCanauxProfesseur() async {
@@ -105,14 +145,33 @@ class _CanalScreenState extends State<CanalScreen> {
       _erreurCanauxProfesseur = null;
     });
     try {
+      // ✅ CORRIGÉ — utilisait /canaux/professeur-filieres (ancien mécanisme,
+      // un canal par filière mélangeant tous les profs et tous les niveaux).
+      // Utilise désormais le même endpoint granulaire que la vue Messages
+      // (admin_messages.dart, étape 4) : un sous-fil par (filière, niveau)
+      // où CE prof a un module affecté.
       final response = await http.get(
-        Uri.parse('${ApiService.baseUrl}/canaux/professeur-filieres'),
+        Uri.parse('${ApiService.baseUrl}/professeurs/mes-canaux-coordination'),
         headers: await ApiService.getHeaders(),
       );
       if (response.statusCode == 200 && mounted) {
         final body = jsonDecode(utf8.decode(response.bodyBytes));
-        setState(() => _canauxProfesseur = (body['data'] as List<dynamic>? ?? [])
-            .cast<Map<String, dynamic>>());
+        final List data = body['data'] as List? ?? [];
+        // Aplati la structure {filiere_nom, niveaux: [{niveau, canal_id}]}
+        // en une liste plate d'un item par (filière, niveau), pour l'affichage.
+        final aplatis = <Map<String, dynamic>>[];
+        for (final f in data) {
+          final filiereNom = f['filiere_nom']?.toString() ?? '';
+          for (final n in (f['niveaux'] as List? ?? [])) {
+            aplatis.add({
+              'id': n['canal_id'],
+              'nom': '$filiereNom · ${n['niveau']}',
+              'niveau': n['niveau'],
+              'description': 'Coordination pédagogique — $filiereNom ${n['niveau']}',
+            });
+          }
+        }
+        setState(() => _canauxProfesseur = aplatis);
       } else if (mounted) {
         setState(() => _erreurCanauxProfesseur =
             'Le serveur a répondu ${response.statusCode}.');
@@ -133,6 +192,15 @@ class _CanalScreenState extends State<CanalScreen> {
     if (role == 'professeur' || role == 'prof' || role == 'enseignant' || role == 'teacher') {
       return _buildProfessorView(context);
     }
+    // Description dynamique de la carte "Admin & Filière" : nom réel de la
+    // filière/niveau une fois résolu, sinon message d'attente/erreur.
+    final String descriptionAdminFiliere = _chargementMonCanal
+        ? 'Chargement du canal de votre filière...'
+        : _monCanalAdminFiliere != null
+            ? 'Messages de l\'administration pour ${_monCanalAdminFiliere!['filiere_nom']} ${_monCanalAdminFiliere!['niveau']}'
+            : 'Messages ciblés de l\'administration et de votre délégué';
+    final String? canalIdAdminFiliere = _monCanalAdminFiliere?['canal_id']?.toString();
+
     return Scaffold(
       backgroundColor: _bgPage,
       body: SafeArea(
@@ -191,9 +259,39 @@ class _CanalScreenState extends State<CanalScreen> {
                 canalId: '1', type: 'administration'),
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.campaign_rounded, nom: 'Admin & Filière',
-                description: 'Messages ciblés de l\'administration et de votre délégué',
-                couleur: const Color(0xFF0891B2), badge: '1', tag: 'Broadcast',
-                canalId: '2', type: 'admin_filiere'),
+                description: descriptionAdminFiliere,
+                couleur: const Color(0xFF0891B2), tag: 'Broadcast',
+                canalId: canalIdAdminFiliere ?? '',
+                type: 'admin_filiere',
+                enCours: canalIdAdminFiliere == null),
+            if (widget.profile.estDelegue) ...[
+              const SizedBox(height: 28),
+              _sectionLabel('COORDINATION PÉDAGOGIQUE'),
+              const SizedBox(height: 12),
+              if (_chargementCoordinations)
+                const Center(child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(),
+                ))
+              else if (_mesCoordinations.isEmpty)
+                const Text('Aucun professeur affecté à votre niveau pour le moment.',
+                    style: TextStyle(fontSize: 13, color: _textMuted))
+              else
+                ..._mesCoordinations.map((c) {
+                  final profNom = '${c['prof_prenoms'] ?? ''} ${c['prof_nom'] ?? ''}'.trim();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _carteCanal(context,
+                      icon: Icons.hub_rounded,
+                      nom: profNom.isEmpty ? 'Professeur' : profNom,
+                      description: '${c['filiere_nom'] ?? ''} ${c['niveau'] ?? ''}',
+                      couleur: _couleurNiveau(c['niveau']?.toString()),
+                      tag: 'Coordination',
+                      canalId: c['canal_id'].toString(),
+                      type: 'prof_delegues'),
+                  );
+                }),
+            ],
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.gavel_rounded, nom: 'Bureau des Étudiants',
                 description: 'Événements, activités et annonces du BDE',
@@ -299,8 +397,8 @@ class _CanalScreenState extends State<CanalScreen> {
                   icon: Icons.hub_rounded,
                   nom: canal['nom']?.toString() ?? 'Professeurs & Délégués',
                   description: canal['description']?.toString() ?? 'Coordination pédagogique',
-                  couleur: const Color(0xFF0891B2),
-                  tag: '${(canal['membres'] as List? ?? []).length} membres',
+                  couleur: _couleurNiveau(canal['niveau']?.toString()),
+                  tag: 'Coordination',
                   canalId: canal['id'].toString(),
                   type: 'prof_delegues'),
               )),
@@ -313,13 +411,26 @@ class _CanalScreenState extends State<CanalScreen> {
   Widget _sectionLabel(String text) => Text(text, style: const TextStyle(
       fontSize: 11, fontWeight: FontWeight.w800, color: _textMuted, letterSpacing: 1.0));
 
+  // Même palette que côté professeur (admin_messages.dart) pour que le
+  // délégué reconnaisse visuellement le même niveau des deux côtés.
+  Color _couleurNiveau(String? niveau) {
+    const couleurs = {
+      'Licence 1': Color(0xFF10B981),
+      'Licence 2': Color(0xFF3B82F6),
+      'Licence 3': Color(0xFFF59E0B),
+      'Master 1':  Color(0xFF8B5CF6),
+      'Master 2':  Color(0xFFEC4899),
+    };
+    return couleurs[niveau] ?? const Color(0xFF64748B);
+  }
+
   Widget _carteCanal(BuildContext context, {
     required IconData icon, required String nom, required String description,
     required Color couleur, required String type, required String canalId,
-    String? badge, String? tag,
+    String? badge, String? tag, bool enCours = false,
   }) {
     return GestureDetector(
-      onTap: () => _ouvrir(context, type, canalId),
+      onTap: enCours ? null : () => _ouvrir(context, type, canalId),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -353,7 +464,10 @@ class _CanalScreenState extends State<CanalScreen> {
                 maxLines: 1, overflow: TextOverflow.ellipsis),
           ])),
           const SizedBox(width: 8),
-          if (badge != null)
+          if (enCours)
+            const SizedBox(width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2))
+          else if (badge != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(color: couleur, borderRadius: BorderRadius.circular(10)),
@@ -368,6 +482,8 @@ class _CanalScreenState extends State<CanalScreen> {
 
   void _ouvrir(BuildContext context, String type, String canalId) {
     final p = widget.profile;
+    // p.role porte directement 'delegue'/'delegue_adjoint' dans cette classe
+    // (voir StudentProfile.estDelegue) — pas de champ séparé etudiantRole.
     final peutEcrireAdminFiliere = (p.role == 'delegue' || p.role == 'delegue_adjoint');
     final peutEcrireBDE = p.role == 'bde_president' || p.role == 'bde_adjoint';
 
@@ -394,7 +510,13 @@ class _CanalScreenState extends State<CanalScreen> {
             canalId: canalId, canWrite: true);
         break;
       case 'admin_filiere':
-        page = _CanalDetail(profile: p, nom: 'Admin & Filière', icon: Icons.campaign_rounded,
+        // ✅ CORRIGÉ — canalId est désormais le canal réel de la filière/niveau
+        // de CET étudiant (résolu dynamiquement), plus le canal global fixe.
+        page = _CanalDetail(profile: p,
+            nom: _monCanalAdminFiliere != null
+                ? 'Admin · ${_monCanalAdminFiliere!['filiere_nom']} ${_monCanalAdminFiliere!['niveau']}'
+                : 'Admin & Filière',
+            icon: Icons.campaign_rounded,
             couleur: const Color(0xFF0891B2),
             tag: p.role == 'professeur' || peutEcrireAdminFiliere ? 'Droits d\'écriture actifs' : 'Broadcast',
             canalId: canalId, canWrite: p.role == 'professeur' || peutEcrireAdminFiliere);

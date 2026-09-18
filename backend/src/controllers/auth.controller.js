@@ -24,7 +24,7 @@ const login = async (req, res) => {
                   COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
                   COALESCE(e.tel, u.tel) AS tel_etudiant,
-                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.domaine_admin, 'Tous') AS admin_domaine,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   CASE 
                     WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
@@ -48,7 +48,7 @@ const login = async (req, res) => {
                   COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
                   COALESCE(e.tel, u.tel) AS tel_etudiant,
-                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.domaine_admin, 'Tous') AS admin_domaine,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   CASE 
                     WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
@@ -73,7 +73,7 @@ const login = async (req, res) => {
                   COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
                   COALESCE(e.tel, u.tel) AS tel_etudiant,
-                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.domaine_admin, 'Tous') AS admin_domaine,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   CASE 
                     WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)

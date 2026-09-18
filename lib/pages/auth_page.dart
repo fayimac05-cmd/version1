@@ -273,7 +273,18 @@ class _AuthPageState extends State<AuthPage> {
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
-      final roleUtilisateur = (user['role'] ?? 'etudiant').toString();
+      // ✅ CORRIGÉ (v2) — la v1 utilisait user['etudiant_role'] ?? user['role'],
+      // mais ?? ne traite que null comme absent, pas une chaîne vide ''. Si
+      // etudiant_role valait '' (plutôt que NULL) pour un compte non-étudiant
+      // (ex: professeur), ça écrasait 'professeur' par '' → rôle non reconnu
+      // → l'app retombait sur l'écran étudiant par défaut. On ne fait donc
+      // passer etudiant_role en priorité QUE s'il vaut explicitement
+      // 'delegue' ou 'delegue_adjoint' — jamais pour toute autre valeur.
+      final rawRole = (user['role'] ?? 'etudiant').toString();
+      final rawEtudiantRole = (user['etudiant_role'] ?? '').toString();
+      final roleUtilisateur = (rawEtudiantRole == 'delegue' || rawEtudiantRole == 'delegue_adjoint')
+          ? rawEtudiantRole
+          : rawRole;
       
       String domaineAdmin = user['admin_domaine'] ?? user['domaine_admin'] ?? user['domaineAdmin'] ?? 'Tous';
       // ignore: avoid_print
@@ -392,7 +403,12 @@ class _AuthPageState extends State<AuthPage> {
       niveau: u['niveau'] ?? '',
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
-      role: u['role'] ?? 'etudiant',
+      // ✅ CORRIGÉ (v2) — même correctif que dans _seConnecter : n'écrase
+      // le rôle générique que si etudiant_role vaut explicitement
+      // 'delegue'/'delegue_adjoint' (jamais pour '' ou autre valeur).
+      role: (u['etudiant_role'] == 'delegue' || u['etudiant_role'] == 'delegue_adjoint')
+          ? u['etudiant_role']
+          : (u['role'] ?? 'etudiant'),
       adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
       // Domaine restreint de l'admin (ex: 'Sciences & Technologies', 'Sciences de Gestion', 'Tous')
       domaineAdmin: u['admin_domaine'] ?? u['domaine_admin'] ?? u['domaineAdmin'] ?? 'Tous',

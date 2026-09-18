@@ -43,6 +43,7 @@ class MessageAdmin {
 class GroupeAdmin {
   final String id, nom, type, avatar, description;
   final String? filiereId;
+  final String? niveau; // pour colorer différemment chaque niveau (étape 4)
   final List<String> membres;
   final List<MessageAdmin> messages;
   int nbNonLus;
@@ -51,12 +52,16 @@ class GroupeAdmin {
   GroupeAdmin({
     required this.id, required this.nom, required this.type,
     required this.avatar, required this.description,
-    this.filiereId, required this.membres,
+    this.filiereId, this.niveau, required this.membres,
     required this.messages, this.nbNonLus = 0, this.readonly = false,
   });
 }
 
 // ── Données initiales / mock ──────────────────────────────────────────────
+// ✅ CORRIGÉ — le canal global "Admin & Filière" (id fixe '2', toutes
+// filières/niveaux mélangés) a été retiré d'ici : chaque (filière, niveau)
+// a désormais son propre canal réel, chargé dynamiquement dans
+// _loadGroupes() via /api/canaux/admin-filieres.
 final List<GroupeAdmin> _defaultAdminGroupes = [
   GroupeAdmin(
     id: '5', nom: 'Administration & Professeurs',
@@ -91,14 +96,6 @@ final List<GroupeAdmin> _defaultAdminGroupes = [
     messages: [],
   ),
   GroupeAdmin(
-    id: '2', nom: 'Admin & Filière',
-    type: 'admin_filiere', avatar: '',
-    description: 'Échanges entre l\'administration et les délégués de filière',
-    membres: ['Administration', 'Délégués de filières'],
-    nbNonLus: 0, readonly: false,
-    messages: [],
-  ),
-  GroupeAdmin(
     id: '3', nom: 'Bureau des Étudiants',
     type: 'bde', avatar: '',
     description: 'Annonces et activités du BDE',
@@ -107,6 +104,18 @@ final List<GroupeAdmin> _defaultAdminGroupes = [
     messages: [],
   ),
 ];
+
+// ── Couleur par niveau — étape 4 : chaque niveau se distingue visuellement
+// dans la liste des canaux "Professeurs & Délégués" du professeur.
+const Map<String, Color> _couleursNiveaux = {
+  'Licence 1': Color(0xFF10B981), // vert
+  'Licence 2': Color(0xFF3B82F6), // bleu
+  'Licence 3': Color(0xFFF59E0B), // orange
+  'Master 1':  Color(0xFF8B5CF6), // violet
+  'Master 2':  Color(0xFFEC4899), // rose
+};
+Color _couleurPourNiveau(String? niveau) =>
+    _couleursNiveaux[niveau] ?? const Color(0xFF64748B);
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE ADMIN MESSAGES
@@ -153,11 +162,14 @@ class AdminMessagesState extends State<AdminMessages>
           g.type == 'professeurs' ||
           g.type == 'admin_profs' ||
           g.type == 'prof_delegues' ||
-          g.type == 'groupe_etudiants' ||
           g.type == 'prive').toList();
     } else {
-      // Un admin voit tout sauf la salle des profs
-      return adminGroupes.where((g) => g.type != 'professeurs').toList();
+      // Un admin voit tout sauf la salle des profs — et, depuis cette
+      // refonte, jamais les sous-fils "Professeurs & Délégués" (type
+      // prof_delegues) : ceux-ci ne sont jamais chargés pour l'admin (voir
+      // _loadGroupes) donc ce filtre n'a rien à exclure en pratique, mais
+      // on le garde par sécurité si jamais un ancien canal traînait.
+      return adminGroupes.where((g) => g.type != 'professeurs' && g.type != 'prof_delegues').toList();
     }
   }
 
@@ -165,7 +177,7 @@ class AdminMessagesState extends State<AdminMessages>
       .where((g) => g.type == 'admin_profs' || g.type == 'admin_delegues' || g.type == 'professeurs' || g.type == 'administration' || g.type == 'bde')
       .toList();
   List<GroupeAdmin> get _filieres =>
-      _groupesVisibles.where((g) => g.type == 'admin_filiere' || g.type == 'prof_delegues' || g.type == 'groupe_etudiants').toList();
+      _groupesVisibles.where((g) => g.type == 'admin_filiere' || g.type == 'prof_delegues').toList();
   List<GroupeAdmin> get _prives =>
       _groupesVisibles.where((g) => g.type == 'prive').toList();
   int get _totalNonLus =>
@@ -184,8 +196,7 @@ class AdminMessagesState extends State<AdminMessages>
     try {
       _myUserId = await ApiService.getUserId();
       final headers = await ApiService.getHeaders();
-      final resF = await http.get(Uri.parse('${ApiService.baseUrl}/canaux/professeur-filieres'), headers: headers);
-      
+
       final newGroupes = <GroupeAdmin>[];
       for (final def in _defaultAdminGroupes) {
         newGroupes.add(GroupeAdmin(
@@ -200,41 +211,85 @@ class AdminMessagesState extends State<AdminMessages>
         ));
       }
 
-      if (resF.statusCode == 200) {
-        final body = jsonDecode(utf8.decode(resF.bodyBytes));
-        final List data = body is Map ? (body['data'] as List? ?? []) : body;
-        for (var f in data) {
-          final fid = f['filiere_id'].toString();
-          final membres = (f['membres'] as List? ?? [])
-              .map((m) => '${m['fonction']}: ${m['prenoms'] ?? ''} ${m['nom'] ?? ''}'.trim())
-              .toList();
-          newGroupes.add(GroupeAdmin(
-            id: f['id'].toString(), nom: 'Professeurs & Délégués · ${f['nom']}',
-            type: 'prof_delegues', avatar: '', filiereId: fid,
-            description: f['description'] ?? 'Coordination pédagogique',
-            membres: membres.isEmpty ? ['Aucun membre affecté'] : membres,
-            nbNonLus: 0, readonly: false,
-            messages: [],
-          ));
+      // ── Canaux "Professeurs & Délégués" — UNIQUEMENT pour la vue
+      // professeur. Un sous-fil par (filière, niveau) où CE prof a au moins
+      // un module affecté (créés automatiquement à l'étape 2 — voir
+      // getOrCreateCanalProfDelegue). Ne mélange plus tous les profs et
+      // tous les niveaux d'une filière comme l'ancien mécanisme.
+      if (_estProf) {
+        try {
+          final resF = await http.get(Uri.parse('${ApiService.baseUrl}/professeurs/mes-canaux-coordination'), headers: headers);
+          if (resF.statusCode == 200) {
+            final body = jsonDecode(utf8.decode(resF.bodyBytes));
+            final List data = body is Map ? (body['data'] as List? ?? []) : [];
+            for (final f in data) {
+              final filiereNom = f['filiere_nom']?.toString() ?? '';
+              final niveaux = (f['niveaux'] as List? ?? []);
+              for (final n in niveaux) {
+                newGroupes.add(GroupeAdmin(
+                  id: n['canal_id'].toString(),
+                  nom: '$filiereNom · ${n['niveau']}',
+                  type: 'prof_delegues',
+                  avatar: '',
+                  filiereId: f['filiere_id'].toString(),
+                  niveau: n['niveau']?.toString(),
+                  description: 'Coordination pédagogique — $filiereNom ${n['niveau']}',
+                  membres: const ['Vous', 'Délégué(e)/Adjoint(e) du niveau'],
+                  nbNonLus: 0, readonly: false,
+                  messages: [],
+                ));
+              }
+            }
+          }
+        } catch (errF) {
+          debugPrint('[AdminMessages] Erreur chargement canaux professeur-coordination: $errF');
         }
       }
 
-      // ── Groupes Prof ↔ Étudiants ──
-      final resG = await http.get(Uri.parse('${ApiService.baseUrl}/messages/groupe/mes-filieres'), headers: headers);
-      if (resG.statusCode == 200) {
-        final body = jsonDecode(utf8.decode(resG.bodyBytes));
-        final List data = body['data'] as List? ?? [];
-        for (var f in data) {
-          newGroupes.add(GroupeAdmin(
-            id: 'grp_${f['id']}', nom: f['nom'] ?? 'Filière',
-            type: 'groupe_etudiants', avatar: '', filiereId: f['id'].toString(),
-            description: f['description'] ?? 'Groupe de discussion avec vos étudiants',
-            membres: ['Tous les étudiants de la filière'],
-            nbNonLus: 0, readonly: false,
-            messages: [],
-          ));
+      // ── Canaux Admin Filière — UNIQUEMENT pour la vue administration.
+      // ✅ Remplace l'ancien canal global unique "Admin & Filière" (id=2,
+      // toutes filières/niveaux mélangés) : désormais un vrai canal par
+      // (filière, niveau) réellement peuplé d'étudiants. L'admin peut
+      // toujours y écrire ; seuls le(s) délégué(s)/adjoint(s) de ce niveau
+      // peuvent répondre (règle appliquée côté backend).
+      if (!_estProf) {
+        try {
+          final resAF = await http.get(
+            Uri.parse('${ApiService.baseUrl}/canaux/admin-filieres'),
+            headers: headers,
+          );
+          if (resAF.statusCode == 200) {
+            final body = jsonDecode(utf8.decode(resAF.bodyBytes));
+            final List data = body is Map ? (body['data'] as List? ?? []) : [];
+            for (final f in data) {
+              final filiereNom = f['filiere_nom']?.toString() ?? '';
+              final niveaux = (f['niveaux'] as List? ?? []);
+              for (final n in niveaux) {
+                newGroupes.add(GroupeAdmin(
+                  id: n['canal_id'].toString(),
+                  nom: '$filiereNom · ${n['niveau']}',
+                  type: 'admin_filiere',
+                  avatar: '',
+                  filiereId: f['filiere_id'].toString(),
+                  description: 'Administration ↔ étudiants de $filiereNom ${n['niveau']}',
+                  membres: const ['Administration', 'Étudiants du niveau', 'Délégué(e)/Adjoint(e)'],
+                  nbNonLus: 0, readonly: false,
+                  messages: [],
+                ));
+              }
+            }
+          }
+        } catch (errAF) {
+          debugPrint('[AdminMessages] Erreur chargement canaux admin-filieres: $errAF');
         }
       }
+
+      // ✅ RETIRÉ — "Prof ↔ Étudiants" (groupe_etudiants, messages_groupe
+      // côté backend) permettait à un professeur de discuter avec TOUS les
+      // étudiants d'une filière. Ce n'est pas la règle voulue : un
+      // professeur ne doit échanger qu'avec le(s) délégué(s)/adjoint(s) de
+      // son niveau — exactement ce que fait déjà "Coordination Pédagogique"
+      // (canaux prof_delegue_niveau, étapes 2/4/5). Section supprimée.
 
       // ── Conversations privées ──
       try {
@@ -783,8 +838,8 @@ class AdminMessagesState extends State<AdminMessages>
     final active    = _groupeActif?.id == g.id;
     final dernMsg   = g.messages.isNotEmpty ? g.messages.last : null;
     final isPrive   = g.type == 'prive';
-    final isFiliere = g.type == 'admin_filiere' || g.type == 'prof_delegues' || g.type == 'groupe_etudiants';
-    final color     = _couleurType(g.type);
+    final isFiliere = g.type == 'admin_filiere' || g.type == 'prof_delegues';
+    final color     = _couleurGroupe(g);
 
     return GestureDetector(
       onTap: () => _selectionnerGroupe(g),
@@ -821,9 +876,7 @@ class AdminMessagesState extends State<AdminMessages>
                   decoration: BoxDecoration(color: color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(4)),
                   child: Text(
-                    g.type == 'groupe_etudiants' ? 'Prof ↔ Étudiants'
-                    : g.type == 'prof_delegues'  ? 'Coordination'
-                    : 'Broadcast',
+                    g.type == 'prof_delegues' ? 'Coordination' : 'Broadcast',
                     style: TextStyle(
                         fontSize: 8, fontWeight: FontWeight.w700,
                         color: color))),
@@ -1478,6 +1531,16 @@ class AdminMessagesState extends State<AdminMessages>
         expediteur: 'Admin', texte: nom,
         heure: _now(), type: type, estMoi: true));
     });
+  }
+
+  // Couleur d'un groupe — pour "Professeurs & Délégués" (vue prof), la
+  // couleur dépend du niveau (étape 4) plutôt que du type seul, pour
+  // distinguer visuellement Licence 1 / Licence 2 / etc.
+  Color _couleurGroupe(GroupeAdmin g) {
+    if (g.type == 'prof_delegues' && g.niveau != null) {
+      return _couleurPourNiveau(g.niveau);
+    }
+    return _couleurType(g.type);
   }
 
   Color _couleurType(String type) {
