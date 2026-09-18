@@ -293,7 +293,8 @@ const getConversationsPrivees = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT DISTINCT ON (correspondant_id)
               correspondant_id,
-              u.prenoms, u.nom, u.role,
+              u.prenoms, u.nom, u.role, u.matricule, u.domaine,
+              COALESCE(e.filiere_nom, u.filiere_nom, '') AS filiere_nom,
               mp.contenu AS dernier_message,
               mp.created_at,
               mp.is_read,
@@ -306,6 +307,7 @@ const getConversationsPrivees = async (req, res) => {
          WHERE expediteur_id = $1 OR destinataire_id = $1
        ) mp
        JOIN users u ON u.id = mp.correspondant_id
+       LEFT JOIN etudiants e ON e.user_id = u.id
        ORDER BY correspondant_id, mp.created_at DESC`,
       [req.user.id]
     );
@@ -641,6 +643,133 @@ const getAdminContact = async (req, res) => {
   }
 };
 
+// ── GET /api/messages/admin-contacts ───────────────────────
+// Renvoie tous les comptes de l'administration disponibles
+const getAdminContacts = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nom, prenoms, email, tel, COALESCE(domaine, 'Administration') AS domaine, role
+       FROM users
+       WHERE role = 'admin' AND COALESCE(statut, 'actif') = 'actif'
+       ORDER BY matricule NULLS LAST, nom ASC`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('[getAdminContacts]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// ── GET /api/messages/contacts ───────────────────────────
+// Récupère la liste des contacts adressables selon le rôle
+const getContacts = async (req, res) => {
+  try {
+    const filterRole = req.query.role ? String(req.query.role).toLowerCase().trim() : null;
+    const search = req.query.q ? `%${String(req.query.q).trim().toLowerCase()}%` : null;
+    const currentUserId = req.user.id;
+
+    // 1. Récupération des professeurs
+    let profs = [];
+    if (!filterRole || filterRole === 'professeur' || filterRole === 'prof') {
+      let profQuery = `
+        SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.domaine, 'professeur' AS role,
+               COALESCE(p.specialite, u.domaine, 'Enseignant') AS specialite,
+               COALESCE(
+                 json_agg(DISTINCT json_build_object('filiere_id', f.id, 'filiere_nom', f.nom))
+                 FILTER (WHERE f.id IS NOT NULL), '[]'
+               ) AS filieres
+        FROM users u
+        LEFT JOIN professeurs p ON p.user_id = u.id
+        LEFT JOIN module_professeur mp ON mp.professeur_id = p.id
+        LEFT JOIN modules m ON m.id = mp.module_id
+        LEFT JOIN filieres f ON f.id = m.filiere_id
+        WHERE u.role IN ('professeur', 'prof', 'enseignant')
+          AND COALESCE(u.statut, 'actif') = 'actif'
+          AND u.id != $1
+      `;
+      const params = [currentUserId];
+      if (search) {
+        params.push(search);
+        profQuery += ` AND (LOWER(u.nom) LIKE $${params.length} OR LOWER(u.prenoms) LIKE $${params.length} OR LOWER(COALESCE(p.specialite, '')) LIKE $${params.length})`;
+      }
+      profQuery += ` GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.domaine, p.specialite ORDER BY u.nom ASC`;
+      const { rows } = await pool.query(profQuery, params);
+      profs = rows;
+    }
+
+    // 2. Récupération de l'administration
+    let admins = [];
+    if (!filterRole || filterRole === 'admin' || filterRole === 'administration') {
+      let adminQuery = `
+        SELECT u.id, u.nom, u.prenoms, u.email, u.tel, COALESCE(u.domaine, 'Administration') AS domaine, 'admin' AS role
+        FROM users u
+        WHERE u.role = 'admin'
+          AND COALESCE(u.statut, 'actif') = 'actif'
+          AND u.id != $1
+      `;
+      const params = [currentUserId];
+      if (search) {
+        params.push(search);
+        adminQuery += ` AND (LOWER(u.nom) LIKE $${params.length} OR LOWER(u.prenoms) LIKE $${params.length} OR LOWER(COALESCE(u.domaine, '')) LIKE $${params.length})`;
+      }
+      adminQuery += ` ORDER BY u.matricule NULLS LAST, u.nom ASC`;
+      const { rows } = await pool.query(adminQuery, params);
+      admins = rows;
+    }
+
+    // 3. Récupération des étudiants
+    let etudiants = [];
+    if (!filterRole || filterRole === 'etudiant') {
+      let etuQuery = `
+        SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.niveau,
+               COALESCE(u.etudiant_role, 'etudiant') AS etudiant_role,
+               COALESCE(e.filiere_nom, u.filiere_nom, '') AS filiere_nom,
+               e.filiere_id, 'etudiant' AS role
+        FROM users u
+        LEFT JOIN etudiants e ON e.user_id = u.id
+        WHERE (u.role = 'etudiant' OR u.role IS NULL OR u.role = '')
+          AND COALESCE(u.statut, 'actif') = 'actif'
+          AND u.id != $1
+      `;
+      const params = [currentUserId];
+      if (req.query.filiere_id) {
+        params.push(req.query.filiere_id);
+        etuQuery += ` AND (e.filiere_id = $${params.length} OR u.filiere_id = $${params.length})`;
+      }
+      if (search) {
+        params.push(search);
+        etuQuery += ` AND (LOWER(u.nom) LIKE $${params.length} OR LOWER(u.prenoms) LIKE $${params.length} OR LOWER(COALESCE(u.matricule, '')) LIKE $${params.length})`;
+      }
+      etuQuery += ` ORDER BY u.nom ASC LIMIT 250`;
+      const { rows } = await pool.query(etuQuery, params);
+      etudiants = rows;
+    }
+
+    if (filterRole === 'professeur' || filterRole === 'prof') {
+      return res.json({ success: true, data: profs });
+    }
+    if (filterRole === 'admin' || filterRole === 'administration') {
+      return res.json({ success: true, data: admins });
+    }
+    if (filterRole === 'etudiant') {
+      return res.json({ success: true, data: etudiants });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        professeurs: profs,
+        administration: admins,
+        etudiants: etudiants,
+        total: profs.length + admins.length + etudiants.length,
+      }
+    });
+  } catch (err) {
+    console.error('[getContacts]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
 // ── GET /api/messages/online ──────────────────────────────
 // Liste des utilisateurs en ligne
 const getUsersOnline = (req, res) => {
@@ -663,5 +792,7 @@ module.exports = {
   ajouterReaction,
   supprimerMessage,
   getAdminContact,
+  getAdminContacts,
+  getContacts,
   getUsersOnline,
 };

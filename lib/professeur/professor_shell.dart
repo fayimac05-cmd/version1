@@ -9,6 +9,7 @@ import 'notes_tab.dart';
 import 'programme_screen.dart';
 import 'upload_course_screen.dart';
 import '../admin/admin_messages.dart';
+import '../pages/discussion_privee_page.dart';
 
 // ── Shell principal ────────────────────────────────────────────────────────
 
@@ -501,6 +502,26 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                           ),
                           title: Text('$prenoms ${e['nom'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                           subtitle: Text('${e['matricule'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppPalette.blue, size: 20),
+                            tooltip: 'Écrire en privé',
+                            onPressed: () {
+                              final userId = e['user_id']?.toString() ?? e['id']?.toString() ?? '';
+                              if (userId.isEmpty) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => DiscussionPriveePage(
+                                    destinataireId: userId,
+                                    destinataireNom: '$prenoms ${e['nom'] ?? ''}'.trim(),
+                                    destinataireRole: 'Étudiant',
+                                    destinataireSousTitre: e['matricule']?.toString(),
+                                    themeColor: const Color(0xFF1E40AF),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         );
                       }),
         ),

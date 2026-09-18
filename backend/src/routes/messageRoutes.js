@@ -21,6 +21,8 @@ const {
   ajouterReaction,
   supprimerMessage,
   getAdminContact,
+  getAdminContacts,
+  getContacts,
   getUsersOnline,
 } = require('../controllers/messageController');
 
@@ -53,5 +55,7 @@ router.delete('/:id',            supprimerMessage);
 // ── Présence & contacts ───────────────────────────────────
 router.get('/online',            getUsersOnline);
 router.get('/admin-contact',     getAdminContact);
+router.get('/admin-contacts',    getAdminContacts);
+router.get('/contacts',          getContacts);
 
 module.exports = router;
