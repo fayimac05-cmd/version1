@@ -6,6 +6,8 @@ import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../widgets/delegue_badge.dart';
+import 'choisir_professeur_page.dart';
+import 'messages_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE MESSAGE CANAL
@@ -204,6 +206,16 @@ class _CanalScreenState extends State<CanalScreen> {
                 description: 'Posez une question en privé de manière confidentielle',
                 couleur: const Color(0xFF059669), tag: 'Privé',
                 canalId: '0', type: 'prive'),
+            const SizedBox(height: 12),
+            _carteCanal(context, icon: Icons.school_rounded, nom: 'Contacter un Professeur',
+                description: 'Consultez la liste des professeurs et écrivez-leur en privé',
+                couleur: const Color(0xFF2563EB), tag: 'Enseignants',
+                canalId: 'profs', type: 'contact_profs'),
+            const SizedBox(height: 12),
+            _carteCanal(context, icon: Icons.chat_bubble_outline_rounded, nom: 'Messagerie Privée & Camarades',
+                description: 'Discussions privées avec vos camarades de promotion',
+                couleur: const Color(0xFF0D9488), tag: 'Étudiants',
+                canalId: 'etudiants', type: 'contact_etudiants'),
             const SizedBox(height: 16),
             
             // Note d'information épurée
@@ -392,6 +404,12 @@ class _CanalScreenState extends State<CanalScreen> {
             couleur: const Color(0xFF7C3AED),
             tag: peutEcrireBDE ? 'BDE · Droits de publication actifs' : 'BDE',
             canalId: canalId, canWrite: peutEcrireBDE);
+        break;
+      case 'contact_profs':
+        page = ChoisirProfesseurPage(profile: p);
+        break;
+      case 'contact_etudiants':
+        page = MessagesScreen(profile: p);
         break;
       case 'prive':
         page = _MessagePriveAdmin(profile: p);

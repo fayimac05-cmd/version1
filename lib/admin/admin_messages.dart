@@ -9,6 +9,7 @@ import '../utils/snackbar_helper.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../widgets/delegue_badge.dart';
+import '../pages/discussion_privee_page.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -468,6 +469,147 @@ class AdminMessagesState extends State<AdminMessages>
             if (_showSticker) _panneauStickers(),
           ]));
 
+  // ── Bouton « Nouvelle discussion » ──────────────────────────────────────
+  Future<void> _initierNouvelleDiscussion() async {
+    // Détermination des types de contacts proposés selon le rôle
+    final isProf = _estProf;
+    List<String> options = isProf
+        ? ['Étudiant', 'Administration', 'Collègue professeur']
+        : ['Étudiant', 'Professeur']; // admin
+
+    final choix = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 16),
+            const Text('Nouvelle discussion privée',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+            const SizedBox(height: 4),
+            const Text('Choisissez avec qui vous souhaitez échanger',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+            const SizedBox(height: 20),
+            ...options.map((opt) => GestureDetector(
+              onTap: () => Navigator.pop(context, opt),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: _couleurChoix(opt).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(_iconeChoix(opt), color: _couleurChoix(opt), size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Text(opt, style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                ]),
+              ),
+            )),
+          ],
+        ),
+      ),
+    );
+
+    if (choix == null || !mounted) return;
+    await _ouvrirSelecteurContact(choix);
+  }
+
+  Color _couleurChoix(String choix) {
+    switch (choix) {
+      case 'Étudiant': return const Color(0xFF059669);
+      case 'Professeur': return const Color(0xFF2563EB);
+      case 'Administration': return const Color(0xFF7C3AED);
+      case 'Collègue professeur': return const Color(0xFF0891B2);
+      default: return AdminTheme.primary;
+    }
+  }
+
+  IconData _iconeChoix(String choix) {
+    switch (choix) {
+      case 'Étudiant': return Icons.school_rounded;
+      case 'Professeur': return Icons.person_rounded;
+      case 'Administration': return Icons.account_balance_rounded;
+      case 'Collègue professeur': return Icons.groups_rounded;
+      default: return Icons.person_outline_rounded;
+    }
+  }
+
+  Future<void> _ouvrirSelecteurContact(String type) async {
+    String roleFiltre;
+    String titre;
+    Color couleur;
+    switch (type) {
+      case 'Étudiant':
+        roleFiltre = 'etudiant';
+        titre = 'Choisir un étudiant';
+        couleur = const Color(0xFF059669);
+        break;
+      case 'Professeur':
+      case 'Collègue professeur':
+        roleFiltre = 'professeur';
+        titre = 'Choisir un professeur';
+        couleur = const Color(0xFF2563EB);
+        break;
+      case 'Administration':
+        roleFiltre = 'admin';
+        titre = 'Choisir un administrateur';
+        couleur = const Color(0xFF7C3AED);
+        break;
+      default:
+        roleFiltre = 'etudiant';
+        titre = 'Choisir un contact';
+        couleur = AdminTheme.primary;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _SelecteurContactPage(
+          titre: titre,
+          roleFiltre: roleFiltre,
+          couleur: couleur,
+          onContactChoisi: (id, nom, sousTitre) {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DiscussionPriveePage(
+                  destinataireId: id,
+                  destinataireNom: nom,
+                  destinataireRole: type,
+                  destinataireSousTitre: sousTitre,
+                  themeColor: couleur,
+                ),
+              ),
+            ).then((_) => _loadGroupes());
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _sidebar() => Column(children: [
     Container(color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -482,6 +624,18 @@ class AdminMessagesState extends State<AdminMessages>
                   fontSize: 12, color: AdminTheme.primary,
                   fontWeight: FontWeight.w600)),
           ])),
+          // ── Bouton Nouvelle Discussion ──
+          GestureDetector(
+            onTap: _initierNouvelleDiscussion,
+            child: Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(
+                color: AdminTheme.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+            ),
+          ),
         ]),
         const SizedBox(height: 10),
         Container(height: 36,
@@ -830,26 +984,30 @@ class AdminMessagesState extends State<AdminMessages>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ...['👍','❤️','😂','😮','😢','🙏'].map((e) =>
-                    GestureDetector(
-                      onTap: () { Navigator.pop(context);
-                        setState(() => msg.reactions[e] =
-                            (msg.reactions[e] ?? 0) + 1); },
-                      child: Container(width: 46, height: 46,
-                        decoration: BoxDecoration(
-                            color: const Color(0xFFF5F7FA),
-                            borderRadius: BorderRadius.circular(12)),
-                        child: Center(child: Text(e,
-                            style: const TextStyle(fontSize: 26)))))),
                 GestureDetector(
-                  onTap: () { Navigator.pop(context); _tousEmojis(msg); },
+                  onTap: () { Navigator.pop(context);
+                    setState(() => msg.reactions['👍'] = (msg.reactions['👍'] ?? 0) + 1); },
                   child: Container(width: 46, height: 46,
                     decoration: BoxDecoration(
                         color: const Color(0xFFF5F7FA),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0))),
-                    child: const Icon(Icons.add_rounded,
-                        color: Color(0xFF54656F), size: 24))),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.thumb_up_outlined, color: Color(0xFF54656F), size: 22))),
+                GestureDetector(
+                  onTap: () { Navigator.pop(context);
+                    setState(() => msg.reactions['❤️'] = (msg.reactions['❤️'] ?? 0) + 1); },
+                  child: Container(width: 46, height: 46,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFF5F7FA),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.favorite_border_rounded, color: Color(0xFF54656F), size: 22))),
+                GestureDetector(
+                  onTap: () { Navigator.pop(context);
+                    setState(() => msg.reactions['✅'] = (msg.reactions['✅'] ?? 0) + 1); },
+                  child: Container(width: 46, height: 46,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFF5F7FA),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF54656F), size: 22))),
               ])),
           const SizedBox(height: 8),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
@@ -878,10 +1036,10 @@ class AdminMessagesState extends State<AdminMessages>
                 _snack('Mode sélection'); }),
           _act(Icons.save_alt_rounded, 'Enregistrer sous',
               const Color(0xFF54656F), () { Navigator.pop(context);
-                _snack('💾 Enregistrement...'); }),
+                _snack('Enregistrement...'); }),
           _act(Icons.share_rounded, 'Partager',
               const Color(0xFF54656F), () { Navigator.pop(context);
-                _snack('📤 Partage...'); }),
+                _snack('Partage...'); }),
           if (msg.estMoi)
             _act(Icons.delete_outline_rounded, 'Supprimer',
                 const Color(0xFFDC2626), () { Navigator.pop(context);
@@ -899,55 +1057,8 @@ class AdminMessagesState extends State<AdminMessages>
         onTap: onTap);
 
   void _tousEmojis(MessageAdmin msg) {
-    final sc = TextEditingController();
-    const emojis = ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉',
-      '😊','😇','🥰','😍','😘','😋','😛','😜','🤪','🤑','🤗','🤔',
-      '😐','😑','😶','😏','😒','🙄','😬','😌','😔','😴','🥺','😢',
-      '😭','😱','😡','😠','💀','👍','👎','❤️','🔥','💯','🎉','🙏',
-      '✅','👏','💪','🤝','👌','🫶','🤞','✌️','⭐','🌟','🎯','💫'];
-    showModalBottomSheet(context: context, isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(builder: (ctx, setS) {
-        final q = sc.text;
-        final shown = q.isEmpty ? emojis
-            : emojis.where((e) => e.contains(q)).toList();
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.5,
-          decoration: const BoxDecoration(color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          child: Column(children: [
-            const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(2))),
-            Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-              child: Container(height: 36,
-                decoration: BoxDecoration(
-                    color: const Color(0xFFF5F7FA),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE2E8F0))),
-                child: TextField(
-                  controller: sc, onChanged: (_) => setS(() {}),
-                  decoration: const InputDecoration(
-                    hintText: 'Rechercher réaction',
-                    hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                    prefixIcon: Icon(Icons.search_rounded,
-                        color: Color(0xFF94A3B8), size: 16),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 9))))),
-            Expanded(child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 8, mainAxisSpacing: 2, crossAxisSpacing: 2),
-              itemCount: shown.length,
-              itemBuilder: (_, i) => GestureDetector(
-                onTap: () { Navigator.pop(ctx);
-                  setState(() => msg.reactions[shown[i]] =
-                      (msg.reactions[shown[i]] ?? 0) + 1); },
-                child: Center(child: Text(shown[i],
-                    style: const TextStyle(fontSize: 24)))))),
-          ]));
-      }));
+    // Panneau de réactions supprimé — interface professionnelle sans emoji
+    _snack('Réaction ajoutée');
   }
 
   // ── Zone de saisie avec bandeau de réponse ───────────────────────────
@@ -1126,69 +1237,13 @@ class AdminMessagesState extends State<AdminMessages>
       child: Icon(icon, color: const Color(0xFF667781), size: 22)));
 
   Widget _panneauEmoji() {
-    const emojis = ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉',
-      '😊','😇','🥰','😍','😘','😋','😛','😜','🤪','🤑','🤗','🤔',
-      '😐','😑','😶','😏','😒','🙄','😬','😌','😔','😴','🥺','😢',
-      '😭','😱','😡','😠','💀','👍','👎','❤️','🔥','💯','🎉','🙏',
-      '✅','👏','💪','🤝','👌','🫶','🤞','✌️','⭐','🌟','🎯'];
-    return Container(height: 210, color: Colors.white,
-      child: Column(children: [
-        adminDivider,
-        Padding(padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-          child: Row(children: [
-            const Text('Émojis', style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            GestureDetector(onTap: () => setState(() => _showEmoji = false),
-                child: const Icon(Icons.close_rounded,
-                    size: 18, color: Color(0xFF94A3B8))),
-          ])),
-        Expanded(child: GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 9, mainAxisSpacing: 2, crossAxisSpacing: 2),
-          itemCount: emojis.length,
-          itemBuilder: (_, i) => GestureDetector(
-            onTap: () => setState(() {
-              _msgCtrl.text += emojis[i];
-              _msgCtrl.selection = TextSelection.fromPosition(
-                  TextPosition(offset: _msgCtrl.text.length));
-            }),
-            child: Center(child: Text(emojis[i],
-                style: const TextStyle(fontSize: 20)))))),
-      ]));
+    // Panneau emoji désactivé — interface professionnelle
+    return const SizedBox.shrink();
   }
 
   Widget _panneauStickers() {
-    const stickers = ['😂','🔥','💯','🎉','👑','💪','😍','🤣','😭','🙏',
-      '😤','🥳','😎','🤔','😅','✨','💀','🫡','🤯','😴','🫶','❤️',
-      '💚','💙','⭐','🌟','🎯','🏆','🐱','🐶','🦁','🍕','🎮','🚀'];
-    return Container(height: 210, color: Colors.white,
-      child: Column(children: [
-        adminDivider,
-        Padding(padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-          child: Row(children: [
-            const Text('Stickers', style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            GestureDetector(onTap: () => setState(() => _showSticker = false),
-                child: const Icon(Icons.close_rounded,
-                    size: 18, color: Color(0xFF94A3B8))),
-          ])),
-        Expanded(child: GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7, mainAxisSpacing: 4, crossAxisSpacing: 4),
-          itemCount: stickers.length,
-          itemBuilder: (_, i) => GestureDetector(
-            onTap: () { setState(() => _showSticker = false);
-              _envoyerSticker(stickers[i], _groupeActif!); },
-            child: Container(
-              decoration: BoxDecoration(color: const Color(0xFFF5F7FA),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Center(child: Text(stickers[i],
-                  style: const TextStyle(fontSize: 26))))))),
-      ]));
+    // Panneau stickers désactivé — interface professionnelle
+    return const SizedBox.shrink();
   }
 
   void _menuPieceJointe(GroupeAdmin g) {
@@ -1211,13 +1266,13 @@ class AdminMessagesState extends State<AdminMessages>
                 _envoyerMedia(g, 'image', 'photo.jpg'); }),
           _mitem(Icons.camera_alt_outlined, 'Caméra',
               const Color(0xFFDC3545), () { Navigator.pop(context);
-                _snack('📸 Caméra...'); }),
+                _snack('Caméra non disponible'); }),
           _mitem(Icons.headphones_outlined, 'Audio',
               const Color(0xFFFF6B35), () { Navigator.pop(context);
                 _envoyerMedia(g, 'vocal', '00:15'); }),
           _mitem(Icons.poll_outlined, 'Sondage',
               const Color(0xFF0D6EFD), () { Navigator.pop(context);
-                _snack('📊 Sondage'); }),
+                _snack('Sondage'); }),
           _mitem(Icons.add_circle_outline_rounded, 'Nouveau sticker',
               const Color(0xFF20C997), () { Navigator.pop(context);
                 setState(() { _showSticker = true; _showEmoji = false; }); }),
@@ -1256,12 +1311,12 @@ class AdminMessagesState extends State<AdminMessages>
               decoration: BoxDecoration(
                   color: const Color(0xFF25D366).withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(10)),
-              child: const Center(child: Text('💬',
-                  style: TextStyle(fontSize: 20)))),
+              child: const Center(child: Icon(
+                  Icons.share_rounded, color: Color(0xFF25D366), size: 22))),
             title: const Text('Partager sur WhatsApp',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             onTap: () { Navigator.pop(context);
-              _snack('✅ Ouverture WhatsApp...'); }),
+              _snack('Ouverture WhatsApp...'); }),
           const Divider(height: 1),
           Expanded(child: ListView.builder(
             itemCount: adminGroupes.length,
@@ -1280,9 +1335,9 @@ class AdminMessagesState extends State<AdminMessages>
                   setState(() => g.messages.add(MessageAdmin(
                     id: 'T${DateTime.now().millisecondsSinceEpoch}',
                     expediteur: 'Admin',
-                    texte: '↩️ Transféré : ${msg.texte}',
+                    texte: 'Transféré : ${msg.texte}',
                     heure: _now(), type: 'texte', estMoi: true)));
-                  _snack('✅ Transféré !'); });
+                   _snack('Transféré !'); });
             })),
         ])));
   }
@@ -1298,7 +1353,7 @@ class AdminMessagesState extends State<AdminMessages>
               color: AdminTheme.border,
               borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 14),
-          Text(g.avatar, style: const TextStyle(fontSize: 32)),
+          const Icon(Icons.forum_rounded, size: 32, color: AdminTheme.textSecondary),
           const SizedBox(height: 6),
           Text(g.nom, style: const TextStyle(
               fontSize: 15, fontWeight: FontWeight.w800)),
@@ -1890,5 +1945,248 @@ class _WaveformWidgetState extends State<_WaveformWidget>
               color: const Color(0xFF8696A0),
               borderRadius: BorderRadius.circular(2)));
         })));
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SÉLECTEUR DE CONTACT pour initier une nouvelle discussion privée
+// ════════════════════════════════════════════════════════════════════════════
+class _SelecteurContactPage extends StatefulWidget {
+  final String titre;
+  final String roleFiltre;
+  final Color couleur;
+  final void Function(String id, String nom, String? sousTitre) onContactChoisi;
+
+  const _SelecteurContactPage({
+    required this.titre,
+    required this.roleFiltre,
+    required this.couleur,
+    required this.onContactChoisi,
+  });
+
+  @override
+  State<_SelecteurContactPage> createState() => _SelecteurContactPageState();
+}
+
+class _SelecteurContactPageState extends State<_SelecteurContactPage> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<Map<String, dynamic>> _contacts = [];
+  bool _loading = true;
+  String? _erreur;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerContacts();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _chargerContacts() async {
+    setState(() { _loading = true; _erreur = null; });
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.get(
+        Uri.parse('${ApiService.baseUrl}/messages/contacts?role=${widget.roleFiltre}'),
+        headers: headers,
+      );
+      if (res.statusCode == 200 && mounted) {
+        final body = jsonDecode(utf8.decode(res.bodyBytes));
+        final list = (body is Map ? body['data'] : body) as List? ?? [];
+        setState(() {
+          _contacts = list.cast<Map<String, dynamic>>();
+          _loading = false;
+        });
+      } else if (mounted) {
+        setState(() {
+          _erreur = 'Impossible de charger les contacts (code ${res.statusCode}).';
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _erreur = 'Erreur réseau.'; _loading = false; });
+    }
+  }
+
+  List<Map<String, dynamic>> get _filtres {
+    if (_query.trim().isEmpty) return _contacts;
+    final q = _query.trim().toLowerCase();
+    return _contacts.where((c) {
+      final nom = '${c['prenoms'] ?? ''} ${c['nom'] ?? ''}'.toLowerCase();
+      final extra = (c['specialite'] ?? c['domaine'] ?? c['filiere_nom'] ?? '').toString().toLowerCase();
+      final matricule = (c['matricule'] ?? '').toString().toLowerCase();
+      return nom.contains(q) || extra.contains(q) || matricule.contains(q);
+    }).toList();
+  }
+
+  String _initiales(Map<String, dynamic> c) {
+    final p = (c['prenoms'] ?? '').toString().trim();
+    final n = (c['nom'] ?? '').toString().trim();
+    return '${p.isNotEmpty ? p[0] : ''}${n.isNotEmpty ? n[0] : ''}'.toUpperCase().isNotEmpty
+        ? '${p.isNotEmpty ? p[0] : ''}${n.isNotEmpty ? n[0] : ''}'.toUpperCase()
+        : '?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final liste = _filtres;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.titre,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+            const Text('Appuyez pour ouvrir la discussion',
+              style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  hintText: 'Rechercher par nom ou matricule...',
+                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 18),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF94A3B8)),
+                          onPressed: () { _searchCtrl.clear(); setState(() => _query = ''); },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _erreur != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.redAccent),
+                      const SizedBox(height: 12),
+                      Text(_erreur!, textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFF64748B))),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _chargerContacts,
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('Réessayer'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.couleur,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ]),
+                  ),
+                )
+              : liste.isEmpty
+                  ? Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.person_search_rounded, size: 48, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        Text(
+                          _query.isNotEmpty ? 'Aucun résultat pour "$_query"' : 'Aucun contact disponible',
+                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                        ),
+                      ]),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: liste.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) {
+                        final c = liste[i];
+                        final nomComplet = '${c['prenoms'] ?? ''} ${c['nom'] ?? ''}'.trim();
+                        final sousTitre = c['specialite'] ?? c['domaine'] ?? c['filiere_nom'] ?? c['matricule'];
+                        final id = c['id']?.toString() ?? '';
+                        return GestureDetector(
+                          onTap: () => widget.onContactChoisi(id, nomComplet, sousTitre?.toString()),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              boxShadow: [BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.03),
+                                blurRadius: 6, offset: const Offset(0, 2),
+                              )],
+                            ),
+                            child: Row(children: [
+                              Container(
+                                width: 46, height: 46,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [widget.couleur, widget.couleur.withValues(alpha: 0.7)],
+                                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(13),
+                                ),
+                                child: Center(
+                                  child: Text(_initiales(c),
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(
+                                    nomComplet.isNotEmpty ? nomComplet : 'Contact',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (sousTitre != null && sousTitre.toString().isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(sousTitre.toString(),
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ]),
+                              ),
+                              Container(
+                                width: 34, height: 34,
+                                decoration: BoxDecoration(
+                                  color: widget.couleur.withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.chat_bubble_outline_rounded, color: widget.couleur, size: 17),
+                              ),
+                            ]),
+                          ),
+                        );
+                      },
+                    ),
+    );
   }
 }
