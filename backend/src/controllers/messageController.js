@@ -21,10 +21,19 @@ const STANDARD_CANAUX = {
   6: { nom: 'Administration & Délégués', type: 'admin_delegues', description: 'Canal officiel Admin ↔ Délégués de filières' },
 };
 
+// ✅ Types dont l'accès est réservé strictement aux membres explicites
+// (canal_membres) — la règle générale "tout admin/prof a accès à tout" ne
+// s'applique PAS à ces types. Ce sont des canaux à audience restreinte :
+// un sous-fil "Professeurs & Délégués" (prof_delegue_niveau) ne doit être
+// visible que par le prof concerné + le(s) délégué(s)/adjoint(s) de ce
+// niveau précis — ni les autres profs, ni l'administration, ni les autres
+// étudiants.
+const TYPES_ACCES_RESTREINT = ['prof_delegue_niveau'];
+
 async function ensureCanalExists(canalId) {
   const numId = parseInt(canalId, 10);
   if (!numId) return null;
-  const { rows: existing } = await pool.query('SELECT id, type, nom FROM canaux WHERE id = $1', [numId]);
+  const { rows: existing } = await pool.query('SELECT id, type, nom, professeur_id, filiere_id, niveau FROM canaux WHERE id = $1', [numId]);
   if (existing.length) return existing[0];
 
   // Si c'est un canal standard manquant, le créer automatiquement dans la base
@@ -35,7 +44,7 @@ async function ensureCanalExists(canalId) {
         `INSERT INTO canaux (id, nom, description, type)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (id) DO UPDATE SET type = EXCLUDED.type
-         RETURNING id, type, nom`,
+         RETURNING id, type, nom, professeur_id, filiere_id, niveau`,
         [numId, std.nom, std.description, std.type]
       );
       return rows[0];
@@ -46,27 +55,50 @@ async function ensureCanalExists(canalId) {
   return null;
 }
 
-// Vérifie l'accès d'un utilisateur à un canal : membre, ou canal public.
-// Accepte aussi les professeurs sur les canaux prof/admin par rôle JWT.
+// Vérifie l'accès EN LECTURE d'un utilisateur à un canal : membre, canal
+// public, ou règle spécifique au type. Accepte aussi les professeurs sur
+// les canaux prof/admin par rôle JWT — SAUF pour les types à audience
+// restreinte ou gérée différemment (TYPES_ACCES_RESTREINT, et
+// admin_filiere_niveau qui a sa propre règle ci-dessous).
 async function accesCanal(canalId, userId, userRole) {
   const normRole = String(userRole || '').toLowerCase().trim();
 
-  // 1. Admin ou Professeur : accès automatique à tous les canaux de communication
-  if (['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(normRole)) {
+  // 0. Résoudre le canal d'abord, pour connaître son type et sa règle d'accès.
+  const canal = await ensureCanalExists(canalId);
+  const numId = parseInt(canalId, 10);
+  const type = canal ? canal.type : (STANDARD_CANAUX[numId] ? STANDARD_CANAUX[numId].type : null);
+
+  // Cas "Admin Filière" par niveau : lecture ouverte à l'admin et à tout
+  // étudiant appartenant à CE (filiere_id, niveau) précis — pas aux profs,
+  // pas aux étudiants d'un autre niveau/filière. Géré ici en dehors de la
+  // logique générique ci-dessous (ni membre explicite requis, ni bypass
+  // "tout prof/admin" générique).
+  if (type === 'admin_filiere_niveau' && canal) {
+    if (normRole === 'admin') return true;
+    const { rows } = await pool.query(
+      `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2 AND niveau = $3`,
+      [userId, canal.filiere_id, canal.niveau]
+    );
+    return rows.length > 0;
+  }
+
+  const accesRestreint = type && TYPES_ACCES_RESTREINT.includes(type);
+
+  // 1. Admin ou Professeur : accès automatique à tous les canaux de
+  //    communication — sauf les types à accès restreint (sous-fils prof↔délégués).
+  if (!accesRestreint && ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(normRole)) {
     return true;
   }
 
-  // 2. Vérifier si membre explicite du canal
+  // 2. Vérifier si membre explicite du canal (seule voie d'accès pour les
+  //    types à accès restreint).
   const { rows: membre } = await pool.query(
     `SELECT role FROM canal_membres WHERE canal_id = $1 AND user_id = $2`,
     [canalId, userId]
   );
   if (membre.length) return true;
 
-  // 3. S'assurer que le canal existe en BDD
-  const canal = await ensureCanalExists(canalId);
-  const numId = parseInt(canalId, 10);
-  const type = canal ? canal.type : (STANDARD_CANAUX[numId] ? STANDARD_CANAUX[numId].type : null);
+  if (accesRestreint) return false;
 
   if (!type) return false;
 
@@ -78,10 +110,33 @@ async function accesCanal(canalId, userId, userRole) {
     return ['delegue', 'delegue_adjoint'].includes(normRole);
   }
 
-  // Canaux prof_delegues par filière
+  // Canaux prof_delegues par filière (ancien mécanisme, conservé pour compatibilité)
   if (type.startsWith('prof_delegues:')) return true;
 
   return false;
+}
+
+// Vérifie l'accès EN ÉCRITURE — plus strict que la lecture pour certains
+// types. Pour tous les autres types (non listés ici), l'accès en lecture
+// (accesCanal) suffit aussi pour écrire — comportement inchangé.
+async function peutEcrireCanal(canal, userId, userRole) {
+  if (!canal) return true;
+
+  if (canal.type === 'admin_filiere_niveau') {
+    const normRole = String(userRole || '').toLowerCase().trim();
+    if (normRole === 'admin') return true;
+    // Le rôle délégué/adjoint est porté par users.etudiant_role — pas
+    // forcément par le rôle générique du JWT ('etudiant').
+    const { rows } = await pool.query(
+      `SELECT 1 FROM users u JOIN etudiants e ON e.user_id = u.id
+       WHERE u.id = $1 AND e.filiere_id = $2 AND e.niveau = $3
+         AND LOWER(u.etudiant_role) IN ('delegue', 'delegue_adjoint')`,
+      [userId, canal.filiere_id, canal.niveau]
+    );
+    return rows.length > 0;
+  }
+
+  return true;
 }
 
 
@@ -90,7 +145,7 @@ async function accesCanal(canalId, userId, userRole) {
 const getCanaux = async (req, res) => {
   try {
     const { rows } = await pool.query(
-            `SELECT c.id, c.nom, c.description, c.type,
+            `SELECT c.id, c.nom, c.description, c.type, c.professeur_id, c.filiere_id, c.niveau,
               COALESCE(cm.role, 'membre') AS role,
               (SELECT COUNT(*) FROM messages m WHERE m.canal_id = c.id) AS nb_messages
        FROM canaux c
@@ -246,12 +301,18 @@ const envoyerMessageCanal = async (req, res) => {
   }
 
   try {
-    // Vérifier les droits d'écriture (membre, canal public, ou rôle autorisé)
+    // Vérifier les droits de lecture (membre, canal public, ou rôle autorisé)
     if (!(await accesCanal(id, req.user.id, req.user.role))) {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
-    await ensureCanalExists(id);
+    const canal = await ensureCanalExists(id);
+    if (!(await peutEcrireCanal(canal, req.user.id, req.user.role))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Seuls l\'administration et le(s) délégué(s)/adjoint(s) de ce niveau peuvent écrire dans ce canal.',
+      });
+    }
 
     const { rows: inserted } = await pool.query(
       `INSERT INTO messages (canal_id, auteur_id, contenu, type, created_at)
@@ -442,22 +503,21 @@ const getProfFilieres = async (req, res) => {
     if (!['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role)) {
       return res.status(403).json({ success: false, error: 'Accès réservé aux professeurs' });
     }
-    // Récupère les filières via module_professeur → modules → filieres
+    // ✅ CORRIGÉ — utilisait module_professeur (table jamais renseignée),
+    // ce qui déclenchait systématiquement le filet de sécurité "toutes les
+    // filières" ci-dessous pour CHAQUE professeur, quelle que soit sa
+    // véritable affectation. Utilise désormais professeur_modules, la
+    // vraie table d'affectation (module + niveau + semestre). Le filet de
+    // sécurité "toutes les filières" est retiré : un prof sans aucun
+    // module affecté ne doit voir aucune filière ici, pas toutes.
     const { rows } = await pool.query(
       `SELECT DISTINCT f.id, f.nom, f.description
-       FROM filieres f
-       JOIN modules mo ON mo.filiere_id = f.id
-       JOIN module_professeur mp ON mp.module_id = mo.id
-       JOIN professeurs p ON p.id = mp.professeur_id
-       WHERE p.user_id = $1
+       FROM professeur_modules pm
+       JOIN filieres f ON f.id = pm.filiere_id
+       WHERE pm.professeur_id = $1
        ORDER BY f.nom`,
       [req.user.id]
     );
-    // Si aucune filière via modules, renvoyer toutes les filières (si admin ou prof sans affectation)
-    if (!rows.length && (role === 'admin' || role === 'professeur' || role === 'prof')) {
-      const { rows: all } = await pool.query('SELECT id, nom, description FROM filieres ORDER BY nom');
-      return res.json({ success: true, data: all });
-    }
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('[getProfFilieres]', err);

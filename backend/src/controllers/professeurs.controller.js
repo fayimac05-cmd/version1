@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
+const { getOrCreateCanalProfDelegue } = require('../utils/canauxProfDelegue');
 
 // ── GET /api/professeurs ──────────────────────────────────────────────────────
 // Renvoie chaque professeur avec ses affectations (filière + niveau), agrégées.
@@ -272,16 +273,18 @@ exports.getClasses = async (req, res) => {
 };
 
 // ── GET /api/professeurs/modules ──────────────────────────────────────────────
-// Modules des filières affectées au prof (via professeur_filieres), plutôt
-// que via l'ancienne table module_professeur (jamais renseignée).
+// ✅ CORRIGÉ — utilise désormais professeur_modules (affectation précise
+// module+niveau+semestre), plus professeur_filieres (qui renvoyait TOUS les
+// modules de la filière, même ceux que ce prof ne donne pas réellement).
 exports.getModules = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT DISTINCT m.id, m.nom, m.coefficient, m.volume_horaire, m.filiere_id, m.filiere_nom
-       FROM modules m
-       JOIN professeur_filieres pf ON pf.filiere_id = m.filiere_id
-       WHERE pf.professeur_id = $1
-       ORDER BY m.nom`,
+      `SELECT pm.id AS affectation_id, m.id, m.nom, m.coefficient, m.volume_horaire,
+              m.filiere_id, m.filiere_nom, pm.niveau, pm.semestre
+       FROM professeur_modules pm
+       JOIN modules m ON m.id = pm.module_id
+       WHERE pm.professeur_id = $1
+       ORDER BY m.filiere_nom, pm.niveau, pm.semestre, m.nom`,
       [req.user.id]
     );
     res.json({ success: true, data: result.rows });
@@ -289,14 +292,16 @@ exports.getModules = async (req, res) => {
 };
 
 // ── GET /api/professeurs/:id/modules ──────────────────────────────────────────
+// ✅ CORRIGÉ — même correctif que ci-dessus, vue admin sur un prof précis.
 exports.getModulesByProfesseur = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT DISTINCT m.id, m.nom, m.coefficient, m.volume_horaire, m.filiere_id, m.filiere_nom
-       FROM modules m
-       JOIN professeur_filieres pf ON pf.filiere_id = m.filiere_id
-       WHERE pf.professeur_id = $1
-       ORDER BY m.nom`,
+      `SELECT pm.id AS affectation_id, m.id, m.nom, m.coefficient, m.volume_horaire,
+              m.filiere_id, m.filiere_nom, pm.niveau, pm.semestre
+       FROM professeur_modules pm
+       JOIN modules m ON m.id = pm.module_id
+       WHERE pm.professeur_id = $1
+       ORDER BY m.filiere_nom, pm.niveau, pm.semestre, m.nom`,
       [req.params.id]
     );
     res.json({ success: true, data: result.rows });
@@ -417,6 +422,10 @@ exports.saveDisponibilites = async (req, res) => {
 };
 
 // ── PATCH /api/professeurs/assign-module ──────────────────────────────────────
+// ⚠️ Conservé pour compatibilité (ancien mécanisme, module_professeur sans
+// niveau — "jamais renseignée" selon le commentaire d'origine). Préférer les
+// nouveaux endpoints ci-dessous (assignerModule / retirerModule), qui
+// capturent aussi le niveau et le semestre.
 exports.patchModuleAssignment = async (req, res) => {
   const { module_id, professeur_id, action } = req.body;
   try {
@@ -429,4 +438,96 @@ exports.patchModuleAssignment = async (req, res) => {
     }
     res.json({ message: `Module ${action === 'assign' ? 'assigné' : 'retiré'} avec succès.` });
   } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// ── POST /api/professeurs/:id/modules ─────────────────────────────────────────
+// Affecte un module précis à un prof, pour un niveau et un semestre donnés.
+// body: { module_id, filiere_id, niveau, semestre }
+exports.assignerModule = async (req, res) => {
+  const { id: professeurId } = req.params;
+  const { module_id, filiere_id, niveau, semestre } = req.body;
+
+  if (!module_id || !filiere_id || !niveau || !semestre) {
+    return res.status(400).json({ success: false, message: 'module_id, filiere_id, niveau et semestre sont requis.' });
+  }
+
+  try {
+    const result = await db.query(
+      `INSERT INTO professeur_modules (professeur_id, module_id, filiere_id, niveau, semestre)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (professeur_id, module_id, niveau) DO UPDATE SET semestre = EXCLUDED.semestre
+       RETURNING id, professeur_id, module_id, filiere_id, niveau, semestre, created_at`,
+      [professeurId, module_id, filiere_id, niveau, semestre]
+    );
+
+    // Crée (ou récupère) le sous-fil "Professeurs & Délégués" pour ce trio
+    // (professeur, filiere, niveau) — un seul sous-fil qui regroupe tous les
+    // modules de ce prof à ce niveau, peu importe combien sont affectés.
+    // À la toute première création, les délégué(e)s/adjoint(e)s de ce
+    // niveau sont ajoutés comme membres et notifiés.
+    try {
+      await getOrCreateCanalProfDelegue(professeurId, filiere_id, niveau);
+    } catch (canalErr) {
+      // Ne bloque pas l'affectation du module si la création du sous-fil échoue.
+      console.error('[assignerModule] Erreur création sous-fil prof-délégué (non bloquante):', canalErr.message);
+    }
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('[assignerModule]', err);
+    if (err.code === '23503') {
+      return res.status(400).json({ success: false, message: 'Professeur, module ou filière introuvable.' });
+    }
+    res.status(500).json({ success: false, message: 'Erreur lors de l\'affectation du module.' });
+  }
+};
+
+// ── DELETE /api/professeurs/:id/modules/:affectationId ────────────────────────
+// Retire une affectation module précise (pas tout le prof, juste cette ligne).
+// ── GET /api/professeurs/mes-canaux-coordination ──────────────────────────
+// Liste des sous-fils "Professeurs & Délégués" (canaux type prof_delegue_niveau)
+// où CE professeur est le titulaire — un par (filière, niveau) où il a au
+// moins un module affecté (créés automatiquement par assignerModule, voir
+// getOrCreateCanalProfDelegue). Groupés par filière pour l'écran messagerie.
+exports.getMesCanauxCoordination = async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT c.id AS canal_id, c.filiere_id, f.nom AS filiere_nom, c.niveau
+       FROM canaux c
+       JOIN filieres f ON f.id = c.filiere_id
+       WHERE c.type = 'prof_delegue_niveau' AND c.professeur_id = $1
+       ORDER BY f.nom, c.niveau`,
+      [req.user.id]
+    );
+
+    const parFiliere = {};
+    for (const row of result.rows) {
+      if (!parFiliere[row.filiere_id]) {
+        parFiliere[row.filiere_id] = { filiere_id: row.filiere_id, filiere_nom: row.filiere_nom, niveaux: [] };
+      }
+      parFiliere[row.filiere_id].niveaux.push({ niveau: row.niveau, canal_id: row.canal_id });
+    }
+
+    res.json({ success: true, data: Object.values(parFiliere) });
+  } catch (err) {
+    console.error('[getMesCanauxCoordination]', err);
+    res.status(500).json({ success: false, message: 'Erreur lors du chargement des canaux de coordination.' });
+  }
+};
+
+exports.retirerModule = async (req, res) => {
+  const { id: professeurId, affectationId } = req.params;
+  try {
+    const result = await db.query(
+      `DELETE FROM professeur_modules WHERE id = $1 AND professeur_id = $2 RETURNING id`,
+      [affectationId, professeurId]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Affectation non trouvée.' });
+    }
+    res.json({ success: true, message: 'Module retiré.' });
+  } catch (err) {
+    console.error('[retirerModule]', err);
+    res.status(500).json({ success: false, message: 'Erreur lors du retrait du module.' });
+  }
 };
