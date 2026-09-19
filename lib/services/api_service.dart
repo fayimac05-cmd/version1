@@ -12,7 +12,7 @@ class ApiService {
   //
   // Après le premier déploiement Render, remplacer _cloudUrl par l'URL
   // affichée dans le dashboard (https://backend-scolarhub.onrender.com).
-  static const bool _useCloud = true;
+  static const bool _useCloud = false;
   static const String _cloudUrl = 'https://backend-scolarhub.onrender.com/api';
   // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
   // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
@@ -42,6 +42,31 @@ class ApiService {
   static Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
+    await prefs.remove('user_id');
+    await prefs.remove('matricule');
+    // ✅ CORRIGÉ — fuite de données entre comptes : clearToken() n'effaçait
+    // que 'token', jamais les caches hors-ligne (cache_me, cache_filieres,
+    // etc.). Après une déconnexion, ces caches gardaient les données du
+    // compte précédent ; si un appel réseau échouait/tardait juste après
+    // une nouvelle connexion, l'app retombait sur ces vieilles données —
+    // par exemple le profil (et donc potentiellement les notes) d'un autre
+    // étudiant se sont affichées sur un compte qui vient d'être créé.
+    // On efface maintenant systématiquement tous les caches connus à la
+    // déconnexion, pour qu'aucune trace du compte précédent ne subsiste.
+    const clesCache = [
+      'me', 'filieres', 'annonces', 'evenements', 'paiements',
+      'supports_revision', 'membres_admin',
+    ];
+    for (final cle in clesCache) {
+      await prefs.remove('cache_$cle');
+      await prefs.remove('cache_${cle}_ts');
+    }
+    // cache_modules_<filiereId ou 'all'> a une clé dynamique — on balaie
+    // toutes les clés restantes commençant par 'cache_' par sécurité.
+    final toutesLesCles = prefs.getKeys().where((k) => k.startsWith('cache_')).toList();
+    for (final cle in toutesLesCles) {
+      await prefs.remove(cle);
+    }
   }
 
   // ── Cache hors-ligne ─────────────────────────────────────
@@ -1429,6 +1454,61 @@ class ApiService {
         'success': false,
         'error': 'Serveur injoignable. Démarrez le backend (npm start).',
       };
+    }
+  }
+
+  // ── Photo de profil / couverture — commun à tous les rôles ────────────
+  // ✅ NOUVEAU — remplace l'ancien ProfileMediaService (client Supabase
+  // direct, RLS bloquant en silence, clé par matricule cassée pour les
+  // profs sans matricule). Authentification JWT classique, comme partout
+  // ailleurs dans l'app — le backend identifie l'utilisateur via le token.
+  static Future<Map<String, dynamic>> uploadPhotoProfil(List<int> fileBytes, String fileName) async {
+    return _uploadPhoto('$baseUrl/upload/photo-profil', fileBytes, fileName);
+  }
+
+  static Future<Map<String, dynamic>> uploadPhotoCouverture(List<int> fileBytes, String fileName) async {
+    return _uploadPhoto('$baseUrl/upload/photo-couverture', fileBytes, fileName);
+  }
+
+  static Future<Map<String, dynamic>> _uploadPhoto(String url, List<int> fileBytes, String fileName) async {
+    try {
+      final token = await getToken();
+      final request = http.MultipartRequest('POST', Uri.parse(url));
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: fileName));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'url': body['url']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi de la photo.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> deletePhotoProfil() async {
+    return _deletePhoto('$baseUrl/upload/photo-profil');
+  }
+
+  static Future<Map<String, dynamic>> deletePhotoCouverture() async {
+    return _deletePhoto('$baseUrl/upload/photo-couverture');
+  }
+
+  static Future<Map<String, dynamic>> _deletePhoto(String url) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.delete(Uri.parse(url), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la suppression.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Démarrez le backend (npm start).'};
     }
   }
 

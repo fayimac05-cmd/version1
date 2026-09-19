@@ -26,6 +26,18 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
   String? _selectedModuleId;
   PlatformFile? _selectedFile;
 
+  // ✅ NOUVEAU — le module doit être limité à ceux réellement affectés à ce
+  // professeur POUR la filière + niveau choisis dans le premier dropdown.
+  // Auparavant le dropdown Module utilisait _modules brut (tous niveaux
+  // confondus), ce qui pouvait afficher/planter avec des doublons (même
+  // module affecté à deux niveaux différents => même valeur en double).
+  List<dynamic> get _modulesFiltres {
+    if (_selectedClassId == null || _selectedNiveau == null) return const [];
+    return _modules.where((m) =>
+        m['filiere_id']?.toString() == _selectedClassId &&
+        m['niveau']?.toString() == _selectedNiveau).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -151,20 +163,31 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
                           _selectedClassId = c['id'].toString();
                           _selectedClassName = c['nom'];
                           _selectedNiveau = c['niveau'];
+                          // Le module valable dépend de la filière+niveau ;
+                          // on réinitialise pour éviter une valeur devenue
+                          // invalide (voir _modulesFiltres).
+                          _selectedModuleId = null;
                         });
                       },
                       validator: (v) => v == null ? 'Requis' : null,
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: 'Module', border: OutlineInputBorder()),
-                      items: _modules.map<DropdownMenuItem<String>>((m) {
+                      key: ValueKey('module_${_selectedClassId}_$_selectedNiveau'),
+                      decoration: InputDecoration(
+                        labelText: 'Module',
+                        border: const OutlineInputBorder(),
+                        helperText: _selectedClassId == null
+                            ? 'Choisissez d\'abord une filière'
+                            : (_modulesFiltres.isEmpty ? 'Aucun module affecté pour ce niveau' : null),
+                      ),
+                      items: _modulesFiltres.map<DropdownMenuItem<String>>((m) {
                         return DropdownMenuItem<String>(
                           value: m['id'].toString(),
                           child: Text(m['nom']),
                         );
                       }).toList(),
-                      onChanged: (val) => setState(() => _selectedModuleId = val),
+                      onChanged: _modulesFiltres.isEmpty ? null : (val) => setState(() => _selectedModuleId = val),
                       validator: (v) => v == null ? 'Requis' : null,
                     ),
                     const SizedBox(height: 24),
