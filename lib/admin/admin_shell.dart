@@ -469,6 +469,8 @@ class _AdminShellState extends State<AdminShell>
                 badgeColor: const Color(0xFFD97706),
                 accentColor: const Color(0xFF1E40AF),
                 bannerGradient: const [Color(0xFF0C1A3D), Color(0xFF1A237E), Color(0xFF283593)],
+                initialPhotoUrl: widget.profile.photoUrl,
+                initialCoverUrl: widget.profile.coverUrl,
               ),
               const SizedBox(height: 20),
               _adminInfoTile(Icons.badge_outlined, 'Matricule', widget.profile.matricule),

@@ -274,6 +274,8 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
             badgeText: widget.profile.niveau.isNotEmpty ? widget.profile.niveau : null,
             accentColor: _brandBlue,
             bannerGradient: const [Color(0xFF0F172A), Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+            initialPhotoUrl: widget.profile.photoUrl,
+            initialCoverUrl: widget.profile.coverUrl,
           ),
 
           const SizedBox(height: 16),
