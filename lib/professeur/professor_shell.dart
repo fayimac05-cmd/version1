@@ -845,6 +845,8 @@ class _ProfilTabState extends State<_ProfilTab> {
               badgeText: 'Professeur',
               accentColor: AppPalette.blue,
               bannerGradient: const [Color(0xFF0D1B4B), Color(0xFF1565C0), Color(0xFF42A5F5)],
+              initialPhotoUrl: profile.photoUrl,
+              initialCoverUrl: profile.coverUrl,
             ),
             const SizedBox(height: 24),
             // Infos

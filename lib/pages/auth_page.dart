@@ -102,12 +102,21 @@ class _AuthPageState extends State<AuthPage> {
 
     // Utilise le navigateur global : le context de cette page n'existe plus
     // au moment où l'utilisateur se déconnecte depuis son tableau de bord.
+    // ✅ CORRIGÉ — clearToken() n'était pas attendu avant la navigation.
+    // Maintenant que clearToken() efface plusieurs entrées (token, user_id,
+    // matricule, tous les caches), il faut impérativement attendre sa fin
+    // avant de permettre une nouvelle connexion — sinon l'effacement
+    // pourrait se terminer APRÈS que le nouveau compte ait déjà écrit ses
+    // propres données, les effaçant par erreur. On garde `void Function()`
+    // (compatible VoidCallback, attendu par les écrans onLogout:) tout en
+    // chaînant via .then() pour préserver l'ordre.
     void logout() {
-      ApiService.clearToken();
-      ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const SplashScreen()),
-        (_) => false,
-      );
+      ApiService.clearToken().then((_) {
+        ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
+          (_) => false,
+        );
+      });
     }
 
     final String r = profile.role.toLowerCase().trim();
@@ -412,6 +421,8 @@ class _AuthPageState extends State<AuthPage> {
       adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
       // Domaine restreint de l'admin (ex: 'Sciences & Technologies', 'Sciences de Gestion', 'Tous')
       domaineAdmin: u['admin_domaine'] ?? u['domaine_admin'] ?? u['domaineAdmin'] ?? 'Tous',
+      photoUrl: u['photo_url'] ?? u['photoUrl'],
+      coverUrl: u['cover_url'] ?? u['coverUrl'],
     );
   }
 

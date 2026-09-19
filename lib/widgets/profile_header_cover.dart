@@ -7,6 +7,14 @@ import 'image_viewer_dialog.dart';
 
 /// Composant Premium unifié affichant la Bannière de Couverture et la Photo de Profil
 /// avec gestion interactive complète (Modification, Prise de vue, Galerie, Plein écran, Suppression).
+///
+/// ✅ RÉÉCRIT — reçoit désormais [initialPhotoUrl]/[initialCoverUrl] en
+/// paramètres (provenant de StudentProfile.photoUrl/.coverUrl, chargés une
+/// fois à la connexion depuis le backend) au lieu de les récupérer lui-même
+/// via une résolution matricule → Supabase. Ça élimine la classe de bug où
+/// la photo "disparaissait au rafraîchissement" ou n'apparaissait jamais :
+/// elle vient directement d'une source de vérité serveur fiable, mise à
+/// jour localement après chaque upload réussi.
 class ProfileHeaderCover extends StatefulWidget {
   const ProfileHeaderCover({
     super.key,
@@ -14,6 +22,8 @@ class ProfileHeaderCover extends StatefulWidget {
     required this.nomComplet,
     required this.roleLabel,
     required this.initiales,
+    this.initialPhotoUrl,
+    this.initialCoverUrl,
     this.badgeText,
     this.badgeColor,
     this.accentColor = const Color(0xFF1E40AF),
@@ -26,6 +36,8 @@ class ProfileHeaderCover extends StatefulWidget {
   final String nomComplet;
   final String roleLabel;
   final String initiales;
+  final String? initialPhotoUrl;
+  final String? initialCoverUrl;
   final String? badgeText;
   final Color? badgeColor;
   final Color accentColor;
@@ -45,38 +57,20 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
   @override
   void initState() {
     super.initState();
-    _chargerPhotos();
-    ProfileMediaService.mediaNotifier.addListener(_onMediaNotifier);
+    _profilePhotoPath = widget.initialPhotoUrl;
+    _coverPhotoPath = widget.initialCoverUrl;
   }
 
   @override
   void didUpdateWidget(ProfileHeaderCover oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.matricule != widget.matricule) {
-      _chargerPhotos();
-    }
-  }
-
-  @override
-  void dispose() {
-    ProfileMediaService.mediaNotifier.removeListener(_onMediaNotifier);
-    super.dispose();
-  }
-
-  void _onMediaNotifier() {
-    if (mounted) _chargerPhotos();
-  }
-
-  Future<void> _chargerPhotos() async {
-    final avatar =
-        await ProfileMediaService.instance.getProfilePhotoPath(widget.matricule);
-    final cover =
-        await ProfileMediaService.instance.getCoverPhotoPath(widget.matricule);
-    if (mounted) {
-      setState(() {
-        _profilePhotoPath = avatar;
-        _coverPhotoPath = cover;
-      });
+    // Si le parent reconstruit ce widget avec un profil différent (ex.
+    // changement de compte sans redémarrage complet de l'app), on
+    // re-synchronise l'affichage sur les nouvelles valeurs fournies.
+    if (oldWidget.initialPhotoUrl != widget.initialPhotoUrl ||
+        oldWidget.initialCoverUrl != widget.initialCoverUrl) {
+      _profilePhotoPath = widget.initialPhotoUrl;
+      _coverPhotoPath = widget.initialCoverUrl;
     }
   }
 
@@ -163,9 +157,15 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                   title: const Text('Supprimer la couverture', style: TextStyle(color: Color(0xFFDC2626))),
                   onTap: () async {
                     Navigator.pop(ctx);
-                    await ProfileMediaService.instance.deleteCoverPhoto(widget.matricule);
-                    _chargerPhotos();
-                    widget.onMediaChanged?.call();
+                    setState(() => _loading = true);
+                    final ok = await ProfileMediaService.instance.deleteCoverPhoto();
+                    if (mounted) {
+                      setState(() {
+                        _loading = false;
+                        if (ok) _coverPhotoPath = null;
+                      });
+                    }
+                    if (ok) widget.onMediaChanged?.call();
                   },
                 ),
             ],
@@ -178,10 +178,9 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
   Future<void> _pickCover(ImageSource source) async {
     setState(() => _loading = true);
     try {
-      final path = await ProfileMediaService.instance
-          .pickAndSaveCoverPhoto(widget.matricule, source: source);
-      if (path != null && mounted) {
-        setState(() => _coverPhotoPath = path);
+      final url = await ProfileMediaService.instance.pickAndSaveCoverPhoto(source: source);
+      if (url != null && mounted) {
+        setState(() => _coverPhotoPath = url);
         widget.onMediaChanged?.call();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -274,9 +273,15 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                   title: const Text('Supprimer la photo', style: TextStyle(color: Color(0xFFDC2626))),
                   onTap: () async {
                     Navigator.pop(ctx);
-                    await ProfileMediaService.instance.deleteProfilePhoto(widget.matricule);
-                    _chargerPhotos();
-                    widget.onMediaChanged?.call();
+                    setState(() => _loading = true);
+                    final ok = await ProfileMediaService.instance.deleteProfilePhoto();
+                    if (mounted) {
+                      setState(() {
+                        _loading = false;
+                        if (ok) _profilePhotoPath = null;
+                      });
+                    }
+                    if (ok) widget.onMediaChanged?.call();
                   },
                 ),
             ],
@@ -289,10 +294,9 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
   Future<void> _pickProfile(ImageSource source) async {
     setState(() => _loading = true);
     try {
-      final path = await ProfileMediaService.instance
-          .pickAndSaveProfilePhoto(widget.matricule, source: source);
-      if (path != null && mounted) {
-        setState(() => _profilePhotoPath = path);
+      final url = await ProfileMediaService.instance.pickAndSaveProfilePhoto(source: source);
+      if (url != null && mounted) {
+        setState(() => _profilePhotoPath = url);
         widget.onMediaChanged?.call();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
