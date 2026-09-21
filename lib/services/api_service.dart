@@ -384,6 +384,10 @@ class ApiService {
           'success': true,
           'premierLogin': data['premierLogin'] == true,
           'userId': data['userId'],
+          // Présent uniquement pour un parent en première connexion (pas
+          // encore de ligne `users` — voir auth.controller.js::lookup,
+          // fallback parents). null dans tous les autres cas.
+          'parentId': data['parentId'],
           'user': data['user'],
         };
       }
@@ -395,6 +399,47 @@ class ApiService {
       return {
         'success': false,
         'offline': true,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
+    }
+  }
+
+  // ── Finaliser la première connexion d'un parent ───────────
+  // Contrairement à finaliserInscription (étudiants), aucun `userId` n'existe
+  // encore : on identifie le compte par parentId (renvoyé par lookupDetails
+  // quand le parent n'a pas encore de ligne `users`). L'email n'est jamais
+  // obligatoire pour un parent (contrairement aux étudiants).
+  static Future<Map<String, dynamic>> finaliserParent({
+    required String parentId,
+    required String password,
+    String? email,
+    String? telephone,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/parents/finaliser'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'parentId': parentId,
+          'password': password,
+          if (email != null && email.isNotEmpty) 'email': email,
+          if (telephone != null && telephone.isNotEmpty) 'telephone': telephone,
+        }),
+      );
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        if (data['token'] != null) {
+          await saveToken(data['token'], userId: data['user']?['id']);
+        }
+        return {'success': true, 'user': data['user'] ?? {}};
+      }
+      return {
+        'success': false,
+        'error': data['message'] ?? 'Erreur lors de l\'activation du compte.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
         'error': 'Serveur injoignable. Vérifiez votre connexion.',
       };
     }
@@ -1137,6 +1182,139 @@ class ApiService {
     }
   }
 
+
+  static Future<Map<String, dynamic>> getListeClasseAvecNotes({
+  required String filiereId,
+  required String niveau,
+  required String moduleId,
+  required String semestre,
+  required String anneeAcademique,
+}) async {
+  try {
+    final headers = await getHeaders();
+    final uri = Uri.parse('$baseUrl/notes/liste-classe').replace(queryParameters: {
+      'filiere_id': filiereId,
+      'niveau': niveau,
+      'module_id': moduleId,
+      'semestre': semestre,
+      'annee_academique': anneeAcademique,
+    });
+    final response = await http.get(uri, headers: headers);
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200 && body['success'] == true) {
+      return {'success': true, 'data': body['data']};
+    }
+    return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement.'};
+  } catch (e) {
+    return {'success': false, 'error': 'Serveur injoignable.'};
+  }
+}
+
+  static Future<Map<String, dynamic>> getCantineJour(String date) async {
+  try {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/cantine/jour?date=$date'),
+      headers: headers,
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200 && body['success'] == true) {
+      return {'success': true, 'data': body['data']};
+    }
+    return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement du menu.'};
+  } catch (e) {
+    return {'success': false, 'error': 'Serveur injoignable.'};
+  }
+}
+
+static Future<Map<String, dynamic>> publierMenuCantine({
+  required String date,
+  required String repas,
+  required List<Map<String, dynamic>> plats,
+}) async {
+  try {
+    final headers = await getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/cantine/publier'),
+      headers: headers,
+      body: jsonEncode({'date': date, 'repas': repas, 'plats': plats}),
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200 && body['success'] == true) {
+      return {'success': true, 'message': body['message']};
+    }
+    return {'success': false, 'error': body['message'] ?? 'Erreur lors de la publication.'};
+  } catch (e) {
+    return {'success': false, 'error': 'Serveur injoignable.'};
+  }
+}
+
+static Future<Map<String, dynamic>> getCantineAujourdhui() async {
+  try {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/cantine/aujourdhui'),
+      headers: headers,
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200 && body['success'] == true) {
+      return {'success': true, 'data': body['data']};
+    }
+    return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement du menu.'};
+  } catch (e) {
+    return {'success': false, 'error': 'Serveur injoignable.'};
+  }
+}
+
+  static Future<Map<String, dynamic>> changerStatutEtudiant(String etudiantId, String statut) async {
+  try {
+    final headers = await getHeaders();
+    final response = await http.patch(
+      Uri.parse('$baseUrl/etudiants/$etudiantId/statut'),
+      headers: headers,
+      body: jsonEncode({'statut': statut}),
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200 && body['success'] == true) {
+      return {'success': true};
+    }
+    return {'success': false, 'error': body['message'] ?? 'Erreur lors du changement de statut.'};
+  } catch (e) {
+    return {'success': false, 'error': 'Serveur injoignable.'};
+  }
+}
+
+  static Future<int> getNombreNotificationsNonLues() async {
+  try {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/notifications/non-lues/count'),
+      headers: headers,
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200 && body['success'] == true) {
+      return (body['count'] as num?)?.toInt() ?? 0;
+    }
+    return 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+
+  static Future<int> getNombreSessionsEnAttente() async {
+  try {
+    final headers = await getHeaders();
+    final response = await http.get(Uri.parse('$baseUrl/notes/sessions/en-attente/count'), headers: headers);
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200 && body['success'] == true) {
+      return (body['count'] as num?)?.toInt() ?? 0;
+    }
+    return 0;
+  } catch (e) {
+    return 0;
+  }
+}
   static Future<bool> marquerNotificationLue(String id) async {
     try {
       final headers = await getHeaders();
@@ -2452,6 +2630,328 @@ class ApiService {
         'success': false,
         'error': body['message'] ?? 'Erreur lors du retrait.',
       };
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  // ── Réclamations (contestation de note/moyenne/absence) ──────────────
+  static Future<Map<String, dynamic>> creerReclamation({
+    required String moduleId,
+    required String moduleNom,
+    required String type, // 'note' | 'moyenne' | 'absence'
+    String? typeEval,
+    num? noteActuelle,
+    String? semestre,
+    String? annee,
+    String? partiesContestees,
+    required String justification,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/reclamations'),
+        headers: headers,
+        body: jsonEncode({
+          'module_id': moduleId,
+          'module_nom': moduleNom,
+          'type': type,
+          'type_eval': typeEval,
+          'note_actuelle': noteActuelle,
+          'semestre': semestre,
+          'annee': annee,
+          'parties_contestees': partiesContestees,
+          'justification': justification,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['success'] == true) {
+        return {'success': true};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'envoi.',
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getMesReclamations() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/reclamations/mes-reclamations'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getAllReclamations({String? statut}) async {
+    try {
+      final headers = await getHeaders();
+      final uri = Uri.parse('$baseUrl/reclamations').replace(
+        queryParameters: statut != null ? {'statut': statut} : null,
+      );
+      final response = await http.get(uri, headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<int> getNombreReclamationsEnAttente() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/reclamations/en-attente/count'),
+        headers: headers,
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return (body['count'] as num?)?.toInt() ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  static Future<Map<String, dynamic>> transfererReclamation(String id, String profTransfere) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/reclamations/$id/transferer'),
+        headers: headers,
+        body: jsonEncode({'prof_transfere': profTransfere}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> repondreReclamation(String id, String reponse) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/reclamations/$id/repondre'),
+        headers: headers,
+        body: jsonEncode({'reponse': reponse}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> rejeterReclamation(String id, String motif) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/reclamations/$id/rejeter'),
+        headers: headers,
+        body: jsonEncode({'motif': motif}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  // ── Statistiques admin — inscriptions réelles groupées par mois+domaine ──
+  static Future<Map<String, dynamic>> getStatsInscriptions() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/etudiants/stats/inscriptions'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  // ── Évaluation des professeurs ────────────────────────────────────────
+  static Future<Map<String, dynamic>> creerPeriodeEvaluation({
+    required String filiereId,
+    required String dateDebut,
+    required String dateFin,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/evaluations/periodes'),
+        headers: headers,
+        body: jsonEncode({'filiere_id': filiereId, 'date_debut': dateDebut, 'date_fin': dateFin}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getPeriodesEvaluation() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/evaluations/periodes'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> cloturerPeriodeEvaluation(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(Uri.parse('$baseUrl/evaluations/periodes/$id/cloturer'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getResultatsPeriodeEvaluation(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/evaluations/periodes/$id/resultats'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getEvaluationsAFaire() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/evaluations/a-faire'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message']};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> soumettreEvaluationProf({
+    required String periodeId,
+    required String professeurId,
+    required Map<String, int> criteres,
+    String? commentaire,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/evaluations'),
+        headers: headers,
+        body: jsonEncode({
+          'periode_id': periodeId,
+          'professeur_id': professeurId,
+          'criteres': criteres,
+          'commentaire': commentaire,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getPrevisionMoyenne({
+    required String filiereId,
+    required String niveau,
+    required String semestre,
+    required String anneeAcademique,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final uri = Uri.parse('$baseUrl/bulletins/prevision').replace(queryParameters: {
+        'filiere_id': filiereId,
+        'niveau': niveau,
+        'semestre': semestre,
+        'annee_academique': anneeAcademique,
+      });
+      final response = await http.get(uri, headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> envoyerPrevision({
+    required String filiereId,
+    required String niveau,
+    required String semestre,
+    required String anneeAcademique,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/bulletins/prevision/envoyer'),
+        headers: headers,
+        body: jsonEncode({
+          'filiere_id': filiereId,
+          'niveau': niveau,
+          'semestre': semestre,
+          'annee_academique': anneeAcademique,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getMesPrevisions() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/bulletins/mes-previsions'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable.'};
     }

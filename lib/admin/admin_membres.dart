@@ -225,6 +225,21 @@ Map<String, bool> _getDefaultRightsForRole(AdminRole role) {
         'stats': true,
         'membres': false,
       };
+    case AdminRole.cantiniere:
+      // Aucun droit sur ces sections — son seul accès (menu "Cantine") est
+      // géré séparément par AdminMenuService.allowedItems (admin_shell.dart).
+      return {
+        'etudiants': false,
+        'notes': false,
+        'reclamations': false,
+        'filieres': false,
+        'professeurs': false,
+        'parents': false,
+        'messages': false,
+        'annonces': false,
+        'stats': false,
+        'membres': false,
+      };
   }
 }
 
@@ -801,4 +816,3 @@ class _AdminMembresState extends State<AdminMembres> {
 
   void _snack(String msg) => showAppSnackBar(context, msg);
 }
-

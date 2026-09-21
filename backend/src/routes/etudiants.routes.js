@@ -9,6 +9,7 @@ router.post('/', authMiddleware, requireRole('admin'), etudiantsController.inscr
 router.post('/finaliser', etudiantsController.finaliserPremiereConnexion);
 
 router.get('/delegues', authMiddleware, etudiantsController.getDelegues);
+router.get('/stats/inscriptions', authMiddleware, requireRole('admin'), etudiantsController.getStatsInscriptions);
 router.post('/:id/nommer-delegue', authMiddleware, etudiantsController.nommerDelegue);
 router.patch('/:id/revoquer-delegue', authMiddleware, etudiantsController.revoquerDelegue);
 

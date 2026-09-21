@@ -4,6 +4,7 @@ import '../admin/admin_annonces.dart' show istNiveaux;
 import '../services/api_service.dart';
 import '../utils/snackbar_helper.dart';
 import '../models/student_profile.dart';
+import 'admin_prevision_moyenne.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLE — étudiant en préparation de bulletin
@@ -73,6 +74,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
 
   List<EtudiantPreparation> _etudiants = [];
   final Map<int, String> _selections = {}; // etudiant_id -> 'valide'/'ajourne'/'invalide'
+  final Map<int, TextEditingController> _moyenneCtrls = {}; // etudiant_id -> moyenne modifiable
 
   @override
   void initState() {
@@ -83,6 +85,9 @@ class _AdminBulletinsState extends State<AdminBulletins> {
   @override
   void dispose() {
     _anneeCtrl.dispose();
+    for (final c in _moyenneCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -135,6 +140,18 @@ class _AdminBulletinsState extends State<AdminBulletins> {
         for (final e in _etudiants) {
           if (e.bulletinStatut != null) _selections[e.etudiantId] = e.bulletinStatut!;
         }
+        // Un champ modifiable par étudiant, pré-rempli avec la moyenne
+        // calculée automatiquement — "ces moyennes sont modifiables, c'est
+        // l'administration qui peut modifier".
+        for (final c in _moyenneCtrls.values) {
+          c.dispose();
+        }
+        _moyenneCtrls.clear();
+        for (final e in _etudiants) {
+          _moyenneCtrls[e.etudiantId] = TextEditingController(
+            text: e.moyenneCalculee != null ? e.moyenneCalculee!.toStringAsFixed(2) : '',
+          );
+        }
       } else {
         _errorMessage = result['error'] as String?;
       }
@@ -172,7 +189,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
               Icon(Icons.security_rounded, color: AdminTheme.primary, size: 16),
               SizedBox(width: 8),
               Expanded(child: Text(
-                'Chaque étudiant ne verra que son propre bulletin. La moyenne générale sera recalculée au moment de la publication.',
+                'Chaque étudiant ne verra que son propre bulletin. La moyenne affichée est celle qui sera publiée — modifie-la si besoin avant de valider.',
                 style: TextStyle(fontSize: 12, color: AdminTheme.primary, fontWeight: FontWeight.w600),
               )),
             ]),
@@ -192,7 +209,11 @@ class _AdminBulletinsState extends State<AdminBulletins> {
     if (confirme != true) return;
 
     setState(() => _isPublishing = true);
-    final resultats = _selections.entries.map((e) => {'etudiant_id': e.key, 'statut': e.value}).toList();
+    final resultats = _selections.entries.map((e) {
+      final moyenneTexte = _moyenneCtrls[e.key]?.text.trim().replaceAll(',', '.');
+      final moyenne = (moyenneTexte != null && moyenneTexte.isNotEmpty) ? double.tryParse(moyenneTexte) : null;
+      return {'etudiant_id': e.key, 'statut': e.value, if (moyenne != null) 'moyenne': moyenne};
+    }).toList();
     final result = await ApiService.publierBulletins(
       filiereId: _filiereId!,
       niveau: _niveau!,
@@ -225,6 +246,22 @@ class _AdminBulletinsState extends State<AdminBulletins> {
                 Text('Publication des bulletins', style: AdminTheme.headingLarge),
                 Text('Moyenne générale + statut du semestre — par filière/niveau', style: AdminTheme.bodyMedium),
               ])),
+              if (_filiereId != null && _niveau != null && _semestre != null)
+                TextButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminPrevisionMoyenne(
+                        filiereId: _filiereId!,
+                        niveau: _niveau!,
+                        semestre: _semestre!,
+                        anneeAcademique: _anneeCtrl.text.trim(),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.table_chart_outlined, size: 16),
+                  label: const Text('Prévision de moyenne'),
+                ),
               if (_etudiants.isNotEmpty)
                 IconButton(
                   onPressed: _isLoadingPreparation ? null : _chargerPreparation,
@@ -342,13 +379,23 @@ class _AdminBulletinsState extends State<AdminBulletins> {
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${e.prenoms} ${e.nom}', style: AdminTheme.headingSmall),
-            Text('${e.matricule} · ${e.nbNotes} note(s) prise(s) en compte', style: AdminTheme.caption),
+            Text('${e.matricule} · ${e.nbNotes} module(s) pris en compte', style: AdminTheme.caption),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(
-              e.moyenneCalculee != null ? e.moyenneCalculee!.toStringAsFixed(2) : '—',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
-                  color: (e.moyenneCalculee ?? 0) >= 10 ? AdminTheme.primary : AdminTheme.danger),
+            SizedBox(
+              width: 64,
+              child: TextField(
+                controller: _moyenneCtrls[e.etudiantId],
+                textAlign: TextAlign.right,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
+                    color: AdminTheme.primary),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: UnderlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(vertical: 4),
+                ),
+              ),
             ),
             const Text('/20', style: TextStyle(fontSize: 10, color: AdminTheme.textMuted)),
           ]),

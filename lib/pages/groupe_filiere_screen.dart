@@ -18,6 +18,7 @@ class _Membre {
   final String matricule;
   final String? etudiantRole;
   final String? niveau;
+  final String? photoUrl;
 
   const _Membre({
     required this.nom,
@@ -25,6 +26,7 @@ class _Membre {
     required this.matricule,
     this.etudiantRole,
     this.niveau,
+    this.photoUrl,
   });
 
   String get initiales =>
@@ -171,6 +173,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               matricule: json['auteur_id']?.toString() ?? '',
               etudiantRole: json['etudiant_role']?.toString(),
               niveau: json['niveau']?.toString(),
+              photoUrl: (json['photo_url'] ?? json['photoUrl'])?.toString(),
             ),
       contenu: (json['contenu'] ?? '') as String,
       type: TypeMessage.texte,
@@ -195,6 +198,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     matricule: widget.profile.matricule,
     etudiantRole: widget.profile.role,
     niveau: widget.profile.niveau,
+    photoUrl: widget.profile.photoUrl,
   );
 
   List<_MessageGroupe> _messagesSimules() {
@@ -1072,14 +1076,19 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppPalette.blue.withValues(alpha:0.15),
-                child: Text(
-                  msg.auteur.initiales,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppPalette.blue,
-                  ),
-                ),
+                backgroundImage: (msg.auteur.photoUrl != null && msg.auteur.photoUrl!.isNotEmpty)
+                    ? NetworkImage(msg.auteur.photoUrl!)
+                    : null,
+                child: (msg.auteur.photoUrl == null || msg.auteur.photoUrl!.isEmpty)
+                    ? Text(
+                        msg.auteur.initiales,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.blue,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 8),
             ],
@@ -1185,14 +1194,19 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppPalette.yellow,
-                child: Text(
-                  msg.auteur.initiales,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppPalette.blue,
-                  ),
-                ),
+                backgroundImage: (msg.auteur.photoUrl != null && msg.auteur.photoUrl!.isNotEmpty)
+                    ? NetworkImage(msg.auteur.photoUrl!)
+                    : null,
+                child: (msg.auteur.photoUrl == null || msg.auteur.photoUrl!.isEmpty)
+                    ? Text(
+                        msg.auteur.initiales,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.blue,
+                        ),
+                      )
+                    : null,
               ),
             ],
           ],

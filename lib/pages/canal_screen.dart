@@ -16,6 +16,11 @@ class _MessageCanal {
   final String id, expediteur, initiales, texte, heure, date, type;
   final Color color;
   final String? etudiantRole, niveau;
+  /// URL de la photo de profil de l'expéditeur, si disponible — remplace les
+  /// initiales dans la bulle quand présente. Renseignée localement à
+  /// l'envoi (depuis le profil courant) ; côté serveur, dépend de ce que
+  /// l'API renvoie (peut être absente pour les anciens messages/API).
+  final String? photoUrl;
   Map<String, int> reactions;
   bool epingle = false;
 
@@ -30,6 +35,7 @@ class _MessageCanal {
     required this.color,
     this.etudiantRole,
     this.niveau,
+    this.photoUrl,
     Map<String, int>? reactions,
   }) : reactions = reactions ?? {};
 
@@ -63,6 +69,7 @@ class _MessageCanal {
       color: color,
       etudiantRole: json['etudiant_role']?.toString(),
       niveau: json['niveau']?.toString(),
+      photoUrl: (json['photo_url'] ?? json['photoUrl'])?.toString(),
       reactions: {},
     );
   }
@@ -652,6 +659,7 @@ class _CanalDetailState extends State<_CanalDetail> {
       initiales: '${p.prenoms[0]}${p.nom[0]}'.toUpperCase(),
       texte: texte, heure: heure, date: 'Aujourd\'hui',
       type: 'texte', color: widget.couleur,
+      photoUrl: p.photoUrl,
       // Rôle/niveau rafraîchis dès que le message a fait l'aller-retour
       // serveur (WebSocket ou rechargement) — pas connus localement ici.
       etudiantRole: null,
@@ -878,9 +886,22 @@ class _BulleCanal extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(width: 38, height: 38,
-          decoration: BoxDecoration(color: message.color, borderRadius: BorderRadius.circular(10)),
-          child: Center(child: Text(message.initiales, style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)))),
+          decoration: BoxDecoration(
+            color: message.color,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: (message.photoUrl != null && message.photoUrl!.isNotEmpty)
+              ? Image.network(
+                  message.photoUrl!,
+                  fit: BoxFit.cover,
+                  width: 38,
+                  height: 38,
+                  errorBuilder: (_, __, ___) => Center(child: Text(message.initiales, style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white))),
+                )
+              : Center(child: Text(message.initiales, style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)))),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [

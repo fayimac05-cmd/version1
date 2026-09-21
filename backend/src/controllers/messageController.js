@@ -176,9 +176,13 @@ const getMessagesCanal = async (req, res) => {
 
     // ✅ u.etudiant_role + niveau (via etudiants, fallback users.niveau) ajoutés
     // pour afficher le badge Délégué/Adjoint sur chaque bulle de message.
+    // ✅ u.photo_url ajouté — le badge disparaissait de l'écho local (normal,
+    // pas de rôle connu avant confirmation serveur) et la PHOTO disparaissait
+    // après confirmation car jamais renvoyée par cette requête : le message
+    // "officiel" chargé ici remplaçait l'écho local sans jamais porter de photo.
     const { rows: msgs } = await pool.query(
       `SELECT m.id, m.canal_id, m.contenu, m.type, m.created_at,
-              u.id AS auteur_id, u.prenoms, u.nom, u.etudiant_role,
+              u.id AS auteur_id, u.prenoms, u.nom, u.etudiant_role, u.photo_url,
               COALESCE(MAX(e.niveau), u.niveau) AS niveau,
               COALESCE(
                 JSON_AGG(r.emoji) FILTER (WHERE r.emoji IS NOT NULL), '[]'
@@ -322,11 +326,11 @@ const envoyerMessageCanal = async (req, res) => {
     );
     const msgId = inserted[0].id;
 
-    // ✅ etudiant_role + niveau ajoutés pour que le badge apparaisse
-    // immédiatement dans le message émis via WebSocket.
+    // ✅ etudiant_role + niveau + photo_url ajoutés pour que badge et photo
+    // apparaissent immédiatement dans le message émis via WebSocket.
     const { rows: fullMsgs } = await pool.query(
       `SELECT m.id, m.canal_id, m.auteur_id, m.contenu, m.type, m.created_at,
-              u.prenoms, u.nom, u.role, u.etudiant_role,
+              u.prenoms, u.nom, u.role, u.etudiant_role, u.photo_url,
               COALESCE(e.niveau, u.niveau) AS niveau
        FROM messages m
        JOIN users u ON u.id = m.auteur_id
@@ -549,10 +553,10 @@ const getMessagesGroupe = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
-    // ✅ etudiant_role + niveau ajoutés pour le badge Délégué/Adjoint.
+    // ✅ etudiant_role + niveau + photo_url ajoutés pour badge et photo.
     const { rows } = await pool.query(
       `SELECT mg.id, mg.contenu, mg.created_at,
-              mg.auteur_id, u.prenoms, u.nom, u.etudiant_role,
+              mg.auteur_id, u.prenoms, u.nom, u.etudiant_role, u.photo_url,
               COALESCE(e.niveau, u.niveau) AS niveau
        FROM messages_groupe mg
        JOIN users u ON u.id = mg.auteur_id
@@ -602,10 +606,10 @@ const envoyerMessageGroupe = async (req, res) => {
       [filiereId, req.user.id, contenu.trim()]
     );
 
-    // ✅ etudiant_role + niveau ajoutés pour que le badge apparaisse
-    // immédiatement dans le message émis via WebSocket.
+    // ✅ etudiant_role + niveau + photo_url ajoutés pour que badge et photo
+    // apparaissent immédiatement dans le message émis via WebSocket.
     const { rows: userRows } = await pool.query(
-      `SELECT u.prenoms, u.nom, u.etudiant_role, COALESCE(e.niveau, u.niveau) AS niveau
+      `SELECT u.prenoms, u.nom, u.etudiant_role, u.photo_url, COALESCE(e.niveau, u.niveau) AS niveau
        FROM users u LEFT JOIN etudiants e ON e.user_id = u.id
        WHERE u.id = $1`,
       [req.user.id]
@@ -616,6 +620,7 @@ const envoyerMessageGroupe = async (req, res) => {
       prenoms: userRows[0]?.prenoms,
       nom: userRows[0]?.nom,
       etudiant_role: userRows[0]?.etudiant_role,
+      photo_url: userRows[0]?.photo_url,
       niveau: userRows[0]?.niveau,
     };
 

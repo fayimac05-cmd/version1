@@ -81,7 +81,14 @@ class _NotesTabState extends State<NotesTab> {
     if (!mounted) return;
     setState(() {
       _classes = classesResult['success'] == true ? classesResult['data'] as List<dynamic> : [];
-      _modules = modulesResult['success'] == true ? modulesResult['data'] as List<dynamic> : [];
+      // ⚠️ CORRIGÉ — plantage "[DropdownButton]'s value: X ... zero or 2 or
+      // more items detected with the same value" : le backend peut renvoyer
+      // un même module plusieurs fois (ex. rattaché à plusieurs filières via
+      // une jointure), et DropdownButtonFormField exige EXACTEMENT une
+      // correspondance par valeur. On déduplique par id juste après réception.
+      final rawModules = modulesResult['success'] == true ? modulesResult['data'] as List<dynamic> : [];
+      final idsVus = <String>{};
+      _modules = rawModules.where((m) => idsVus.add(m['id'].toString())).toList();
       _sessions = sessionsResult['success'] == true ? sessionsResult['data'] as List<dynamic> : [];
       _loading = false;
     });

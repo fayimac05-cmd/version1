@@ -155,7 +155,7 @@ exports.createEdt = async (req, res) => {
 // POST /api/edt/grille - Créer un EDT au format grille (jours/heures/salle), sans fichier PDF
 exports.createEdtGrille = async (req, res) => {
   try {
-    const { filiere, niveau, anneeAcademique, creneaux } = req.body;
+    const { filiere, niveau, anneeAcademique, creneaux, dateDebut, dateFin } = req.body;
 
     if (!filiere || !niveau) {
       return res.status(400).json({
@@ -180,6 +180,8 @@ exports.createEdtGrille = async (req, res) => {
       anneeAcademique: anneeAcademique || new Date().getFullYear().toString(),
       pdfUrl: null,
       creneaux,
+      dateDebut: dateDebut || null,
+      dateFin: dateFin || null,
       archive: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -206,7 +208,7 @@ exports.createEdtGrille = async (req, res) => {
 exports.updateEdtGrille = async (req, res) => {
   try {
     const { id } = req.params;
-    const { niveau, anneeAcademique, creneaux, archive } = req.body;
+    const { niveau, anneeAcademique, creneaux, archive, dateDebut, dateFin } = req.body;
 
     const edt = await EdtModel.findById(id);
     if (!edt) {
@@ -221,6 +223,8 @@ exports.updateEdtGrille = async (req, res) => {
       ...(anneeAcademique && { anneeAcademique }),
       ...(Array.isArray(creneaux) && { creneaux }),
       ...(typeof archive === 'boolean' && { archive }),
+      ...(dateDebut !== undefined && { dateDebut }),
+      ...(dateFin !== undefined && { dateFin }),
       updatedAt: new Date().toISOString(),
     };
 
@@ -367,13 +371,18 @@ exports.envoyerEdt = async (req, res) => {
     const filiereId = edt.filiere;      // id de filière stocké dans l'EDT
     const niveau = edt.niveau || null;  // ex. "Licence 2"
 
-    // Étudiants actifs de cette filière (et de ce niveau si renseigné).
+    // ⚠️ Bug récurrent sur ce projet : `filiere_id` et `niveau` n'existent
+    // QUE sur `etudiants`, jamais sur `users` — ne JAMAIS écrire
+    // `u.filiere_id` ou `u.niveau` dans une requête (déjà rencontré et
+    // corrigé dans etudiants.controller.js::listEtudiants, notes.controller.js
+    // et ailleurs). D'où le JOIN (pas LEFT) : un étudiant sans ligne
+    // `etudiants` ne peut de toute façon pas être rattaché à une filière.
     const r = await pool.query(
       `SELECT u.id, u.prenoms, u.nom
          FROM users u
-         LEFT JOIN etudiants e ON u.id = e.user_id
-        WHERE (e.filiere_id = $1 OR u.filiere_id = $1)
-          AND ($2::text IS NULL OR e.niveau = $2 OR u.niveau = $2)
+         JOIN etudiants e ON u.id = e.user_id
+        WHERE e.filiere_id = $1
+          AND ($2::text IS NULL OR e.niveau = $2)
           AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%')
           AND COALESCE(u.statut, 'actif') NOT IN ('suspendu', 'renvoye')`,
       [filiereId, niveau]
@@ -387,7 +396,8 @@ exports.envoyerEdt = async (req, res) => {
 
     let notifies = 0;
     for (const etu of etudiants) {
-      const rr = await envoyerNotificationAuto(etu.id, titre, corps);
+      // type/data → au clic côté Flutter, ouvre directement l'onglet Planning.
+      const rr = await envoyerNotificationAuto(etu.id, titre, corps, 'edt', { tab: 'planning' });
       if (rr.success) notifies += 1;
     }
 

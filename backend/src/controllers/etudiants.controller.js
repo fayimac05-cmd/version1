@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { ensureFilieres } = require('../utils/filieres');
 const { notifierInscription } = require('../services/inscription.notify');
+const { envoyerNotificationAuto } = require('./notifications.controller');
 
 const domaineFromFiliere = (filiere) => {
   const f = (filiere || '').toLowerCase();
@@ -51,6 +52,62 @@ const mapRowToEtudiant = (row) => ({
   filiereRole: row.filiere_role || null,
   premiereFois: row.premierefois ?? true,
 });
+
+// ── Créer ou lier le compte parent (tuteur) à l'étudiant ──────────────────────
+// Appelée à l'inscription d'un étudiant. Non-bloquant : une erreur ici ne doit
+// jamais faire échouer l'inscription de l'étudiant lui-même.
+// - Si un parent existe déjà avec ce téléphone (cas fratrie : même tuteur,
+//   plusieurs enfants), on réutilise ce compte, on ne le duplique pas.
+// - Sinon on crée un parent sans user_id (compte "en attente", comme les
+//   professeurs avant leur première connexion) : il ne pourra se connecter
+//   qu'après avoir défini son mot de passe via /api/parent/finaliser.
+// - Le lien est figé : la contrainte UNIQUE(etudiant_id) sur parent_etudiants
+//   garantit un seul tuteur principal par enfant. Toute correction ultérieure
+//   passe par un écran admin dédié, pas par ce flux.
+const creerOuLierParent = async (client, { nomParent, prenomParent, telParent, emailParent }, etuId) => {
+  if (!telParent?.trim()) return null; // tuteur optionnel : pas de tel = on ignore
+
+  try {
+    const tel = telParent.trim();
+
+    // 1. Chercher un parent existant avec ce téléphone
+    const parentRes = await client.query('SELECT id FROM parents WHERE tel = $1', [tel]);
+    let parentId;
+    let lienExistant = false;
+
+    if (parentRes.rows.length > 0) {
+      parentId = parentRes.rows[0].id;
+      lienExistant = true;
+    } else {
+      // 2. Créer le parent sans compte (user_id = null)
+      const nouveau = await client.query(
+        `INSERT INTO parents (nom, prenoms, tel, email, statut)
+         VALUES ($1, $2, $3, $4, 'actif') RETURNING id`,
+        [
+          (nomParent?.trim() || '').toUpperCase(),
+          prenomParent?.trim() || null,
+          tel,
+          emailParent?.trim() || null,
+        ]
+      );
+      parentId = nouveau.rows[0].id;
+    }
+
+    // 3. Lier au nouvel étudiant (ON CONFLICT protège si un tuteur principal
+    // existe déjà pour cet étudiant — ne devrait pas arriver à l'inscription
+    // mais reste sûr en cas de double-appel)
+    await client.query(
+      `INSERT INTO parent_etudiants (parent_id, etudiant_id)
+       VALUES ($1, $2) ON CONFLICT (etudiant_id) DO NOTHING`,
+      [parentId, etuId]
+    );
+
+    return { parentId, lienExistant };
+  } catch (err) {
+    console.error('[creerOuLierParent] Erreur (non bloquante):', err.message);
+    return null;
+  }
+};
 
 // ── Intégrer automatiquement un étudiant dans le groupe filière ───────────────
 const integrerDansGroupeFiliere = async (client, userId, filiereId, filiere, matricule) => {
@@ -207,6 +264,7 @@ const inscrireEtudiant = async (req, res) => {
       dateNaissance,
       adresse,
       nomParent,
+      prenomParent,
       telParent,
       emailParent,
       nationalite,
@@ -308,6 +366,16 @@ const inscrireEtudiant = async (req, res) => {
     if (filiereId) {
       groupesInfo = await integrerDansGroupeFiliere(client, userId, filiereId, filiere.trim(), matricule);
     }
+
+    // Créer/lier le compte parent (tuteur) — non-bloquant
+    let parentInfo = null;
+    if (etuId) {
+      parentInfo = await creerOuLierParent(
+        client,
+        { nomParent, prenomParent, telParent, emailParent },
+        etuId
+      );
+    }
     // Pas de COMMIT car pas de BEGIN avec Supabase RPC
 
     // Notification best-effort
@@ -325,11 +393,34 @@ const inscrireEtudiant = async (req, res) => {
       console.error('[inscrireEtudiant] notification', notifErr.message);
     }
 
+    // Notifier les autres étudiants déjà inscrits dans la même filière+niveau
+    // qu'un nouveau camarade a rejoint — non-bloquant.
+    if (filiereId && etuId) {
+      try {
+        const camarades = await client.query(
+          `SELECT u.id FROM users u
+           JOIN etudiants e ON e.user_id = u.id
+           WHERE e.filiere_id = $1 AND e.niveau = $2 AND e.id != $3
+             AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%')
+             AND COALESCE(u.statut, 'actif') NOT IN ('suspendu', 'renvoye')`,
+          [filiereId, niveau?.trim() || null, etuId]
+        );
+        const titreNouvel = 'Nouvel étudiant dans la filière';
+        const corpsNouvel = `${prenoms.trim()} ${nom.trim().toUpperCase()} a rejoint ${filiere.trim()}${niveau ? ' — ' + niveau.trim() : ''}.`;
+        for (const c of camarades.rows) {
+          await envoyerNotificationAuto(c.id, titreNouvel, corpsNouvel, 'nouvel_etudiant', { etudiantId: etuId });
+        }
+      } catch (notifCamErr) {
+        console.error('[inscrireEtudiant] notification camarades', notifCamErr.message);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       matricule,
       notifications,
       groupes: groupesInfo,
+      parent: parentInfo,
       etudiant: {
         id: etuId,
         userId,
@@ -414,6 +505,15 @@ const finaliserPremiereConnexion = async (req, res) => {
         [email || null, telephone || null, userRow.etudiant_id]
       );
     }
+
+    // Notification "bienvenue" — non-bloquant.
+    envoyerNotificationAuto(
+      userRow.id,
+      'Bienvenue sur ScolarHub',
+      'Votre compte a été activé avec succès. Bonne année académique !',
+      'premiere_connexion',
+      null
+    ).catch(() => {});
 
     const token = jwt.sign(
       { id: userRow.id, matricule: userRow.matricule, role: userRow.role, filiere_id: userRow.filiere_id },
@@ -528,4 +628,101 @@ const revoquerDelegue = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Erreur lors du retrait.' });
   }
 };
-module.exports = { listEtudiants, inscrireEtudiant, finaliserPremiereConnexion, getDelegues, nommerDelegue, revoquerDelegue };
+
+// ── PATCH /api/etudiants/:id/statut — Suspendre / réactiver un étudiant ────
+// :id = id de la table etudiants (pas l'UUID users.id), mêmes conventions
+// que nommerDelegue/revoquerDelegue ci-dessus.
+// ⚠️ Avant cette fonction, "Suspendre" côté Flutter (admin_etudiants.dart)
+// ne faisait qu'un setState() local — jamais persisté en base, et
+// l'étudiant "suspendu" pouvait donc continuer à se connecter normalement
+// (login() vérifie users.statut en base). Corrigé ici : les deux tables
+// (users ET etudiants, qui dupliquent statut) sont mises à jour ensemble.
+const changerStatutEtudiant = async (req, res) => {
+  const { id } = req.params;
+  const { statut } = req.body;
+  const statutsValides = ['actif', 'suspendu', 'renvoye'];
+  if (!statutsValides.includes(statut)) {
+    return res.status(400).json({
+      success: false,
+      message: `Statut invalide. Valeurs autorisées : ${statutsValides.join(', ')}.`,
+    });
+  }
+  try {
+    const etuRes = await pool.query(
+      'SELECT user_id, filiere_id, niveau, nom, prenoms FROM etudiants WHERE id = $1',
+      [id]
+    );
+    const etu = etuRes.rows[0];
+    if (!etu) {
+      return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+    }
+
+    await pool.query('UPDATE users SET statut = $1 WHERE id = $2', [statut, etu.user_id]);
+    await pool.query('UPDATE etudiants SET statut = $1 WHERE id = $2', [statut, id]);
+
+    // Notifier les camarades de filière+niveau en cas de suspension — non
+    // bloquant.
+    if (statut === 'suspendu' && etu.filiere_id) {
+      try {
+        const camarades = await pool.query(
+          `SELECT u.id FROM users u
+           JOIN etudiants e ON e.user_id = u.id
+           WHERE e.filiere_id = $1 AND e.niveau = $2 AND e.id != $3
+             AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%')
+             AND COALESCE(u.statut, 'actif') NOT IN ('suspendu', 'renvoye')`,
+          [etu.filiere_id, etu.niveau, id]
+        );
+        const titre = 'Étudiant suspendu';
+        const corps = `${etu.prenoms} ${etu.nom} a été suspendu(e) de la filière.`;
+        for (const c of camarades.rows) {
+          await envoyerNotificationAuto(c.id, titre, corps, 'suspension', null);
+        }
+      } catch (notifErr) {
+        console.error('[changerStatutEtudiant] notification', notifErr.message);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: statut === 'actif' ? 'Étudiant réactivé.' : `Étudiant ${statut === 'suspendu' ? 'suspendu' : 'renvoyé'}.`,
+    });
+  } catch (err) {
+    console.error('[changerStatutEtudiant]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors du changement de statut.' });
+  }
+};
+
+// GET /api/etudiants/stats/inscriptions (admin) — inscriptions groupées par
+// mois + domaine, depuis la date réelle de création du compte (users.created_at).
+// Sert à la fois à la courbe mensuelle de l'année en cours et à l'historique
+// pluriannuel — le Flutter agrège selon le besoin. Ne renvoie que les mois où
+// il existe réellement des inscriptions (pas de mois inventés à zéro).
+const getStatsInscriptions = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DATE_TRUNC('month', u.created_at) AS mois, f.domaine,
+             COALESCE(e.filiere_nom, f.nom) AS filiere_nom, COUNT(*) AS total
+      FROM users u
+      JOIN etudiants e ON e.user_id = u.id
+      LEFT JOIN filieres f ON f.id = e.filiere_id
+      WHERE u.created_at IS NOT NULL
+      GROUP BY DATE_TRUNC('month', u.created_at), f.domaine, COALESCE(e.filiere_nom, f.nom)
+      ORDER BY mois
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('[getStatsInscriptions]', error);
+    res.status(500).json({ success: false, message: 'Erreur lors du calcul des statistiques.' });
+  }
+};
+
+module.exports = {
+  listEtudiants,
+  inscrireEtudiant,
+  finaliserPremiereConnexion,
+  getDelegues,
+  nommerDelegue,
+  revoquerDelegue,
+  changerStatutEtudiant,
+  getStatsInscriptions,
+};

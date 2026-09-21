@@ -5,6 +5,7 @@ enum AdminRole {
   secretariat,
   communication,
   cycleDirecteur,
+  cantiniere,
 }
 
 extension AdminRoleExtension on AdminRole {
@@ -22,6 +23,8 @@ extension AdminRoleExtension on AdminRole {
         return 'Chargé Communication & BDE';
       case AdminRole.cycleDirecteur:
         return 'Directeur de Cycle';
+      case AdminRole.cantiniere:
+        return 'Cantinière';
     }
   }
 
@@ -39,6 +42,8 @@ extension AdminRoleExtension on AdminRole {
         return 'communication';
       case AdminRole.cycleDirecteur:
         return 'cycle';
+      case AdminRole.cantiniere:
+        return 'cantiniere';
     }
   }
 
@@ -58,6 +63,9 @@ extension AdminRoleExtension on AdminRole {
       case 'cycle':
       case 'directeur_cycle':
         return AdminRole.cycleDirecteur;
+      case 'cantiniere':
+      case 'cantine':
+        return AdminRole.cantiniere;
       case 'super_admin':
       case 'superadmin':
       default:

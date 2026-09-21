@@ -1,7 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/etudiant_model.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
@@ -25,10 +27,18 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
   String _filtreStatut = 'tous';
   late String _filtredomaine;
   String _filtreNiveau = 'tous';
+  String _filtreFiliere = 'toutes';
   String _recherche = '';
   final TextEditingController _searchCtrl = TextEditingController();
 
   bool get isDesktop => MediaQuery.of(context).size.width >= 900;
+
+  /// Filières distinctes présentes dans la liste — alimente le filtre.
+  List<String> get _filieresDisponibles {
+    final noms = adminEtudiants.map((e) => e.filiere).where((f) => f.isNotEmpty).toSet().toList();
+    noms.sort();
+    return noms;
+  }
 
   List<Etudiant> get liste => adminEtudiants.where((e) {
     if (_filtreStatut.toLowerCase() != 'tous' &&
@@ -39,6 +49,9 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
       return false;
     if (_filtreNiveau.toLowerCase() != 'tous' &&
         e.niveau.toLowerCase() != _filtreNiveau.toLowerCase())
+      return false;
+    if (_filtreFiliere.toLowerCase() != 'toutes' &&
+        e.filiere.toLowerCase() != _filtreFiliere.toLowerCase())
       return false;
     if (_recherche.isNotEmpty) {
       final q = _recherche.toLowerCase();
@@ -160,6 +173,27 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                       AdminTheme.warningLight,
                     ),
                     const SizedBox(width: 6),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: _exporterListePDF,
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFEF4444)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.picture_as_pdf_outlined, color: Color(0xFFEF4444), size: 16),
+                            SizedBox(width: 6),
+                            Text('PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
+                          ],
+                        ),
+                      ),
+                    ),
                     GestureDetector(
                       onTap: () => _inscrireEtudiant(),
                       child: Container(
@@ -293,6 +327,16 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                                     (v) => setState(() => _filtreNiveau = v!),
                                   ),
                                 ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _filtreDropdown(
+                                    'Filière',
+                                    _filtreFiliere,
+                                    ['toutes', ..._filieresDisponibles],
+                                    ['Toutes', ..._filieresDisponibles],
+                                    (v) => setState(() => _filtreFiliere = v!),
+                                  ),
+                                ),
                               ],
                             )
                           : Column(
@@ -337,6 +381,30 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                                       ),
                                     ],
                                   ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _filtreDropdown(
+                                        'Niveau',
+                                        _filtreNiveau,
+                                        ['tous', 'Licence 1', 'Licence 2', 'Licence 3'],
+                                        ['Tous', 'Licence 1', 'Licence 2', 'Licence 3'],
+                                        (v) => setState(() => _filtreNiveau = v!),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _filtreDropdown(
+                                        'Filière',
+                                        _filtreFiliere,
+                                        ['toutes', ..._filieresDisponibles],
+                                        ['Toutes', ..._filieresDisponibles],
+                                        (v) => setState(() => _filtreFiliere = v!),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -621,9 +689,111 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
   }
 
   // ════════════════════════════════════════════════════════════════════════
+  // EXPORT PDF — LISTE FILTRÉE (roster, pas de notes : l'admin n'est pas
+  // rattaché à un module précis)
+  // ════════════════════════════════════════════════════════════════════════
+  Future<void> _exporterListePDF() async {
+    if (liste.isEmpty) {
+      showAppSnackBar(context, 'Aucun étudiant à exporter avec ces filtres.');
+      return;
+    }
+    final pdf = pw.Document();
+    final filtreLabel = [
+      if (_filtreFiliere != 'toutes') _filtreFiliere,
+      if (_filtreNiveau != 'tous') _filtreNiveau,
+      if (_filtreStatut != 'tous') _filtreStatut,
+    ].join(' · ');
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text('INSTITUT SUPÉRIEUR DE TECHNOLOGIES (IST)', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Liste des étudiants', style: const pw.TextStyle(fontSize: 9)),
+              ]),
+              pw.Text('${liste.length} étudiant(s)', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+            ],
+          ),
+          if (filtreLabel.isNotEmpty) ...[
+            pw.SizedBox(height: 4),
+            pw.Text('Filtres : $filtreLabel', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+          ],
+          pw.SizedBox(height: 14),
+          pw.TableHelper.fromTextArray(
+            headers: ['N°', 'Matricule', 'Nom', 'Prénoms', 'Filière', 'Niveau', 'Statut'],
+            data: liste.asMap().entries.map((entry) => [
+              '${entry.key + 1}',
+              entry.value.matricule,
+              entry.value.nom,
+              entry.value.prenoms,
+              entry.value.filiere,
+              entry.value.niveau,
+              entry.value.statut,
+            ]).toList(),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E40AF)),
+            cellStyle: const pw.TextStyle(fontSize: 8.5),
+            cellAlignment: pw.Alignment.centerLeft,
+            cellPadding: const pw.EdgeInsets.all(5),
+          ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Liste_Etudiants.pdf');
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
   // GÉNÉRATION CARTE PDF
   // ════════════════════════════════════════════════════════════════════════
-  Future<void> _genererCarte(Etudiant e) async {
+  /// Propose d'ajouter une photo AVANT de générer la carte. Cette photo est
+  /// utilisée UNIQUEMENT pour ce PDF — elle n'est jamais envoyée au backend
+  /// ni associée au profil de l'étudiant (voir demande explicite d'Ib).
+  Future<void> _choisirPhotoEtGenererCarte(Etudiant e) async {
+    Uint8List? photoBytes;
+    final choix = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Photo pour la carte', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        content: const Text(
+          'Ajouter une photo pour cette carte d\'étudiant ? Elle ne sera utilisée que pour ce document — elle ne modifie pas le profil de l\'étudiant.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, 'sans'), child: const Text('Sans photo')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, 'avec'),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt),
+            child: const Text('Choisir une photo', style: TextStyle(color: AdminTheme.iconFgAlt)),
+          ),
+        ],
+      ),
+    );
+
+    if (choix == 'avec') {
+      try {
+        final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+        if (picked != null) {
+          photoBytes = await picked.readAsBytes();
+        }
+      } catch (_) {
+        if (mounted) showAppSnackBar(context, 'Impossible de charger cette image.');
+      }
+    } else if (choix == null) {
+      return; // dialogue fermé sans choix
+    }
+
+    _genererCarte(e, photoBytes: photoBytes);
+  }
+
+  Future<void> _genererCarte(Etudiant e, {Uint8List? photoBytes}) async {
+    final pw.ImageProvider? photoImage = photoBytes != null ? pw.MemoryImage(photoBytes) : null;
     final pdf = pw.Document();
     pdf.addPage(
       pw.Page(
@@ -708,17 +878,22 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                             color: PdfColors.white,
                             width: 1.5,
                           ),
+                          image: photoImage != null
+                              ? pw.DecorationImage(image: photoImage, fit: pw.BoxFit.cover)
+                              : null,
                         ),
-                        child: pw.Center(
-                          child: pw.Text(
-                            '${e.prenoms[0]}${e.nom[0]}',
-                            style: pw.TextStyle(
-                              fontSize: 14,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.white,
-                            ),
-                          ),
-                        ),
+                        child: photoImage == null
+                            ? pw.Center(
+                                child: pw.Text(
+                                  '${e.prenoms[0]}${e.nom[0]}',
+                                  style: pw.TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.white,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
                       pw.SizedBox(height: 6),
                       pw.Text(
@@ -871,7 +1046,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
               title: const Text('Générer carte PDF'),
               onTap: () {
                 Navigator.pop(context);
-                _genererCarte(e);
+                _choisirPhotoEtGenererCarte(e);
               },
             ),
             if (e.statut == 'actif')
@@ -886,8 +1061,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  setState(() => e.statut = 'suspendu');
-                  _snack('${e.prenoms} suspendu(e).');
+                  _changerStatut(e, 'suspendu');
                 },
               ),
             if (e.statut == 'suspendu')
@@ -902,8 +1076,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  setState(() => e.statut = 'actif');
-                  _snack('${e.prenoms} réactivé(e).');
+                  _changerStatut(e, 'actif');
                 },
               ),
             const SizedBox(height: 8),
@@ -911,6 +1084,21 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
         ),
       ),
     );
+  }
+
+  // ⚠️ CORRIGÉ — "Suspendre"/"Réactiver" ne faisaient auparavant qu'un
+  // setState() local, jamais persisté en base : l'étudiant "suspendu"
+  // pouvait donc continuer à se connecter normalement. Appelle maintenant
+  // le vrai endpoint, qui met à jour users.statut (vérifié par login()).
+  Future<void> _changerStatut(Etudiant e, String nouveauStatut) async {
+    final result = await ApiService.changerStatutEtudiant(e.id, nouveauStatut);
+    if (!mounted) return;
+    if (result['success'] == true) {
+      setState(() => e.statut = nouveauStatut);
+      _snack(nouveauStatut == 'actif' ? '${e.prenoms} réactivé(e).' : '${e.prenoms} suspendu(e).');
+    } else {
+      _snack(result['error']?.toString() ?? 'Erreur lors du changement de statut.');
+    }
   }
 
   void _snack(String msg) => showAppSnackBar(context, msg);
@@ -1253,6 +1441,15 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
   final _telephoneCtrl = TextEditingController();
   final _matriculeCtrl = TextEditingController();
 
+  // ── Champs tuteur / parent (optionnels) ─────────────────────────────────
+  // Remplis => création/liaison automatique d'un compte parent côté backend
+  // (voir etudiants.controller.js::creerOuLierParent). Le téléphone est la
+  // clé utilisée pour détecter une fratrie (même tuteur, plusieurs enfants).
+  final _nomParentCtrl = TextEditingController();
+  final _prenomParentCtrl = TextEditingController();
+  final _telParentCtrl = TextEditingController();
+  final _emailParentCtrl = TextEditingController();
+
   List<String> _filieres = _filieresParDefaut;
   String? _filiereSelectionnee;
   String _niveauSelectionne = _niveaux.first;
@@ -1289,6 +1486,10 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
     _emailCtrl.dispose();
     _telephoneCtrl.dispose();
     _matriculeCtrl.dispose();
+    _nomParentCtrl.dispose();
+    _prenomParentCtrl.dispose();
+    _telParentCtrl.dispose();
+    _emailParentCtrl.dispose();
     super.dispose();
   }
 
@@ -1320,6 +1521,14 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
         'telephone': _telephoneCtrl.text.trim(),
       if (_matriculeCtrl.text.trim().isNotEmpty)
         'matricule': _matriculeCtrl.text.trim(),
+      if (_nomParentCtrl.text.trim().isNotEmpty)
+        'nomParent': _nomParentCtrl.text.trim(),
+      if (_prenomParentCtrl.text.trim().isNotEmpty)
+        'prenomParent': _prenomParentCtrl.text.trim(),
+      if (_telParentCtrl.text.trim().isNotEmpty)
+        'telParent': _telParentCtrl.text.trim(),
+      if (_emailParentCtrl.text.trim().isNotEmpty)
+        'emailParent': _emailParentCtrl.text.trim(),
     });
 
     if (!mounted) return;
@@ -1450,7 +1659,7 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: 440,
-        constraints: const BoxConstraints(maxHeight: 620),
+        constraints: const BoxConstraints(maxHeight: 680),
         padding: const EdgeInsets.all(24),
         child: SingleChildScrollView(
           child: Column(
@@ -1510,6 +1719,47 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
               ),
               const SizedBox(height: 14),
               _champ('Matricule (auto-généré si vide)', _matriculeCtrl),
+
+              // ── Section tuteur / parent (optionnelle) ───────────────────
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Tuteur / Parent (optionnel)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF374151),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Si rempli, un compte parent sera créé (ou lié s\'il existe déjà pour ce numéro).',
+                style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _champ('Nom du tuteur', _nomParentCtrl)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _champ('Prénom(s) du tuteur', _prenomParentCtrl),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _champ('Téléphone du tuteur', _telParentCtrl),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _champ('Email du tuteur', _emailParentCtrl),
+                  ),
+                ],
+              ),
+
               if (_erreur != null) ...[
                 const SizedBox(height: 12),
                 Container(
