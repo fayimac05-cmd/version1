@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const supabase = require('../config/supabase');
 const emailService = require('../services/email.service');
+const { envoyerNotificationAuto } = require('./notifications.controller');
 
 const genToken = (user) => jwt.sign(
   { id: user.id, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id },
@@ -143,6 +144,49 @@ const login = async (req, res) => {
         }
       } catch (admErr2) {
         console.warn('[LOGIN] Fallback administrateurs échoué :', admErr2.message);
+      }
+    }
+
+    // ── Fallback 3 : parent pas encore matérialisé en `users` ──────────────────
+    // Un parent créé à l'inscription d'un étudiant n'a QUE sa ligne dans
+    // `parents` (user_id = null) tant qu'il ne s'est jamais connecté. Il ne
+    // peut donc pas être trouvé dans `users` par les recherches ci-dessus.
+    // On le cherche ici directement dans `parents` par nom+prénom+téléphone.
+    // S'il est trouvé sans user_id, on renvoie le signal de première
+    // connexion — la création réelle du `users` se fait dans
+    // parent.controller.js::finaliserPremiereConnexionParent.
+    if (!user && nom && (tel || req.body.telephone)) {
+      const telClean = (tel || req.body.telephone).trim().replace(/\s+/g, '');
+      const prenomVal = (prenom || prenoms || req.body.prenom || req.body.prenoms || '').trim();
+      try {
+        const pRes = await pool.query(
+          `SELECT id, nom, prenoms, tel, email, user_id
+           FROM parents
+           WHERE LOWER(TRIM(nom)) = LOWER(TRIM($1))
+             AND REPLACE(COALESCE(tel,''), ' ', '') = $2
+             ${prenomVal ? "AND LOWER(TRIM(prenoms)) = LOWER(TRIM($3))" : ""}`,
+          prenomVal ? [nom.trim(), telClean, prenomVal] : [nom.trim(), telClean]
+        );
+        const p = pRes.rows[0];
+        if (p && !p.user_id) {
+          // Parent connu, jamais connecté : signal première connexion
+          return res.status(200).json({
+            premiereFois: true,
+            parent: {
+              parentId: p.id,
+              nom: p.nom,
+              prenoms: p.prenoms,
+              telephone: p.tel,
+              email: p.email || '',
+              role: 'parent',
+            },
+          });
+        }
+        // Si p existe ET a déjà un user_id, on laisse la suite gérer via `users`
+        // (cas normal déjà couvert par la recherche nom+tel ci-dessus, donc on
+        // ne fait rien de plus ici — cette branche ne devrait pas arriver).
+      } catch (e) {
+        console.warn('[LOGIN] Fallback parents:', e.message);
       }
     }
 
@@ -380,6 +424,50 @@ const lookup = async (req, res) => {
       return res.status(400).json({ found: false, message: 'Matricule ou détails (nom, prenom, tel) requis.' });
     }
 
+    // ── Fallback : parent pas encore matérialisé en `users` ─────────────────
+    // Même situation que dans login() : un parent créé à l'inscription d'un
+    // étudiant n'a que sa ligne dans `parents` (user_id = null) tant qu'il ne
+    // s'est jamais connecté. Le flux Flutter "Nom & Prénom" (profs ET
+    // parents) passe par CETTE fonction (lookup), pas par login() — le
+    // fallback doit donc exister ici aussi, avec la même logique.
+    if (!row && nom && prenom && tel) {
+      const telClean = tel.trim().replace(/\s+/g, '');
+      try {
+        const pRes = await pool.query(
+          `SELECT id, nom, prenoms, tel, email, user_id
+           FROM parents
+           WHERE LOWER(TRIM(nom)) = LOWER(TRIM($1))
+             AND LOWER(TRIM(prenoms)) = LOWER(TRIM($2))
+             AND REPLACE(COALESCE(tel,''), ' ', '') = $3`,
+          [nom.trim(), prenom.trim(), telClean]
+        );
+        const p = pRes.rows[0];
+        if (p && !p.user_id) {
+          return res.status(200).json({
+            found: true,
+            premierLogin: true,
+            userId: null,
+            parentId: p.id,
+            user: {
+              id: null,
+              nom: p.nom,
+              prenoms: p.prenoms,
+              matricule: '',
+              role: 'parent',
+              admin_sub_role: null,
+              filiere: '',
+              domaine: '',
+              niveau: '',
+              enfant_nom: '',
+              matricule_enfant: '',
+            },
+          });
+        }
+      } catch (e) {
+        console.warn('[LOOKUP] Fallback parents:', e.message);
+      }
+    }
+
     if (!row) return res.status(404).json({ found: false, message: 'Utilisateur non reconnu.' });
     if (row.statut === 'suspendu' || row.statut === 'renvoye') {
       return res.status(403).json({ found: false, message: 'Compte désactivé. Contactez l\'administration.' });
@@ -443,6 +531,13 @@ const changePassword = async (req, res) => {
     if (!isValid) return res.status(401).json({ message: 'Ancien mot de passe incorrect.' });
     const hashed = await bcrypt.hash(nouveauMotDePasse, 10);
     await pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [hashed, req.user.id]);
+    envoyerNotificationAuto(
+      req.user.id,
+      'Mot de passe modifié',
+      'Votre mot de passe a été changé avec succès. Si ce n\'était pas vous, contactez l\'administration immédiatement.',
+      'mot_de_passe',
+      null
+    ).catch(() => {});
     return res.status(200).json({ message: 'Mot de passe mis a jour.' });
   } catch (err) {
     console.error('Change password error:', err);

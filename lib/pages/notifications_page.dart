@@ -2,9 +2,18 @@ import 'package:flutter/material.dart';
 import '../widgets/app_bubble_bg.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../models/student_profile.dart';
+import 'planning_tab.dart';
+import 'courses_tab.dart';
+import 'bulletin_screen.dart';
+import 'cantine_sheet.dart';
+import 'mes_notes_page.dart';
+import 'evaluations_a_faire_page.dart';
+import 'mes_previsions_page.dart';
 
 class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({super.key});
+  const NotificationsPage({super.key, required this.profile});
+  final StudentProfile profile;
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -25,7 +34,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   @override
   void dispose() {
-    SocketService().off('notification');
+    // ⚠️ Passer le callback précis — sinon ça retire aussi l'écouteur de la
+    // cloche de l'accueil (HomeTab), qui écoute le même événement en même
+    // temps. Voir socket_service.dart::off.
+    SocketService().off('notification', _onNotifTempsReel);
     super.dispose();
   }
 
@@ -70,11 +82,75 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _marquerLue(Map<String, dynamic> n) async {
-    if (n['lue'] == true) return;
-    final id = n['id']?.toString();
-    if (id == null) return;
-    setState(() => n['lue'] = true);
-    await ApiService.marquerNotificationLue(id);
+    if (n['lue'] != true) {
+      final id = n['id']?.toString();
+      if (id != null) {
+        setState(() => n['lue'] = true);
+        await ApiService.marquerNotificationLue(id);
+      }
+    }
+    if (!mounted) return;
+    _ouvrirDestination(n);
+  }
+
+  // ── Redirection au clic selon le type de notification ────────────────────
+  // Chaque type ajouté côté backend (voir notifications.controller.js /
+  // envoyerNotificationAuto) doit avoir sa branche ici. Types sans écran
+  // dédié (mot de passe, première connexion, nouvel étudiant) restent de
+  // simples informations — le clic se contente de marquer comme lu.
+  void _ouvrirDestination(Map<String, dynamic> n) {
+    final type = (n['type'] ?? '').toString();
+    switch (type) {
+      case 'edt':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => PlanningTab(profile: widget.profile)),
+        );
+        break;
+      case 'cours':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CoursesTab()),
+        );
+        break;
+      case 'note':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => MesNotesPage(profile: widget.profile)),
+        );
+        break;
+      case 'bulletin':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const BulletinScreen()),
+        );
+        break;
+      case 'cantine':
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const CantineSheet(),
+        );
+        break;
+      case 'evaluation':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const EvaluationsAFairePage()),
+        );
+        break;
+      case 'prevision':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MesPrevisionsPage()),
+        );
+        break;
+      // 'mot_de_passe', 'premiere_connexion', 'nouvel_etudiant', 'annonce',
+      // 'suspension' : pas de destination dédiée pour l'instant — reste sur
+      // cette page.
+      default:
+        break;
+    }
   }
 
   int get _nonLues => _notifs.where((n) => n['lue'] != true).length;
@@ -179,7 +255,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final titre = (n['titre'] ?? '').toString();
     final corps = (n['corps'] ?? '').toString();
     final lue = n['lue'] == true;
-    final style = _styleFromTitre(titre);
+    final style = _styleFromType((n['type'] ?? '').toString(), titre);
+    final cliquable = _aDestination((n['type'] ?? '').toString());
 
     return Container(
       decoration: BoxDecoration(
@@ -241,12 +318,43 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
           ],
         ),
+        trailing: cliquable
+            ? const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8))
+            : null,
       ),
     );
   }
 
-  // Icône + couleurs selon le sujet de la notification.
-  (IconData, Color, Color) _styleFromTitre(String titre) {
+  bool _aDestination(String type) =>
+      ['edt', 'cours', 'note', 'bulletin', 'cantine', 'evaluation', 'prevision'].contains(type);
+
+  // Icône + couleurs selon le TYPE (fiable) avec repli sur le titre pour les
+  // anciennes notifications enregistrées avant l'ajout de la colonne type.
+  (IconData, Color, Color) _styleFromType(String type, String titre) {
+    switch (type) {
+      case 'edt':
+        return (Icons.calendar_today_outlined, const Color(0xFFE6F1FB), const Color(0xFF185FA5));
+      case 'note':
+      case 'bulletin':
+        return (Icons.grade_outlined, const Color(0xFFFAEEDA), const Color(0xFF854F0B));
+      case 'cours':
+        return (Icons.menu_book_outlined, const Color(0xFFE6F1FB), const Color(0xFF185FA5));
+      case 'mot_de_passe':
+        return (Icons.lock_outline_rounded, const Color(0xFFFCE8E8), const Color(0xFFB3261E));
+      case 'premiere_connexion':
+        return (Icons.check_circle_outline, const Color(0xFFEAF3DE), const Color(0xFF3B6D11));
+      case 'nouvel_etudiant':
+        return (Icons.person_add_alt_1_outlined, const Color(0xFFEEEDFE), const Color(0xFF534AB7));
+      case 'annonce':
+        return (Icons.campaign_outlined, const Color(0xFFEEEDFE), const Color(0xFF534AB7));
+      case 'cantine':
+        return (Icons.restaurant_menu_outlined, const Color(0xFFFFF7E6), const Color(0xFFB7791F));
+      case 'evaluation':
+        return (Icons.rate_review_outlined, const Color(0xFFEEEDFE), const Color(0xFF534AB7));
+      case 'prevision':
+        return (Icons.query_stats_rounded, const Color(0xFFE6F1FB), const Color(0xFF185FA5));
+    }
+    // Repli sur le titre pour les notifications antérieures à la colonne type.
     final t = titre.toLowerCase();
     if (t.contains('emploi du temps') || t.contains('planning')) {
       return (Icons.calendar_today_outlined, const Color(0xFFE6F1FB), const Color(0xFF185FA5));

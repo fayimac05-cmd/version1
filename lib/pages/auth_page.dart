@@ -7,7 +7,7 @@ import '../professeur/professor_shell.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
 import 'bureau_des_etudiants.dart';
-import 'parent_shell.dart';
+import 'parent/parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
@@ -54,6 +54,11 @@ class _AuthPageState extends State<AuthPage> {
   String? _cleTrouvee;
   String? _matriculeReel; // vrai matricule (null si généré artificiellement)
   String? _userId; // id backend, requis pour setupPassword (1ère connexion)
+  // Rempli uniquement pour un parent en première connexion (pas encore de
+  // ligne `users` — voir auth.controller.js::lookup, fallback parents).
+  // Sert à identifier le compte auprès de POST /api/parents/finaliser,
+  // à la place de _userId qui reste null tant que le compte n'existe pas.
+  String? _parentId;
 
   @override
   void initState() {
@@ -128,9 +133,7 @@ class _AuthPageState extends State<AuthPage> {
     } else if (r == 'parent' || r == 'tuteur') {
       destination = ParentShell(
         profile: profile,
-        nomEnfant: '${profile.prenoms} ${profile.nom}',
         onLogout: logout,
-        etudiantId: profile.matricule,
       );
     } else if (r == 'bde') {
       destination = const BureauDesEtudiantsScreen();
@@ -248,6 +251,9 @@ class _AuthPageState extends State<AuthPage> {
             _matriculeReel = _cleTrouvee;
           }
           _userId = result['userId']?.toString();
+          // Parent en première connexion : userId est null, mais parentId
+          // permet de l'identifier auprès de /api/parents/finaliser.
+          _parentId = result['parentId']?.toString();
           _loading = false;
           _etape = premierLogin ? _Etape.premiereFois : _Etape.motDePasse;
         });
@@ -379,6 +385,36 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
+    // Parent en première connexion : pas de userId (aucune ligne `users`
+    // n'existe encore), on active le compte via parentId.
+    if (isParent && _parentId != null) {
+      final result = await ApiService.finaliserParent(
+        parentId: _parentId!,
+        password: _newPassCtrl.text,
+        email: emailText.isNotEmpty ? emailText : null,
+        telephone: _numeroCtrl.text.trim().isNotEmpty ? _numeroCtrl.text.trim() : null,
+      );
+      if (result['success'] == true) {
+        setState(() => _loading = false);
+        final user = Map<String, dynamic>.from(result['user'] as Map);
+        _goToDashboard(StudentProfile(
+          nom: user['nom'] ?? '',
+          prenoms: user['prenoms'] ?? '',
+          matricule: '',
+          email: user['email'] ?? '',
+          telephone: user['telephone'] ?? '',
+          filiere: "Parent d'élève",
+          niveau: '',
+          motDePasse: '',
+          domaine: '',
+          role: 'parent',
+        ));
+      } else {
+        _setError(result['error']?.toString() ?? 'Erreur lors de l\'activation du compte.');
+      }
+      return;
+    }
+
     // Compte backend : on confirme l'inscription en définissant le mot de passe.
     if (_userId != null) {
       final result = await ApiService.setupPassword(
@@ -500,6 +536,7 @@ class _AuthPageState extends State<AuthPage> {
     _etape = _Etape.saisie;
     _userTrouve = null;
     _userId = null;
+    _parentId = null;
     _error = null;
     for (final c in [
       _matriculeCtrl,

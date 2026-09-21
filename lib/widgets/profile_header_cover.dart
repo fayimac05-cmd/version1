@@ -43,7 +43,11 @@ class ProfileHeaderCover extends StatefulWidget {
   final Color accentColor;
   final List<Color> bannerGradient;
   final bool canEdit;
-  final VoidCallback? onMediaChanged;
+  /// Appelé après chaque upload/suppression réussi, avec les URLs actuelles
+  /// (photo, couverture) — permet à l'écran appelant de les conserver au-delà
+  /// de la durée de vie de ce widget (ex. survie à un changement d'onglet qui
+  /// détruit et recrée cet écran). `null` signifie "pas de photo".
+  final void Function(String? photoUrl, String? coverUrl)? onMediaChanged;
 
   @override
   State<ProfileHeaderCover> createState() => _ProfileHeaderCoverState();
@@ -165,7 +169,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                         if (ok) _coverPhotoPath = null;
                       });
                     }
-                    if (ok) widget.onMediaChanged?.call();
+                    if (ok) widget.onMediaChanged?.call(_profilePhotoPath, _coverPhotoPath);
                   },
                 ),
             ],
@@ -181,7 +185,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
       final url = await ProfileMediaService.instance.pickAndSaveCoverPhoto(source: source);
       if (url != null && mounted) {
         setState(() => _coverPhotoPath = url);
-        widget.onMediaChanged?.call();
+        widget.onMediaChanged?.call(_profilePhotoPath, _coverPhotoPath);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Photo de couverture mise à jour !'),
@@ -281,7 +285,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                         if (ok) _profilePhotoPath = null;
                       });
                     }
-                    if (ok) widget.onMediaChanged?.call();
+                    if (ok) widget.onMediaChanged?.call(_profilePhotoPath, _coverPhotoPath);
                   },
                 ),
             ],
@@ -297,7 +301,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
       final url = await ProfileMediaService.instance.pickAndSaveProfilePhoto(source: source);
       if (url != null && mounted) {
         setState(() => _profilePhotoPath = url);
-        widget.onMediaChanged?.call();
+        widget.onMediaChanged?.call(_profilePhotoPath, _coverPhotoPath);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Photo de profil mise à jour !'),

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../models/student_profile.dart';
 import '../models/event.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import 'event_registration_page.dart';
 import 'notifications_page.dart';
@@ -15,6 +16,8 @@ import 'courses_tab.dart';
 import 'groupe_filiere_screen.dart';
 import 'checkin_screen.dart';
 import 'planning_tab.dart';
+import 'cantine_sheet.dart';
+import 'mes_notes_page.dart';
  
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key, required this.profile, this.onMenuTap});
@@ -33,10 +36,14 @@ class _HomeTabState extends State<HomeTab> {
   int _annoncePage = 0;
   Timer? _autoScroll;
   Timer? _annoncesAutoScroll;
+  Timer? _notifsPoll;
  
   List<Map<String, dynamic>> _annonces = [];
   bool _annoncesLoading = true;
   List<EventModel> _evenements = [];
+
+  // ── Cloche de notifications (badge rouge avec compteur) ──────────────────
+  int _notifsNonLues = 0;
  
   bool _apercuLoading = true;
   double? _moyenne;
@@ -71,6 +78,12 @@ class _HomeTabState extends State<HomeTab> {
     _fetchEvenements();
     _fetchApercuEtProchainCours();
     _fetchNotesNonLues();
+    _fetchNotifsNonLues();
+    // Temps réel : une nouvelle notification incrémente le badge immédiatement.
+    SocketService().onNotification(_onNouvelleNotification);
+    // Filet de sécurité indépendant du socket : re-synchronise le compteur
+    // toutes les 30s, même si la connexion temps réel a un souci ponctuel.
+    _notifsPoll = Timer.periodic(const Duration(seconds: 30), (_) => _fetchNotifsNonLues());
  
     _autoScroll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || _carouselLength <= 1) return;
@@ -101,7 +114,31 @@ class _HomeTabState extends State<HomeTab> {
     _annoncesCtrl.dispose();
     _autoScroll?.cancel();
     _annoncesAutoScroll?.cancel();
+    _notifsPoll?.cancel();
+    // ⚠️ Passer le callback précis, pas juste le nom de l'événement — sinon
+    // ça retire aussi l'écouteur de NotificationsPage (et inversement) si
+    // les deux sont actifs en même temps. Voir socket_service.dart::off.
+    SocketService().off('notification', _onNouvelleNotification);
     super.dispose();
+  }
+
+  Future<void> _fetchNotifsNonLues() async {
+    final n = await ApiService.getNombreNotificationsNonLues();
+    if (mounted) setState(() => _notifsNonLues = n);
+  }
+
+  void _onNouvelleNotification(dynamic data) {
+    if (!mounted) return;
+    setState(() => _notifsNonLues += 1);
+  }
+
+  Future<void> _ouvrirNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => NotificationsPage(profile: widget.profile)),
+    );
+    // Au retour, resynchronise le badge (certaines ont pu être marquées lues).
+    if (mounted) _fetchNotifsNonLues();
   }
  
   Future<void> _fetchAnnonces() async {
@@ -231,16 +268,10 @@ class _HomeTabState extends State<HomeTab> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _NotesPage(
-          profile: widget.profile,
-          notes: List<Map<String, dynamic>>.from(_notesPubliees),
-          notesLues: Set<String>.from(_notesLues),
-          noteKey: _noteKey,
-          onMarkRead: _marquerNotesCommeLues,
-        ),
+        builder: (_) => MesNotesPage(profile: widget.profile),
       ),
     );
- 
+
     if (mounted) {
       await _fetchNotesNonLues();
     }
@@ -519,10 +550,7 @@ Widget _buildHeader(BuildContext context) {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => NotificationsPage()),
-              ),
+              onTap: _ouvrirNotifications,
               child: Container(
                 width: 44, height: 44,
                 decoration: BoxDecoration(
@@ -530,21 +558,35 @@ Widget _buildHeader(BuildContext context) {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     const Center(
                       child: Icon(Icons.notifications_none_rounded,
                           color: Color(0xFF334155), size: 25),
                     ),
-                    Positioned(
-                      top: 7, right: 7,
-                      child: Container(
-                        width: 9, height: 9,
-                        decoration: const BoxDecoration(
-                          color: AppPalette.yellow,
-                          shape: BoxShape.circle,
+                    if (_notifsNonLues > 0)
+                      Positioned(
+                        top: -2, right: -2,
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 18),
+                          height: 18,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDC2626),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _notifsNonLues > 99 ? '99+' : '$_notifsNonLues',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -1910,427 +1952,10 @@ Widget _annonceVide() {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _CantineSheet(),
+      builder: (_) => const CantineSheet(),
     );
   }
 }
- 
-class _NotesPage extends StatefulWidget {
-  const _NotesPage({
-    required this.profile,
-    required this.notes,
-    required this.notesLues,
-    required this.noteKey,
-    required this.onMarkRead,
-  });
- 
-  final StudentProfile profile;
-  final List<Map<String, dynamic>> notes;
-  final Set<String> notesLues;
-  final String Function(Map<String, dynamic>) noteKey;
-  final Future<void> Function(List<Map<String, dynamic>>) onMarkRead;
- 
-  @override
-  State<_NotesPage> createState() => _NotesPageState();
-}
- 
-class _NotesPageState extends State<_NotesPage> {
-  late final Set<String> _lues;
-  int _onglet = 0;
- 
-  @override
-  void initState() {
-    super.initState();
-    _lues = Set<String>.from(widget.notesLues);
-  }
- 
-  // Les clés reconnues correspondent désormais à celles renvoyées par
-  // ApiService.getMesNotes() (backend) : module_nom, note, date_session...
-  // — les anciennes clés Supabase (matiere_nom, date_note...) restent en
-  // repli, au cas où.
-  String _titreNote(Map<String, dynamic> note) {
-    for (final key in [
-      'module_nom',
-      'matiere_nom',
-      'matiere',
-      'cours',
-      'module',
-      'ue',
-      'intitule',
-    ]) {
-      final value = note[key]?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    return 'Note publiée';
-  }
- 
-  String _profNote(Map<String, dynamic> note) {
-    final prenoms = (note['prof_prenoms'] ?? '').toString().trim();
-    final nom = (note['prof_nom'] ?? '').toString().trim();
-    final full = [prenoms, nom].where((s) => s.isNotEmpty).join(' ');
-    return full.isNotEmpty ? full : '';
-  }
- 
-  String _semestreNote(Map<String, dynamic> note) {
-    return (note['semestre'] ?? '').toString().trim();
-  }
- 
-  String _mentionNote(Map<String, dynamic> note) {
-    return (note['mention'] ?? '').toString().trim();
-  }
- 
-  String _dateNote(Map<String, dynamic> note) {
-    for (final key in [
-      'date_session',
-      'date_note',
-      'date_evaluation',
-      'created_at',
-      'date',
-    ]) {
-      final raw = note[key]?.toString();
-      if (raw == null || raw.isEmpty) continue;
- 
-      try {
-        return DateFormat('dd/MM/yyyy').format(DateTime.parse(raw).toLocal());
-      } catch (_) {}
-    }
-    return '';
-  }
- 
-  String _valeur(Map<String, dynamic> note) {
-    final value = note['valeur'] ?? note['note'] ?? note['score'];
-    if (value == null) return '--';
-    final n = double.tryParse(value.toString());
-    if (n == null) return value.toString();
-    return n.toStringAsFixed(n % 1 == 0 ? 0 : 2).replaceAll('.', ',');
-  }
- 
-  String _coefficient(Map<String, dynamic> note) {
-    final value = note['coefficient'] ?? note['coef'];
-    return value == null ? '' : 'Coef. ${value.toString()}';
-  }
- 
-  List<Map<String, dynamic>> get _nonLues => widget.notes
-      .where((note) => !_lues.contains(widget.noteKey(note)))
-      .toList();
- 
-  List<Map<String, dynamic>> get _historique => widget.notes
-      .where((note) => _lues.contains(widget.noteKey(note)))
-      .toList();
- 
-  Future<void> _lireNotes(List<Map<String, dynamic>> notes) async {
-    if (notes.isEmpty) return;
- 
-    setState(() {
-      _lues.addAll(notes.map(widget.noteKey));
-    });
- 
-    await widget.onMarkRead(notes);
- 
-    if (mounted) setState(() {});
-  }
- 
-  @override
-  Widget build(BuildContext context) {
-    final notes = _onglet == 0 ? _nonLues : _historique;
- 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF172033),
-        title: const Text(
-          'Mes notes',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-        ),
-        actions: [
-          if (_nonLues.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 14),
-              child: Center(
-                child: Text(
-                  '${_nonLues.length} nouvelle${_nonLues.length > 1 ? 's' : ''}',
-                  style: const TextStyle(
-                    color: Color(0xFFDC2626),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: AppPalette.lightBlue,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Row(
-              children: [
-                Expanded(child: _tab('Nouvelles', 0, _nonLues.length)),
-                Expanded(child: _tab('Historique', 1, _historique.length)),
-              ],
-            ),
-          ),
-          if (_onglet == 0 && _nonLues.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => _lireNotes(_nonLues),
-                  icon: const Icon(Icons.done_all_rounded, size: 17),
-                  label: const Text('Tout marquer comme lu'),
-                ),
-              ),
-            ),
-          Expanded(
-            child: notes.isEmpty
-                ? _emptyState()
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
-                    itemCount: notes.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 9),
-                    itemBuilder: (_, index) => _noteCard(notes[index]),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
- 
-  Widget _tab(String label, int index, int count) {
-    final active = _onglet == index;
-    return GestureDetector(
-      onTap: () => setState(() => _onglet = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: active ? AppPalette.blue : AppPalette.grey,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            if (count > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: index == 0
-                      ? const Color(0xFFDC2626)
-                      : AppPalette.blue,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$count',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
- 
-  Widget _noteCard(Map<String, dynamic> note) {
-    final isRead = _lues.contains(widget.noteKey(note));
- 
-    return GestureDetector(
-      onTap: () => _lireNotes([note]),
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isRead
-                ? const Color(0xFFE2E8F0)
-                : const Color(0xFFFECACA),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.035),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: isRead
-                    ? AppPalette.lightBlue
-                    : const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(
-                Icons.grade_rounded,
-                color: isRead
-                    ? AppPalette.blue
-                    : const Color(0xFFDC2626),
-                size: 23,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _titreNote(note),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF172033),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      if (_profNote(note).isNotEmpty) 'Prof. ${_profNote(note)}',
-                      if (_semestreNote(note).isNotEmpty) _semestreNote(note),
-                    ].join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppPalette.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Text(
-                        _dateNote(note),
-                        style: const TextStyle(
-                          fontSize: 9.5,
-                          color: AppPalette.grey,
-                        ),
-                      ),
-                      if (_coefficient(note).isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          _coefficient(note),
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            color: AppPalette.grey,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (_mentionNote(note).isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppPalette.lightBlue,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _mentionNote(note),
-                        style: const TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppPalette.blue,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _valeur(note),
-                  style: TextStyle(
-                    color: isRead
-                        ? const Color(0xFF172033)
-                        : const Color(0xFFDC2626),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  isRead ? 'Lu' : 'Nouveau',
-                  style: TextStyle(
-                    color: isRead
-                        ? AppPalette.grey
-                        : const Color(0xFFDC2626),
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
- 
-  Widget _emptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(30),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _onglet == 0
-                  ? Icons.mark_email_read_outlined
-                  : Icons.history_rounded,
-              size: 48,
-              color: const Color(0xFFCBD5E1),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _onglet == 0
-                  ? 'Aucune nouvelle note'
-                  : 'Aucune note dans l’historique',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
- 
 class _QuickAction {
   final IconData icon;
   final String label;
@@ -2362,226 +1987,3 @@ class _EventData {
     this.imageUrl,
   });
 }
- 
-class _CantineSheet extends StatelessWidget {
-  const _CantineSheet();
- 
-  static const _menu = [
-    (
-      '☀️',
-      'Petit déjeuner',
-      [
-        ['Croissant', '200 FCFA'],
-        ['Pain au chocolat', '250 FCFA'],
-        ['Café au lait', '150 FCFA'],
-      ]
-    ),
-    (
-      '🍽️',
-      'Déjeuner',
-      [
-        ['Riz gras', '500 FCFA'],
-        ['Poisson braisé', '800 FCFA'],
-        ['Salade verte', '300 FCFA'],
-      ]
-    ),
-    (
-      '🌙',
-      'Dîner',
-      [
-        ['Yassa poulet', '700 FCFA'],
-        ['Thiéboudienne', '800 FCFA'],
-        ['Soupe légumes', '400 FCFA'],
-      ]
-    ),
-  ];
- 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: AppPalette.blueGradient,
-                borderRadius: BorderRadius.circular(17),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.restaurant_menu_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Menu du jour',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          'Menu de la cantine',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'Ouvert',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: _menu.map((meal) {
-                    final (emoji, title, dishes) = meal;
-                    return _mealSection(
-                      emoji,
-                      title,
-                      dishes,
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
- 
-  Widget _mealSection(
-    String emoji,
-    String title,
-    List<List<String>> dishes,
-  ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppPalette.lightBlue,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: AppPalette.lightBlue,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Center(
-                  child: Text(
-                    emoji,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 9),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Color(0xFF172033),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...dishes.map(
-            (dish) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    dish[0],
-                    style: const TextStyle(
-                      color: Color(0xFF555F6F),
-                      fontSize: 12,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppPalette.softYellow,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      dish[1],
-                      style: const TextStyle(
-                        color: Color(0xFF4A3000),
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
- 

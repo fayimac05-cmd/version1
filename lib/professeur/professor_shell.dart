@@ -8,6 +8,7 @@ import 'appel_tab.dart';
 import 'notes_tab.dart';
 import 'programme_screen.dart';
 import 'upload_course_screen.dart';
+import 'professeur_liste_etudiants.dart';
 import '../admin/admin_messages.dart';
 import '../pages/discussion_privee_page.dart';
 
@@ -475,6 +476,27 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: _ajouterModule,
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                label: const Text('Liste des étudiants (PDF)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFEF4444),
+                  side: const BorderSide(color: Color(0xFFEF4444)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ProfesseurListeEtudiantsScreen(classe: Map<String, dynamic>.from(widget.classe as Map))),
+                  );
+                },
               ),
             ),
           ]),

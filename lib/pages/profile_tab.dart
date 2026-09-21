@@ -27,9 +27,12 @@ class AppNotification {
 }
 
 class ProfileTab extends StatefulWidget {
-  const ProfileTab({super.key, required this.profile, required this.onLogout});
+  const ProfileTab({super.key, required this.profile, required this.onLogout, this.onPhotoChanged});
   final StudentProfile profile;
   final VoidCallback onLogout;
+  /// Remonte la nouvelle photo/couverture au shell qui héberge cet écran,
+  /// pour qu'elle survive à un changement d'onglet (voir StudentShell).
+  final void Function(String? photoUrl, String? coverUrl)? onPhotoChanged;
 
   @override
   State<ProfileTab> createState() => _ProfileTabState();
@@ -274,6 +277,9 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
             badgeText: widget.profile.niveau.isNotEmpty ? widget.profile.niveau : null,
             accentColor: _brandBlue,
             bannerGradient: const [Color(0xFF0F172A), Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+            initialPhotoUrl: widget.profile.photoUrl,
+            initialCoverUrl: widget.profile.coverUrl,
+            onMediaChanged: widget.onPhotoChanged,
           ),
 
           const SizedBox(height: 16),
