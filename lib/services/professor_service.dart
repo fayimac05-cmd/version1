@@ -470,4 +470,25 @@ class ProfessorService {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
+
+  // Correction manuelle par le prof pendant une session QR active — retard
+  // laissé entrer, ou présence forcée en cas de souci de connexion au
+  // moment du scan. Fonctionne aussi pour un étudiant qui n'a pas scanné.
+  static Future<Map<String, dynamic>> marquerPresenceQr(String sessionId, String matricule, String statut) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/appels/qr/$sessionId/marquer'),
+        headers: headers,
+        body: jsonEncode({'matricule': matricule, 'statut': statut}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour du statut.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
 }

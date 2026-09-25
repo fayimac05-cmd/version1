@@ -239,4 +239,71 @@ const cloturerSessionQr = async (req, res) => {
   }
 };
 
-module.exports = { ouvrirSessionQr, getSessionQr, checkin, cloturerSessionQr };
+// POST /api/appels/qr/:sessionId/marquer - Le prof force manuellement le
+// statut d'un étudiant pendant une session active : un retard laissé
+// entrer, ou une présence forcée en cas de souci de connexion au moment du
+// scan. Fonctionne aussi bien pour un étudiant qui n'a pas encore scanné
+// (création de la ligne) que pour corriger un scan déjà enregistré.
+const marquerPresenceManuelle = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { matricule, statut } = req.body;
+    const statutsValides = ['present', 'absent', 'retard'];
+    if (!matricule || !statutsValides.includes(statut)) {
+      return res.status(400).json({ success: false, message: 'matricule et statut (present/absent/retard) requis.' });
+    }
+
+    const sessionResult = await pool.query(`
+      SELECT s.id, s.appel_id, s.statut, a.filiere_id, a.professeur_id
+      FROM appel_qr_sessions s
+      JOIN appels a ON a.id = s.appel_id
+      WHERE s.id = $1
+    `, [sessionId]);
+    const session = sessionResult.rows[0];
+    if (!session) return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+    if (session.professeur_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Accès refusé.' });
+    }
+    if (session.statut !== 'ouverte') {
+      return res.status(400).json({ success: false, message: 'Session déjà clôturée.' });
+    }
+
+    const etudiantResult = await pool.query(
+      `SELECT id, matricule, nom, prenoms FROM etudiants WHERE matricule = $1`,
+      [matricule],
+    );
+    const etudiant = etudiantResult.rows[0];
+    if (!etudiant) return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+
+    const existant = await pool.query(
+      `SELECT id FROM appel_presences WHERE appel_id = $1 AND etudiant_id = $2`,
+      [session.appel_id, etudiant.id],
+    );
+    if (existant.rows.length > 0) {
+      await pool.query(`UPDATE appel_presences SET statut = $1 WHERE id = $2`, [statut, existant.rows[0].id]);
+    } else {
+      await pool.query(`
+        INSERT INTO appel_presences (appel_id, etudiant_id, matricule, nom, prenoms, statut)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [session.appel_id, etudiant.id, etudiant.matricule, etudiant.nom, etudiant.prenoms, statut]);
+    }
+
+    // Suivi en direct côté prof — même canal que le check-in étudiant.
+    const io = req.app.get('io');
+    if (io) {
+      io.emit(`appel_qr:${session.id}`, {
+        matricule: etudiant.matricule,
+        nom: etudiant.nom,
+        prenoms: etudiant.prenoms,
+        statut,
+      });
+    }
+
+    res.json({ success: true, message: 'Statut mis à jour.' });
+  } catch (error) {
+    console.error('[marquerPresenceManuelle]', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour du statut.' });
+  }
+};
+
+module.exports = { ouvrirSessionQr, getSessionQr, checkin, cloturerSessionQr, marquerPresenceManuelle };
