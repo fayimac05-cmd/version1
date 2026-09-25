@@ -18,6 +18,15 @@ router.post(
   uploadController.uploadExamCopy
 );
 
+// POST /api/upload/message — pièce jointe de message (doc/photo/vidéo/audio)
+router.post(
+  '/message',
+  authMiddleware,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/messages'),
+  uploadController.uploadMessageFile
+);
+
 // Photo de profil / couverture — ouvert à tout utilisateur connecté, quel
 // que soit son rôle (étudiant, professeur, admin, parent).
 router.post(

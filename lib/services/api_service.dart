@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,7 +13,7 @@ class ApiService {
   //
   // Après le premier déploiement Render, remplacer _cloudUrl par l'URL
   // affichée dans le dashboard (https://backend-scolarhub.onrender.com).
-  static const bool _useCloud = false;
+  static const bool _useCloud = true;
   static const String _cloudUrl = 'https://backend-scolarhub.onrender.com/api';
   // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
   // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
@@ -1676,6 +1677,118 @@ static Future<Map<String, dynamic>> getCantineAujourdhui() async {
     return _deletePhoto('$baseUrl/upload/photo-couverture');
   }
 
+  static Future<Map<String, dynamic>> uploaderFichierMessage(List<int> fileBytes, String fileName) async {
+    try {
+      final token = await getToken();
+      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/upload/message'));
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: fileName));
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'url': body['url']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de l\'envoi du fichier.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  // ── Sondages ───────────────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> creerSondage({
+    required String question,
+    required List<String> options,
+    required bool choixMultiple,
+    required bool anonyme,
+    DateTime? dateCloture,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/sondages'),
+        headers: headers,
+        body: jsonEncode({
+          'question': question,
+          'options': options,
+          'choix_multiple': choixMultiple,
+          'anonyme': anonyme,
+          'date_cloture': dateCloture?.toIso8601String(),
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['success'] == true) {
+        return {'success': true, 'id': body['id']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la création du sondage.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  // ── "Vu par" ───────────────────────────────────────────────────────────
+  static Future<void> marquerMessageLu(String type, String id) async {
+    try {
+      final headers = await getHeaders();
+      await http.post(Uri.parse('$baseUrl/messages/$type/$id/lu'), headers: headers);
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>> getLecteursMessage(String type, String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/messages/$type/$id/lecteurs'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['error'] ?? 'Erreur lors du chargement.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getSondage(String id) async {    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/sondages/$id'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Sondage introuvable.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> voterSondage(String id, List<String> optionIds) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/sondages/$id/voter'),
+        headers: headers,
+        body: jsonEncode({'option_ids': optionIds}),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors du vote.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> cloturerSondage(String id) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.patch(Uri.parse('$baseUrl/sondages/$id/cloturer'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la clôture.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
   static Future<Map<String, dynamic>> _deletePhoto(String url) async {
     try {
       final headers = await getHeaders();
@@ -2954,6 +3067,69 @@ static Future<Map<String, dynamic>> getCantineAujourdhui() async {
       return {'success': false, 'error': body['message'] ?? 'Erreur lors du chargement.'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getMembresGroupe(String filiereId) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/messages/groupe/$filiereId/membres'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['error'] ?? 'Erreur lors du chargement.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<void> marquerGroupeLu(String filiereId) async {
+    try {
+      final headers = await getHeaders();
+      await http.patch(Uri.parse('$baseUrl/messages/groupe/$filiereId/lu'), headers: headers);
+    } catch (_) {}
+  }
+
+  static Future<int> getNombreNonLusGroupe(String filiereId) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/messages/groupe/$filiereId/non-lus/count'), headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return (body['count'] as num?)?.toInt() ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  // ── GIF (proxy GIPHY côté backend) ────────────────────────────────────
+  static Future<Map<String, dynamic>> rechercherGifs(String? q) async {
+    try {
+      final headers = await getHeaders();
+      final uri = Uri.parse('$baseUrl/gifs/search').replace(queryParameters: q != null ? {'q': q} : null);
+      final response = await http.get(uri, headers: headers);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la recherche de GIF.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  /// Télécharge un fichier distant (image/GIF/sticker) en octets bruts —
+  /// sert à enregistrer localement un sticker reçu en message.
+  static Future<Uint8List?> telechargerFichier(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) return response.bodyBytes;
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }
