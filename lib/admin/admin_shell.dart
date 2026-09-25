@@ -58,6 +58,7 @@ import '../pages/choose_etablissement_type_page.dart';
 import '../pages/splash_screen.dart';
 import '../widgets/profile_header_cover.dart';
 import '../admin/admin_delegues.dart';
+import '../admin/admin_bde_membres.dart';
 import '../admin/admin_cantine.dart';
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
@@ -102,13 +103,14 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.workspace_premium_outlined,  iconActive: Icons.workspace_premium_rounded,  label: 'Bulletins',          group: 'ACADÉMIQUE'),
   _MenuItem(icon: Icons.groups_2_outlined, iconActive: Icons.groups_2_rounded, label: 'Délégués', group: 'PERSONNES'),
   _MenuItem(icon: Icons.restaurant_menu_outlined, iconActive: Icons.restaurant_menu_rounded, label: 'Cantine', group: 'SERVICES'),
+  _MenuItem(icon: Icons.diversity_3_outlined, iconActive: Icons.diversity_3_rounded, label: 'Bureau des Étudiants', group: 'PERSONNES'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
   {'key': 'GÉNÉRAL',    'items': [0, 1]},
   {'key': 'SECTIONS',   'items': [14, 15]},
   {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5, 17]},
-  {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18]},
+  {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18, 20]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
   {'key': 'SERVICES',   'items': [19]},
@@ -128,8 +130,8 @@ class AdminMenuService {
   static Set<int> allowedItems(AdminRole role) {
     switch (role) {
       case AdminRole.superAdmin:
-        // Accès total (0..19)
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
+        // Accès total (0..20)
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
       case AdminRole.scolarite:
         // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
         return {0, 2, 3, 6, 7, 12};
@@ -140,8 +142,8 @@ class AdminMenuService {
         // Tableau de bord, Annonces, Réclamations, Étudiants, Parents
         return {0, 1, 5, 6, 8, 18};
       case AdminRole.communication:
-        // Tableau de bord, Annonces, Groupes & Messages, BDE & Événements
-        return {0, 1, 10, 11};
+        // Tableau de bord, Annonces, Groupes & Messages, BDE & Événements, Bureau des Étudiants (nomination)
+        return {0, 1, 10, 11, 20};
       case AdminRole.cycleDirecteur:
         // Tableau de bord, Statistiques, Collège & Lycée, Primaire
         return {0, 12, 14, 15};
@@ -271,6 +273,7 @@ class _AdminShellState extends State<AdminShell>
       AdminBulletins(profile: widget.profile),
       const AdminDelegues(),
       const AdminCantine(),
+      const AdminBdeMembres(),
     ];
 
     _pageAnim = AnimationController(

@@ -214,7 +214,7 @@ const login = async (req, res) => {
             filiere: user.filiere || user.filiere_nom || '',
             filiere_id: user.filiere_id,
             niveau: user.niveau_etudiant || user.niveau || '',
-            role: user.role || 'etudiant',
+            role: (user.role === 'etudiant' && user.etudiant_role) ? user.etudiant_role : (user.role || 'etudiant'),
           }
         });
       }
@@ -266,7 +266,19 @@ const login = async (req, res) => {
 
     const responseUser = {
       ...safeUser,
-      role: safeUser.role || 'etudiant',
+      // ✅ CORRIGÉ — le rôle générique du compte (users.role, toujours
+      // 'etudiant' pour un élève) écrasait le rôle spécifique de l'élève
+      // (users.etudiant_role : 'delegue', 'bde_president', etc.), envoyé à
+      // Flutter dans le champ que StudentProfile.role attend précisément
+      // pour ce rôle spécifique. Résultat : un président BDE fraîchement
+      // nommé restait "etudiant" simple à ses yeux même après reconnexion,
+      // et ne pouvait jamais écrire dans le canal BDE (peutEcrireBDE testait
+      // ce champ). On préfère désormais etudiant_role quand il existe pour
+      // un compte de type étudiant ; les autres types de compte (admin,
+      // professeur, parent) ne sont pas concernés.
+      role: (safeUser.role === 'etudiant' && safeUser.etudiant_role)
+        ? safeUser.etudiant_role
+        : (safeUser.role || 'etudiant'),
       admin_sub_role: safeUser.admin_sub_role || null,
       admin_domaine: safeUser.admin_domaine || 'Tous',
     };
@@ -504,11 +516,20 @@ const lookup = async (req, res) => {
 const me = async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.statut, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1',
+      'SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.etudiant_role, u.statut, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1',
       [req.user.id]
     );
     if (!r.rows[0]) return res.status(404).json({ message: 'Introuvable.' });
-    return res.status(200).json(r.rows[0]);
+    const row = r.rows[0];
+    // ✅ CORRIGÉ — même correctif que dans login() : le rôle spécifique de
+    // l'élève (etudiant_role : délégué, président BDE...) doit prévaloir
+    // sur le rôle générique du compte pour les comptes étudiants, sinon
+    // le profil rechargé au démarrage de l'app "efface" une nomination
+    // qui venait d'avoir lieu.
+    return res.status(200).json({
+      ...row,
+      role: (row.role === 'etudiant' && row.etudiant_role) ? row.etudiant_role : (row.role || 'etudiant'),
+    });
   } catch (err) {
     return res.status(500).json({ message: 'Erreur serveur.' });
   }

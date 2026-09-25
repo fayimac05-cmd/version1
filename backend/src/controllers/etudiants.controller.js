@@ -629,6 +629,86 @@ const revoquerDelegue = async (req, res) => {
   }
 };
 
+// ── GET /api/etudiants/bde ──────────────────────────────────────────────────
+// Liste établissement-wide du Bureau des Étudiants (président, adjoint,
+// membres) — contrairement au délégué/adjoint, le BDE n'est pas scopé par
+// filière/niveau : un seul président et un seul adjoint pour toute l'école.
+const getBde = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.nom, u.prenoms, u.matricule, u.etudiant_role, u.photo_url,
+             COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
+             COALESCE(e.niveau, u.niveau) AS niveau
+      FROM users u
+      LEFT JOIN etudiants e ON u.id = e.user_id
+      WHERE u.etudiant_role IN ('bde_president', 'bde_adjoint', 'bde_membre')
+      ORDER BY CASE u.etudiant_role
+                 WHEN 'bde_president' THEN 0
+                 WHEN 'bde_adjoint' THEN 1
+                 ELSE 2
+               END, u.nom
+    `);
+    return res.status(200).json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('[getBde]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors du chargement du BDE.' });
+  }
+};
+
+// ── POST /api/etudiants/:id/nommer-bde ──────────────────────────────────────
+// :id = id de la table etudiants (pas l'UUID users.id).
+// body: { role: 'bde_president' | 'bde_adjoint' | 'bde_membre' }
+// Un seul président ET un seul adjoint à la fois pour TOUTE l'école (pas de
+// scope filière/niveau, contrairement au délégué) — le titulaire précédent
+// du même rôle est automatiquement rétrogradé. 'bde_membre' n'a pas cette
+// contrainte : plusieurs membres simples peuvent coexister.
+const nommerBde = async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+  if (!['bde_president', 'bde_adjoint', 'bde_membre'].includes(role)) {
+    return res.status(400).json({ success: false, message: 'Rôle invalide.' });
+  }
+  const client = await pool.connect();
+  try {
+    const etuRes = await client.query('SELECT user_id FROM etudiants WHERE id = $1', [id]);
+    const userId = etuRes.rows[0]?.user_id;
+    if (!userId) {
+      return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+    }
+
+    if (role === 'bde_president' || role === 'bde_adjoint') {
+      await client.query(
+        `UPDATE users SET etudiant_role = NULL WHERE etudiant_role = $1 AND id != $2`,
+        [role, userId]
+      );
+    }
+    await client.query(`UPDATE users SET etudiant_role = $1 WHERE id = $2`, [role, userId]);
+    return res.status(200).json({ success: true, message: 'Nomination effectuée.' });
+  } catch (err) {
+    console.error('[nommerBde]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de la nomination.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── PATCH /api/etudiants/:id/revoquer-bde ───────────────────────────────────
+const revoquerBde = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const etuRes = await pool.query('SELECT user_id FROM etudiants WHERE id = $1', [id]);
+    const userId = etuRes.rows[0]?.user_id;
+    if (!userId) {
+      return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+    }
+    await pool.query(`UPDATE users SET etudiant_role = NULL WHERE id = $1`, [userId]);
+    return res.status(200).json({ success: true, message: 'Statut retiré.' });
+  } catch (err) {
+    console.error('[revoquerBde]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors du retrait.' });
+  }
+};
+
 // ── PATCH /api/etudiants/:id/statut — Suspendre / réactiver un étudiant ────
 // :id = id de la table etudiants (pas l'UUID users.id), mêmes conventions
 // que nommerDelegue/revoquerDelegue ci-dessus.
@@ -723,6 +803,9 @@ module.exports = {
   getDelegues,
   nommerDelegue,
   revoquerDelegue,
+  getBde,
+  nommerBde,
+  revoquerBde,
   changerStatutEtudiant,
   getStatsInscriptions,
 };
