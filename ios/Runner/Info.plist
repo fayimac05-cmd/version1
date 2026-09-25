@@ -66,5 +66,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ScolarHub a besoin du microphone pour envoyer des messages vocaux.</string>
 </dict>
 </plist>

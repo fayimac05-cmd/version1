@@ -47,6 +47,12 @@ dev_dependencies:
   mockito: ^5.6.4
   build_runner: ^2.15.0
 
+
+  # dependencies pour les audios
+  record: ^6.0.0
+  audioplayers: ^6.1.0
+  path_provider: ^2.1.0
+
 flutter:
   uses-material-design: true
 
