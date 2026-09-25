@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
  
 import 'package:intl/intl.dart';
@@ -44,6 +45,8 @@ class _HomeTabState extends State<HomeTab> {
 
   // ── Cloche de notifications (badge rouge avec compteur) ──────────────────
   int _notifsNonLues = 0;
+  // ── Badge non-lu de "Ma filière" ──────────────────────────────────────
+  int _nonLusMaFiliere = 0;
  
   bool _apercuLoading = true;
   double? _moyenne;
@@ -79,6 +82,7 @@ class _HomeTabState extends State<HomeTab> {
     _fetchApercuEtProchainCours();
     _fetchNotesNonLues();
     _fetchNotifsNonLues();
+    _fetchNonLusMaFiliere();
     // Temps réel : une nouvelle notification incrémente le badge immédiatement.
     SocketService().onNotification(_onNouvelleNotification);
     // Filet de sécurité indépendant du socket : re-synchronise le compteur
@@ -125,6 +129,20 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _fetchNotifsNonLues() async {
     final n = await ApiService.getNombreNotificationsNonLues();
     if (mounted) setState(() => _notifsNonLues = n);
+  }
+
+  Future<void> _fetchNonLusMaFiliere() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final me = await http.get(Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
+      if (me.statusCode != 200) return;
+      final filiereId = jsonDecode(me.body)['filiere_id'];
+      if (filiereId == null) return;
+      final n = await ApiService.getNombreNonLusGroupe(filiereId.toString());
+      if (mounted) setState(() => _nonLusMaFiliere = n);
+    } catch (_) {
+      // Silencieux — juste un badge, pas d'écran d'erreur pour ça.
+    }
   }
 
   void _onNouvelleNotification(dynamic data) {
@@ -1119,12 +1137,18 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
                 ? widget.profile.filiere : 'Canal de la filière',
             watermarkIcon: Icons.groups_rounded,
             imageAsset: 'assets/images/students_group.png',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => GroupeFiliere(profile: widget.profile),
-              ),
-            ),
+            unreadCount: _nonLusMaFiliere,
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => GroupeFiliere(profile: widget.profile),
+                ),
+              );
+              // Au retour, l'écran a marqué la lecture côté serveur —
+              // resynchronise le badge (doit repasser à 0).
+              if (mounted) _fetchNonLusMaFiliere();
+            },
           ),
         ),
       ],
@@ -1141,6 +1165,7 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
     String? imageAsset,
     String? badge,
     Color? badgeColor,
+    int? unreadCount,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -1224,6 +1249,29 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
                 ),
               ),
             ),
+            if (unreadCount != null && unreadCount > 0)
+              Positioned(
+                top: 10, right: 10,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 20),
+                  height: 20,
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 13, 12, 12),
               child: Column(
