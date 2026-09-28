@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
+import '../pages/emoji_gif_sticker_picker.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES INTERNES
@@ -384,6 +387,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
   final List<_Msg> _messages = [];
   String? _myUserId;
   bool _loading = true;
+  bool _panneauOuvert = false;
 
   String get _nomProf =>
       '${widget.profile.prenoms} ${widget.profile.nom}';
@@ -512,6 +516,54 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Serveur injoignable')));
     }
+  }
+
+  // ── GIF réel (URL publique GIPHY) — envoyé via le même canal texte ────
+  Future<void> _envoyerGif(String url) async {
+    setState(() => _panneauOuvert = false);
+    final contenu = '[GIF]$url';
+    final msgLocal = _Msg(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      auteurId: _myUserId ?? '',
+      auteurNom: _nomProf,
+      contenu: contenu,
+      type: _TypeMsg.texte,
+      heure: DateTime.now(),
+      estMoi: true,
+    );
+    setState(() => _messages.add(msgLocal));
+    _scrollBas();
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.post(
+        Uri.parse('${ApiService.baseUrl}/messages/groupe/${widget.filiere.id}'),
+        headers: headers,
+        body: jsonEncode({'contenu': contenu}),
+      );
+      if (res.statusCode != 201 && mounted) {
+        setState(() => _messages.remove(msgLocal));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _messages.remove(msgLocal));
+    }
+  }
+
+  // ── Sticker : fichier local, écho visible seulement pour vous (pas
+  // d'upload disponible pour l'instant) ────────────────────────────────
+  void _envoyerSticker(String chemin) {
+    setState(() {
+      _panneauOuvert = false;
+      _messages.add(_Msg(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        auteurId: _myUserId ?? '',
+        auteurNom: _nomProf,
+        contenu: '[STICKER]$chemin',
+        type: _TypeMsg.texte,
+        heure: DateTime.now(),
+        estMoi: true,
+      ));
+    });
+    _scrollBas();
   }
 
   String _initiales(String nom) {
@@ -672,6 +724,23 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
             ),
             const SizedBox(width: 10),
             GestureDetector(
+              onTap: () => setState(() => _panneauOuvert = !_panneauOuvert),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _panneauOuvert ? AppPalette.blue.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  _panneauOuvert ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
+                  color: AppPalette.blue,
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            GestureDetector(
               onTap: _envoyer,
               child: Container(
                 width: 48,
@@ -692,6 +761,20 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
             ),
           ]),
         ),
+        if (_panneauOuvert)
+          EmojiGifStickerPicker(
+            onEmoji: (emoji) {
+              _inputCtrl.text += emoji;
+              _inputCtrl.selection = TextSelection.fromPosition(TextPosition(offset: _inputCtrl.text.length));
+            },
+            onEnvoiDirect: (type, valeur) {
+              if (type == 'gif') {
+                _envoyerGif(valeur);
+              } else {
+                _envoyerSticker(valeur);
+              }
+            },
+          ),
       ]),
     );
   }
@@ -720,6 +803,33 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
         ),
       ),
     );
+  }
+
+  Widget _contenuMsg(String contenu, bool estMoi) {
+    if (contenu.startsWith('[GIF]')) {
+      final url = contenu.substring(5);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(
+          url, width: 160, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Text('[GIF]', style: TextStyle(fontSize: 13, color: estMoi ? Colors.white70 : const Color(0xFF64748B))),
+        ),
+      );
+    }
+    if (contenu.startsWith('[STICKER]')) {
+      final chemin = contenu.substring(9);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: kIsWeb
+            ? Image.network(chemin, width: 120, height: 120, fit: BoxFit.cover)
+            : Image.file(File(chemin), width: 120, height: 120, fit: BoxFit.cover),
+      );
+    }
+    return Text(contenu,
+        style: TextStyle(
+            fontSize: 14,
+            color: estMoi ? Colors.white : const Color(0xFF0F172A),
+            height: 1.4));
   }
 
   Widget _bulle(_Msg msg) {
@@ -821,12 +931,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
                             : Border.all(
                                 color: const Color(0xFFE2E8F0)),
                       ),
-                      child: Text(msg.contenu,
-                          style: TextStyle(
-                              fontSize: 14,
-                              color:
-                                  estMoi ? Colors.white : const Color(0xFF0F172A),
-                              height: 1.4)),
+                      child: _contenuMsg(msg.contenu, estMoi),
                     ),
 
                     // Heure

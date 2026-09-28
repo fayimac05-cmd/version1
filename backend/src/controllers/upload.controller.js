@@ -30,6 +30,20 @@ exports.uploadExamCopy = async (req, res) => {
   }
 };
 
+// POST /api/upload/message — pièce jointe de message (document, photo,
+// vidéo ou audio) dans une conversation (canal, groupe filière, privé).
+exports.uploadMessageFile = async (req, res) => {
+  try {
+    if (!req.uploadedFileUrl) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
+    }
+    res.status(200).json({ success: true, url: req.uploadedFileUrl });
+  } catch (error) {
+    console.error('[uploadMessageFile] Erreur :', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de l\'upload du fichier.' });
+  }
+};
+
 // ── Photo de profil / couverture ──────────────────────────────────────────
 // ✅ NOUVEAU — remplace l'ancien système (ProfileMediaService côté Flutter)
 // qui passait directement par le client Supabase, avec RLS bloquant

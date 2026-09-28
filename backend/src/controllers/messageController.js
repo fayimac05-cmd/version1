@@ -136,6 +136,21 @@ async function peutEcrireCanal(canal, userId, userRole) {
     return rows.length > 0;
   }
 
+  // Canal "Bureau des Étudiants" — lecture seule pour tout le monde, y
+  // compris l'administration : le BDE, ce sont des élèves, pas une entité
+  // administrative. L'écriture est réservée EXCLUSIVEMENT au président et à
+  // l'adjoint BDE (users.etudiant_role), établi à l'échelle de l'école
+  // entière (pas de scope filière/niveau, voir getBde/nommerBde dans
+  // etudiants.controller.js). Contrairement aux autres types de canaux,
+  // aucun bypass admin ici — volontairement.
+  if (canal.type === 'bde') {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM users WHERE id = $1 AND etudiant_role IN ('bde_president', 'bde_adjoint')`,
+      [userId]
+    );
+    return rows.length > 0;
+  }
+
   return true;
 }
 
@@ -190,13 +205,17 @@ const getMessagesCanal = async (req, res) => {
        FROM messages m
        JOIN users u ON u.id = m.auteur_id
        LEFT JOIN etudiants e ON e.user_id = u.id
-       LEFT JOIN reactions r ON r.message_id = m.id
+       LEFT JOIN reactions r ON r.message_id = m.id AND r.message_type = 'canal'
        WHERE m.canal_id = $1 AND COALESCE(m.type, 'canal') != 'annonce'
+         AND NOT EXISTS (
+           SELECT 1 FROM messages_masques mm
+           WHERE mm.message_id = m.id AND mm.message_type = 'canal' AND mm.user_id = $4
+         )
          ${avant ? 'AND m.created_at < $3' : ''}
        GROUP BY m.id, u.id
        ORDER BY m.created_at DESC
        LIMIT $2`,
-      avant ? [id, limite, avant] : [id, limite]
+      avant ? [id, limite, avant, req.user.id] : [id, limite, null, req.user.id]
     );
 
     // Pour le canal 1 (Administration) et 2 (Admin & Filière), inclure également les annonces publiées
@@ -393,11 +412,15 @@ const getMessagesPrives = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mp.id, mp.contenu, mp.created_at, mp.is_read,
               mp.expediteur_id, mp.destinataire_id,
-              u.prenoms, u.nom, u.role
+              u.prenoms, u.nom, u.role, u.photo_url
        FROM messages_prives mp
        JOIN users u ON u.id = mp.expediteur_id
-       WHERE (mp.expediteur_id = $1 AND mp.destinataire_id = $2)
-          OR (mp.expediteur_id = $2 AND mp.destinataire_id = $1)
+       WHERE ((mp.expediteur_id = $1 AND mp.destinataire_id = $2)
+          OR (mp.expediteur_id = $2 AND mp.destinataire_id = $1))
+         AND NOT EXISTS (
+           SELECT 1 FROM messages_masques mm
+           WHERE mm.message_id = mp.id AND mm.message_type = 'prive' AND mm.user_id = $1
+         )
        ORDER BY mp.created_at DESC
        LIMIT $3`,
       [req.user.id, userId, limite]
@@ -557,14 +580,23 @@ const getMessagesGroupe = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mg.id, mg.contenu, mg.created_at,
               mg.auteur_id, u.prenoms, u.nom, u.etudiant_role, u.photo_url,
-              COALESCE(e.niveau, u.niveau) AS niveau
-       FROM messages_groupe mg
-       JOIN users u ON u.id = mg.auteur_id
-       LEFT JOIN etudiants e ON e.user_id = u.id
-       WHERE mg.filiere_id = $1
-       ORDER BY mg.created_at DESC
-       LIMIT $2`,
-      [filiereId, limite]
+              COALESCE(MAX(e.niveau), u.niveau) AS niveau,
+              COALESCE(
+                JSON_AGG(r.emoji) FILTER (WHERE r.emoji IS NOT NULL), '[]'
+              ) AS reactions
+      FROM messages_groupe mg
+      JOIN users u ON u.id = mg.auteur_id
+      LEFT JOIN etudiants e ON e.user_id = u.id
+      LEFT JOIN reactions r ON r.message_id = mg.id AND r.message_type = 'groupe'
+      WHERE mg.filiere_id = $1
+        AND NOT EXISTS (
+          SELECT 1 FROM messages_masques mm
+          WHERE mm.message_id = mg.id AND mm.message_type = 'groupe' AND mm.user_id = $3
+        )
+      GROUP BY mg.id, u.id
+      ORDER BY mg.created_at DESC
+      LIMIT $2`,
+      [filiereId, limite, req.user.id]
     );
     res.json({ success: true, data: rows.reverse() });
   } catch (err) {
@@ -635,25 +667,42 @@ const envoyerMessageGroupe = async (req, res) => {
 };
 
 // ── POST /api/messages/:id/reaction ──────────────────────
+// body: { emoji, type: 'canal' | 'groupe' | 'prive' (défaut 'canal'),
+//         canalId? (type='canal'), filiereId? (type='groupe'),
+//         destinataireId? (type='prive', pour notifier l'autre utilisateur) }
 const ajouterReaction = async (req, res) => {
   const { id } = req.params;
-  const { emoji, canalId } = req.body;
+  const { emoji, canalId, filiereId, destinataireId } = req.body;
+  const type = req.body.type || 'canal';
 
   if (!emoji) return res.status(400).json({ success: false, error: 'Emoji requis' });
+  if (!['canal', 'groupe', 'prive'].includes(type)) {
+    return res.status(400).json({ success: false, error: 'Type de message invalide' });
+  }
 
   try {
+    // ✅ CORRIGÉ — la clause ON CONFLICT doit correspondre EXACTEMENT à la
+    // contrainte unique réelle de la table (message_id, user_id, emoji,
+    // message_type). Avec seulement 3 colonnes ici, Postgres ne trouvait
+    // aucune contrainte correspondante et renvoyait une erreur 500 à
+    // chaque tentative de réaction — donc rien n'était jamais enregistré.
     await pool.query(
       `INSERT INTO reactions (message_id, user_id, emoji, message_type)
-       VALUES ($1, $2, $3, 'canal')
-       ON CONFLICT (message_id, user_id, emoji) DO NOTHING`,
-      [id, req.user.id, emoji]
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (message_id, user_id, emoji, message_type) DO NOTHING`,
+      [id, req.user.id, emoji, type]
     );
 
     const io = req.app.get('io');
-    if (io && canalId) {
-      io.to(`canal:${canalId}`).emit('reaction:ajout', {
-        messageId: id, userId: req.user.id, emoji
-      });
+    const payload = { messageId: id, userId: req.user.id, emoji, type };
+    if (io) {
+      if (type === 'canal' && canalId) {
+        io.to(`canal:${canalId}`).emit('reaction:ajout', payload);
+      } else if (type === 'groupe' && filiereId) {
+        io.to(`filiere:${filiereId}`).emit('reaction:ajout', payload);
+      } else if (type === 'prive' && destinataireId) {
+        notifierUser(io, destinataireId, 'reaction:ajout', payload);
+      }
     }
 
     res.json({ success: true, message: 'Réaction ajoutée' });
@@ -663,7 +712,29 @@ const ajouterReaction = async (req, res) => {
   }
 };
 
+// ── POST /api/messages/:type/:id/masquer ──────────────────
+// "Supprimer pour moi" : masque CE message uniquement pour l'utilisateur
+// courant — les autres continuent de le voir normalement. Pour l'instant
+// pris en compte uniquement par getMessagesCanal (type='canal') ; à
+// répliquer sur getMessagesGroupe/getMessagesPrives si besoin plus tard.
+const masquerMessage = async (req, res) => {
+  const { type, id } = req.params;
+  try {
+    await pool.query(
+      `INSERT INTO messages_masques (message_id, message_type, user_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (message_id, message_type, user_id) DO NOTHING`,
+      [id, type, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[masquerMessage]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
 // ── DELETE /api/messages/:id ──────────────────────────────
+// (ancienne route, conservée pour compatibilité — canaux uniquement)
 const supprimerMessage = async (req, res) => {
   const { id } = req.params;
 
@@ -687,6 +758,51 @@ const supprimerMessage = async (req, res) => {
     res.json({ success: true, message: 'Message supprimé' });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// ── DELETE /api/messages/:type/:id ─────────────────────────
+// "Supprimer pour tout le monde" — version générique couvrant les 3 tables
+// de messages (canal, groupe filière, privé). Seul l'auteur (ou un admin)
+// peut supprimer. Utiliser cette route plutôt que DELETE /:id pour
+// groupe/prive — celle-ci ne connaît que la table `messages` (canaux).
+const TABLE_PAR_TYPE = {
+  canal:  { table: 'messages',        auteurCol: 'auteur_id',     roomCol: 'canal_id' },
+  groupe: { table: 'messages_groupe', auteurCol: 'auteur_id',     roomCol: 'filiere_id' },
+  prive:  { table: 'messages_prives', auteurCol: 'expediteur_id', roomCol: 'destinataire_id' },
+};
+
+const supprimerMessageType = async (req, res) => {
+  const { type, id } = req.params;
+  const cfg = TABLE_PAR_TYPE[type];
+  if (!cfg) return res.status(400).json({ success: false, error: 'Type de message invalide' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT ${cfg.auteurCol} AS auteur_id, ${cfg.roomCol} AS contexte FROM ${cfg.table} WHERE id = $1`,
+      [id]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: 'Message introuvable' });
+    }
+    if (rows[0].auteur_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Non autorisé' });
+    }
+
+    await pool.query(`DELETE FROM ${cfg.table} WHERE id = $1`, [id]);
+
+    const io = req.app.get('io');
+    if (io) {
+      const payload = { messageId: id, type };
+      if (type === 'canal') io.to(`canal:${rows[0].contexte}`).emit('message:supprimer', payload);
+      else if (type === 'groupe') io.to(`filiere:${rows[0].contexte}`).emit('message:supprimer', payload);
+      else if (type === 'prive') notifierUser(io, rows[0].contexte, 'message:supprimer', payload);
+    }
+
+    res.json({ success: true, message: 'Message supprimé' });
+  } catch (err) {
+    console.error('[supprimerMessageType]', err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 };
@@ -842,6 +958,137 @@ const getUsersOnline = (req, res) => {
   res.json({ success: true, data: getOnlineUsers() });
 };
 
+// ── GET /api/messages/groupe/:filiereId/membres ──────────
+// Vrais étudiants de la MÊME filière ET du MÊME niveau que le demandeur
+// (remplace l'ancienne liste codée en dur côté Flutter dans
+// groupe_filiere_screen.dart). Scopé par niveau, pas juste par filière —
+// sinon le nombre de membres ne correspond pas à ce que l'admin voit pour
+// une filière+niveau précis (ex. "Licence 2").
+const getMembresGroupe = async (req, res) => {
+  const { filiereId } = req.params;
+  try {
+    const role = String(req.user.role || '').toLowerCase();
+    const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role);
+    const appartientJwt = req.user.filiere_id != null &&
+      String(req.user.filiere_id) === String(filiereId);
+    const { rows: check } = (appartientJwt || isStaff)
+      ? { rows: [{ ok: true }] }
+      : await pool.query(
+          `SELECT 1 FROM etudiants WHERE user_id = $1 AND filiere_id = $2`,
+          [req.user.id, filiereId]
+        );
+    if (!check.length) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
+
+    // Niveau du demandeur — le staff (admin/prof) voit tout le monde,
+    // un étudiant ne voit que sa propre classe (filière + niveau).
+    let niveauFiltre = null;
+    if (!isStaff) {
+      const moiRes = await pool.query('SELECT niveau FROM etudiants WHERE user_id = $1', [req.user.id]);
+      niveauFiltre = moiRes.rows[0]?.niveau || null;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT u.id AS user_id, e.matricule, e.nom, e.prenoms, u.photo_url,
+              u.etudiant_role, e.niveau
+       FROM etudiants e
+       JOIN users u ON u.id = e.user_id
+       WHERE e.filiere_id = $1
+         AND ($2::text IS NULL OR e.niveau = $2)
+         AND COALESCE(u.statut, 'actif') NOT IN ('suspendu', 'renvoye')
+       ORDER BY e.nom, e.prenoms`,
+      [filiereId, niveauFiltre]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('[getMembresGroupe]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// ── PATCH /api/messages/groupe/:filiereId/lu ─────────────
+// Marque l'instant présent comme "dernier message lu" pour cet utilisateur
+// dans ce groupe — sert de base au compteur de messages non lus.
+const marquerGroupeLu = async (req, res) => {
+  const { filiereId } = req.params;
+  try {
+    await pool.query(
+      `INSERT INTO groupe_filiere_lectures (user_id, filiere_id, dernier_lu)
+       VALUES ($1, $2, now())
+       ON CONFLICT (user_id, filiere_id) DO UPDATE SET dernier_lu = now()`,
+      [req.user.id, filiereId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[marquerGroupeLu]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// ── GET /api/messages/groupe/:filiereId/non-lus/count ────
+const getNombreNonLusGroupe = async (req, res) => {
+  const { filiereId } = req.params;
+  try {
+    const dernierLuRes = await pool.query(
+      `SELECT dernier_lu FROM groupe_filiere_lectures WHERE user_id = $1 AND filiere_id = $2`,
+      [req.user.id, filiereId]
+    );
+    const dernierLu = dernierLuRes.rows[0]?.dernier_lu || null;
+
+    const result = await pool.query(
+      dernierLu
+        ? `SELECT COUNT(*) FROM messages_groupe WHERE filiere_id = $1 AND created_at > $2 AND auteur_id != $3`
+        : `SELECT COUNT(*) FROM messages_groupe WHERE filiere_id = $1 AND auteur_id != $2`,
+      dernierLu ? [filiereId, dernierLu, req.user.id] : [filiereId, req.user.id]
+    );
+    res.json({ success: true, count: parseInt(result.rows[0].count, 10) || 0 });
+  } catch (err) {
+    console.error('[getNombreNonLusGroupe]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// ── "Vu par" — marquage et consultation des lecteurs d'un message ───────
+// :type = 'canal' | 'groupe' | 'prive'. Un seul mécanisme générique pour
+// les trois familles de messages, sans toucher à leurs tables respectives.
+
+// POST /api/messages/:type/:id/lu — marque CE message comme lu par moi.
+const marquerMessageLu = async (req, res) => {
+  const { type, id } = req.params;
+  try {
+    await pool.query(
+      `INSERT INTO messages_lectures (message_id, message_type, user_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (message_id, message_type, user_id) DO NOTHING`,
+      [id, type, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[marquerMessageLu]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// GET /api/messages/:type/:id/lecteurs — qui a vu ce message, à quelle heure.
+const getLecteursMessage = async (req, res) => {
+  const { type, id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id AS user_id, u.nom, u.prenoms, u.photo_url, l.lu_at
+       FROM messages_lectures l
+       JOIN users u ON u.id = l.user_id
+       WHERE l.message_id = $1 AND l.message_type = $2
+       ORDER BY l.lu_at ASC`,
+      [id, type]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('[getLecteursMessage]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
 module.exports = {
   getCanaux,
   getMessagesCanal,
@@ -853,9 +1100,16 @@ module.exports = {
   ajouterMembreCanal,
   getMessagesGroupe,
   envoyerMessageGroupe,
+  getMembresGroupe,
+  marquerGroupeLu,
+  getNombreNonLusGroupe,
+  marquerMessageLu,
+  getLecteursMessage,
   getProfFilieres,
   ajouterReaction,
+  masquerMessage,
   supprimerMessage,
+  supprimerMessageType,
   getAdminContact,
   getAdminContacts,
   getContacts,

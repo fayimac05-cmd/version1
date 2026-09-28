@@ -17,9 +17,16 @@ const {
   ajouterMembreCanal,
   getMessagesGroupe,
   envoyerMessageGroupe,
+  getMembresGroupe,
+  marquerGroupeLu,
+  getNombreNonLusGroupe,
+  marquerMessageLu,
+  getLecteursMessage,
   getProfFilieres,
   ajouterReaction,
+  masquerMessage,
   supprimerMessage,
+  supprimerMessageType,
   getAdminContact,
   getAdminContacts,
   getContacts,
@@ -48,9 +55,20 @@ router.get('/groupe/mes-filieres', getProfFilieres);  // lister filières du pro
 router.get('/groupe/:filiereId',   getMessagesGroupe);
 router.post('/groupe/:filiereId',  envoyerMessageGroupe);
 
-// ── Réactions & suppression ───────────────────────────────
-router.post('/:id/reaction',     ajouterReaction);
-router.delete('/:id',            supprimerMessage);
+// Membres réels + suivi de lecture (badge non-lu de "Ma filière")
+router.get('/groupe/:filiereId/membres',           getMembresGroupe);
+router.patch('/groupe/:filiereId/lu',               marquerGroupeLu);
+router.get('/groupe/:filiereId/non-lus/count',      getNombreNonLusGroupe);
+
+// "Vu par" — n'importe quel message (canal, groupe filière, ou privé)
+router.post('/:type/:id/lu',       marquerMessageLu);
+router.get('/:type/:id/lecteurs',  getLecteursMessage);
+
+// ── Réactions, masquage ("supprimer pour moi") & suppression ─────────────
+router.post('/:id/reaction',      ajouterReaction);
+router.post('/:type/:id/masquer', masquerMessage);
+router.delete('/:id',             supprimerMessage);       // ancienne route (canaux uniquement, conservée pour compatibilité)
+router.delete('/:type/:id',       supprimerMessageType);    // "supprimer pour tout le monde" — canal/groupe/prive
 
 // ── Présence & contacts ───────────────────────────────────
 router.get('/online',            getUsersOnline);
