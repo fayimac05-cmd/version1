@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/professor_service.dart';
@@ -123,7 +126,6 @@ class _ProfessorShellState extends State<ProfessorShell> {
       width: 252,
       // ✅ Fond bleu marine plein (au lieu du dégradé) — plus proche de la
       // maquette, et cohérent avec le bandeau/les cartes du tableau de bord
-      // qui utilisent maintenant le même bleu marine (0xFF0B1E4D).
       color: const Color(0xFF0B1E4D),
       child: SafeArea(
         child: Padding(
@@ -215,19 +217,27 @@ class _ProfessorShellState extends State<ProfessorShell> {
               ),
               Container(
                 margin: const EdgeInsets.only(top: 14),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
                 decoration: BoxDecoration(
-                  color: AppPalette.yellow.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: AppPalette.yellow.withValues(alpha: 0.12)),
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.lightbulb_outline_rounded, color: AppPalette.yellow, size: 20),
-                    SizedBox(width: 9),
-                    Expanded(child: Text('Votre espace enseignant, au même endroit.', style: TextStyle(color: Color(0xFFDCE8FA), fontSize: 10.5, height: 1.35, fontWeight: FontWeight.w600))),
-                  ],
-                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // Illustration livres + pousse — approximée par icônes
+                  // (pas de vraie image fournie pour cet élément).
+                  SizedBox(
+                    height: 44,
+                    child: Stack(clipBehavior: Clip.none, children: [
+                      Positioned(left: 0, bottom: 0, child: Icon(Icons.menu_book_rounded, color: AppPalette.yellow, size: 34)),
+                      Positioned(left: 18, bottom: 16, child: Icon(Icons.eco_rounded, color: Color(0xFF34D399), size: 24)),
+                    ]),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Enseigner aujourd\'hui, façonne les talents de demain',
+                      style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w800, height: 1.35)),
+                  const SizedBox(height: 10),
+                  Container(width: 30, height: 3, decoration: BoxDecoration(color: AppPalette.yellow, borderRadius: BorderRadius.circular(2))),
+                ]),
               ),
             ],
           ),
@@ -1801,10 +1811,29 @@ class _ProfilTab extends StatefulWidget {
 }
 
 class _ProfilTabState extends State<_ProfilTab> {
+  static const Color _navyText = Color(0xFF0F172A);
+  static const Color _muted = Color(0xFF64748B);
+  static const Color _faint = Color(0xFF94A3B8);
+  static const Color _border = Color(0xFFE5EBF3);
+
   StudentProfile get profile => widget.profile;
   int _nbClasses = 0;
   int _nbCours = 0;
   int _nbSessions = 0;
+  List<String> _modulesEnseignes = [];
+  List<String> _classesLabels = [];
+  double? _tauxPresenceMoyen; // dérivé des vrais appels — null tant que non calculé
+
+  // ── Adresse / attestation / préférences — état local, persisté côté
+  // serveur via PATCH /api/auth/profil et POST /api/upload/attestation-service.
+  late String? _adresse = profile.adresse;
+  late String? _photoUrl = profile.photoUrl;
+  bool _changingPhoto = false;
+  late String? _attestationUrl = profile.attestationUrl;
+  late String _langue = profile.langue;
+  late bool _notificationsActives = profile.notificationsActives;
+  bool _savingProfil = false;
+  bool _uploadingAttestation = false;
 
   @override
   void initState() {
@@ -1813,134 +1842,592 @@ class _ProfilTabState extends State<_ProfilTab> {
   }
 
   Future<void> _chargerStats() async {
-    final classesRes = await ProfessorService.getClasses();
-    final coursRes = await ProfessorService.getCours();
-    final sessionsRes = await ProfessorService.getGradeSessions();
+    final results = await Future.wait([
+      ProfessorService.getClasses(),
+      ProfessorService.getCours(),
+      ProfessorService.getGradeSessions(),
+      ProfessorService.getModules(),
+      ProfessorService.getAppels(),
+    ]);
     if (!mounted) return;
+
+    final classesRes = results[0];
+    final coursRes = results[1];
+    final sessionsRes = results[2];
+    final modulesRes = results[3];
+    final appelsRes = results[4];
+
+    final classes = classesRes['success'] == true ? classesRes['data'] as List<dynamic> : [];
+    final modules = modulesRes['success'] == true ? modulesRes['data'] as List<dynamic> : [];
+    final appels = appelsRes['success'] == true ? appelsRes['data'] as List<dynamic> : [];
+
+    // Taux de présence moyen réel — calculé à partir de tous les appels déjà
+    // faits par ce prof (présents / total pointés), pas une valeur inventée.
+    double? taux;
+    var totalPresents = 0, totalPointes = 0;
+    for (final a in appels) {
+      final p = int.tryParse('${a['nb_presents'] ?? 0}') ?? 0;
+      final ab = int.tryParse('${a['nb_absents'] ?? 0}') ?? 0;
+      final r = int.tryParse('${a['nb_retards'] ?? 0}') ?? 0;
+      totalPresents += p + r;
+      totalPointes += p + ab + r;
+    }
+    if (totalPointes > 0) taux = totalPresents / totalPointes * 100;
+
     setState(() {
-      _nbClasses = classesRes['success'] == true ? (classesRes['data'] as List).length : 0;
+      _nbClasses = classes.length;
       _nbCours = coursRes['success'] == true ? (coursRes['data'] as List).length : 0;
       _nbSessions = sessionsRes['success'] == true ? (sessionsRes['data'] as List).length : 0;
+      _modulesEnseignes = modules.map((m) => m['nom']?.toString() ?? '').where((n) => n.isNotEmpty).toSet().toList();
+      _classesLabels = classes.map((c) => '${c['nom'] ?? ''} — ${c['niveau'] ?? ''}').toList();
+      _tauxPresenceMoyen = taux;
     });
+  }
+
+  // ── PATCH /api/auth/profil ──────────────────────────────────────────
+  Future<bool> _sauvegarderProfil(Map<String, dynamic> champs) async {
+    setState(() => _savingProfil = true);
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.patch(
+        Uri.parse('${ApiService.baseUrl}/auth/profil'),
+        headers: headers,
+        body: jsonEncode(champs),
+      );
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      if (!mounted) return false;
+      setState(() => _savingProfil = false);
+      if (res.statusCode == 200 && body['success'] == true) return true;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(body['message']?.toString() ?? 'Échec de la mise à jour.'), backgroundColor: Colors.red));
+      return false;
+    } catch (_) {
+      if (mounted) {
+        setState(() => _savingProfil = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Serveur injoignable.'), backgroundColor: Colors.red));
+      }
+      return false;
+    }
+  }
+
+  Future<void> _modifierAdresse() async {
+    final ctrl = TextEditingController(text: _adresse ?? '');
+    final nouvelle = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Adresse'),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 2,
+          decoration: InputDecoration(hintText: 'Ex. Ouagadougou, Burkina Faso', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue, foregroundColor: Colors.white),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+    if (nouvelle == null) return;
+    final ok = await _sauvegarderProfil({'adresse': nouvelle});
+    if (ok && mounted) setState(() => _adresse = nouvelle);
+  }
+
+  Future<void> _toggleNotifications(bool valeur) async {
+    final ok = await _sauvegarderProfil({'notifications_actives': valeur});
+    if (ok && mounted) setState(() => _notificationsActives = valeur);
+  }
+
+  // ── Carte "Ma photo de profil" — widget séparé de la grande bannière,
+  // même route d'upload (/api/upload/photo-profil). ⚠️ Limite connue : la
+  // bannière en haut gère sa propre photo indépendamment en interne ; un
+  // changement fait ici ne s'y reflète qu'après un rechargement de l'onglet.
+  Future<void> _changerPhotoProfil() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    if (result == null || result.files.isEmpty || result.files.first.bytes == null) return;
+    final fichier = result.files.first;
+    setState(() => _changingPhoto = true);
+    try {
+      final headers = await ApiService.getHeaders();
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiService.baseUrl}/upload/photo-profil'));
+      req.headers.addAll(headers);
+      req.files.add(http.MultipartFile.fromBytes('file', fichier.bytes!, filename: fichier.name));
+      final streamed = await req.send();
+      final res = await http.Response.fromStream(streamed);
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      if (!mounted) return;
+      setState(() => _changingPhoto = false);
+      if (res.statusCode == 200 && body['success'] == true) {
+        setState(() => _photoUrl = body['url']?.toString());
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(body['message']?.toString() ?? 'Échec de l\'envoi.'), backgroundColor: Colors.red));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _changingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Serveur injoignable.'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _uploadAttestation() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], withData: true);
+    if (result == null || result.files.isEmpty || result.files.first.bytes == null) return;
+    final fichier = result.files.first;
+    setState(() => _uploadingAttestation = true);
+    try {
+      final headers = await ApiService.getHeaders();
+      final req = http.MultipartRequest('POST', Uri.parse('${ApiService.baseUrl}/upload/attestation-service'));
+      req.headers.addAll(headers);
+      req.files.add(http.MultipartFile.fromBytes('file', fichier.bytes!, filename: fichier.name));
+      final streamed = await req.send();
+      final res = await http.Response.fromStream(streamed);
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      if (!mounted) return;
+      setState(() => _uploadingAttestation = false);
+      if (res.statusCode == 200 && body['success'] == true) {
+        setState(() => _attestationUrl = body['url']?.toString());
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(body['message']?.toString() ?? 'Échec de l\'envoi.'), backgroundColor: Colors.red));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _uploadingAttestation = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Serveur injoignable.'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _supprimerAttestation() async {
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer l\'attestation ?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Supprimer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirme != true) return;
+    try {
+      final headers = await ApiService.getHeaders();
+      await http.delete(Uri.parse('${ApiService.baseUrl}/upload/attestation-service'), headers: headers);
+      if (mounted) setState(() => _attestationUrl = null);
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      _ProfHeader(title: 'Mon Profil', subtitle: 'Espace personnel enseignant'),
-      Expanded(
+    return Container(
+      color: const Color(0xFFF4F7FB),
+      child: SafeArea(
+        bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(children: [
-          // Cover + Avatar Premium
-            ProfileHeaderCover(
-              matricule: profile.matricule,
-              nomComplet: '${profile.prenoms} ${profile.nom}',
-              roleLabel: profile.filiere.isNotEmpty ? profile.filiere : 'Enseignant',
-              initiales: '${profile.prenoms.isNotEmpty ? profile.prenoms[0] : ''}${profile.nom.isNotEmpty ? profile.nom[0] : ''.toUpperCase()}',
-              badgeText: 'Professeur',
-              accentColor: AppPalette.blue,
-              bannerGradient: const [Color(0xFF0D1B4B), Color(0xFF1565C0), Color(0xFF42A5F5)],
-              initialPhotoUrl: profile.photoUrl,
-              initialCoverUrl: profile.coverUrl,
-            ),
-            const SizedBox(height: 24),
-            // Infos
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10)],
-              ),
-              child: Column(children: [
-                _profilLigne(Icons.badge_outlined, 'Matricule', profile.matricule),
-                const Divider(height: 1, indent: 56),
-                _profilLigne(Icons.domain_rounded, 'Département', profile.filiere),
-                const Divider(height: 1, indent: 56),
-                _profilLigne(Icons.groups_rounded, 'Classes', '$_nbClasses classe(s)'),
-                const Divider(height: 1, indent: 56),
-                _profilLigne(Icons.menu_book_rounded, 'Cours publiés', '$_nbCours support(s)'),
-              ]),
-            ),
-            const SizedBox(height: 24),
-            // Stats
-            Row(children: [
-              _statCard('$_nbClasses', 'Classes', Icons.groups_rounded, AppPalette.blue),
-              const SizedBox(width: 12),
-              _statCard('$_nbCours', 'Cours', Icons.menu_book_rounded, const Color(0xFFD97706)),
-              const SizedBox(width: 12),
-              _statCard('$_nbSessions', 'Sessions notes', Icons.fact_check_rounded, const Color(0xFF10B981)),
-            ]),
-            const SizedBox(height: 24),
-            // Programme hebdomadaire : déclarer et transmettre ses heures libres
-            SizedBox(
-              width: double.infinity, height: 52,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ProgrammeScreen())),
-                icon: const Icon(Icons.edit_calendar_rounded, size: 20),
-                label: const Text('Mon programme / heures libres',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity, height: 52,
-              child: OutlinedButton.icon(
-                onPressed: widget.onLogout,
-                icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
-                label: const Text('Se déconnecter', style: TextStyle(color: Color(0xFFEF4444), fontSize: 15, fontWeight: FontWeight.w700)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1380),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTopRow(),
+                  const SizedBox(height: 18),
+                  Row(children: [
+                    const Text('Mon profil', style: TextStyle(color: _navyText, fontSize: 20, fontWeight: FontWeight.w900)),
+                  ]),
+                  const SizedBox(height: 16),
+                  ProfileHeaderCover(
+                    // ✅ Clé basée sur la photo courante : si la petite carte
+                    // "Ma photo de profil" change la photo, cette clé change,
+                    // Flutter remonte la bannière avec la nouvelle valeur
+                    // (au lieu de garder l'ancienne, figée depuis initState).
+                    key: ValueKey(_photoUrl),
+                    matricule: profile.matricule,
+                    nomComplet: '${profile.prenoms} ${profile.nom}'.trim(),
+                    roleLabel: profile.filiere.isNotEmpty ? profile.filiere : 'Enseignant',
+                    initiales: '${profile.prenoms.isNotEmpty ? profile.prenoms[0] : ''}${profile.nom.isNotEmpty ? profile.nom[0] : ''.toUpperCase()}',
+                    badgeText: 'Professeur',
+                    accentColor: AppPalette.blue,
+                    showCover: false,
+                    initialPhotoUrl: _photoUrl,
+                    // Sens inverse : si c'est la bannière elle-même qui change
+                    // la photo (son propre bouton), on répercute vers la
+                    // petite carte tout de suite, sans attendre un revisit.
+                    onMediaChanged: (photoUrl, coverUrl) {
+                      if (photoUrl != _photoUrl) setState(() => _photoUrl = photoUrl);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  LayoutBuilder(builder: (context, constraints) {
+                    final desktop = constraints.maxWidth >= 980;
+                    final gauche = Column(children: [
+                      _infoCard(),
+                      const SizedBox(height: 14),
+                      _speCoursCard(),
+                      const SizedBox(height: 14),
+                      _programmeBtn(),
+                    ]);
+                    final droite = Column(children: [
+                      _statsCard(),
+                      const SizedBox(height: 14),
+                      _maPhotoCard(),
+                      const SizedBox(height: 14),
+                      _contactsCard(),
+                      const SizedBox(height: 14),
+                      _documentsCard(),
+                      const SizedBox(height: 14),
+                      _preferencesCard(),
+                      const SizedBox(height: 14),
+                      _aideCard(),
+                      const SizedBox(height: 14),
+                      _deconnexionBtn(),
+                    ]);
+                    if (!desktop) return Column(children: [gauche, const SizedBox(height: 14), droite]);
+                    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(flex: 7, child: gauche),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 3, child: droite),
+                    ]);
+                  }),
+                ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopRow() {
+    final photoUrl = profile.photoUrl?.trim();
+    final nomComplet = '${profile.prenoms} ${profile.nom}'.trim();
+    return Row(children: [
+      Expanded(
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
+          child: Row(children: const [
+            Icon(Icons.search_rounded, size: 19, color: _faint),
+            SizedBox(width: 8),
+            Expanded(child: Text('Rechercher un étudiant, une classe, un cours...', style: TextStyle(color: _faint, fontSize: 13))),
           ]),
         ),
       ),
+      const SizedBox(width: 16),
+      Container(
+        width: 44, height: 44,
+        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
+        child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
+      ),
+      const SizedBox(width: 12),
+      Row(children: [
+        CircleAvatar(
+          radius: 21,
+          backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          child: photoUrl == null || photoUrl.isEmpty
+              ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
+              : null,
+        ),
+        const SizedBox(width: 10),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
+          const Text('Professeur', style: TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+        ]),
+      ]),
     ]);
   }
 
+  Widget _card({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
+      child: child,
+    );
+  }
+
+  Widget _cardTitre(IconData icon, String titre, {Widget? trailing}) {
+    return Row(children: [
+      Icon(icon, color: AppPalette.blue, size: 18),
+      const SizedBox(width: 8),
+      Expanded(child: Text(titre, style: const TextStyle(color: _navyText, fontSize: 14.5, fontWeight: FontWeight.w900))),
+      if (trailing != null) trailing,
+    ]);
+  }
+
+  Widget _infoCard() {
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitre(Icons.person_outline_rounded, 'Informations personnelles'),
+        const SizedBox(height: 14),
+        _profilLigne(Icons.badge_outlined, 'Nom complet', '${profile.prenoms} ${profile.nom}'),
+        const Divider(height: 24),
+        _profilLigne(Icons.email_outlined, 'Email', profile.email.isNotEmpty ? profile.email : '—'),
+        const Divider(height: 24),
+        _profilLigne(Icons.phone_outlined, 'Téléphone', profile.telephone.isNotEmpty ? profile.telephone : '—'),
+        const Divider(height: 24),
+        _profilLigne(Icons.badge_outlined, 'Matricule', profile.matricule),
+      ]),
+    );
+  }
+
+  Widget _speCoursCard() {
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitre(Icons.menu_book_outlined, 'Mes classes et modules'),
+        const SizedBox(height: 14),
+        const Text('Classes enseignées', style: TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        if (_classesLabels.isEmpty)
+          const Text('Aucune classe affectée pour l\'instant.', style: TextStyle(color: _faint, fontSize: 12))
+        else
+          Wrap(spacing: 8, runSpacing: 8, children: _classesLabels.map((c) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(20)),
+            child: Text(c, style: const TextStyle(color: AppPalette.blue, fontSize: 11.5, fontWeight: FontWeight.w700)),
+          )).toList()),
+        const SizedBox(height: 18),
+        const Text('Modules enseignés', style: TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        if (_modulesEnseignes.isEmpty)
+          const Text('Aucun module affecté pour l\'instant.', style: TextStyle(color: _faint, fontSize: 12))
+        else
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: _modulesEnseignes.map((m) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(children: [
+              const Icon(Icons.circle, size: 5, color: AppPalette.blue),
+              const SizedBox(width: 8),
+              Text(m, style: const TextStyle(color: _navyText, fontSize: 13, fontWeight: FontWeight.w600)),
+            ]),
+          )).toList()),
+      ]),
+    );
+  }
+
   Widget _profilLigne(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(9),
-          decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: AppPalette.blue, size: 18),
+    return Row(children: [
+      Container(
+        padding: const EdgeInsets.all(9),
+        decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: AppPalette.blue, size: 16),
+      ),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 10.5, color: _faint, fontWeight: FontWeight.w600)),
+        Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: _navyText)),
+      ])),
+    ]);
+  }
+
+  Widget _statsCard() {
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitre(Icons.bar_chart_rounded, 'Statistiques rapides'),
+        const SizedBox(height: 14),
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          _miniStat('$_nbClasses', 'Classes', AppPalette.blue, Icons.groups_rounded),
+          _miniStat('$_nbCours', 'Cours', const Color(0xFFF5A623), Icons.menu_book_rounded),
+          _miniStat('$_nbSessions', 'Sessions de notes', const Color(0xFF7C3AED), Icons.fact_check_rounded),
+          _miniStat(_tauxPresenceMoyen != null ? '${_tauxPresenceMoyen!.round()}%' : '—', 'Présence moyenne', const Color(0xFF10B981), Icons.how_to_reg_rounded),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _miniStat(String value, String label, Color color, IconData icon) {
+    return Container(
+      width: 140,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 6),
+        Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w900)),
+        Text(label, style: const TextStyle(color: _muted, fontSize: 10, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+
+  Widget _maPhotoCard() {
+    final nomComplet = '${profile.prenoms} ${profile.nom}'.trim();
+    return _card(
+      child: Column(children: [
+        _cardTitre(Icons.image_outlined, 'Ma photo de profil'),
+        const SizedBox(height: 14),
+        Center(
+          child: Stack(alignment: Alignment.bottomRight, children: [
+            CircleAvatar(
+              radius: 44,
+              backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+              backgroundImage: (_photoUrl != null && _photoUrl!.isNotEmpty) ? NetworkImage(_photoUrl!) : null,
+              child: (_photoUrl == null || _photoUrl!.isEmpty)
+                  ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900, fontSize: 22))
+                  : null,
+            ),
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(color: AppPalette.blue, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
+            ),
+          ]),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _changingPhoto ? null : _changerPhotoProfil,
+            icon: _changingPhoto
+                ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.photo_camera_outlined, size: 16),
+            label: Text(_changingPhoto ? 'Envoi...' : 'Changer la photo', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            style: OutlinedButton.styleFrom(foregroundColor: AppPalette.blue, side: const BorderSide(color: AppPalette.blue), padding: const EdgeInsets.symmetric(vertical: 11)),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _contactsCard() {
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitre(Icons.contact_phone_outlined, 'Mes contacts'),
+        const SizedBox(height: 14),
+        _profilLigne(Icons.phone_outlined, 'Téléphone principal', profile.telephone.isNotEmpty ? profile.telephone : '—'),
+        const Divider(height: 24),
+        _profilLigne(Icons.email_outlined, 'Email professionnel', profile.email.isNotEmpty ? profile.email : '—'),
+        const Divider(height: 24),
+        Row(children: [
+          Expanded(child: _profilLigne(Icons.location_on_outlined, 'Adresse', (_adresse ?? '').isNotEmpty ? _adresse! : 'Non renseignée')),
+          IconButton(
+            onPressed: _savingProfil ? null : _modifierAdresse,
+            icon: const Icon(Icons.edit_outlined, size: 18, color: AppPalette.blue),
+            tooltip: 'Modifier',
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _documentsCard() {
+    final hasAttestation = _attestationUrl != null && _attestationUrl!.isNotEmpty;
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitre(Icons.description_outlined, 'Mes documents'),
+        const SizedBox(height: 14),
+        if (_uploadingAttestation)
+          const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
+        else if (hasAttestation)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
+            child: Row(children: [
+              Container(width: 36, height: 36, decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.picture_as_pdf_outlined, color: AppPalette.blue, size: 18)),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Attestation de service', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _navyText))),
+              IconButton(
+                onPressed: () {}, // consultation via un navigateur externe si besoin
+                icon: const Icon(Icons.open_in_new_rounded, size: 16, color: AppPalette.blue),
+                tooltip: 'Ouvrir',
+              ),
+              IconButton(
+                onPressed: _supprimerAttestation,
+                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                tooltip: 'Supprimer',
+              ),
+            ]),
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: _uploadAttestation,
+            icon: const Icon(Icons.upload_file_rounded, size: 17),
+            label: const Text('Ajouter mon attestation de service', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            style: OutlinedButton.styleFrom(foregroundColor: AppPalette.blue, side: const BorderSide(color: AppPalette.blue), padding: const EdgeInsets.symmetric(vertical: 12)),
+          ),
+      ]),
+    );
+  }
+
+  Widget _preferencesCard() {
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _cardTitre(Icons.settings_outlined, 'Préférences'),
+        const SizedBox(height: 14),
+        Row(children: [
+          Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.language_outlined, color: AppPalette.blue, size: 16)),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Langue', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _navyText))),
+          Text(_langue == 'fr' ? 'Français' : _langue, style: const TextStyle(fontSize: 12.5, color: _muted, fontWeight: FontWeight.w600)),
+        ]),
+        const Padding(
+          padding: EdgeInsets.only(left: 42, top: 4),
+          child: Text('L\'application n\'est actuellement disponible qu\'en français.', style: TextStyle(fontSize: 10.5, color: _faint)),
+        ),
+        const Divider(height: 28),
+        Row(children: [
+          Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.notifications_outlined, color: AppPalette.blue, size: 16)),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Notifications', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _navyText))),
+          Switch(value: _notificationsActives, activeThumbColor: AppPalette.blue, onChanged: _savingProfil ? null : _toggleNotifications),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _aideCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(16)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.lightbulb_outline_rounded, color: AppPalette.blue, size: 20),
+        const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+          const Text('Besoin d\'aide ?', style: TextStyle(color: _navyText, fontSize: 13, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          const Text('Notre équipe est disponible pour vous assister en cas de besoin.',
+              style: TextStyle(color: _muted, fontSize: 11.5, height: 1.4, fontWeight: FontWeight.w500)),
         ])),
       ]),
     );
   }
 
-  Widget _statCard(String value, String label, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
+  Widget _programmeBtn() {
+    return SizedBox(
+      width: double.infinity, height: 52,
+      child: ElevatedButton.icon(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProgrammeScreen())),
+        icon: const Icon(Icons.edit_calendar_rounded, size: 20),
+        label: const Text('Mon programme / heures libres', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF10B981),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
-        child: Column(children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
-          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
-          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-        ]),
+      ),
+    );
+  }
+
+  Widget _deconnexionBtn() {
+    return SizedBox(
+      width: double.infinity, height: 50,
+      child: OutlinedButton.icon(
+        onPressed: widget.onLogout,
+        icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
+        label: const Text('Se déconnecter', style: TextStyle(color: Color(0xFFEF4444), fontSize: 14, fontWeight: FontWeight.w700)),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
       ),
     );
   }

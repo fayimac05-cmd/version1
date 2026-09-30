@@ -29,6 +29,7 @@ class ProfileHeaderCover extends StatefulWidget {
     this.accentColor = const Color(0xFF1E40AF),
     this.bannerGradient = const [Color(0xFF0F172A), Color(0xFF1E3A8A), Color(0xFF3B82F6)],
     this.canEdit = true,
+    this.showCover = true,
     this.onMediaChanged,
   });
 
@@ -43,6 +44,10 @@ class ProfileHeaderCover extends StatefulWidget {
   final Color accentColor;
   final List<Color> bannerGradient;
   final bool canEdit;
+  /// Si false, aucune bannière de couverture n'est affichée ni modifiable —
+  /// juste la photo de profil, centrée, sans chevauchement. Utilisé côté
+  /// professeur, où la notion de couverture n'a pas lieu d'être.
+  final bool showCover;
   /// Appelé après chaque upload/suppression réussi, avec les URLs actuelles
   /// (photo, couverture) — permet à l'écran appelant de les conserver au-delà
   /// de la durée de vie de ce widget (ex. survie à un changement d'onglet qui
@@ -91,6 +96,95 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
           ),
         ),
       ),
+    );
+  }
+
+  // ── Cercle avatar + badge caméra — extrait pour être réutilisé tel quel
+  // dans les deux mises en page (avec ou sans bannière de couverture).
+  Widget _buildAvatarCircle(double avatarRadius) {
+    final hasAvatar = _profilePhotoPath != null && _profilePhotoPath!.isNotEmpty;
+    final isAvatarNetwork = hasAvatar &&
+        (kIsWeb ||
+         _profilePhotoPath!.startsWith('http://') ||
+         _profilePhotoPath!.startsWith('https://') ||
+         _profilePhotoPath!.startsWith('data:') ||
+         _profilePhotoPath!.startsWith('blob:'));
+
+    return Stack(
+      alignment: Alignment.bottomRight,
+      children: [
+        GestureDetector(
+          onTap: widget.canEdit
+              ? _showProfileOptions
+              : (hasAvatar
+                  ? () => ImageViewerDialog.show(
+                        context,
+                        imagePathOrUrl: _profilePhotoPath!,
+                        title: 'Photo de profil',
+                      )
+                  : null),
+          child: Container(
+            width: avatarRadius * 2,
+            height: avatarRadius * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              border: Border.all(color: Colors.white, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: hasAvatar
+                  ? (isAvatarNetwork
+                      ? Image.network(
+                          _profilePhotoPath!,
+                          fit: BoxFit.cover,
+                          width: avatarRadius * 2,
+                          height: avatarRadius * 2,
+                          errorBuilder: (_, __, ___) => _buildInitialsAvatar(),
+                        )
+                      : Image.file(
+                          File(_profilePhotoPath!),
+                          fit: BoxFit.cover,
+                          width: avatarRadius * 2,
+                          height: avatarRadius * 2,
+                          errorBuilder: (_, __, ___) => _buildInitialsAvatar(),
+                        ))
+                  : _buildInitialsAvatar(),
+            ),
+          ),
+        ),
+        // Badge caméra pour modifier l'avatar
+        if (widget.canEdit)
+          GestureDetector(
+            onTap: _showProfileOptions,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.camera_alt_rounded,
+                color: Colors.white,
+                size: 15,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -339,14 +433,6 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
          _coverPhotoPath!.startsWith('data:') ||
          _coverPhotoPath!.startsWith('blob:'));
 
-    final hasAvatar = _profilePhotoPath != null && _profilePhotoPath!.isNotEmpty;
-    final isAvatarNetwork = hasAvatar &&
-        (kIsWeb ||
-         _profilePhotoPath!.startsWith('http://') ||
-         _profilePhotoPath!.startsWith('https://') ||
-         _profilePhotoPath!.startsWith('data:') ||
-         _profilePhotoPath!.startsWith('blob:'));
-
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -363,12 +449,13 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
       ),
       child: Column(
         children: [
-          // ── BANNIÈRE DE COUVERTURE AVEC AVATAR SUPERPOSÉ ──────────────────
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Bannière
-              GestureDetector(
+          if (widget.showCover) ...[
+            // ── BANNIÈRE DE COUVERTURE AVEC AVATAR SUPERPOSÉ ──────────────────
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Bannière
+                GestureDetector(
                 onTap: widget.canEdit
                     ? _showCoverOptions
                     : (hasCover
@@ -480,93 +567,76 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                 bottom: -avatarRadius,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      GestureDetector(
-                        onTap: widget.canEdit
-                            ? _showProfileOptions
-                            : (hasAvatar
-                                ? () => ImageViewerDialog.show(
-                                      context,
-                                      imagePathOrUrl: _profilePhotoPath!,
-                                      title: 'Photo de profil',
-                                    )
-                                : null),
+                child: Center(child: _buildAvatarCircle(avatarRadius)),
+              ),
+              ],
+            ),
+
+            // Espace pour compenser le débordement de l'avatar
+            const SizedBox(height: avatarRadius + 14),
+          ] else ...[
+            // Pas de couverture uploadable, mais un fond décoratif fixe
+            // (dégradé bleu + forme jaune), purement visuel — rien ici
+            // n'est modifiable ou n'appelle un upload, contrairement à la
+            // bannière ci-dessus. Avatar à gauche + identité à droite
+            // (pas centré), nom/rôle inclus directement dans la bannière.
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(23)),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(gradient: LinearGradient(
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [Color(0xFF12296B), Color(0xFF1E4FD6), Color(0xFF2F6BF0)])),
+                child: Stack(clipBehavior: Clip.none, children: [
+                  Positioned(
+                    right: -30, bottom: -40,
+                    child: Transform.rotate(
+                      angle: 0.35,
+                      child: Container(width: 140, height: 140,
+                          decoration: BoxDecoration(color: const Color(0xFFF5A623), borderRadius: BorderRadius.circular(36))),
+                    ),
+                  ),
+                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                    _buildAvatarCircle(56),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(widget.nomComplet, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 3),
+                        Text(widget.roleLabel, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w600) ??
+                            const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      ]),
+                    ),
+                  ]),
+                  if (widget.canEdit)
+                    Positioned(
+                      top: 0, right: 0,
+                      child: GestureDetector(
+                        onTap: _showProfileOptions,
                         child: Container(
-                          width: avatarRadius * 2,
-                          height: avatarRadius * 2,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                            border: Border.all(color: Colors.white, width: 4),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.12),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white38),
                           ),
-                          child: ClipOval(
-                            child: hasAvatar
-                                ? (isAvatarNetwork
-                                    ? Image.network(
-                                        _profilePhotoPath!,
-                                        fit: BoxFit.cover,
-                                        width: avatarRadius * 2,
-                                        height: avatarRadius * 2,
-                                        errorBuilder: (_, __, ___) => _buildInitialsAvatar(),
-                                      )
-                                    : Image.file(
-                                        File(_profilePhotoPath!),
-                                        fit: BoxFit.cover,
-                                        width: avatarRadius * 2,
-                                        height: avatarRadius * 2,
-                                        errorBuilder: (_, __, ___) => _buildInitialsAvatar(),
-                                      ))
-                                : _buildInitialsAvatar(),
-                          ),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.camera_alt_outlined, color: Colors.white, size: 14),
+                            SizedBox(width: 6),
+                            Text('Modifier la photo', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                          ]),
                         ),
                       ),
-
-                      // Badge caméra pour modifier l'avatar
-                      if (widget.canEdit)
-                        GestureDetector(
-                          onTap: _showProfileOptions,
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  blurRadius: 4,
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt_rounded,
-                              color: Colors.white,
-                              size: 15,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                    ),
+                ]),
               ),
-            ],
-          ),
+            ),
+          ],
 
-          // Espace pour compenser le débordement de l'avatar
-          const SizedBox(height: avatarRadius + 14),
-
-          // ── INFORMATIONS IDENTITÉ & BADGES ────────────────────────────────
+          // ── INFORMATIONS IDENTITÉ & BADGES (uniquement avec couverture) ────
+          if (widget.showCover)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(

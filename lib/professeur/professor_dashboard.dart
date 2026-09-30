@@ -604,22 +604,47 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
   Widget _buildBanner() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0B1E4D), Color(0xFF1E3A8A)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      height: 220,
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
         children: [
-          const Text('« L\'éducation est l\'arme la plus puissante pour changer le monde. »',
-              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, height: 1.4)),
-          const SizedBox(height: 8),
-          Text('— Nelson Mandela', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11.5, fontWeight: FontWeight.w600)),
+          // Photo du campus, visible sans assombrissement — voir
+          // assets/images/campus_banner.png
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/campus_banner.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(color: const Color(0xFFE2E8F0)),
+            ),
+          ),
+          // Bloc bleu sombre semi-transparent en bas — laisse un peu voir
+          // la photo derrière (pas un bloc plein opaque).
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft, end: Alignment.centerRight,
+                  colors: [
+                    const Color(0xFF0B1E4D).withValues(alpha: 0.78),
+                    const Color(0xFF1E3A8A).withValues(alpha: 0.78),
+                  ],
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('« L\'éducation est l\'arme la plus puissante pour changer le monde. »',
+                      style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w800, height: 1.35)),
+                  const SizedBox(height: 6),
+                  Text('— Nelson Mandela', style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 11, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
