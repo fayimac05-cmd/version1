@@ -516,7 +516,10 @@ const lookup = async (req, res) => {
 const me = async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.etudiant_role, u.statut, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1',
+      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.etudiant_role, u.statut,
+              u.adresse, u.attestation_url, u.langue, u.notifications_actives,
+              e.filiere_id
+       FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1`,
       [req.user.id]
     );
     if (!r.rows[0]) return res.status(404).json({ message: 'Introuvable.' });
@@ -532,6 +535,32 @@ const me = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: 'Erreur serveur.' });
+  }
+};
+
+// ── PATCH /api/auth/profil ──────────────────────────────────────────────
+// Mise à jour partielle du profil connecté : adresse, préférences (langue,
+// notifications). Chaque champ est optionnel — seuls ceux envoyés sont
+// modifiés. Téléphone/email restent en lecture seule ici volontairement
+// (déjà gérés par leurs propres flux existants ailleurs dans l'app).
+const modifierProfil = async (req, res) => {
+  try {
+    const { adresse, langue, notifications_actives } = req.body;
+    const champs = [];
+    const valeurs = [];
+    let i = 1;
+    if (adresse !== undefined) { champs.push(`adresse = $${i++}`); valeurs.push(adresse); }
+    if (langue !== undefined) { champs.push(`langue = $${i++}`); valeurs.push(langue); }
+    if (notifications_actives !== undefined) { champs.push(`notifications_actives = $${i++}`); valeurs.push(notifications_actives); }
+    if (champs.length === 0) {
+      return res.status(400).json({ success: false, message: 'Aucun champ à mettre à jour.' });
+    }
+    valeurs.push(req.user.id);
+    await pool.query(`UPDATE users SET ${champs.join(', ')} WHERE id = $${i}`, valeurs);
+    res.status(200).json({ success: true, message: 'Profil mis à jour.' });
+  } catch (err) {
+    console.error('[modifierProfil]', err);
+    res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour du profil.' });
   }
 };
 
@@ -765,6 +794,7 @@ module.exports = {
   login,
   setupPassword,
   me,
+  modifierProfil,
   changePassword,
   register,
   lookup,

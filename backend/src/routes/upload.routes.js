@@ -47,4 +47,14 @@ router.post(
 );
 router.delete('/photo-couverture', authMiddleware, uploadController.deletePhotoCouverture);
 
+// Attestation de service — même schéma que photo-profil/photo-couverture.
+router.post(
+  '/attestation-service',
+  authMiddleware,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/attestations-service'),
+  uploadController.uploaderAttestationService
+);
+router.delete('/attestation-service', authMiddleware, uploadController.supprimerAttestationService);
+
 module.exports = router;
