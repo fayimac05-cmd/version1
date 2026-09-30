@@ -861,11 +861,11 @@ class _SplashScreenState extends State<SplashScreen>
             // ==================================================
 
             Positioned(
-              right: isTablet ? 0 : 30,
-              top: isTablet ? 150 : 120,
+              right: isTablet ? -20 : 0,
+              top: isTablet ? 135 : 105,
               child: Container(
-                width: isTablet ? 390 : 570,
-                height: isTablet ? 390 : 570,
+                width: isTablet ? 440 : 640,
+                height: isTablet ? 440 : 640,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: Color(0xFFDDEAFB),
@@ -878,11 +878,11 @@ class _SplashScreenState extends State<SplashScreen>
             // ==================================================
 
             Positioned(
-              right: isTablet ? 35 : 75,
-              top: isTablet ? 185 : 160,
+              right: isTablet ? 15 : 45,
+              top: isTablet ? 170 : 145,
               child: Container(
-                width: isTablet ? 340 : 500,
-                height: isTablet ? 340 : 500,
+                width: isTablet ? 390 : 560,
+                height: isTablet ? 390 : 560,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: Color(0xFFFDFEFF),
@@ -897,11 +897,15 @@ class _SplashScreenState extends State<SplashScreen>
             Positioned.fill(
               child: Align(
                 alignment: Alignment.center,
-                child: ClipPath(
-                  clipper: StudentImageClipper(),
+                child: ClipOval(
                   child: SizedBox(
-                    width: isTablet ? 430 : 650,
-                    height: isTablet ? 530 : 680,
+                    // Légèrement plus large que haut (au lieu d'un carré
+                    // strict) — un compromis : on montre davantage les
+                    // côtés de la photo (moins rognés), au prix d'une
+                    // forme ovale plutôt qu'un cercle mathématiquement
+                    // parfait. Agrandi aussi par rapport à avant.
+                    width: isTablet ? 380 : 560,
+                    height: isTablet ? 330 : 490,
                     child: Image.asset(
                       'assets/images/etudiant_ist.png',
                       fit: BoxFit.cover,
@@ -1303,8 +1307,8 @@ class _SplashScreenState extends State<SplashScreen>
           alignment: Alignment.center,
           children: [
             Container(
-              width: 300,
-              height: 300,
+              width: 320,
+              height: 320,
               decoration: const BoxDecoration(
                 color: Color(0xFFDDEAFB),
                 shape: BoxShape.circle,
@@ -1312,19 +1316,20 @@ class _SplashScreenState extends State<SplashScreen>
             ),
 
             Container(
-              width: 265,
-              height: 265,
+              width: 285,
+              height: 285,
               decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
             ),
 
-            ClipPath(
-              clipper: StudentImageClipper(),
+            ClipOval(
               child: SizedBox(
-                width: 320,
-                height: 330,
+                // Légèrement plus large que haut, comme en desktop — même
+                // compromis entre forme ronde et rognage réduit.
+                width: 270,
+                height: 240,
                 child: Image.asset(
                   'assets/images/etudiant_ist.png',
                   fit: BoxFit.cover,
@@ -1473,68 +1478,5 @@ class _SplashScreenState extends State<SplashScreen>
         shape: BoxShape.circle,
       ),
     );
-  }
-}
-
-// ================================================================
-// CLIPPER POUR DONNER UNE FORME ORGANIQUE À L'IMAGE
-// ================================================================
-
-class StudentImageClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-
-    path.moveTo(
-      size.width * 0.30,
-      size.height * 0.08,
-    );
-
-    path.cubicTo(
-      size.width * 0.52,
-      size.height * 0.00,
-      size.width * 0.82,
-      size.height * 0.06,
-      size.width * 0.91,
-      size.height * 0.28,
-    );
-
-    path.cubicTo(
-      size.width * 1.00,
-      size.height * 0.50,
-      size.width * 0.88,
-      size.height * 0.82,
-      size.width * 0.67,
-      size.height * 0.94,
-    );
-
-    path.cubicTo(
-      size.width * 0.46,
-      size.height * 1.02,
-      size.width * 0.18,
-      size.height * 0.88,
-      size.width * 0.13,
-      size.height * 0.65,
-    );
-
-    path.cubicTo(
-      size.width * 0.07,
-      size.height * 0.42,
-      size.width * 0.12,
-      size.height * 0.16,
-      size.width * 0.30,
-      size.height * 0.08,
-    );
-
-    path.close();
-
-    return path;
-  }
-
-  @override
-  bool shouldReclip(
-    covariant CustomClipper<Path> oldClipper,
-  ) {
-    return false;
   }
 }
