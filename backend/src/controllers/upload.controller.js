@@ -104,3 +104,32 @@ exports.deletePhotoCouverture = async (req, res) => {
     res.status(500).json({ success: false, message: 'Erreur lors de la suppression de la photo de couverture.' });
   }
 };
+
+// ── Attestation de service ────────────────────────────────────────────────
+// Même schéma que photo-profil/photo-couverture ci-dessus : authentification
+// JWT (req.user.id), persistance directe dans users.attestation_url.
+
+// POST /api/upload/attestation-service
+exports.uploaderAttestationService = async (req, res) => {
+  try {
+    if (!req.uploadedFileUrl) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
+    }
+    await pool.query('UPDATE users SET attestation_url = $1 WHERE id = $2', [req.uploadedFileUrl, req.user.id]);
+    res.status(200).json({ success: true, url: req.uploadedFileUrl });
+  } catch (error) {
+    console.error('[uploaderAttestationService] Erreur :', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour de l\'attestation de service.' });
+  }
+};
+
+// DELETE /api/upload/attestation-service
+exports.supprimerAttestationService = async (req, res) => {
+  try {
+    await pool.query('UPDATE users SET attestation_url = NULL WHERE id = $1', [req.user.id]);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('[supprimerAttestationService] Erreur :', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la suppression de l\'attestation de service.' });
+  }
+};
