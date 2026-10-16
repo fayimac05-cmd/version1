@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ScolarHub — Plateforme</title>
+<style>
+  :root { --bg:#f8fafc; --card:#fff; --tx:#0f172a; --mu:#64748b; --bd:#e2e8f0; --br:#1e40af; --ok:#059669; --ko:#dc2626; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1220; --card:#111a2e; --tx:#e5e7eb; --mu:#94a3b8; --bd:#1f2a44; --br:#6b8cff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:22px; margin:8px 0 4px; } h2 { font-size:17px; margin:0 0 12px; }
+  .mu { color:var(--mu); font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:14px; padding:16px; margin:16px 0; }
+  label { display:block; font-size:13px; color:var(--mu); margin:10px 0 4px; }
+  input, select { width:100%; padding:10px 12px; border:1px solid var(--bd); border-radius:10px; background:var(--bg); color:var(--tx); font:inherit; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:0 14px; }
+  button { background:var(--br); color:#fff; border:0; border-radius:10px; padding:10px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  button.sec { background:transparent; color:var(--br); border:1px solid var(--br); }
+  button.ko { background:var(--ko); }
+  button:disabled { opacity:.5; cursor:default; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--bd); vertical-align:top; }
+  .scroll { overflow-x:auto; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; font-weight:600; }
+  .on { background:#d1fae5; color:#065f46; } .off { background:#fee2e2; color:#991b1b; }
+  #msg { padding:10px 12px; border-radius:10px; margin:12px 0; display:none; }
+  #msg.ok { display:block; background:#d1fae5; color:#065f46; } #msg.err { display:block; background:#fee2e2; color:#991b1b; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  code { background:var(--bg); border:1px solid var(--bd); padding:1px 6px; border-radius:6px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ScolarHub — Plateforme</h1>
+  <div class="mu">Création et gestion des établissements. Réservé au propriétaire de la plateforme.</div>
+  <div id="msg"></div>
+
+  <section class="card" id="connexion">
+    <h2>Clé plateforme</h2>
+    <label for="cle">Clé secrète (PLATFORM_ADMIN_KEY du serveur)</label>
+    <input id="cle" type="password" autocomplete="off">
+    <div class="row" style="margin-top:12px"><button id="btnConnexion">Se connecter</button></div>
+    <div class="mu" style="margin-top:8px">La clé reste dans cet onglet uniquement ; elle est effacée à la fermeture.</div>
+  </section>
+
+  <div id="contenu" class="hidden">
+    <section class="card">
+      <h2>Établissements</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Établissement</th><th>Code</th><th>Matricule</th><th>Effectifs</th><th>État</th><th></th></tr></thead>
+        <tbody id="liste"></tbody>
+      </table></div>
+    </section>
+
+    <section class="card">
+      <h2>Nouvel établissement</h2>
+      <form id="formEtab">
+        <div class="grid">
+          <div><label>Nom complet *</label><input name="nom" required></div>
+          <div><label>Sigle *</label><input name="sigle" required></div>
+          <div><label>Ville</label><input name="ville"></div>
+          <div><label>Campus</label><input name="campus"></div>
+          <div><label>Type</label>
+            <select name="type"><option value="superieur">Supérieur</option><option value="lycee">Lycée</option><option value="college">Collège</option><option value="primaire">Primaire</option><option value="autre">Autre</option></select></div>
+          <div><label>Code d'accès (vide = automatique)</label><input name="code" placeholder="ex. UNIV2026"></div>
+        </div>
+        <label>Modèle de matricule * <span class="mu">— jetons {AA}, {AAAA}, {NNNN} ; le reste est le texte fixe propre à l'école</span></label>
+        <input name="modele_matricule" placeholder="{AA}IST-O2/{NNNN}" required>
+        <h2 style="margin-top:20px">Premier Super Admin</h2>
+        <div class="grid">
+          <div><label>Nom *</label><input name="a_nom" required></div>
+          <div><label>Prénoms</label><input name="a_prenoms"></div>
+          <div><label>Email *</label><input name="a_email" type="email" required></div>
+          <div><label>Téléphone</label><input name="a_tel"></div>
+          <div><label>Mot de passe * (8 caractères min.)</label><input name="a_mdp" type="password" minlength="8" required autocomplete="new-password"></div>
+        </div>
+        <div class="row" style="margin-top:16px"><button id="btnCreer" type="submit">Créer l'établissement</button></div>
+      </form>
+    </section>
+  </div>
+</main>
+<script src="/api/plateforme/ui/app.js"></script>
+</body>
+</html>

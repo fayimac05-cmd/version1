@@ -13,7 +13,7 @@ class ApiService {
   //
   // Après le premier déploiement Render, remplacer _cloudUrl par l'URL
   // affichée dans le dashboard (https://backend-scolarhub.onrender.com).
-  static const bool _useCloud = true;
+  static const bool _useCloud = false;
   static const String _cloudUrl = 'https://backend-scolarhub.onrender.com/api';
   // Chrome/Windows sur ce PC : localhost. Pour un téléphone sur le même Wi-Fi,
   // remplacer par l'IP LAN du PC (actuellement 192.168.11.146).
@@ -187,6 +187,47 @@ class ApiService {
     }
   }
 
+  // ── Établissement (multi-établissement) ──────────────────
+  // Code de l'établissement mémorisé à l'ouverture de l'app (voir
+  // ChooseSchoolPage). Vide tant qu'il n'a pas été saisi.
+  static Future<String> _codeEtablissement() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      return p.getString('etablissement_code') ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  // Reconnaît un établissement à partir de son code (route publique).
+  static Future<Map<String, dynamic>> getEtablissementParCode(String code) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/auth/etablissement?code=${Uri.encodeQueryComponent(code.trim())}'),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 45));
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && data['found'] == true) {
+        return {
+          'success': true,
+          'etablissement': Map<String, dynamic>.from(data['etablissement'] as Map),
+        };
+      }
+      return {
+        'success': false,
+        'error': data['message'] ?? "Code d'établissement inconnu.",
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'offline': true,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
+    }
+  }
+
   // ── Login ────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login({
     String? userId,
@@ -206,6 +247,15 @@ class ApiService {
       if (email != null && email.isNotEmpty) body['email'] = email;
       if (nom != null) body['nom'] = nom;
       if (tel != null) body['tel'] = tel;
+      final codeEtab = await _codeEtablissement();
+            if (codeEtab.isEmpty) {
+        return {
+          'success': false,
+          'etab_requis': true,
+          'error': "Choisissez d'abord votre établissement.",
+        };
+      }
+      body['code_etablissement'] = codeEtab;
 
       final response = await http
           .post(
@@ -334,10 +384,12 @@ class ApiService {
   // Renvoie les infos d'affichage + premierLogin, sans mot de passe.
   static Future<Map<String, dynamic>> lookupMatricule(String matricule) async {
     try {
+      final codeEtab = await _codeEtablissement();
+      final etab = codeEtab.isEmpty ? '' : '&code_etablissement=${Uri.encodeQueryComponent(codeEtab)}';
       final response = await http
           .get(
             Uri.parse(
-              '$baseUrl/auth/lookup?matricule=${Uri.encodeQueryComponent(matricule)}',
+              '$baseUrl/auth/lookup?matricule=${Uri.encodeQueryComponent(matricule)}$etab',
             ),
             headers: {'Content-Type': 'application/json'},
           )
@@ -371,10 +423,12 @@ class ApiService {
     required String tel,
   }) async {
     try {
+      final codeEtab = await _codeEtablissement();
+      final etab = codeEtab.isEmpty ? '' : '&code_etablissement=${Uri.encodeQueryComponent(codeEtab)}';
       final response = await http
           .get(
             Uri.parse(
-              '$baseUrl/auth/lookup?nom=${Uri.encodeQueryComponent(nom)}&prenom=${Uri.encodeQueryComponent(prenom)}&tel=${Uri.encodeQueryComponent(tel)}',
+              '$baseUrl/auth/lookup?nom=${Uri.encodeQueryComponent(nom)}&prenom=${Uri.encodeQueryComponent(prenom)}&tel=${Uri.encodeQueryComponent(tel)}$etab',
             ),
             headers: {'Content-Type': 'application/json'},
           )
@@ -451,10 +505,11 @@ class ApiService {
     required String identifiant,
   }) async {
     try {
+      final codeEtab = await _codeEtablissement();
       final response = await http.post(
         Uri.parse('$baseUrl/auth/forgot-password'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'identifiant': identifiant}),
+        body: jsonEncode({'identifiant': identifiant, 'code_etablissement': codeEtab}),
       );
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
@@ -480,6 +535,7 @@ class ApiService {
     required String newPassword,
   }) async {
     try {
+      final codeEtab = await _codeEtablissement();
       final response = await http.post(
         Uri.parse('$baseUrl/auth/reset-password'),
         headers: {'Content-Type': 'application/json'},
@@ -487,6 +543,7 @@ class ApiService {
           'identifiant': identifiant,
           'code': code,
           'newPassword': newPassword,
+          'code_etablissement': codeEtab,
         }),
       );
       final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -550,7 +607,9 @@ class ApiService {
     }
   }
 
-  // ── Inscription publique (auto-inscription étudiant) ─────
+  // ── Inscription publique TEMPORAIRE des anciens étudiants ─
+  // Réponse : success + pending (true = en attente de validation par
+  // l'administration, pas de connexion immédiate) + message.
   static Future<Map<String, dynamic>> register({
     required String nom,
     required String prenoms,
@@ -560,26 +619,37 @@ class ApiService {
     required String filiere,
     required String niveau,
     String? matricule,
+    String? nomPersonne,
+    String? telPersonne,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'nom': nom,
-          'prenoms': prenoms,
-          'email': email,
-          'telephone': telephone,
-          'motDePasse': motDePasse,
-          'filiere': filiere,
-          'niveau': niveau,
-          if (matricule != null && matricule.isNotEmpty) 'matricule': matricule,
-        }),
-      );
-      final body = jsonDecode(response.body);
+      final codeEtab = await _codeEtablissement();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/register'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              if (codeEtab.isNotEmpty) 'code_etablissement': codeEtab,
+              'nom': nom,
+              'prenoms': prenoms,
+              'email': email,
+              'telephone': telephone,
+              'motDePasse': motDePasse,
+              'filiere': filiere,
+              'niveau': niveau,
+              if (matricule != null && matricule.isNotEmpty) 'matricule': matricule,
+              if (nomPersonne != null && nomPersonne.isNotEmpty) 'nomPersonne': nomPersonne,
+              if (telPersonne != null && telPersonne.isNotEmpty) 'telPersonne': telPersonne,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 201 && body['pending'] == true) {
+        return {'success': true, 'pending': true, 'message': body['message']};
+      }
       if (response.statusCode == 201 && body['token'] != null) {
         await saveToken(body['token'], userId: body['user']?['id']);
-        return {'success': true, 'user': body['user']};
+        return {'success': true, 'pending': false, 'user': body['user']};
       }
       return {
         'success': false,
@@ -588,8 +658,83 @@ class ApiService {
     } catch (e) {
       return {
         'success': false,
-        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
       };
+    }
+  }
+
+  // ── Admin : matricule automatique & inscriptions à valider ─
+  static Future<Map<String, dynamic>> _adminGet(String path) async {
+    try {
+      final headers = await getHeaders();
+      final r = await http
+          .get(Uri.parse('$baseUrl$path'), headers: headers)
+          .timeout(const Duration(seconds: 45));
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      if (r.statusCode == 200) return {'success': true, ...Map<String, dynamic>.from(body as Map)};
+      return {'success': false, 'error': (body is Map ? body['message'] : null) ?? 'Erreur serveur.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> _adminSend(String method, String path, Map<String, dynamic> data) async {
+    try {
+      final headers = await getHeaders();
+      final uri = Uri.parse('$baseUrl$path');
+      final enc = jsonEncode(data);
+      final r = await (method == 'PUT'
+              ? http.put(uri, headers: headers, body: enc)
+              : http.post(uri, headers: headers, body: enc))
+          .timeout(const Duration(seconds: 45));
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      if (r.statusCode >= 200 && r.statusCode < 300) return {'success': true, ...Map<String, dynamic>.from(body as Map)};
+      return {'success': false, 'error': (body is Map ? body['message'] : null) ?? 'Erreur serveur.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  /// Prochain matricule libre selon le modèle de l'établissement
+  /// (bouton « Générer automatiquement »). Clé 'matricule' dans la réponse.
+  static Future<Map<String, dynamic>> getProchainMatricule({int? anneeEntree}) =>
+      _adminGet('/etudiants/prochain-matricule${anneeEntree != null ? '?anneeEntree=$anneeEntree' : ''}');
+
+  static Future<Map<String, dynamic>> getParametresInscription() =>
+      _adminGet('/etudiants/parametres-inscription');
+
+  static Future<Map<String, dynamic>> setParametresInscription({
+    bool? inscriptionOuverte,
+    bool? inscriptionValidation,
+    String? modeleMatricule,
+  }) =>
+      _adminSend('PUT', '/etudiants/parametres-inscription', {
+        if (inscriptionOuverte != null) 'inscriptionOuverte': inscriptionOuverte,
+        if (inscriptionValidation != null) 'inscriptionValidation': inscriptionValidation,
+        if (modeleMatricule != null) 'modeleMatricule': modeleMatricule,
+      });
+
+  static Future<Map<String, dynamic>> getInscriptionsEnAttente() =>
+      _adminGet('/etudiants/en-attente');
+
+  static Future<Map<String, dynamic>> validerInscriptions({List<String>? ids, bool all = false}) =>
+      _adminSend('POST', '/etudiants/valider-inscriptions', {'ids': ids ?? [], 'all': all});
+
+  static Future<Map<String, dynamic>> refuserInscriptions(List<String> ids) =>
+      _adminSend('POST', '/etudiants/refuser-inscriptions', {'ids': ids});
+
+  // Filières affichées à l'inscription (public, avant connexion).
+  static Future<Map<String, dynamic>> getFilieresPubliques() async {
+    try {
+      final codeEtab = await _codeEtablissement();
+      final r = await http
+          .get(Uri.parse('$baseUrl/auth/filieres?code_etablissement=${Uri.encodeQueryComponent(codeEtab)}'))
+          .timeout(const Duration(seconds: 45));
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      if (r.statusCode == 200) return {'success': true, 'data': body as List<dynamic>};
+      return {'success': false, 'error': (body is Map ? body['message'] : null) ?? 'Erreur lors du chargement des filières.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
   }
 
@@ -623,18 +768,83 @@ class ApiService {
   static Future<Map<String, dynamic>> createFiliere({
     required String nom,
     String? description,
+    String? abreviation,
+    String? domaine,
+    String? responsable,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/filieres'),
         headers: await getHeaders(),
-        body: jsonEncode({'nom': nom, 'description': description}),
+        body: jsonEncode({
+          'nom': nom,
+          'description': description,
+          'abreviation': abreviation,
+          'domaine': domaine,
+          'responsable': responsable,
+        }),
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 201) return {'success': true, 'data': body};
       return {
         'success': false,
         'error': body['message'] ?? 'Erreur création filière.',
+      };
+    } catch (_) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend.',
+      };
+    }
+  }
+
+  // ── Filières : modifier ───────────────────────────────────
+  static Future<Map<String, dynamic>> updateFiliere({
+    required String id,
+    required String nom,
+    String? abreviation,
+    String? domaine,
+    String? responsable,
+  }) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/filieres/$id'),
+        headers: await getHeaders(),
+        body: jsonEncode({
+          'nom': nom,
+          'abreviation': abreviation,
+          'domaine': domaine,
+          'responsable': responsable,
+        }),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data'], 'partial': body['partial'] == true};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur modification filière.',
+      };
+    } catch (_) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend.',
+      };
+    }
+  }
+
+  // ── Filières : supprimer ──────────────────────────────────
+  static Future<Map<String, dynamic>> deleteFiliere(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/filieres/$id'),
+        headers: await getHeaders(),
+      );
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) return {'success': true};
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur suppression filière.',
       };
     } catch (_) {
       return {
@@ -972,6 +1182,79 @@ class ApiService {
     }
   }
 
+    // ── Annonces : upload d'un fichier (image / pièce jointe) ──
+  // ── Logo de l'établissement ─────────────────────────────────
+  static Future<String> getLogoEtablissement() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/upload/logo-etablissement'), headers: headers);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(response.bodyBytes));
+        return (body['url'] ?? '').toString();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  static Future<Map<String, dynamic>> uploadLogoEtablissement(List<int> bytes, String filename) async {
+    try {
+      final token = await getToken();
+      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/upload/logo-etablissement'));
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) return {'success': true, 'url': body['url']};
+      return {'success': false, 'error': body['message'] ?? "Erreur lors de l'envoi du logo."};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
+  static Future<bool> supprimerLogoEtablissement() async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.delete(Uri.parse('$baseUrl/upload/logo-etablissement'), headers: headers);
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadAnnonceFichier(
+    String id,
+    List<int> bytes,
+    String filename,
+  ) async {
+    try {
+      final token = await getToken();
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/annonces/$id/fichier'),
+      );
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {'success': true, 'url': body['url'], 'data': body['data']};
+      }
+      return {
+        'success': false,
+        'error': body['message'] ?? 'Erreur lors de l\'upload du fichier.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Serveur injoignable. Démarrez le backend (npm start).',
+      };
+    }
+  }
+  
   // ── Événements : fiche d'inscription ──────────────────────
   static Future<Map<String, dynamic>> inscrireEvenement(
     String id,
