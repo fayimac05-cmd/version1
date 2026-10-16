@@ -31,6 +31,7 @@ const {
   getAdminContacts,
   getContacts,
   getUsersOnline,
+  getCanauxStandard,
 } = require('../controllers/messageController');
 
 // Toutes les routes messagerie nécessitent un JWT valide
@@ -38,6 +39,7 @@ router.use(auth);
 
 // ── Canaux ────────────────────────────────────────────────
 router.get('/canaux',            getCanaux);
+router.get('/canaux-standard',   getCanauxStandard);
 router.get('/canal/:id',         getMessagesCanal);
 router.post('/canal/:id',        envoyerMessageCanal);
 

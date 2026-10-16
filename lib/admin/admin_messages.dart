@@ -207,10 +207,28 @@ class AdminMessagesState extends State<AdminMessages>
       _myUserId = await ApiService.getUserId();
       final headers = await ApiService.getHeaders();
 
+      // Identifiants des canaux standards de MON établissement (par type).
+      final Map<String, String> idsStd = {};
+      try {
+        final resStd = await http.get(
+          Uri.parse('${ApiService.baseUrl}/messages/canaux-standard'),
+          headers: headers,
+        );
+        if (resStd.statusCode == 200) {
+          final b = jsonDecode(utf8.decode(resStd.bodyBytes));
+          final d = b is Map ? b['data'] : null;
+          if (d is Map) {
+            for (final e in d.entries) {
+              idsStd[e.key.toString()] = e.value.toString();
+            }
+          }
+        }
+      } catch (_) {}
+
       final newGroupes = <GroupeAdmin>[];
       for (final def in _defaultAdminGroupes) {
         newGroupes.add(GroupeAdmin(
-          id: def.id,
+          id: idsStd[def.type] ?? def.id,
           nom: def.nom,
           type: def.type,
           avatar: def.avatar,

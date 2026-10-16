@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../admin/admin_theme.dart';
+import '../theme/app_palette.dart';
 
 class AdminDashboard extends StatefulWidget {
   final StudentProfile profile;
@@ -229,46 +230,107 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ── Salutation ────────────────────────────────────────────────────────
-  Widget _greeting() => Row(children: [
-    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Bonjour, ${widget.profile.prenoms} 👋',
-          style: AdminTheme.headingLarge),
-      const SizedBox(height: 4),
-      Text('Voici un aperçu de votre établissement aujourd\'hui.',
-          style: AdminTheme.bodyMedium),
-    ])),
-    if (widget.profile.filtreParDomaine) ...[
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE0F2FE),
-          borderRadius: BorderRadius.circular(AdminTheme.radiusButton),
-          border: Border.all(color: const Color(0xFFBAE6FD)),
-        ),
-        child: Row(children: [
-          const Icon(Icons.school_rounded, color: Color(0xFF0284C7), size: 14),
-          const SizedBox(width: 6),
-          Text(
-            widget.profile.domaineAdmin == 'Sciences & Technologies' ? 'Sciences & Tech' : 'Sciences Gestion',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0284C7)),
+  // ── Salutation / bannière établissement ────────────────────────────────
+  // Fidèle à la maquette : fond bleu marine plein, la photo de
+  // l'établissement n'occupe QUE la partie droite et s'estompe
+  // progressivement dans le marine (ShaderMask sur l'image elle-même,
+  // pas un voile sombre par-dessus — la photo garde ses couleurs là où
+  // elle est visible). Logo "ScolarHub" bicolore en haut à droite, pastille
+  // "Année universitaire" en bas à gauche, swoosh jaune décoratif en coin.
+  Widget _greeting() => Container(
+    width: double.infinity,
+    height: 170,
+    decoration: BoxDecoration(
+      color: const Color(0xFF0B1E4D),
+      borderRadius: BorderRadius.circular(AdminTheme.radiusCard),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Stack(children: [
+      // Photo — uniquement la partie droite du bandeau
+      Positioned.fill(
+        left: 260,
+        child: ShaderMask(
+          shaderCallback: (rect) => const LinearGradient(
+            begin: Alignment.centerLeft, end: Alignment.centerRight,
+            colors: [Colors.transparent, Colors.white, Colors.white],
+            stops: [0.0, 0.35, 1.0],
+          ).createShader(rect),
+          blendMode: BlendMode.dstIn,
+          child: Image.asset(
+            'assets/images/etablissement_banner.png',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox(),
           ),
+        ),
+      ),
+      // Swoosh jaune décoratif (coin bas-droit, façon maquette)
+      Positioned(
+        right: -26, bottom: -34,
+        child: Transform.rotate(
+          angle: -0.33,
+          child: Container(
+            width: 150, height: 54,
+            decoration: BoxDecoration(
+              color: AppPalette.yellow.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(40),
+            ),
+          ),
+        ),
+      ),
+      // Logo ScolarHub — haut droit
+      Positioned(
+        top: 18, right: 20,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          const Icon(Icons.school_rounded, color: Colors.white, size: 24),
+          const SizedBox(height: 4),
+          RichText(
+            text: const TextSpan(children: [
+              TextSpan(text: 'Scolar', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Colors.white)),
+              TextSpan(text: 'Hub', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppPalette.yellow)),
+            ]),
+          ),
+          const SizedBox(height: 2),
+          const Text('Ensemble pour une\néducation de qualité',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 9, color: Color(0xFFB9CBE8), fontWeight: FontWeight.w600, height: 1.3)),
         ]),
       ),
-      const SizedBox(width: 10),
-    ],
-    Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(color: AdminTheme.primaryLight,
-          borderRadius: BorderRadius.circular(AdminTheme.radiusButton)),
-      child: Row(children: [
-        const Icon(Icons.calendar_today_rounded, color: AdminTheme.primary, size: 14),
-        const SizedBox(width: 6),
-        Text('Année 2024-2025', style: const TextStyle(fontSize: 12,
-            fontWeight: FontWeight.w700, color: AdminTheme.primary)),
-      ]),
+      // Texte + pastille — gauche
+      Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text('Bonjour, ${widget.profile.prenoms} 👋',
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+          const SizedBox(height: 4),
+          Text('Voici un aperçu de votre établissement aujourd\'hui.',
+              style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.85))),
+          const Spacer(),
+          Wrap(spacing: 10, runSpacing: 8, children: [
+            _greetingChip(icon: Icons.calendar_today_rounded, label: 'Année universitaire 2024-2025'),
+            if (widget.profile.filtreParDomaine)
+              _greetingChip(
+                icon: Icons.school_rounded,
+                label: widget.profile.domaineAdmin == 'Sciences & Technologies' ? 'Sciences & Tech' : 'Sciences Gestion',
+              ),
+          ]),
+        ]),
+      ),
+    ]),
+  );
+
+  Widget _greetingChip({required IconData icon, required String label}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(AdminTheme.radiusButton),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
     ),
-  ]);
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, color: Colors.white, size: 14),
+      const SizedBox(width: 6),
+      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+    ]),
+  );
 
   // ── Bannière alertes ─────────────────────────────────────────────────
   Widget _alertsBanner() => Container(

@@ -2,6 +2,28 @@ const PDFDocument = require('pdfkit');
 const pool = require('../config/db');
 const { envoyerNotificationAuto } = require('./notifications.controller');
 
+// ── Multi-établissement ─────────────────────────────────────────────────────
+// req.etablissementId vient du jeton (auth.middleware). S'il est absent (anciens
+// jetons), aucun filtre n'est appliqué — comportement historique.
+// Étudiants : colonne etudiants.etablissement_id. Sessions de notes : rattachées
+// à l'établissement par leur filière (filieres.etablissement_id).
+const etabEtu = (params, etabId, alias = 'e') => {
+    if (!etabId) return '';
+    params.push(etabId);
+    return ` AND ${alias}.etablissement_id = $${params.length}`;
+};
+const etabSession = (params, etabId, alias = 'sn') => {
+    if (!etabId) return '';
+    params.push(etabId);
+    return ` AND ${alias}.filiere_id IN (SELECT id FROM filieres WHERE etablissement_id = $${params.length})`;
+};
+async function filiereDeMonEtab(filiereId, etabId) {
+    if (!etabId) return true;
+    if (filiereId === undefined || filiereId === null || filiereId === '') return false;
+    const r = await pool.query('SELECT 1 FROM filieres WHERE id = $1 AND etablissement_id = $2', [filiereId, etabId]);
+    return r.rows.length > 0;
+}
+
 const getNotesEtudiant = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -46,8 +68,9 @@ const generateBulletinPdf = async (req, res) => {
             return res.status(403).json({ error: "Accès refusé : vous ne pouvez générer que votre propre bulletin." });
         }
 
-        const studentQuery = `SELECT nom, prenoms, matricule FROM users WHERE id = $1 AND (role ILIKE '%etudiant%' OR role ILIKE '%delegue%' OR role ILIKE '%bde%')`;
-        const studentResult = await pool.query(studentQuery, [etudiantId]);
+        const studentParams = [etudiantId];
+        const studentQuery = `SELECT nom, prenoms, matricule FROM users WHERE id = $1 AND (role ILIKE '%etudiant%' OR role ILIKE '%delegue%' OR role ILIKE '%bde%')${etabEtu(studentParams, req.etablissementId, 'users')}`;
+        const studentResult = await pool.query(studentQuery, studentParams);
 
         if (studentResult.rows.length === 0) {
             return res.status(404).json({ error: "Étudiant non trouvé." });
@@ -155,6 +178,10 @@ const createGradeSession = async (req, res) => {
             return res.status(400).json({ success: false, message: 'semestre et annee_academique sont requis.' });
         }
 
+        if (!(await filiereDeMonEtab(filiere_id, req.etablissementId))) {
+            return res.status(403).json({ success: false, message: 'Filière inconnue pour votre établissement.' });
+        }
+
         // ✅ La mention (Très Bien/Bien/Assez Bien/Passable/Insuffisant) est
         // désormais saisie PAR ÉTUDIANT (chaque note a la sienne), pas une
         // seule mention pour toute la session — tous les étudiants d'une
@@ -174,7 +201,8 @@ const createGradeSession = async (req, res) => {
                     skippedStudents.push({ matricule: note.matricule || 'inconnu', reason: 'matricule ou valeur manquant' });
                     continue;
                 }
-                const etudiantResult = await pool.query(`SELECT id FROM etudiants WHERE matricule = $1`, [note.matricule]);
+                const pEtu = [note.matricule];
+                const etudiantResult = await pool.query(`SELECT id FROM etudiants e WHERE e.matricule = $1${etabEtu(pEtu, req.etablissementId)}`, pEtu);
                 if (etudiantResult.rows.length > 0) {
                     const e_id = etudiantResult.rows[0].id;
                     await pool.query(`
@@ -203,7 +231,8 @@ const createGradeSession = async (req, res) => {
 // "Notes & Moyennes", léger (juste un COUNT, pas les notes détaillées).
 const getNombreSessionsEnAttente = async (req, res) => {
     try {
-        const result = await pool.query(`SELECT COUNT(*) FROM sessions_notes WHERE statut = 'en_attente'`);
+        const pCount = [];
+        const result = await pool.query(`SELECT COUNT(*) FROM sessions_notes sn WHERE sn.statut = 'en_attente'${etabSession(pCount, req.etablissementId)}`, pCount);
         res.json({ success: true, count: parseInt(result.rows[0].count, 10) || 0 });
     } catch (error) {
         console.error('[getNombreSessionsEnAttente]', error);
@@ -215,11 +244,12 @@ const getAllSessionsAdmin = async (req, res) => {
     try {
         const { statut } = req.query;
         const params = [];
-        let where = '';
+        let where = 'WHERE 1=1';
         if (statut) {
             params.push(statut);
-            where = `WHERE sn.statut = $${params.length}`;
+            where += ` AND sn.statut = $${params.length}`;
         }
+        where += etabSession(params, req.etablissementId);
 
         const result = await pool.query(`
             SELECT sn.id, sn.filiere_id, sn.filiere_nom, sn.niveau, sn.module_id,
@@ -256,10 +286,11 @@ const getAllSessionsAdmin = async (req, res) => {
 const validateSessionAdmin = async (req, res) => {
     try {
         const { session_id } = req.params;
+        const pVal = [session_id];
         const result = await pool.query(`
             UPDATE sessions_notes SET statut = 'validee', is_sent = true
-            WHERE id = $1 RETURNING id, module_id
-        `, [session_id]);
+            WHERE id = $1${etabSession(pVal, req.etablissementId, 'sessions_notes')} RETURNING id, module_id
+        `, pVal);
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Session non trouvée.' });
         }
@@ -301,10 +332,11 @@ const rejectSessionAdmin = async (req, res) => {
     try {
         const { session_id } = req.params;
         const { motif } = req.body;
+        const pRej = [session_id, motif?.trim() || null];
         const result = await pool.query(`
             UPDATE sessions_notes SET statut = 'rejetee', is_sent = false, motif_rejet = $2
-            WHERE id = $1 RETURNING id
-        `, [session_id, motif?.trim() || null]);
+            WHERE id = $1${etabSession(pRej, req.etablissementId, 'sessions_notes')} RETURNING id
+        `, pRej);
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Session non trouvée.' });
         }
@@ -328,7 +360,9 @@ const getSessionDetail = async (req, res) => {
         `, [session_id]);
 
         const session = sessionResult.rows[0];
-        if (!session) return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+        if (!session || !(await filiereDeMonEtab(session.filiere_id, req.etablissementId))) {
+            return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+        }
         if (session.professeur_id !== professeur_id && req.user.role !== 'admin') {
             return res.status(403).json({ success: false, message: 'Accès refusé.' });
         }
@@ -356,7 +390,9 @@ const updateGradeSession = async (req, res) => {
 
         const sessionResult = await pool.query(`SELECT * FROM sessions_notes WHERE id = $1`, [session_id]);
         const session = sessionResult.rows[0];
-        if (!session) return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+        if (!session || !(await filiereDeMonEtab(session.filiere_id, req.etablissementId))) {
+            return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+        }
         if (session.professeur_id !== professeur_id) {
             return res.status(403).json({ success: false, message: 'Accès refusé.' });
         }
@@ -364,7 +400,8 @@ const updateGradeSession = async (req, res) => {
         if (notes && notes.length > 0) {
             for (const note of notes) {
                 if (!note.matricule || note.valeur === undefined || note.valeur === null) continue;
-                const etudiantResult = await pool.query(`SELECT id FROM etudiants WHERE matricule = $1`, [note.matricule]);
+                const pEtu2 = [note.matricule];
+                const etudiantResult = await pool.query(`SELECT id FROM etudiants e WHERE e.matricule = $1${etabEtu(pEtu2, req.etablissementId)}`, pEtu2);
                 const e_id = etudiantResult.rows[0]?.id;
                 if (!e_id) continue;
 
@@ -397,6 +434,7 @@ const updateGradeSession = async (req, res) => {
 
 const getMoyennesAdmin = async (req, res) => {
     try {
+        const pMoy = [];
         const result = await pool.query(`
             SELECT e.id AS etudiant_id, e.matricule, e.nom, e.prenoms,
                    COALESCE(e.filiere_nom, f.nom) AS filiere_nom, e.niveau,
@@ -408,11 +446,11 @@ const getMoyennesAdmin = async (req, res) => {
             JOIN etudiants e ON n.etudiant_id = e.id
             JOIN sessions_notes sn ON n.session_id = sn.id
             LEFT JOIN filieres f ON f.id = e.filiere_id
-            WHERE sn.statut = 'validee'
+            WHERE sn.statut = 'validee'${etabEtu(pMoy, req.etablissementId)}
             GROUP BY e.id, e.matricule, e.nom, e.prenoms, e.filiere_nom, f.nom, f.domaine, e.niveau
             HAVING SUM(m.coefficient) > 0
             ORDER BY moyenne DESC
-        `);
+        `, pMoy);
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('[getMoyennesAdmin]', error);
@@ -426,6 +464,7 @@ const getMoyennesAdmin = async (req, res) => {
 // Sert au chip d'alerte du tableau de bord admin (risque de redoublement).
 const getNotesBlamables = async (req, res) => {
     try {
+        const pBla = [];
         const result = await pool.query(`
             SELECT n.id, n.valeur, e.nom, e.prenoms, e.matricule,
                    COALESCE(e.filiere_nom, f.nom) AS filiere_nom, e.niveau,
@@ -437,9 +476,9 @@ const getNotesBlamables = async (req, res) => {
             LEFT JOIN filieres f ON f.id = e.filiere_id
             WHERE sn.statut = 'validee'
               AND n.valeur < 7
-              AND sn.date_session >= NOW() - INTERVAL '7 days'
+              AND sn.date_session >= NOW() - INTERVAL '7 days'${etabEtu(pBla, req.etablissementId)}
             ORDER BY sn.date_session DESC
-        `);
+        `, pBla);
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('[getNotesBlamables]', error);
@@ -551,17 +590,19 @@ const getListeClasseAvecNotes = async (req, res) => {
         }
         const module = moduleRes.rows[0];
 
+        const pSes = [module_id, semestre, annee_academique];
         const sessionsRes = await pool.query(
-            `SELECT id FROM sessions_notes
-             WHERE module_id = $1 AND semestre = $2 AND annee_academique = $3 AND statut = 'validee'
-             ORDER BY id ASC`,
-            [module_id, semestre, annee_academique]
+            `SELECT sn.id FROM sessions_notes sn
+             WHERE sn.module_id = $1 AND sn.semestre = $2 AND sn.annee_academique = $3 AND sn.statut = 'validee'${etabSession(pSes, req.etablissementId)}
+             ORDER BY sn.id ASC`,
+            pSes
         );
         const sessionIds = sessionsRes.rows.map(s => s.id);
 
+        const pEtL = [filiere_id, niveau];
         const etudiantsRes = await pool.query(
-            `SELECT id, matricule, nom, prenoms FROM etudiants WHERE filiere_id = $1 AND niveau = $2 ORDER BY nom, prenoms`,
-            [filiere_id, niveau]
+            `SELECT e.id, e.matricule, e.nom, e.prenoms FROM etudiants e WHERE e.filiere_id = $1 AND e.niveau = $2${etabEtu(pEtL, req.etablissementId)} ORDER BY e.nom, e.prenoms`,
+            pEtL
         );
 
         let notesParEtudiant = {};
@@ -576,13 +617,14 @@ const getListeClasseAvecNotes = async (req, res) => {
             }
         }
 
+        const pAbs = [module_id, filiere_id, niveau];
         const absencesRes = await pool.query(
             `SELECT ap.matricule, COUNT(*) FILTER (WHERE ap.statut = 'absent') AS nb_absences
              FROM appel_presences ap
              JOIN appels a ON a.id = ap.appel_id
-             WHERE a.module_id = $1 AND a.filiere_id = $2 AND a.niveau = $3
+             WHERE a.module_id = $1 AND a.filiere_id = $2 AND a.niveau = $3${etabSession(pAbs, req.etablissementId, 'a')}
              GROUP BY ap.matricule`,
-            [module_id, filiere_id, niveau]
+            pAbs
         );
         const absencesParMatricule = {};
         for (const row of absencesRes.rows) {

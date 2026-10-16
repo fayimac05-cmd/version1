@@ -25,6 +25,17 @@ const { envoyerNotificationAuto } = require('./notifications.controller');
 // PUIS pondération par coefficient — un seul poids par module.
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Multi-établissement ─────────────────────────────────────────────────────
+// req.etablissementId vient du jeton ; s'il est absent (anciens jetons), pas de filtre.
+// Les bulletins sont rattachés à l'établissement par leur filière.
+const filiereDeMonEtab = async (filiereId, etabId) => {
+    if (!etabId) return true;
+    if (filiereId === undefined || filiereId === null || filiereId === '') return false;
+    const r = await pool.query('SELECT 1 FROM filieres WHERE id = $1 AND etablissement_id = $2', [filiereId, etabId]);
+    return r.rows.length > 0;
+};
+const REFUS_FILIERE = { success: false, message: 'Filière introuvable.' };
+
 // Brique de calcul partagée entre Prévision et Bulletins — pour chaque
 // étudiant de la filière+niveau, la liste de ses modules du semestre avec
 // notes (dans l'ordre chronologique des sessions) + moyenne simple du
@@ -111,6 +122,9 @@ const getPrevisionMoyenne = async (req, res) => {
         if (!filiere_id || !niveau || !semestre || !annee_academique) {
             return res.status(400).json({ success: false, message: 'filiere_id, niveau, semestre et annee_academique sont requis.' });
         }
+        if (!(await filiereDeMonEtab(filiere_id, req.etablissementId))) {
+            return res.status(404).json(REFUS_FILIERE);
+        }
         const { modules, etudiants } = await _calculerMoyennesModules(filiere_id, niveau, semestre, annee_academique);
         res.json({ success: true, data: { modules, etudiants } });
     } catch (error) {
@@ -126,6 +140,10 @@ const getPreparationBulletin = async (req, res) => {
         const { filiere_id, niveau, semestre, annee_academique } = req.query;
         if (!filiere_id || !niveau || !semestre || !annee_academique) {
             return res.status(400).json({ success: false, message: 'filiere_id, niveau, semestre et annee_academique sont requis.' });
+        }
+
+        if (!(await filiereDeMonEtab(filiere_id, req.etablissementId))) {
+            return res.status(404).json(REFUS_FILIERE);
         }
 
         const { etudiants: etudiantsModules } = await _calculerMoyennesModules(filiere_id, niveau, semestre, annee_academique);
@@ -197,6 +215,10 @@ const publierBulletins = async (req, res) => {
             }
         }
 
+        if (!(await filiereDeMonEtab(filiere_id, req.etablissementId))) {
+            return res.status(404).json(REFUS_FILIERE);
+        }
+
         const { etudiants: etudiantsModules } = await _calculerMoyennesModules(filiere_id, niveau, semestre, annee_academique);
         const modulesParEtudiant = {};
         for (const e of etudiantsModules) modulesParEtudiant[e.etudiant_id] = e.modules;
@@ -216,6 +238,11 @@ const publierBulletins = async (req, res) => {
 
         for (const r of resultats) {
             try {
+                // Avec un établissement, on ne publie que pour les étudiants de cette filière/niveau.
+                if (req.etablissementId && !modulesParEtudiant[r.etudiant_id]) {
+                    echecs.push({ etudiant_id: r.etudiant_id, raison: 'Étudiant hors de cette classe.' });
+                    continue;
+                }
                 const modules = modulesParEtudiant[r.etudiant_id] || [];
                 const moyenneCalculee = _moyenneGenerale(modules);
                 const moyenne = (r.moyenne !== undefined && r.moyenne !== null)
@@ -320,6 +347,9 @@ const envoyerPrevision = async (req, res) => {
         const { filiere_id, niveau, semestre, annee_academique } = req.body;
         if (!filiere_id || !niveau || !semestre || !annee_academique) {
             return res.status(400).json({ success: false, message: 'filiere_id, niveau, semestre et annee_academique sont requis.' });
+        }
+        if (!(await filiereDeMonEtab(filiere_id, req.etablissementId))) {
+            return res.status(404).json(REFUS_FILIERE);
         }
         await pool.query(
             `INSERT INTO previsions_envoyees (filiere_id, niveau, semestre, annee_academique, envoye_par)

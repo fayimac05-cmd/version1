@@ -57,4 +57,16 @@ router.post(
 );
 router.delete('/attestation-service', authMiddleware, uploadController.supprimerAttestationService);
 
+// Logo de l'établissement — lecture : tout connecté ; écriture : Super Admin
+// (vérifié dans le contrôleur).
+router.get('/logo-etablissement', authMiddleware, uploadController.getLogoEtablissement);
+router.post(
+  '/logo-etablissement',
+  authMiddleware,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/logo-etablissement'),
+  uploadController.uploadLogoEtablissement
+);
+router.delete('/logo-etablissement', authMiddleware, uploadController.deleteLogoEtablissement);
+
 module.exports = router;

@@ -3,6 +3,20 @@ const pool = require('../config/db');
 const { envoyerNotificationAuto } = require('./notifications.controller');
 const { envoyerSMS } = require('../services/sms.service');
 
+// ── Multi-établissement ─────────────────────────────────────────────────────
+// req.etablissementId vient du jeton ; s'il est absent (anciens jetons), pas de filtre.
+// Un appel est rattaché à l'établissement par sa filière (filieres.etablissement_id).
+const filiereDeMonEtab = async (filiereId, etabId) => {
+  if (!etabId) return true;
+  if (filiereId === undefined || filiereId === null || filiereId === '') return false;
+  const r = await pool.query('SELECT 1 FROM filieres WHERE id = $1 AND etablissement_id = $2', [filiereId, etabId]);
+  return r.rows.length > 0;
+};
+
+// Diffusion temps réel : limitée à la salle de l'établissement (etab:<id>, rejointe
+// par socketHandler à la connexion) ; sans établissement (ancien jeton), diffusion globale.
+const emettreEtab = (io, etabId, event, data) => (etabId ? io.to(`etab:${etabId}`) : io).emit(event, data);
+
 const DUREE_SESSION_MIN = 10; // durée de validité d'une session de check-in
 
 const genererCode = () => String(Math.floor(100000 + Math.random() * 900000));
@@ -14,6 +28,10 @@ const ouvrirSessionQr = async (req, res) => {
     const professeur_id = req.user.id;
     if (!filiere_id || !module_id) {
       return res.status(400).json({ success: false, message: 'filiere_id et module_id sont requis.' });
+    }
+
+    if (!(await filiereDeMonEtab(filiere_id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Filière introuvable.' });
     }
 
     const appelResult = await pool.query(`
@@ -57,7 +75,9 @@ const getSessionQr = async (req, res) => {
       WHERE s.id = $1
     `, [sessionId]);
     const session = sessionResult.rows[0];
-    if (!session) return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+    if (!session || !(await filiereDeMonEtab(session.filiere_id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+    }
     if (session.professeur_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Accès refusé.' });
     }
@@ -99,15 +119,23 @@ const checkin = async (req, res) => {
     }
 
     // Le QR encode le token UUID ; la saisie manuelle utilise le code à 6 chiffres.
+    // Le code à 6 chiffres peut exister dans plusieurs établissements : on ne
+    // cherche que parmi les sessions des filières de l'établissement de l'étudiant.
+    const pc = [String(code).trim()];
+    let filtreEtab = '';
+    if (req.etablissementId) {
+      pc.push(req.etablissementId);
+      filtreEtab = ` AND a.filiere_id IN (SELECT id FROM filieres WHERE etablissement_id = $${pc.length})`;
+    }
     const sessionResult = await pool.query(`
       SELECT s.id AS session_id, s.appel_id, s.code, s.token, s.statut, s.expires_at,
              a.filiere_id, a.filiere_nom, a.professeur_id, a.module_id, a.niveau
       FROM appel_qr_sessions s
       JOIN appels a ON a.id = s.appel_id
       WHERE (s.code = $1 OR s.token::text = $1)
-        AND s.statut = 'ouverte' AND s.expires_at > NOW()
+        AND s.statut = 'ouverte' AND s.expires_at > NOW()${filtreEtab}
       ORDER BY s.created_at DESC LIMIT 1
-    `, [String(code).trim()]);
+    `, pc);
     const session = sessionResult.rows[0];
     if (!session) {
       return res.status(404).json({ success: false, message: 'Code invalide ou session expirée.' });
@@ -158,7 +186,7 @@ const checkin = async (req, res) => {
     // Suivi en direct côté prof
     const io = req.app.get('io');
     if (io) {
-      io.emit(`appel_qr:${session.session_id}`, {
+      emettreEtab(io, req.etablissementId, `appel_qr:${session.session_id}`, {
         matricule: etudiant.matricule,
         nom: etudiant.nom,
         prenoms: etudiant.prenoms,
@@ -187,7 +215,9 @@ const cloturerSessionQr = async (req, res) => {
       WHERE s.id = $1
     `, [sessionId]);
     const session = sessionResult.rows[0];
-    if (!session) return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+    if (!session || !(await filiereDeMonEtab(session.filiere_id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+    }
     if (session.professeur_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Accès refusé.' });
     }
@@ -260,7 +290,9 @@ const marquerPresenceManuelle = async (req, res) => {
       WHERE s.id = $1
     `, [sessionId]);
     const session = sessionResult.rows[0];
-    if (!session) return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+    if (!session || !(await filiereDeMonEtab(session.filiere_id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Session non trouvée.' });
+    }
     if (session.professeur_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Accès refusé.' });
     }
@@ -268,9 +300,15 @@ const marquerPresenceManuelle = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Session déjà clôturée.' });
     }
 
+    const pe = [matricule];
+    let filtreEtu = '';
+    if (req.etablissementId) {
+      pe.push(req.etablissementId);
+      filtreEtu = ` AND etablissement_id = $${pe.length}`;
+    }
     const etudiantResult = await pool.query(
-      `SELECT id, matricule, nom, prenoms FROM etudiants WHERE matricule = $1`,
-      [matricule],
+      `SELECT id, matricule, nom, prenoms FROM etudiants WHERE matricule = $1${filtreEtu}`,
+      pe,
     );
     const etudiant = etudiantResult.rows[0];
     if (!etudiant) return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
@@ -291,7 +329,7 @@ const marquerPresenceManuelle = async (req, res) => {
     // Suivi en direct côté prof — même canal que le check-in étudiant.
     const io = req.app.get('io');
     if (io) {
-      io.emit(`appel_qr:${session.id}`, {
+      emettreEtab(io, req.etablissementId, `appel_qr:${session.id}`, {
         matricule: etudiant.matricule,
         nom: etudiant.nom,
         prenoms: etudiant.prenoms,

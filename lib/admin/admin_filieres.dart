@@ -12,6 +12,11 @@ import '../services/api_service.dart';
 import '../services/professor_service.dart';
 import '../utils/snackbar_helper.dart';
 
+const Color _navy = Color(0xFF0B1E4D);
+const Color _blue = Color(0xFF1565E0);
+const String _domTech = 'Sciences & Technologies';
+const String _domGestion = 'Sciences de Gestion';
+
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
 // ════════════════════════════════════════════════════════════════════════════
@@ -33,91 +38,118 @@ class Module {
       );
 }
 
-
+/// Filière — construite à partir de GET /api/filieres (données réelles :
+/// effectifs, niveaux et nombre de modules calculés côté serveur).
 class Filiere {
-  final String id, nom, abreviation, niveau, domaine, anneeAcademique; // Ajout abreviation
+  final String id, nom, abreviation, niveau, domaine, anneeAcademique;
   final List<Module> modules;
   int nbEtudiants;
+  int nbModules;
   bool active;
-  // id réel de la filière côté backend (utilisé pour persister les modules)
   String? backendId;
+  String responsable;
+  String statut;
+  List<String> niveaux;
+  Map<String, int> parNiveau;
   Filiere({required this.id, required this.nom, required this.abreviation, required this.niveau,
       required this.domaine, required this.anneeAcademique,
-      required this.modules, this.nbEtudiants = 0, this.active = true, this.backendId});
+      required this.modules, this.nbEtudiants = 0, this.nbModules = 0, this.active = true,
+      this.backendId, this.responsable = '', this.statut = '', this.niveaux = const [], this.parNiveau = const {}});
+
+  factory Filiere.fromApi(Map<String, dynamic> j) {
+    final nom = (j['nom'] ?? '').toString().trim();
+    final desc = (j['description'] ?? '').toString();
+    final niveaux = ((j['niveaux'] as List?) ?? const [])
+        .map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+
+    var domaine = (j['domaine_col'] ?? j['domaine'] ?? '').toString().trim();
+    if (domaine.isEmpty) {
+      final part = desc.split('·').first.trim();
+      domaine = part.startsWith('Sciences') ? part : _domaineFromNom(nom);
+    }
+    var abrev = (j['abreviation'] ?? '').toString().trim();
+    if (abrev.isEmpty) abrev = _deriveAbrev(nom);
+
+    final now = DateTime.now();
+    final y = now.month >= 9 ? now.year : now.year - 1;
+
+    return Filiere(
+      id: j['id'].toString(),
+      backendId: j['id'].toString(),
+      nom: nom,
+      abreviation: abrev,
+      niveau: niveaux.map(_abrevNiveau).join(', '),
+      niveaux: niveaux,
+      parNiveau: ((j['par_niveau'] as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), (v as num).toInt())),
+      domaine: domaine,
+      anneeAcademique: '$y-${y + 1}',
+      modules: [],
+      nbEtudiants: (j['nb_etudiants'] as num?)?.toInt() ?? 0,
+      nbModules: (j['nb_modules'] as num?)?.toInt() ?? 0,
+      responsable: (j['responsable'] ?? '').toString().trim(),
+      statut: (j['statut'] ?? '').toString().trim(),
+    );
+  }
 }
 
-final List<Filiere> adminFilieres = [
-  Filiere(
-    id: 'F001', 
-    nom: 'Réseaux Informatiques et Télécom', 
-    abreviation: 'RIT', 
-    niveau: 'Licence 2',
-    domaine: 'Sciences & Technologies', 
-    anneeAcademique: '2024-2025', 
-    nbEtudiants: 38,
-    modules: [
-      Module(id: 'M001', nom: 'Réseaux & Protocoles', code: 'RES301', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Mamadou'),
-      Module(id: 'M002', nom: 'Programmation Web', code: 'WEB302', coefficient: 2, volumeHoraire: 30, professeur: 'SAWADOGO Issa'),
-      Module(id: 'M003', nom: 'Base de Données', code: 'BDD303', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Mamadou'),
-      Module(id: 'M004', nom: 'Sécurité Informatique', code: 'SEC304', coefficient: 2, volumeHoraire: 30, professeur: 'TRAORÉ Alassane'),
-      Module(id: 'M005', nom: 'Algorithmique Avancée', code: 'ALG305', coefficient: 4, volumeHoraire: 60, professeur: 'SAWADOGO Issa'),
-    ],
-  ),
-  Filiere(
-    id: 'F002', 
-    nom: 'Électrotechnique', 
-    abreviation: 'ELT', 
-    niveau: 'Licence 2',
-    domaine: 'Sciences & Technologies', 
-    anneeAcademique: '2024-2025', 
-    nbEtudiants: 24,
-    modules: [
-      Module(id: 'M006', nom: 'Électronique de Puissance', code: 'EP301', coefficient: 3, volumeHoraire: 45, professeur: 'COMPAORÉ Brahima'),
-      Module(id: 'M007', nom: 'Machines Électriques', code: 'ME302', coefficient: 3, volumeHoraire: 45, professeur: 'COMPAORÉ Brahima'),
-      Module(id: 'M008', nom: 'Automatisme', code: 'AUT303', coefficient: 2, volumeHoraire: 30, professeur: 'KABORÉ Jean'),
-    ],
-  ),
-  Filiere(
-    id: 'F003', 
-    nom: 'Marketing & Communication', 
-    abreviation: 'MKC', 
-    niveau: 'Licence 2',
-    domaine: 'Sciences de Gestion', 
-    anneeAcademique: '2024-2025', 
-    nbEtudiants: 31,
-    modules: [
-      Module(id: 'M009', nom: 'Marketing Digital', code: 'MKD301', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Aïcha'),
-      Module(id: 'M010', nom: 'Communication Visuelle', code: 'COM302', coefficient: 2, volumeHoraire: 30, professeur: 'ZONGO Marie'),
-      Module(id: 'M011', nom: 'Stratégie Commerciale', code: 'STR303', coefficient: 3, volumeHoraire: 45, professeur: 'OUÉDRAOGO Aïcha'),
-    ],
-  ),
-  Filiere(
-    id: 'F004', 
-    nom: 'Gestion Comptable et Financière', 
-    abreviation: 'GCF', 
-    niveau: 'Licence 3',
-    domaine: 'Sciences de Gestion', 
-    anneeAcademique: '2024-2025', 
-    nbEtudiants: 19,
-    modules: [
-      Module(id: 'M012', nom: 'Comptabilité Générale', code: 'CPT301', coefficient: 4, volumeHoraire: 60, professeur: 'TRAORÉ Boubacar'),
-      Module(id: 'M013', nom: 'Fiscalité', code: 'FSC302', coefficient: 3, volumeHoraire: 45, professeur: 'TRAORÉ Boubacar'),
-    ],
-  ),
-  Filiere(
-    id: 'F005', 
-    nom: 'Génie Civil', 
-    abreviation: 'GNC', 
-    niveau: 'Licence 2',
-    domaine: 'Sciences & Technologies', 
-    anneeAcademique: '2024-2025', 
-    nbEtudiants: 15,
-    modules: [
-      Module(id: 'M014', nom: 'Résistance des Matériaux', code: 'RDM301', coefficient: 4, volumeHoraire: 60, professeur: 'SANKARA Paul'),
-      Module(id: 'M015', nom: 'Topographie', code: 'TOP302', coefficient: 2, volumeHoraire: 30, professeur: 'SANKARA Paul'),
-    ],
-  ),
+/// Liste partagée (utilisée par admin_evaluations.dart) : alimentée avec les
+/// vraies filières du backend. [chargerAdminFilieres] la remplit à la demande.
+final List<Filiere> adminFilieres = [];
+
+Future<void> chargerAdminFilieres() async {
+  final res = await ApiService.getFilieres();
+  if (res['success'] != true) return;
+  final list = (res['data'] as List<dynamic>)
+      .map((e) => Filiere.fromApi(Map<String, dynamic>.from(e as Map)))
+      .toList();
+  adminFilieres..clear()..addAll(list);
+}
+
+String _abrevNiveau(String n) {
+  final t = n.trim();
+  final m = RegExp(r'^(licence|master)\s*(\d)$', caseSensitive: false).firstMatch(t);
+  if (m == null) return t;
+  return '${m.group(1)!.toLowerCase() == 'licence' ? 'L' : 'M'}${m.group(2)}';
+}
+
+String _deriveAbrev(String nom) {
+  const stop = {'et', 'de', 'des', 'du', 'la', 'le', 'les', 'en', 'd', '&', 'l'};
+  final words = nom.split(RegExp(r"[\s'’-]+")).where((w) => w.isNotEmpty && !stop.contains(w.toLowerCase())).toList();
+  if (words.isEmpty) return '';
+  if (words.length == 1) {
+    final w = words.first;
+    return (w.length <= 3 ? w : w.substring(0, 3)).toUpperCase();
+  }
+  return words.map((w) => w[0]).join().toUpperCase();
+}
+
+String _domaineFromNom(String nom) {
+  final n = nom.toLowerCase();
+  const gestion = ['gestion', 'compta', 'marketing', 'commerc', 'financ', 'communication', 'management', 'banque', 'assurance'];
+  return gestion.any(n.contains) ? _domGestion : _domTech;
+}
+
+IconData _iconFiliere(String nom) {
+  final n = nom.toLowerCase();
+  if (n.contains('réseau') || n.contains('reseau') || n.contains('télécom') || n.contains('telecom')) return Icons.hub_rounded;
+  if (n.contains('électro') || n.contains('electro') || n.contains('énergie') || n.contains('energie')) return Icons.bolt_rounded;
+  if (n.contains('marketing') || n.contains('communication')) return Icons.campaign_rounded;
+  if (n.contains('civil') || n.contains('bâtiment') || n.contains('batiment')) return Icons.settings_rounded;
+  if (n.contains('compta') || n.contains('financ')) return Icons.account_balance_rounded;
+  if (n.contains('gestion')) return Icons.bar_chart_rounded;
+  if (n.contains('informatique') || n.contains('logiciel')) return Icons.computer_rounded;
+  if (n.contains('science') || n.contains('techno')) return Icons.science_rounded;
+  return Icons.school_rounded;
+}
+
+const List<Color> _palette = [
+  Color(0xFF1D4ED8), Color(0xFFF59E0B), Color(0xFF7C3AED),
+  Color(0xFF10B981), Color(0xFFEF4444), Color(0xFF2563EB),
 ];
+Color _colorFiliere(Filiere f) {
+  final id = int.tryParse(f.backendId ?? '') ?? f.nom.hashCode.abs();
+  return _palette[id % _palette.length];
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE FILIÈRES & MODULES
@@ -129,275 +161,721 @@ class AdminFilieres extends StatefulWidget {
 }
 
 class _AdminFilieresState extends State<AdminFilieres> {
-  late String _domaine;
-  String _query   = '';
+  static const int _parPage = 6;
+
+  List<Filiere> _filieres = [];
+  bool _loading = true;
+  String? _error;
+
+  String _query = '';
+  String? _filtreFiliere; // backendId
+  String? _filtreDomaine;
+  String? _filtreNiveau;
+  bool _vueCartes = true;
+  int _page = 1;
   final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _domaine = widget.profile.filtreParDomaine ? widget.profile.domaineAdmin : 'tous';
-    _chargerModulesReels();
+    if (widget.profile.filtreParDomaine) _filtreDomaine = widget.profile.domaineAdmin;
+    _charger();
   }
 
-  // Rattache chaque filière (mock) à son id réel côté backend et charge ses
-  // modules réels, afin que les modules ajoutés ici soient persistés et
-  // utilisables par les professeurs (saisie de notes, appel...).
-  Future<void> _chargerModulesReels() async {
-    final result = await ApiService.getFilieres();
-    if (result['success'] != true) return;
-    final backendFilieres = result['data'] as List<dynamic>;
+  @override
+  void dispose() { _searchCtrl.dispose(); super.dispose(); }
 
-    for (final f in adminFilieres) {
-      final match = backendFilieres.firstWhere(
-        (bf) => (bf['nom'] as String).trim().toLowerCase() == f.nom.trim().toLowerCase(),
-        orElse: () => null,
-      );
-      if (match == null) continue;
-      f.backendId = match['id'].toString();
-
-      final modulesResult = await ApiService.getModules(filiereId: f.backendId);
-      if (modulesResult['success'] == true) {
-        final data = modulesResult['data'] as List<dynamic>;
-        f.modules
-          ..clear()
-          ..addAll(data.map((m) => Module.fromApi(m as Map<String, dynamic>)));
-      }
+  Future<void> _charger({bool silencieux = false}) async {
+    if (!silencieux) setState(() { _loading = true; _error = null; });
+    final res = await ApiService.getFilieres();
+    if (!mounted) return;
+    if (res['success'] != true) {
+      setState(() { _loading = false; _error = res['error']?.toString() ?? 'Erreur de chargement.'; });
+      return;
     }
-    if (mounted) setState(() {});
+    final list = (res['data'] as List<dynamic>)
+        .map((e) => Filiere.fromApi(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    adminFilieres..clear()..addAll(list);
+    setState(() { _filieres = list; _loading = false; _error = null; });
   }
 
-  List<Filiere> get _filtered => adminFilieres.where((f) {
-    final matchD = _domaine == 'tous' || f.domaine == _domaine;
-    final matchQ = _query.isEmpty ||
-        f.nom.toLowerCase().contains(_query.toLowerCase()) ||
-        f.niveau.toLowerCase().contains(_query.toLowerCase());
-    return matchD && matchQ;
+  // Filières visibles pour cet admin (restriction par domaine si nécessaire)
+  List<Filiere> get _visibles => widget.profile.filtreParDomaine
+      ? _filieres.where((f) => f.domaine == widget.profile.domaineAdmin).toList()
+      : _filieres;
+
+  List<Filiere> get _filtered => _visibles.where((f) {
+    final q = _query.trim().toLowerCase();
+    final matchQ = q.isEmpty ||
+        f.nom.toLowerCase().contains(q) ||
+        f.abreviation.toLowerCase().contains(q);
+    final matchF = _filtreFiliere == null || f.backendId == _filtreFiliere;
+    final matchD = _filtreDomaine == null || f.domaine == _filtreDomaine;
+    final matchN = _filtreNiveau == null || f.niveaux.contains(_filtreNiveau);
+    return matchQ && matchF && matchD && matchN;
   }).toList();
+
+  List<String> get _tousNiveaux {
+    final s = <String>{};
+    for (final f in _visibles) { s.addAll(f.niveaux); }
+    final l = s.toList()..sort();
+    return l;
+  }
+
+  List<Filiere> get _pageItems {
+    final all = _filtered;
+    final start = (_page - 1) * _parPage;
+    if (start >= all.length) return all.take(_parPage).toList();
+    return all.skip(start).take(_parPage).toList();
+  }
+
+  int get _nbPages {
+    final n = _filtered.length;
+    return n == 0 ? 1 : ((n + _parPage - 1) ~/ _parPage);
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = AdminTheme.isDesktop(context);
-    final st = _filtered;
+    final pad = isDesktop ? 24.0 : 14.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: Column(children: [
-        // ── Header style MaisonPlus ───────────────────────────────────
-        Container(
-          color: Colors.white,
-          padding: EdgeInsets.fromLTRB(isDesktop ? 28 : 16, 20, isDesktop ? 28 : 16, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Filières & Modules',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
-                        color: Color(0xFF1A1A2E), letterSpacing: -0.5)),
-                const SizedBox(height: 4),
-                Text('${adminFilieres.length} filières · ${adminFilieres.fold(0, (s, f) => s + f.nbEtudiants)} étudiants inscrits',
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-              ])),
-              // Bouton Nouvelle filière
-              GestureDetector(
-                onTap: () => _ouvrirCreation(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: AdminTheme.iconBgAlt,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: AdminTheme.iconBgAlt.withValues(alpha:0.3),
-                        blurRadius: 8, offset: const Offset(0, 3))],
-                  ),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_rounded, color: AdminTheme.iconFgAlt, size: 18),
-                    SizedBox(width: 6),
-                    Text('Nouvelle filière', style: TextStyle(fontSize: 14,
-                        fontWeight: FontWeight.w700, color: Colors.white)),
-                  ]),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 20),
-
-            // Recherche + filtres domaine
-            Row(children: [
-              Expanded(child: Container(
-                height: 42,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _query = v),
-                  style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A2E)),
-                  decoration: InputDecoration(
-                    hintText: 'Rechercher une filière...',
-                    hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9CA3AF)),
-                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF9CA3AF), size: 18),
-                    suffixIcon: _query.isNotEmpty
-                        ? IconButton(icon: const Icon(Icons.clear, size: 16, color: Color(0xFF9CA3AF)),
-                            onPressed: () => setState(() { _query = ''; _searchCtrl.clear(); }))
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 11),
+      backgroundColor: const Color(0xFFF4F7FC),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _erreur()
+              : RefreshIndicator(
+                  onRefresh: () => _charger(silencieux: true),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.all(pad),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _header(isDesktop),
+                      const SizedBox(height: 18),
+                      _kpiRow(isDesktop),
+                      const SizedBox(height: 16),
+                      _barreFiltres(isDesktop),
+                      const SizedBox(height: 18),
+                      _enteteListe(),
+                      const SizedBox(height: 12),
+                      if (_filtered.isEmpty)
+                        _vide()
+                      else if (_vueCartes)
+                        _grille(isDesktop)
+                      else
+                        _tableau(),
+                      const SizedBox(height: 14),
+                      _pied(),
+                    ]),
                   ),
                 ),
-              )),
-              const SizedBox(width: 12),
-              // Filtres domaine
-              if (widget.profile.filtreParDomaine)
-                _domaineChip(
-                  widget.profile.domaineAdmin == 'Sciences & Technologies'
-                      ? 'Sciences & Tech'
-                      : 'Sciences Gestion',
-                  widget.profile.domaineAdmin,
-                )
-              else ...[
-                _domaineChip('Tous', 'tous'),
-                const SizedBox(width: 6),
-                _domaineChip('Sciences & Tech', 'Sciences & Technologies'),
-                const SizedBox(width: 6),
-                _domaineChip('Sciences Gestion', 'Sciences de Gestion'),
-              ],
-            ]),
-            const SizedBox(height: 16),
-
-            // Stats rapides
-            Row(children: [
-              _statCard('${adminFilieres.where((f) => f.domaine.contains('Technologies')).length}',
-                  'Sciences & Tech', const Color(0xFF1A3C34), const Color(0xFFD8F3DC)),
-              const SizedBox(width: 10),
-              _statCard('${adminFilieres.where((f) => f.domaine.contains('Gestion')).length}',
-                  'Sciences Gestion', const Color(0xFF0891B2), const Color(0xFFE0F7FA)),
-              const SizedBox(width: 10),
-              _statCard('${adminFilieres.fold(0, (s, f) => s + f.modules.length)}',
-                  'Modules total', const Color(0xFF7C3AED), const Color(0xFFF5F3FF)),
-            ]),
-            const SizedBox(height: 16),
-          ]),
-        ),
-        adminDivider,
-
-        // ── Grille filières ───────────────────────────────────────────
-        Expanded(child: st.isEmpty
-            ? _vide()
-            : GridView.builder(
-                padding: EdgeInsets.all(isDesktop ? 24 : 14),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: isDesktop ? 3 : 1,
-                  mainAxisSpacing: 16, crossAxisSpacing: 16,
-                  childAspectRatio: isDesktop ? 1.1 : 0.85,
-                ),
-                itemCount: st.length,
-                itemBuilder: (_, i) => _carteFiliere(st[i]),
-              )),
-      ]),
     );
   }
 
-  Widget _domaineChip(String label, String value) {
-    final active = _domaine == value;
-    return GestureDetector(
-      onTap: () => setState(() => _domaine = value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? AdminTheme.iconBg : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active ? AdminTheme.iconBg : const Color(0xFFE5E7EB)),
-        ),
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-            color: active ? Colors.white : const Color(0xFF6B7280))),
+  Widget _erreur() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+    const Icon(Icons.cloud_off_rounded, size: 44, color: Color(0xFF94A3B8)),
+    const SizedBox(height: 12),
+    Text(_error ?? '', style: const TextStyle(color: Color(0xFF64748B))),
+    const SizedBox(height: 12),
+    ElevatedButton(onPressed: _charger, child: const Text('Réessayer')),
+  ]));
+
+  // ── Bandeau titre + photo ───────────────────────────────────────────────
+  Widget _header(bool isDesktop) {
+    final bouton = ElevatedButton.icon(
+      onPressed: _ouvrirCreation,
+      icon: const Icon(Icons.add_rounded, size: 18),
+      label: const Text('Nouvelle filière', style: TextStyle(fontWeight: FontWeight.w700)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _navy, foregroundColor: Colors.white, elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
-  }
 
-  Widget _statCard(String value, String label, Color fg, Color bg) => Expanded(
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-      child: Row(children: [
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: fg)),
-        const SizedBox(width: 8),
-        Expanded(child: Text(label, style: TextStyle(fontSize: 11,
-            fontWeight: FontWeight.w600, color: fg.withValues(alpha:0.8)))),
-      ]),
-    ),
-  );
-
-  // ── Carte filière ─────────────────────────────────────────────────────
-  Widget _carteFiliere(Filiere f) {
-  final isST = f.domaine.contains('Technologies');
-  final color = isST ? AdminTheme.primary : AdminTheme.info;
-  final lightColor = isST ? AdminTheme.primaryLight : AdminTheme.infoLight;
-
-  return GestureDetector(
-    onTap: () => _ouvrirDetail(f),
-    child: Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+    final titre = Row(children: [
+      Container(
+        width: 64, height: 64,
+        decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 30),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header coloré avec l'abréviation
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: lightColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      const SizedBox(width: 16),
+      Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        const Text('Filières & Modules', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _navy, letterSpacing: -0.5)),
+        const SizedBox(height: 4),
+        const Text("Gérez les filières, les niveaux d'études et les modules de votre établissement.",
+            style: TextStyle(fontSize: 13.5, color: Color(0xFF475569))),
+      ])),
+    ]);
+
+    if (!isDesktop) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE2E8F0))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          titre, const SizedBox(height: 14), SizedBox(width: double.infinity, child: bouton),
+        ]),
+      );
+    }
+
+    return Container(
+      height: 118,
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(children: [
+          Positioned(
+            top: 0, bottom: 0, right: 0, width: 560,
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (r) => const LinearGradient(
+                colors: [Colors.transparent, Colors.white], stops: [0.0, 0.45],
+              ).createShader(r),
+              child: Image.asset('assets/images/etablissement_banner.png',
+                  fit: BoxFit.cover, alignment: Alignment.centerRight,
+                  errorBuilder: (_, __, ___) => const SizedBox()),
+            ),
           ),
-          child: Row(children: [
-            Container(width: 38, height: 38, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10))),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(f.abreviation, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E))),
-              Text(f.nom, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)), maxLines: 1, overflow: TextOverflow.ellipsis),
-            ])),
-          ]),
+          Positioned(
+            right: -40, bottom: -22,
+            child: Transform.rotate(angle: -0.13,
+                child: Container(width: 340, height: 30, color: const Color(0xFFF5B800))),
+          ),
+          Positioned.fill(child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: Row(children: [
+              Expanded(child: titre),
+              const SizedBox(width: 16),
+              bouton,
+            ]),
+          )),
+        ]),
+      ),
+    );
+  }
+
+  // ── KPI ─────────────────────────────────────────────────────────────────
+  Widget _kpiRow(bool isDesktop) {
+    final v = _visibles;
+    final totalEtu = v.fold<int>(0, (s, f) => s + f.nbEtudiants);
+    final totalMod = v.fold<int>(0, (s, f) => s + f.nbModules);
+    final niv = _tousNiveaux;
+
+    final cards = [
+      _kpi(Icons.school_rounded, const Color(0xFF1D4ED8), 'Filières', '${v.length}', 'Filières enregistrées'),
+      _kpi(Icons.groups_rounded, const Color(0xFF10B981), 'Étudiants', '$totalEtu', 'Total des étudiants inscrits'),
+      _kpi(Icons.menu_book_rounded, const Color(0xFF7C3AED), 'Modules', '$totalMod', 'Tous les modules confondus'),
+      _kpi(Icons.layers_rounded, const Color(0xFFF59E0B), "Niveaux d'études", '${niv.length}',
+          niv.isEmpty ? 'Aucun étudiant rattaché' : niv.map(_abrevNiveau).join(', ')),
+    ];
+
+    if (isDesktop) {
+      return Row(children: [
+        for (var i = 0; i < cards.length; i++) ...[
+          if (i > 0) const SizedBox(width: 14),
+          Expanded(child: cards[i]),
+        ],
+      ]);
+    }
+    return GridView.count(
+      crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10, crossAxisSpacing: 10, mainAxisExtent: 112,
+      children: cards,
+    );
+  }
+
+  Widget _kpi(IconData icon, Color c, String label, String value, String caption) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white, borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE2E8F0)),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+    ),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 48, height: 48,
+        decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(14)),
+        child: Icon(icon, color: Colors.white, size: 24),
+      ),
+      const SizedBox(width: 14),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _navy, height: 1.1)),
+        const SizedBox(height: 4),
+        Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+      ])),
+    ]),
+  );
+
+  // ── Barre de filtres ────────────────────────────────────────────────────
+  Widget _barreFiltres(bool isDesktop) {
+    final search = Container(
+      height: 46,
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() { _query = v; _page = 1; }),
+        style: const TextStyle(fontSize: 13.5),
+        decoration: const InputDecoration(
+          hintText: 'Rechercher une filière par nom ou code...',
+          hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+          prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 19),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(vertical: 13),
         ),
-      ]),
+      ),
+    );
+
+    final dFiliere = _FDrop<Filiere>(
+      icon: Icons.account_tree_rounded, hint: 'Toutes les filières',
+      value: _visibles.where((f) => f.backendId == _filtreFiliere).isEmpty
+          ? null : _visibles.firstWhere((f) => f.backendId == _filtreFiliere),
+      items: _visibles, labelOf: (f) => f.abreviation.isEmpty ? f.nom : '${f.abreviation} — ${f.nom}',
+      onChanged: (f) => setState(() { _filtreFiliere = f?.backendId; _page = 1; }),
+    );
+    final dDomaine = _FDrop<String>(
+      icon: Icons.category_rounded, hint: 'Tous les domaines',
+      value: _filtreDomaine,
+      items: widget.profile.filtreParDomaine ? [widget.profile.domaineAdmin] : const [_domTech, _domGestion],
+      labelOf: (d) => d,
+      onChanged: (d) => setState(() { _filtreDomaine = d; _page = 1; }),
+    );
+    final dNiveau = _FDrop<String>(
+      icon: Icons.layers_rounded, hint: 'Tous les niveaux',
+      value: _filtreNiveau, items: _tousNiveaux, labelOf: (n) => n,
+      onChanged: (n) => setState(() { _filtreNiveau = n; _page = 1; }),
+    );
+    final toggle = _toggleVue();
+
+    if (isDesktop) {
+      return Row(children: [
+        Expanded(flex: 4, child: search), const SizedBox(width: 12),
+        Expanded(flex: 3, child: dFiliere), const SizedBox(width: 12),
+        Expanded(flex: 3, child: dDomaine), const SizedBox(width: 12),
+        Expanded(flex: 3, child: dNiveau), const SizedBox(width: 12),
+        toggle,
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      search, const SizedBox(height: 10),
+      dFiliere, const SizedBox(height: 10),
+      Row(children: [Expanded(child: dDomaine), const SizedBox(width: 10), Expanded(child: dNiveau)]),
+      const SizedBox(height: 10),
+      toggle,
+    ]);
+  }
+
+  Widget _toggleVue() {
+    Widget btn(String label, IconData icon, bool actif, VoidCallback onTap) => GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: actif ? _blue : Colors.white,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: actif ? _blue : const Color(0xFFE2E8F0)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 16, color: actif ? Colors.white : _navy),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: actif ? Colors.white : _navy)),
+        ]),
+      ),
+    );
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      btn('Cartes', Icons.grid_view_rounded, _vueCartes, () => setState(() => _vueCartes = true)),
+      const SizedBox(width: 6),
+      btn('Tableau', Icons.view_list_rounded, !_vueCartes, () => setState(() => _vueCartes = false)),
+    ]);
+  }
+
+  Widget _enteteListe() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+    child: Row(children: [
+      const Icon(Icons.school_rounded, color: _blue, size: 20),
+      const SizedBox(width: 8),
+      Expanded(child: Text('Toutes les filières (${_visibles.length})',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _navy))),
+      Text('${_filtered.length} filière${_filtered.length > 1 ? 's' : ''} trouvée${_filtered.length > 1 ? 's' : ''}',
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+    ]),
+  );
+
+  // ── Grille de cartes ────────────────────────────────────────────────────
+  Widget _grille(bool isDesktop) => LayoutBuilder(builder: (ctx, c) {
+    final cols = c.maxWidth >= 1000 ? 3 : (c.maxWidth >= 640 ? 2 : 1);
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols, mainAxisSpacing: 16, crossAxisSpacing: 16, mainAxisExtent: 262,
+      ),
+      itemCount: _pageItems.length,
+      itemBuilder: (_, i) => _carteFiliere(_pageItems[i]),
+    );
+  });
+
+  Widget _carteFiliere(Filiere f) {
+    final color = _colorFiliere(f);
+    final niveauxTxt = f.niveaux.isEmpty ? '—' : f.niveaux.map(_abrevNiveau).join(', ');
+
+    Widget stat(IconData ic, String val, String label, {String? sub}) => Expanded(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(ic, size: 16, color: _blue), const SizedBox(width: 6),
+          Flexible(child: Text(val, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _navy))),
+        ]),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+        if (sub != null) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+      ]));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 5))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(height: 3.5, color: color),
+          Expanded(child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 50, height: 50,
+                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(13)),
+                  child: Icon(_iconFiliere(f.nom), color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(f.abreviation, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _navy)),
+                  const SizedBox(height: 2),
+                  Text(f.nom, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                ])),
+                if (f.statut.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(20)),
+                    child: Text(f.statut, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF047857))),
+                  ),
+              ]),
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 12),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                stat(Icons.groups_rounded, '${f.nbEtudiants}', 'Étudiants'),
+                stat(Icons.layers_rounded, f.niveaux.isEmpty ? '0' : '${f.niveaux.length}', 'Niveaux', sub: f.niveaux.isEmpty ? null : '($niveauxTxt)'),
+                stat(Icons.menu_book_rounded, '${f.nbModules}', 'Modules'),
+              ]),
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 10),
+              SizedBox(height: 18, child: f.responsable.isEmpty
+                  ? const SizedBox()
+                  : Row(children: [
+                      const Icon(Icons.person_rounded, size: 15, color: Color(0xFF334155)),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text('Responsable : ${f.responsable}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF334155)))),
+                    ])),
+              const Spacer(),
+              Row(children: [
+                Expanded(child: ElevatedButton.icon(
+                  onPressed: () => _ouvrirDetail(f, tab: 1),
+                  icon: const Icon(Icons.visibility_rounded, size: 15),
+                  label: const Text('Voir les détails', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _blue, foregroundColor: Colors.white, elevation: 0,
+                    textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: OutlinedButton.icon(
+                  onPressed: () => _ouvrirDetail(f, tab: 0),
+                  icon: const Icon(Icons.settings_rounded, size: 15),
+                  label: const Text('Gérer les modules', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _navy, side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                )),
+                const SizedBox(width: 8),
+                _menuFiliere(f),
+              ]),
+            ]),
+          )),
+        ]),
+      ),
+    );
+  }
+
+  Widget _menuFiliere(Filiere f) => PopupMenuButton<String>(
+    tooltip: 'Plus d\'actions',
+    position: PopupMenuPosition.under,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    onSelected: (v) {
+      if (v == 'edit') _modifier(f);
+      if (v == 'delete') _supprimer(f);
+    },
+    itemBuilder: (_) => const [
+      PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 16), SizedBox(width: 8), Text('Modifier')])),
+      PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)), SizedBox(width: 8), Text('Supprimer', style: TextStyle(color: Color(0xFFEF4444)))])),
+    ],
+    child: Container(
+      width: 40, height: 40,
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFCBD5E1))),
+      child: const Icon(Icons.more_horiz_rounded, size: 18, color: _navy),
     ),
   );
-}
 
-  // ════════════════════════════════════════════════════════════════════════
-  // DÉTAIL FILIÈRE
-  // ════════════════════════════════════════════════════════════════════════
-  void _ouvrirDetail(Filiere f) {
+  // ── Vue tableau ─────────────────────────────────────────────────────────
+  Widget _tableau() {
+    Widget cell(String t, double w, {bool bold = false, Color? color}) => SizedBox(
+      width: w, child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12.5, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, color: color ?? const Color(0xFF334155))));
+    const widths = [80.0, 240.0, 170.0, 90.0, 120.0, 80.0, 190.0, 50.0];
+    const heads = ['Code', 'Filière', 'Domaine', 'Étudiants', 'Niveaux', 'Modules', 'Responsable', ''];
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: const Color(0xFFF8FAFC),
+            child: Row(children: [for (var i = 0; i < heads.length; i++) cell(heads[i], widths[i], bold: true, color: _navy)]),
+          ),
+          for (final f in _pageItems) InkWell(
+            onTap: () => _ouvrirDetail(f, tab: 1),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE2E8F0)))),
+              child: Row(children: [
+                cell(f.abreviation, widths[0], bold: true, color: _colorFiliere(f)),
+                cell(f.nom, widths[1], bold: true),
+                cell(f.domaine, widths[2]),
+                cell('${f.nbEtudiants}', widths[3]),
+                cell(f.niveaux.isEmpty ? '—' : f.niveaux.map(_abrevNiveau).join(', '), widths[4]),
+                cell('${f.nbModules}', widths[5]),
+                cell(f.responsable.isEmpty ? '—' : f.responsable, widths[6]),
+                SizedBox(width: widths[7], child: _menuFiliere(f)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ── Pied : compteur + pagination ────────────────────────────────────────
+  Widget _pied() {
+    final total = _filtered.length;
+    final debut = total == 0 ? 0 : (_page - 1) * _parPage + 1;
+    final fin = total == 0 ? 0 : ((_page - 1) * _parPage + _pageItems.length);
+
+    Widget nav(IconData ic, bool enabled, VoidCallback onTap) => GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 34, height: 34,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E8F0))),
+        child: Icon(ic, size: 16, color: enabled ? _navy : const Color(0xFFCBD5E1)),
+      ),
+    );
+
+    return Row(children: [
+      Expanded(child: Text('Affichage de $debut à $fin sur $total filière${total > 1 ? 's' : ''}',
+          style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)))),
+      nav(Icons.arrow_back_rounded, _page > 1, () => setState(() => _page--)),
+      const SizedBox(width: 6),
+      for (var p = 1; p <= _nbPages; p++) ...[
+        GestureDetector(
+          onTap: () => setState(() => _page = p),
+          child: Container(
+            width: 34, height: 34, alignment: Alignment.center,
+            decoration: BoxDecoration(color: p == _page ? _blue : Colors.white, borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: p == _page ? _blue : const Color(0xFFE2E8F0))),
+            child: Text('$p', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: p == _page ? Colors.white : _navy)),
+          ),
+        ),
+        const SizedBox(width: 6),
+      ],
+      nav(Icons.arrow_forward_rounded, _page < _nbPages, () => setState(() => _page++)),
+    ]);
+  }
+
+  // ── Actions ─────────────────────────────────────────────────────────────
+  void _ouvrirDetail(Filiere f, {int tab = 0}) {
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _DetailFiliere(
-        profile: widget.profile,
-        filiere: f, onEdit: () => setState(() {})),
-    );
+        profile: widget.profile, filiere: f, initialTab: tab,
+        onEdit: () => setState(() {})),
+    ).then((_) => _charger(silencieux: true));
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // CRÉATION FILIÈRE — Stepper 3 étapes
-  // ════════════════════════════════════════════════════════════════════════
   void _ouvrirCreation() {
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CreationFiliere(
-        onCreated: (f) async => setState(() => adminFilieres.add(f))),
+      builder: (_) => _CreationFiliere(onCreated: (f) async { await _charger(silencieux: true); }),
     );
   }
 
-  Widget _vide() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-    Container(width: 72, height: 72,
-      decoration: BoxDecoration(color: AdminTheme.iconBg,
-          borderRadius: BorderRadius.circular(18)),
-      child: const Icon(Icons.school_outlined, color: AdminTheme.iconFg, size: 36)),
-    const SizedBox(height: 16),
-    const Text('Aucune filière trouvée', style: TextStyle(fontSize: 17,
-        fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-  ]));
+  void _modifier(Filiere f) {
+    final nomCtrl = TextEditingController(text: f.nom);
+    final abrCtrl = TextEditingController(text: f.abreviation);
+    final respCtrl = TextEditingController(text: f.responsable);
+    String domaine = f.domaine;
+    bool envoi = false;
+
+    InputDecoration deco(String label) => InputDecoration(
+      labelText: label, isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
+
+    showDialog(context: context, builder: (dCtx) => StatefulBuilder(builder: (dCtx, setD) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Modifier la filière', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+      content: SizedBox(width: 380, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: nomCtrl, decoration: deco('Nom de la filière')),
+        const SizedBox(height: 12),
+        TextField(controller: abrCtrl, decoration: deco('Code / abréviation (ex : RIT)')),
+        const SizedBox(height: 12),
+        TextField(controller: respCtrl, decoration: deco('Responsable (ex : Dr. SOME Karim)')),
+        const SizedBox(height: 12),
+        Align(alignment: Alignment.centerLeft, child: Wrap(spacing: 8, children: [
+          for (final d in const [_domTech, _domGestion])
+            ChoiceChip(label: Text(d, style: const TextStyle(fontSize: 12)), selected: domaine == d,
+                onSelected: (_) => setD(() => domaine = d)),
+        ])),
+      ]))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: envoi ? null : () async {
+            if (nomCtrl.text.trim().isEmpty) return;
+            setD(() => envoi = true);
+            final res = await ApiService.updateFiliere(
+              id: f.backendId!, nom: nomCtrl.text.trim(),
+              abreviation: abrCtrl.text.trim(), domaine: domaine,
+              responsable: respCtrl.text.trim(),
+            );
+            if (!mounted) return;
+            if (dCtx.mounted) Navigator.pop(dCtx);
+            if (res['success'] == true) {
+              await _charger(silencieux: true);
+              if (!mounted) return;
+              if (res['partial'] == true) {
+                showAppSnackBar(context, 'Nom enregistré. Pour sauvegarder code, domaine et responsable, exécute le SQL de migration (colonnes manquantes).', backgroundColor: const Color(0xFFF59E0B));
+              } else {
+                showAppSnackBar(context, 'Filière mise à jour.');
+              }
+            } else {
+              showAppSnackBar(context, res['error']?.toString() ?? 'Erreur de modification.', backgroundColor: AdminTheme.danger);
+            }
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white, elevation: 0),
+          child: const Text('Enregistrer'),
+        ),
+      ],
+    )));
+  }
+
+  Future<void> _supprimer(Filiere f) async {
+    final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Supprimer la filière ?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+      content: Text('« ${f.nom} » sera supprimée définitivement. Impossible si des étudiants ou des modules y sont rattachés.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(c, true),
+          style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.danger, foregroundColor: Colors.white, elevation: 0),
+          child: const Text('Supprimer'),
+        ),
+      ],
+    ));
+    if (ok != true || f.backendId == null) return;
+    final res = await ApiService.deleteFiliere(f.backendId!);
+    if (!mounted) return;
+    if (res['success'] == true) {
+      await _charger(silencieux: true);
+      if (!mounted) return;
+      showAppSnackBar(context, 'Filière supprimée.');
+    } else {
+      showAppSnackBar(context, res['error']?.toString() ?? 'Erreur de suppression.', backgroundColor: AdminTheme.danger);
+    }
+  }
+
+  Widget _vide() => Container(
+    padding: const EdgeInsets.symmetric(vertical: 48),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 64, height: 64,
+        decoration: BoxDecoration(color: AdminTheme.iconBg, borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.school_outlined, color: AdminTheme.iconFg, size: 32)),
+      const SizedBox(height: 14),
+      const Text('Aucune filière trouvée', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
+    ]),
+  );
+}
+
+// ── Liste déroulante (PopupMenuButton — jamais DropdownButton sur Flutter Web)
+class _FDrop<T> extends StatelessWidget {
+  final IconData icon;
+  final String hint;
+  final T? value;
+  final List<T> items;
+  final String Function(T) labelOf;
+  final ValueChanged<T?> onChanged;
+  const _FDrop({required this.icon, required this.hint, required this.value,
+      required this.items, required this.labelOf, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<int>(
+      position: PopupMenuPosition.under,
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      onSelected: (i) => onChanged(i < 0 ? null : items[i]),
+      itemBuilder: (_) => [
+        PopupMenuItem<int>(value: -1, child: Text(hint, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+        for (var i = 0; i < items.length; i++)
+          PopupMenuItem<int>(value: i, child: Text(labelOf(items[i]), style: const TextStyle(fontSize: 13))),
+      ],
+      child: Container(
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+        child: Row(children: [
+          Icon(icon, size: 16, color: const Color(0xFF475569)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(value != null ? labelOf(value as T) : hint, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600,
+                  color: value != null ? _navy : const Color(0xFF475569)))),
+          const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF64748B)),
+        ]),
+      ),
+    );
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -407,7 +885,8 @@ class _DetailFiliere extends StatefulWidget {
   final StudentProfile profile;
   final Filiere filiere;
   final VoidCallback onEdit;
-  const _DetailFiliere({required this.profile, required this.filiere, required this.onEdit});
+  final int initialTab;
+  const _DetailFiliere({required this.profile, required this.filiere, required this.onEdit, this.initialTab = 0});
   @override State<_DetailFiliere> createState() => _DetailFiliereState();
 }
 
@@ -420,12 +899,26 @@ class _DetailFiliereState extends State<_DetailFiliere>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 3, vsync: this, initialIndex: widget.initialTab.clamp(0, 2));
+    _chargerModules();
     _chargerEtudiants();
   }
 
   @override
   void dispose() { _tab.dispose(); super.dispose(); }
+
+  // Charge les modules réels de la filière (la liste ne les embarque plus).
+  Future<void> _chargerModules() async {
+    final id = widget.filiere.backendId;
+    if (id == null) return;
+    final res = await ApiService.getModules(filiereId: id);
+    if (!mounted || res['success'] != true) return;
+    setState(() {
+      widget.filiere.modules
+        ..clear()
+        ..addAll((res['data'] as List<dynamic>).map((m) => Module.fromApi(Map<String, dynamic>.from(m as Map))));
+    });
+  }
 
   Future<void> _chargerEtudiants() async {
     var id = widget.filiere.backendId;
@@ -483,7 +976,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(f.nom, style: const TextStyle(fontSize: 16,
                     fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-                Text('${f.niveau} · ${f.anneeAcademique}',
+                Text(f.niveau.isEmpty ? f.anneeAcademique : '${f.niveau} · ${f.anneeAcademique}',
                     style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
               ])),
               IconButton(icon: const Icon(Icons.close_rounded, color: Color(0xFF6B7280)),
@@ -1338,6 +1831,8 @@ Future<void> _creer() async {
   final result = await ApiService.createFiliere(
     nom: f.nom,
     description: '${f.domaine} · ${f.niveau}',
+    abreviation: f.abreviation,
+    domaine: f.domaine,
   );
   if (!mounted) return;
   if (result['success'] != true) {
@@ -1346,7 +1841,7 @@ Future<void> _creer() async {
   }
   final data = result['data'] as Map<String, dynamic>;
   final filierePersisted = Filiere(
-    id: 'F${data['id']}',
+    id: data['id'].toString(),
     nom: data['nom']?.toString() ?? f.nom,
     abreviation: f.abreviation,
     niveau: f.niveau,
@@ -1355,6 +1850,16 @@ Future<void> _creer() async {
     modules: f.modules,
     backendId: data['id'].toString(),
   );
+  // Les modules saisis dans l'assistant n'étaient jamais enregistrés : on les persiste.
+  for (final m in _modules) {
+    await ApiService.createModule(
+      nom: (m['nom'] as String).trim(),
+      coefficient: int.tryParse(m['coef'].toString()) ?? 2,
+      volumeHoraire: int.tryParse(m['vh'].toString()) ?? 30,
+      filiereId: int.tryParse(filierePersisted.backendId!),
+      filiereNom: filierePersisted.nom,
+    );
+  }
   await widget.onCreated(filierePersisted);
   if (mounted) Navigator.pop(context);
 }
