@@ -2,8 +2,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { ensureFilieres } = require('../utils/filieres');
+const { synchroniserDeleguesCanaux } = require('../utils/canauxProfDelegue');
 const { notifierInscription } = require('../services/inscription.notify');
 const { envoyerNotificationAuto } = require('./notifications.controller');
+const { genererProchainMatricule, validerMatricule, modeleValide } = require('../utils/matricule');
 
 const domaineFromFiliere = (filiere) => {
   const f = (filiere || '').toLowerCase();
@@ -13,20 +15,11 @@ const domaineFromFiliere = (filiere) => {
   return 'Sciences & Technologies';
 };
 
-const generateMatricule = async (client) => {
-  const annee = new Date().getFullYear().toString().slice(2);
-  const countRes = await client.query(
-    "SELECT COUNT(*)::int AS c FROM users WHERE role = 'etudiant'"
-  );
-  let num = 1900 + countRes.rows[0].c + 1;
-  let matricule = `${annee}IST-O2/${num}`;
-  let exists = await client.query('SELECT 1 FROM users WHERE matricule = $1', [matricule]);
-  while (exists.rows.length > 0) {
-    num += 1;
-    matricule = `${annee}IST-O2/${num}`;
-    exists = await client.query('SELECT 1 FROM users WHERE matricule = $1', [matricule]);
-  }
-  return matricule;
+// Ajoute « AND <alias>.etablissement_id = $N » seulement si l'établissement est connu.
+const etabClause = (params, etabId, alias = 'u') => {
+  if (!etabId) return '';
+  params.push(etabId);
+  return ` AND ${alias}.etablissement_id = $${params.length}`;
 };
 
 const mapRowToEtudiant = (row) => ({
@@ -122,8 +115,8 @@ const integrerDansGroupeFiliere = async (client, userId, filiereId, filiere, mat
     if (groupeRes.rows.length === 0) {
       // Créer le groupe filière
       const newGroupe = await client.query(
-        `INSERT INTO groupes (nom, type, filiere_id, description, created_at)
-         VALUES ($1, 'filiere', $2, $3, NOW())
+        `INSERT INTO groupes (nom, type, filiere_id, description, created_at, etablissement_id)
+         VALUES ($1, 'filiere', $2, $3, NOW(), (SELECT etablissement_id FROM filieres WHERE id = $2))
          RETURNING id`,
         [
           `Groupe ${filiere}`,
@@ -146,8 +139,8 @@ const integrerDansGroupeFiliere = async (client, userId, filiereId, filiere, mat
     let groupeAdminId;
     if (groupeAdminRes.rows.length === 0) {
       const newGroupeAdmin = await client.query(
-        `INSERT INTO groupes (nom, type, filiere_id, description, created_at)
-         VALUES ($1, 'admin_filiere', $2, $3, NOW())
+        `INSERT INTO groupes (nom, type, filiere_id, description, created_at, etablissement_id)
+         VALUES ($1, 'admin_filiere', $2, $3, NOW(), (SELECT etablissement_id FROM filieres WHERE id = $2))
          RETURNING id`,
         [
           `Admin - ${filiere}`,
@@ -223,10 +216,12 @@ const listEtudiants = async (req, res) => {
       FROM users u
       LEFT JOIN etudiants e ON u.id = e.user_id
       LEFT JOIN filieres f ON f.id = e.filiere_id
-      WHERE u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%'
+      WHERE (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%')
+        AND COALESCE(u.statut, 'actif') <> 'en_attente'
     `;
 
     const params = [];
+    queryText += etabClause(params, req.etablissementId);
     if (domaineFiltre) {
       params.push(domaineFiltre);
       queryText += `
@@ -269,6 +264,7 @@ const inscrireEtudiant = async (req, res) => {
       emailParent,
       nationalite,
       matricule: matriculeBody,
+      anneeEntree,
     } = req.body;
 
     if (!nom?.trim() || !prenoms?.trim()) {
@@ -283,11 +279,41 @@ const inscrireEtudiant = async (req, res) => {
     // chaque requête est déjà atomique
     await ensureFilieres(client);
 
-    const filiereRes = await client.query('SELECT id FROM filieres WHERE nom = $1', [filiere.trim()]);
+    // La filière se cherche DANS l'établissement de l'admin (deux écoles peuvent avoir
+    // une filière du même nom : sans ce filtre, l'étudiant était rattaché à celle de l'autre école).
+    const pf = [filiere.trim()];
+    const filiereRes = await client.query(
+      `SELECT id FROM filieres WHERE LOWER(TRIM(nom)) = LOWER($1)${etabClause(pf, req.etablissementId, 'filieres')}`,
+      pf
+    );
     const filiereId = filiereRes.rows[0]?.id || null;
+    if (!filiereId) {
+      return res.status(400).json({ message: `Filière « ${filiere.trim()} » introuvable dans votre établissement.` });
+    }
 
-    const matricule = (matriculeBody?.trim().toUpperCase()) || (await generateMatricule(client));
-    const emailFinal = email?.trim() || `${matricule.split('/')[1]}@ist.bf`;
+    // Matricule : saisi à la main (anciens étudiants) ou généré selon le modèle de
+    // l'établissement (voir utils/matricule.js).
+    const etabId = req.etablissementId || null;
+    let modele = '';
+    if (etabId) {
+      const er = await client.query('SELECT modele_matricule FROM etablissements WHERE id = $1', [etabId]);
+      modele = er.rows[0]?.modele_matricule || '';
+    }
+    let matricule = matriculeBody?.trim().toUpperCase();
+    if (matricule) {
+      const v = validerMatricule(modele, matricule);
+      if (!v.ok) return res.status(400).json({ message: v.message });
+      const dejaLa = await client.query('SELECT 1 FROM users WHERE matricule = $1', [matricule]);
+      if (dejaLa.rows.length) return res.status(409).json({ message: 'Ce matricule existe déjà.' });
+    } else {
+      try {
+        matricule = await genererProchainMatricule(client, etabId, { anneeEntree });
+      } catch (e) {
+        if (e.code === 'NO_ETAB' || e.code === 'NO_MODELE') return res.status(400).json({ message: e.message });
+        throw e;
+      }
+    }
+    const emailFinal = email?.trim() || `${matricule.replace(/[^A-Za-z0-9]/g, '').toLowerCase()}@sans-email.scolarhub`;
     const domaineFinal = domaine?.trim() || domaineFromFiliere(filiere);
 
     // INSERT users sans RETURNING (non supporté par execute_sql Supabase)
@@ -295,11 +321,11 @@ const inscrireEtudiant = async (req, res) => {
       `INSERT INTO users (
         matricule, nom, prenoms, email, tel, role, statut, mot_de_passe,
         domaine, niveau, date_naissance, nationalite, adresse,
-        nom_parent, tel_parent, email_parent, etudiant_role, filiere_nom
+        nom_parent, tel_parent, email_parent, etudiant_role, filiere_nom, etablissement_id
       ) VALUES (
         $1, $2, $3, $4, $5, 'etudiant', 'actif', NULL,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, 'etudiant', $14
+        $11, $12, $13, 'etudiant', $14, $15
       )`,
       [
         matricule,
@@ -316,6 +342,7 @@ const inscrireEtudiant = async (req, res) => {
         telParent?.trim() || null,
         emailParent?.trim() || null,
         filiere.trim(),
+        etabId,
       ]
     );
 
@@ -330,12 +357,12 @@ const inscrireEtudiant = async (req, res) => {
         user_id, filiere_id, premierefois,
         matricule, nom, prenoms, email, tel,
         filiere_nom, domaine, niveau, date_naissance, nationalite,
-        adresse, nom_parent, tel_parent, email_parent, statut
+        adresse, nom_parent, tel_parent, email_parent, statut, etablissement_id
       ) VALUES (
         $1, $2, true,
         $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, 'actif'
+        $13, $14, $15, $16, 'actif', $17
       )`,
       [
         userId,
@@ -354,6 +381,7 @@ const inscrireEtudiant = async (req, res) => {
         nomParent?.trim() || null,
         telParent?.trim() || null,
         emailParent?.trim() || null,
+        etabId,
       ]
     );
 
@@ -401,6 +429,7 @@ const inscrireEtudiant = async (req, res) => {
           `SELECT u.id FROM users u
            JOIN etudiants e ON e.user_id = u.id
            WHERE e.filiere_id = $1 AND e.niveau = $2 AND e.id != $3
+             AND u.etablissement_id = (SELECT etablissement_id FROM filieres WHERE id = $1)
              AND (u.role ILIKE '%etudiant%' OR u.role ILIKE '%delegue%' OR u.role ILIKE '%bde%')
              AND COALESCE(u.statut, 'actif') NOT IN ('suspendu', 'renvoye')`,
           [filiereId, niveau?.trim() || null, etuId]
@@ -550,6 +579,8 @@ const finaliserPremiereConnexion = async (req, res) => {
 // Liste complète de tous les délégués/adjoints de l'établissement (admin).
 const getDelegues = async (req, res) => {
   try {
+    const pr = [];
+    const etabSql = etabClause(pr, req.etablissementId);
     const result = await pool.query(`
       SELECT u.id, u.nom, u.prenoms, u.matricule, u.etudiant_role,
              COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
@@ -558,9 +589,9 @@ const getDelegues = async (req, res) => {
              e.filiere_id AS filiere_id
       FROM users u
       LEFT JOIN etudiants e ON u.id = e.user_id
-      WHERE u.etudiant_role IN ('delegue', 'delegue_adjoint')
+      WHERE u.etudiant_role IN ('delegue', 'delegue_adjoint')${etabSql}
       ORDER BY COALESCE(e.filiere_nom, u.filiere_nom), COALESCE(e.niveau, u.niveau), u.etudiant_role, u.nom
-    `);
+    `, pr);
     return res.status(200).json({ success: true, data: result.rows });
   } catch (err) {
     console.error('[getDelegues]', err);
@@ -602,6 +633,10 @@ const nommerDelegue = async (req, res) => {
       [role, filiere_id, niveau, userId]
     );
     await client.query(`UPDATE users SET etudiant_role = $1 WHERE id = $2`, [role, userId]);
+    // Le nouveau délégué rejoint les groupes des professeurs de sa classe
+    // (et l'ancien titulaire en est retiré).
+    try { await synchroniserDeleguesCanaux(filiere_id, niveau); }
+    catch (e) { console.error('[nommerDelegue] sync canaux:', e.message); }
     return res.status(200).json({ success: true, message: 'Nomination effectuée.' });
   } catch (err) {
     console.error('[nommerDelegue]', err);
@@ -621,7 +656,10 @@ const revoquerDelegue = async (req, res) => {
     if (!userId) {
       return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
     }
+    const classeRes = await pool.query('SELECT filiere_id, niveau FROM etudiants WHERE id = $1', [id]);
     await pool.query(`UPDATE users SET etudiant_role = NULL WHERE id = $1`, [userId]);
+    try { await synchroniserDeleguesCanaux(classeRes.rows[0]?.filiere_id, classeRes.rows[0]?.niveau); }
+    catch (e) { console.error('[revoquerDelegue] sync canaux:', e.message); }
     return res.status(200).json({ success: true, message: 'Statut retiré.' });
   } catch (err) {
     console.error('[revoquerDelegue]', err);
@@ -635,19 +673,21 @@ const revoquerDelegue = async (req, res) => {
 // filière/niveau : un seul président et un seul adjoint pour toute l'école.
 const getBde = async (req, res) => {
   try {
+    const pr = [];
+    const etabSql = etabClause(pr, req.etablissementId);
     const result = await pool.query(`
       SELECT u.id, u.nom, u.prenoms, u.matricule, u.etudiant_role, u.photo_url,
              COALESCE(e.filiere_nom, u.filiere_nom) AS filiere_nom,
              COALESCE(e.niveau, u.niveau) AS niveau
       FROM users u
       LEFT JOIN etudiants e ON u.id = e.user_id
-      WHERE u.etudiant_role IN ('bde_president', 'bde_adjoint', 'bde_membre')
+      WHERE u.etudiant_role IN ('bde_president', 'bde_adjoint', 'bde_membre')${etabSql}
       ORDER BY CASE u.etudiant_role
                  WHEN 'bde_president' THEN 0
                  WHEN 'bde_adjoint' THEN 1
                  ELSE 2
                END, u.nom
-    `);
+    `, pr);
     return res.status(200).json({ success: true, data: result.rows });
   } catch (err) {
     console.error('[getBde]', err);
@@ -796,6 +836,168 @@ const getStatsInscriptions = async (req, res) => {
   }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Matricule automatique, inscription temporaire des anciens, validation admin
+// ═════════════════════════════════════════════════════════════════════════════
+const UUID_RE = /^[A-Za-z0-9-]{8,64}$/;
+
+async function estSuperAdmin(userId) {
+  const r = await pool.query('SELECT role, admin_sub_role FROM users WHERE id = $1', [userId]);
+  if (!r.rows.length) return false;
+  const role = String(r.rows[0].role || '').toLowerCase();
+  const sub = String(r.rows[0].admin_sub_role || '').toLowerCase().replace(/[\s-]/g, '_');
+  return role === 'super_admin' || (role === 'admin' && sub.includes('super'));
+}
+
+// GET /api/etudiants/prochain-matricule?anneeEntree=2026  (admin)
+// Aperçu du prochain matricule libre — pour le bouton « Générer automatiquement ».
+const prochainMatricule = async (req, res) => {
+  try {
+    const matricule = await genererProchainMatricule(pool, req.etablissementId, { anneeEntree: req.query.anneeEntree });
+    const er = await pool.query('SELECT modele_matricule FROM etablissements WHERE id = $1', [req.etablissementId]);
+    return res.status(200).json({ success: true, matricule, modele: er.rows[0]?.modele_matricule || '' });
+  } catch (err) {
+    if (err.code === 'NO_ETAB' || err.code === 'NO_MODELE') {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    console.error('[prochainMatricule]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de la génération du matricule.' });
+  }
+};
+
+// GET /api/etudiants/parametres-inscription (admin)
+const getParametresInscription = async (req, res) => {
+  try {
+    if (!req.etablissementId) return res.status(400).json({ success: false, message: 'Établissement inconnu. Reconnectez-vous.' });
+    const r = await pool.query(
+      'SELECT modele_matricule, inscription_ouverte, inscription_validation FROM etablissements WHERE id = $1',
+      [req.etablissementId]
+    );
+    const e = r.rows[0] || {};
+    return res.status(200).json({
+      success: true,
+      modeleMatricule: e.modele_matricule || '',
+      inscriptionOuverte: e.inscription_ouverte === true,
+      inscriptionValidation: e.inscription_validation !== false,
+    });
+  } catch (err) {
+    console.error('[getParametresInscription]', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+// PUT /api/etudiants/parametres-inscription (Super Admin)
+// body: { inscriptionOuverte?: bool, inscriptionValidation?: bool, modeleMatricule?: string }
+const setParametresInscription = async (req, res) => {
+  try {
+    if (!req.etablissementId) return res.status(400).json({ success: false, message: 'Établissement inconnu. Reconnectez-vous.' });
+    if (!(await estSuperAdmin(req.user.id))) {
+      return res.status(403).json({ success: false, message: 'Réservé au Super Admin.' });
+    }
+    const sets = [];
+    const params = [];
+    if (typeof req.body.inscriptionOuverte === 'boolean') {
+      params.push(req.body.inscriptionOuverte); sets.push(`inscription_ouverte = $${params.length}`);
+    }
+    if (typeof req.body.inscriptionValidation === 'boolean') {
+      params.push(req.body.inscriptionValidation); sets.push(`inscription_validation = $${params.length}`);
+    }
+    if (typeof req.body.modeleMatricule === 'string') {
+      const m = req.body.modeleMatricule.trim();
+      if (m) {
+        const v = modeleValide(m);
+        if (!v.ok) return res.status(400).json({ success: false, message: v.message });
+      }
+      params.push(m); sets.push(`modele_matricule = $${params.length}`);
+    }
+    if (!sets.length) return res.status(400).json({ success: false, message: 'Rien à modifier.' });
+    params.push(req.etablissementId);
+    await pool.query(`UPDATE etablissements SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('[setParametresInscription]', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+// GET /api/etudiants/en-attente (admin) — auto-inscriptions à valider
+const listerEnAttente = async (req, res) => {
+  try {
+    const params = [];
+    const etabSql = etabClause(params, req.etablissementId);
+    const r = await pool.query(
+      `SELECT u.id, u.matricule, u.nom, u.prenoms, u.email, u.tel,
+              COALESCE(e.filiere_nom, u.filiere_nom) AS filiere, COALESCE(e.niveau, u.niveau) AS niveau,
+              u.nom_parent, u.tel_parent, u.created_at
+       FROM users u LEFT JOIN etudiants e ON e.user_id = u.id
+       WHERE u.statut = 'en_attente'${etabSql}
+       ORDER BY u.created_at DESC`,
+      params
+    );
+    return res.status(200).json({ success: true, data: r.rows });
+  } catch (err) {
+    console.error('[listerEnAttente]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors du chargement des inscriptions.' });
+  }
+};
+
+// Récupère les comptes « en attente » ciblés (ids, ou tous si all=true).
+async function chargerEnAttente(req) {
+  const params = [];
+  let where = "u.statut = 'en_attente'" + etabClause(params, req.etablissementId);
+  if (!req.body.all) {
+    const ids = (Array.isArray(req.body.ids) ? req.body.ids : []).map(String).filter((x) => UUID_RE.test(x));
+    if (!ids.length) return [];
+    where += ` AND u.id IN (${ids.map((id) => { params.push(id); return `$${params.length}`; }).join(', ')})`;
+  }
+  const r = await pool.query(
+    `SELECT u.id, u.matricule, e.filiere_id, COALESCE(e.filiere_nom, u.filiere_nom) AS filiere
+     FROM users u LEFT JOIN etudiants e ON e.user_id = u.id WHERE ${where}`,
+    params
+  );
+  return r.rows;
+}
+
+// POST /api/etudiants/valider-inscriptions (admin) body: { ids: [...] } ou { all: true }
+const validerInscriptions = async (req, res) => {
+  try {
+    const cibles = await chargerEnAttente(req);
+    for (const c of cibles) {
+      await pool.query("UPDATE users SET statut = 'actif' WHERE id = $1", [c.id]);
+      await pool.query("UPDATE etudiants SET statut = 'actif' WHERE user_id = $1", [c.id]);
+      if (c.filiere_id) {
+        await integrerDansGroupeFiliere(pool, c.id, c.filiere_id, c.filiere || '', c.matricule);
+      }
+      envoyerNotificationAuto(
+        c.id, 'Inscription validée',
+        'Votre inscription a été validée par l\'administration. Vous pouvez maintenant vous connecter.',
+        'inscription_validee', null
+      ).catch(() => {});
+    }
+    return res.status(200).json({ success: true, valides: cibles.length });
+  } catch (err) {
+    console.error('[validerInscriptions]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de la validation.' });
+  }
+};
+
+// POST /api/etudiants/refuser-inscriptions (admin) body: { ids: [...] }
+// Supprime la demande (le compte n'a jamais été actif) : l'étudiant pourra refaire sa demande.
+const refuserInscriptions = async (req, res) => {
+  try {
+    req.body.all = false;
+    const cibles = await chargerEnAttente(req);
+    for (const c of cibles) {
+      await pool.query('DELETE FROM etudiants WHERE user_id = $1', [c.id]);
+      await pool.query("DELETE FROM users WHERE id = $1 AND statut = 'en_attente'", [c.id]);
+    }
+    return res.status(200).json({ success: true, refuses: cibles.length });
+  } catch (err) {
+    console.error('[refuserInscriptions]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors du refus.' });
+  }
+};
+
 module.exports = {
   listEtudiants,
   inscrireEtudiant,
@@ -808,4 +1010,10 @@ module.exports = {
   revoquerBde,
   changerStatutEtudiant,
   getStatsInscriptions,
+  prochainMatricule,
+  getParametresInscription,
+  setParametresInscription,
+  listerEnAttente,
+  validerInscriptions,
+  refuserInscriptions,
 };

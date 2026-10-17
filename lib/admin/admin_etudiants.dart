@@ -8,6 +8,7 @@ import '../models/etudiant_model.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../app/scolar_hub_app.dart';
+import '../config/etablissement_config.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
@@ -23,6 +24,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
   bool _loading = true;
+  int _nbEnAttente = 0;
 
   String _filtreStatut = 'tous';
   late String _filtredomaine;
@@ -103,6 +105,25 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
       adminEtudiants = [];
     }
     if (mounted) setState(() => _loading = false);
+    _chargerNbEnAttente();
+  }
+
+  // Nombre d'auto-inscriptions en attente de validation (pastille du bouton « Demandes »).
+  Future<void> _chargerNbEnAttente() async {
+    final r = await ApiService.getInscriptionsEnAttente();
+    if (!mounted) return;
+    if (r['success'] == true && r['data'] is List) {
+      setState(() => _nbEnAttente = (r['data'] as List).length);
+    }
+  }
+
+  void _ouvrirDemandes() {
+    showDialog(
+      context: context,
+      builder: (_) => const _DemandesDialog(),
+    ).then((_) {
+      if (mounted) _chargerEtudiants();
+    });
   }
 
   void _inscrireEtudiant() {
@@ -161,6 +182,14 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                         ],
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Boutons d'action : retour à la ligne automatique sur petit écran.
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 8,
+                  children: [
                     _statBadge(
                       '${adminEtudiants.where((e) => e.statut == 'actif').length} Actifs',
                       AdminTheme.success,
@@ -190,6 +219,34 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                             Icon(Icons.picture_as_pdf_outlined, color: Color(0xFFEF4444), size: 16),
                             SizedBox(width: 6),
                             Text('PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
+                          ],
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _ouvrirDemandes,
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AdminTheme.primary),
+                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.how_to_reg_outlined, color: AdminTheme.primary, size: 16),
+                            const SizedBox(width: 6),
+                            const Text('Demandes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AdminTheme.primary)),
+                            if (_nbEnAttente > 0) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(color: AdminTheme.danger, borderRadius: BorderRadius.circular(10)),
+                                child: Text('$_nbEnAttente', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -712,7 +769,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text('INSTITUT SUPÉRIEUR DE TECHNOLOGIES (IST)', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                pw.Text(EtablissementConfig.instance.nom.toUpperCase(), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 pw.Text('Liste des étudiants', style: const pw.TextStyle(fontSize: 9)),
               ]),
               pw.Text('${liste.length} étudiant(s)', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
@@ -857,7 +914,7 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                                 ),
                               ),
                               pw.Text(
-                                'IST Ouaga 2000',
+                                EtablissementConfig.instance.nom,
                                 style: const pw.TextStyle(
                                   fontSize: 7,
                                   color: PdfColors.white,
@@ -1426,14 +1483,6 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
     'Master 1',
     'Master 2',
   ];
-  static const _filieresParDefaut = [
-    'Réseaux Informatiques et Télécom',
-    'Électrotechnique',
-    'Marketing & Communication',
-    'Gestion Comptable et Financière',
-    'Génie Civil',
-    'Finance Comptabilité',
-  ];
 
   final _nomCtrl = TextEditingController();
   final _prenomsCtrl = TextEditingController();
@@ -1450,7 +1499,8 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
   final _telParentCtrl = TextEditingController();
   final _emailParentCtrl = TextEditingController();
 
-  List<String> _filieres = _filieresParDefaut;
+  List<String> _filieres = [];
+  bool _genEnCours = false;
   String? _filiereSelectionnee;
   String _niveauSelectionne = _niveaux.first;
   bool _chargementFilieres = true;
@@ -1467,16 +1517,35 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
     final result = await ApiService.getFilieres();
     if (result['success'] == true) {
       final data = result['data'] as List<dynamic>;
-      if (data.isNotEmpty) {
-        _filieres = data.map((f) => f['nom'] as String).toList();
-      }
+      // toSet() : évite les doublons de nom (sinon le menu déroulant plante).
+      _filieres = data
+          .map((f) => (f['nom'] ?? '').toString().trim())
+          .where((n) => n.isNotEmpty)
+          .toSet()
+          .toList();
     }
     if (mounted) {
       setState(() {
-        _filiereSelectionnee = _filieres.first;
+        _filiereSelectionnee = _filieres.isEmpty ? null : _filieres.first;
         _chargementFilieres = false;
       });
     }
+  }
+
+  // « Générer automatiquement » : propose le prochain matricule libre selon le
+  // modèle de l'établissement. Pour un ancien étudiant, saisir le matricule à la main.
+  Future<void> _genererMatricule() async {
+    setState(() { _genEnCours = true; _erreur = null; });
+    final r = await ApiService.getProchainMatricule();
+    if (!mounted) return;
+    setState(() {
+      _genEnCours = false;
+      if (r['success'] == true && (r['matricule'] ?? '').toString().isNotEmpty) {
+        _matriculeCtrl.text = r['matricule'].toString();
+      } else {
+        _erreur = r['error']?.toString() ?? 'Génération impossible.';
+      }
+    });
   }
 
   @override
@@ -1575,7 +1644,7 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Matricule généré',
+              'Matricule',
               style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 6),
@@ -1694,6 +1763,14 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: LinearProgressIndicator(),
                     )
+                  : _filieres.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'Aucune filière dans cet établissement. Créez d\'abord une filière (menu Filières).',
+                        style: TextStyle(color: Color(0xFFC62828), fontSize: 13),
+                      ),
+                    )
                   : _dropdown(
                       'Filière *',
                       _filiereSelectionnee,
@@ -1718,7 +1795,29 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
                 ],
               ),
               const SizedBox(height: 14),
-              _champ('Matricule (auto-généré si vide)', _matriculeCtrl),
+              _champ('Matricule', _matriculeCtrl),
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      EtablissementConfig.instance.modeleMatricule.isNotEmpty
+                          ? 'Ancien étudiant : saisissez son matricule. Nouvel étudiant : générez-le automatiquement. Modèle : ${EtablissementConfig.instance.modeleMatricule}'
+                          : 'Ancien étudiant : saisissez son matricule. Nouvel étudiant : générez-le automatiquement.',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF), height: 1.35),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: _genEnCours ? null : _genererMatricule,
+                    icon: _genEnCours
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.auto_fix_high_rounded, size: 16),
+                    label: const Text('Générer automatiquement', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
 
               // ── Section tuteur / parent (optionnelle) ───────────────────
               const SizedBox(height: 20),
@@ -1906,4 +2005,271 @@ class _InscrireEtudiantDialogState extends State<_InscrireEtudiantDialog> {
       ),
     ],
   );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DIALOGUE — INSCRIPTIONS EN ATTENTE (auto-inscriptions des anciens étudiants)
+// + interrupteurs de l'inscription en ligne (réservés au Super Admin côté serveur)
+// ════════════════════════════════════════════════════════════════════════════
+class _DemandesDialog extends StatefulWidget {
+  const _DemandesDialog();
+
+  @override
+  State<_DemandesDialog> createState() => _DemandesDialogState();
+}
+
+class _DemandesDialogState extends State<_DemandesDialog> {
+  bool _chargement = true;
+  bool _occupe = false;
+  String? _message;
+  bool _messageErreur = false;
+  List<Map<String, dynamic>> _demandes = [];
+  final Set<String> _selection = {};
+  bool _ouverte = false;
+  bool _validation = true;
+  bool _paramsOk = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  Future<void> _charger() async {
+    setState(() => _chargement = true);
+    final r = await ApiService.getInscriptionsEnAttente();
+    final p = await ApiService.getParametresInscription();
+    if (!mounted) return;
+    setState(() {
+      _chargement = false;
+      if (r['success'] == true && r['data'] is List) {
+        _demandes = (r['data'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _selection.removeWhere((id) => !_demandes.any((d) => '${d['id']}' == id));
+      } else {
+        _message = r['error']?.toString() ?? 'Impossible de charger les demandes.';
+        _messageErreur = true;
+      }
+      if (p['success'] == true) {
+        _ouverte = p['inscriptionOuverte'] == true;
+        _validation = p['inscriptionValidation'] != false;
+        _paramsOk = true;
+      }
+    });
+  }
+
+  Future<void> _majParametre({bool? ouverte, bool? validation}) async {
+    final ancienO = _ouverte, ancienV = _validation;
+    setState(() {
+      if (ouverte != null) _ouverte = ouverte;
+      if (validation != null) _validation = validation;
+      _message = null;
+    });
+    final r = await ApiService.setParametresInscription(
+      inscriptionOuverte: ouverte,
+      inscriptionValidation: validation,
+    );
+    if (!mounted) return;
+    if (r['success'] != true) {
+      setState(() {
+        _ouverte = ancienO;
+        _validation = ancienV;
+        _message = r['error']?.toString() ?? 'Modification impossible.';
+        _messageErreur = true;
+      });
+    }
+  }
+
+  Future<void> _valider({bool tout = false}) async {
+    if (!tout && _selection.isEmpty) return;
+    setState(() { _occupe = true; _message = null; });
+    final r = await ApiService.validerInscriptions(ids: _selection.toList(), all: tout);
+    if (!mounted) return;
+    setState(() {
+      _occupe = false;
+      _messageErreur = r['success'] != true;
+      _message = r['success'] == true
+          ? '${r['valides'] ?? 0} inscription(s) validée(s).'
+          : (r['error']?.toString() ?? 'Validation impossible.');
+      if (r['success'] == true) _selection.clear();
+    });
+    if (r['success'] == true) _charger();
+  }
+
+  Future<void> _refuser() async {
+    if (_selection.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Refuser ces demandes ?'),
+        content: Text('${_selection.length} demande(s) seront supprimées. Les étudiants pourront refaire une demande.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Refuser', style: TextStyle(color: AdminTheme.danger)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() { _occupe = true; _message = null; });
+    final r = await ApiService.refuserInscriptions(_selection.toList());
+    if (!mounted) return;
+    setState(() {
+      _occupe = false;
+      _messageErreur = r['success'] != true;
+      _message = r['success'] == true
+          ? '${r['refuses'] ?? 0} demande(s) refusée(s).'
+          : (r['error']?.toString() ?? 'Refus impossible.');
+      if (r['success'] == true) _selection.clear();
+    });
+    if (r['success'] == true) _charger();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 560,
+        constraints: const BoxConstraints(maxHeight: 680),
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.how_to_reg_outlined, color: AdminTheme.primary),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Inscriptions des anciens étudiants',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+                ),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+              ],
+            ),
+            if (_paramsOk) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Inscription en ligne ouverte', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                  'À fermer quand tous les anciens étudiants sont inscrits (Super Admin).',
+                  style: TextStyle(fontSize: 11.5),
+                ),
+                value: _ouverte,
+                onChanged: (v) => _majParametre(ouverte: v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Validation par l\'administration', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                  'Activée : chaque demande doit être validée avant la première connexion.',
+                  style: TextStyle(fontSize: 11.5),
+                ),
+                value: _validation,
+                onChanged: (v) => _majParametre(validation: v),
+              ),
+              const Divider(height: 18),
+            ],
+            if (_message != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _messageErreur ? AdminTheme.dangerLight : AdminTheme.successLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(_message!,
+                    style: TextStyle(fontSize: 12.5, color: _messageErreur ? AdminTheme.danger : AdminTheme.success)),
+              ),
+            Flexible(
+              child: _chargement
+                  ? const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator()))
+                  : _demandes.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 30),
+                          child: Center(
+                            child: Text('Aucune demande en attente.',
+                                style: TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
+                          ),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _demandes.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final d = _demandes[i];
+                            final id = '${d['id']}';
+                            final aPrevenir = [d['nom_parent'], d['tel_parent']]
+                                .where((x) => x != null && '$x'.isNotEmpty)
+                                .join(' · ');
+                            return CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              value: _selection.contains(id),
+                              onChanged: _occupe
+                                  ? null
+                                  : (v) => setState(() => v == true ? _selection.add(id) : _selection.remove(id)),
+                              title: Text('${d['prenoms'] ?? ''} ${d['nom'] ?? ''}',
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                              subtitle: Text(
+                                [
+                                  '${d['matricule'] ?? ''}',
+                                  '${d['filiere'] ?? ''} · ${d['niveau'] ?? ''}',
+                                  '${d['tel'] ?? ''} · ${d['email'] ?? ''}',
+                                  if (aPrevenir.isNotEmpty) 'À prévenir : $aPrevenir',
+                                ].join('\n'),
+                                style: const TextStyle(fontSize: 11.5, height: 1.4),
+                              ),
+                              isThreeLine: true,
+                            );
+                          },
+                        ),
+            ),
+            if (_demandes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _occupe
+                        ? null
+                        : () => setState(() {
+                              if (_selection.length == _demandes.length) {
+                                _selection.clear();
+                              } else {
+                                _selection
+                                  ..clear()
+                                  ..addAll(_demandes.map((d) => '${d['id']}'));
+                              }
+                            }),
+                    child: Text(_selection.length == _demandes.length ? 'Tout désélectionner' : 'Tout sélectionner'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _occupe || _selection.isEmpty ? null : _refuser,
+                    style: OutlinedButton.styleFrom(foregroundColor: AdminTheme.danger),
+                    child: const Text('Refuser'),
+                  ),
+                  ElevatedButton(
+                    onPressed: _occupe || _selection.isEmpty ? null : () => _valider(),
+                    style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt),
+                    child: Text(
+                      _selection.isEmpty ? 'Valider' : 'Valider (${_selection.length})',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

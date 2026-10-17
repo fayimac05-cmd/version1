@@ -2,27 +2,47 @@ const pool = require('../config/db');
 const supabase = require('../config/supabase');
 const bcrypt = require('bcryptjs');
 
+// ── Multi-établissement ─────────────────────────────────────────────────────
+// req.etablissementId vient du jeton ; s'il est absent (anciens jetons), pas de filtre.
+// Un administrateur appartient à un établissement (users / administrateurs / membres).
+const membreDeMonEtab = async (id, etabId) => {
+  if (!etabId) return true;
+  const r = await pool.query(
+    `SELECT 1 FROM users WHERE id = $1 AND etablissement_id = $2`, [id, etabId]
+  );
+  return r.rows.length > 0;
+};
+
 // ── GET /api/membres — Récupérer tous les administrateurs et membres ────────
 const getAllMembres = async (req, res) => {
   try {
     let membres = [];
     try {
+      const pl = [];
+      let filtreEtab = '';
+      if (req.etablissementId) {
+        pl.push(req.etablissementId);
+        filtreEtab = ` AND u.etablissement_id = $${pl.length}`;
+      }
       const r = await pool.query(
         `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.admin_sub_role, u.statut,
                 COALESCE(m.permissions, '{}'::jsonb) AS permissions
          FROM users u
          LEFT JOIN membres m ON u.id = m.user_id
-         WHERE u.role = 'admin' OR u.role = 'admi' OR u.role = 'administrator'
-         ORDER BY u.nom`
+         WHERE (u.role = 'admin' OR u.role = 'admi' OR u.role = 'administrator')${filtreEtab}
+         ORDER BY u.nom`,
+        pl
       );
       membres = r.rows;
     } catch (dbErr) {
       console.warn('Direct PG failed in getAllMembres, fallback to Supabase SDK:', dbErr.message);
       if (supabase && typeof supabase.from === 'function') {
-        const { data, error } = await supabase
+        let q = supabase
           .from('users')
           .select('id, nom, prenoms, email, tel, role, admin_sub_role, statut, permissions')
           .or('role.eq.admin,role.eq.admi');
+        if (req.etablissementId) q = q.eq('etablissement_id', req.etablissementId);
+        const { data, error } = await q;
         if (!error && data) membres = data;
       }
     }
@@ -70,6 +90,7 @@ const createMembre = async (req, res) => {
     const domaineFinal = domaine || 'Tous';
     const permissionsObj = { ...(permissions || {}), domaine: domaineFinal };
 
+    const etabId = req.etablissementId || null;
     let createdUser = null;
 
     try {
@@ -83,17 +104,34 @@ const createMembre = async (req, res) => {
         return res.status(409).json({ success: false, message: 'Cet email est déjà utilisé par un autre compte.' });
       }
 
-      // Générer matricule admin unique
-      const countRes = await client.query("SELECT COUNT(*)::int AS c FROM users WHERE role = 'admin'");
-      const matricule = `ADM-${new Date().getFullYear()}-${(countRes.rows[0].c + 1).toString().padStart(3, '0')}`;
+      // Générer matricule admin unique (la clé users.matricule est globale : on
+      // incrémente jusqu'à trouver un numéro libre, quel que soit l'établissement)
+      const pc = [];
+      let filtreCount = '';
+      if (etabId) { pc.push(etabId); filtreCount = ` AND etablissement_id = $${pc.length}`; }
+      const countRes = await client.query(`SELECT COUNT(*)::int AS c FROM users WHERE role = 'admin'${filtreCount}`, pc);
+      let numAdm = countRes.rows[0].c + 1;
+      let matricule;
+      for (let i = 0; i < 200; i += 1, numAdm += 1) {
+        matricule = `ADM-${new Date().getFullYear()}-${numAdm.toString().padStart(3, '0')}`;
+        const dejaPris = await client.query('SELECT 1 FROM users WHERE matricule = $1', [matricule]);
+        if (dejaPris.rows.length === 0) break;
+      }
 
       // 1. Insertion dans la table users
-      const userRes = await client.query(
-        `INSERT INTO users (matricule, nom, prenoms, email, tel, mot_de_passe, role, admin_sub_role, statut)
-         VALUES ($1, $2, $3, $4, $5, $6, 'admin', $7, 'actif')
-         RETURNING id, matricule, nom, prenoms, email, tel, role, admin_sub_role`,
-        [matricule, nom.trim().toUpperCase(), prenoms.trim(), email.trim().toLowerCase(), telFinal, hashedPassword, subRole]
-      );
+      const userRes = etabId
+        ? await client.query(
+            `INSERT INTO users (matricule, nom, prenoms, email, tel, mot_de_passe, role, admin_sub_role, statut, etablissement_id)
+             VALUES ($1, $2, $3, $4, $5, $6, 'admin', $7, 'actif', $8)
+             RETURNING id, matricule, nom, prenoms, email, tel, role, admin_sub_role`,
+            [matricule, nom.trim().toUpperCase(), prenoms.trim(), email.trim().toLowerCase(), telFinal, hashedPassword, subRole, etabId]
+          )
+        : await client.query(
+            `INSERT INTO users (matricule, nom, prenoms, email, tel, mot_de_passe, role, admin_sub_role, statut)
+             VALUES ($1, $2, $3, $4, $5, $6, 'admin', $7, 'actif')
+             RETURNING id, matricule, nom, prenoms, email, tel, role, admin_sub_role`,
+            [matricule, nom.trim().toUpperCase(), prenoms.trim(), email.trim().toLowerCase(), telFinal, hashedPassword, subRole]
+          );
       createdUser = userRes.rows[0];
 
       // 2. Insertion dans la table membres / permissions
@@ -103,6 +141,10 @@ const createMembre = async (req, res) => {
          ON CONFLICT (user_id) DO UPDATE SET permissions = EXCLUDED.permissions`,
         [createdUser.id, JSON.stringify(permissionsObj)]
       );
+      if (etabId) {
+        // etablissement_id existe sur membres / administrateurs (migration phase 1)
+        try { await client.query('UPDATE membres SET etablissement_id = $1 WHERE user_id = $2', [etabId, createdUser.id]); } catch (_) {}
+      }
 
       // 3. Insertion dans la table administrateurs (sans colonne 'role' qui n'existe pas)
       try {
@@ -116,6 +158,9 @@ const createMembre = async (req, res) => {
              permissions = EXCLUDED.permissions`,
           [createdUser.id, nom.trim().toUpperCase(), prenoms?.trim() || '', email.trim().toLowerCase(), telFinal, subRole, JSON.stringify(permissionsObj)]
         );
+        if (etabId) {
+          try { await client.query('UPDATE administrateurs SET etablissement_id = $1 WHERE user_id = $2', [etabId, createdUser.id]); } catch (_) {}
+        }
       } catch (admErr) {
         console.warn('[createMembre] Insertion dans administrateurs échouée:', admErr.message);
       }
@@ -134,7 +179,8 @@ const createMembre = async (req, res) => {
           mot_de_passe: hashedPassword,
           role: 'admin',
           admin_sub_role: subRole,
-          statut: 'actif'
+          statut: 'actif',
+          ...(etabId ? { etablissement_id: etabId } : {}),
         }]).select().single();
 
         if (errSup) return res.status(500).json({ success: false, message: errSup.message });
@@ -156,6 +202,7 @@ const createMembre = async (req, res) => {
           admin_sub_role: subRole,
           permissions: permissionsObj,
           statut: 'actif',
+          ...(etabId ? { etablissement_id: etabId } : {}),
         }], { onConflict: 'user_id' });
 
         if (admSupErr) {
@@ -193,6 +240,10 @@ const updatePermissions = async (req, res) => {
     const { id } = req.params;
     const { permissions, role } = req.body;
 
+    if (!(await membreDeMonEtab(id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Membre introuvable.' });
+    }
+
     try {
       await pool.query(
         `INSERT INTO membres (user_id, permissions)
@@ -222,6 +273,9 @@ const updatePermissions = async (req, res) => {
 const deleteMembre = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!(await membreDeMonEtab(id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Membre introuvable.' });
+    }
     try {
       await pool.query('DELETE FROM users WHERE id = $1', [id]);
     } catch (dbErr) {

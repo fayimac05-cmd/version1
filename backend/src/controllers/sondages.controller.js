@@ -7,6 +7,19 @@
 // ════════════════════════════════════════════════════════════════════════
 const pool = require('../config/db');
 
+// ── Isolation par établissement ─────────────────────────────────────────────
+// Un sondage appartient à l'établissement de son créateur (users.etablissement_id).
+// req.etablissementId vient du jeton ; s'il est absent (anciens jetons), pas de filtre.
+async function sondageDeMonEtab(req, id) {
+    if (!req.etablissementId) return true;
+    const r = await pool.query(
+        `SELECT 1 FROM sondages s JOIN users u ON u.id = s.createur_id
+         WHERE s.id = $1 AND u.etablissement_id = $2`,
+        [id, req.etablissementId]
+    );
+    return r.rows.length > 0;
+}
+
 // POST /api/sondages
 // Body : { question, options: string[], choix_multiple, anonyme, date_cloture? }
 const creerSondage = async (req, res) => {
@@ -52,7 +65,7 @@ const getSondage = async (req, res) => {
         const { id } = req.params;
         const sondageRes = await pool.query('SELECT * FROM sondages WHERE id = $1', [id]);
         const sondage = sondageRes.rows[0];
-        if (!sondage) {
+        if (!sondage || !(await sondageDeMonEtab(req, id))) {
             return res.status(404).json({ success: false, message: 'Sondage introuvable.' });
         }
 
@@ -132,7 +145,7 @@ const voter = async (req, res) => {
 
         const sondageRes = await pool.query('SELECT * FROM sondages WHERE id = $1', [id]);
         const sondage = sondageRes.rows[0];
-        if (!sondage) {
+        if (!sondage || !(await sondageDeMonEtab(req, id))) {
             return res.status(404).json({ success: false, message: 'Sondage introuvable.' });
         }
         const cloture = sondage.cloture_manuelle ||

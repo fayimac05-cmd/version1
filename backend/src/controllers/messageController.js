@@ -8,6 +8,7 @@ const supabase = require('../config/supabase');
 const { notifierUser } = require('../socket/socketHandler');
 
 const { resolveFiliere, normalizeNiveau } = require('../utils/filieres');
+const { ensureCanauxStandard } = require('../utils/canauxStandard');
 
 // Types de canaux « publics » : lisibles par tout utilisateur authentifié,
 // sans inscription préalable dans canal_membres (les droits d'écriture
@@ -30,10 +31,45 @@ const STANDARD_CANAUX = {
 // étudiants.
 const TYPES_ACCES_RESTREINT = ['prof_delegue_niveau'];
 
-async function ensureCanalExists(canalId) {
+// ── Multi-établissement ─────────────────────────────────────────────────────
+// req.etablissementId vient du jeton ; absent (anciens jetons) = pas de filtre.
+// Un canal appartient à un établissement (canaux.etablissement_id) ; les
+// messages suivent leur canal ; les groupes filière suivent filieres.etablissement_id.
+async function filiereDeMonEtab(filiereId, etabId) {
+  if (!etabId) return true;
+  if (filiereId === undefined || filiereId === null || filiereId === '') return false;
+  const r = await pool.query('SELECT 1 FROM filieres WHERE id = $1 AND etablissement_id = $2', [filiereId, etabId]);
+  return r.rows.length > 0;
+}
+async function userDeMonEtab(userId, etabId) {
+  if (!etabId) return true;
+  const r = await pool.query('SELECT 1 FROM users WHERE id = $1 AND etablissement_id = $2', [userId, etabId]);
+  return r.rows.length > 0;
+}
+// Ajoute « AND <alias>.etablissement_id = $N » seulement si l'établissement est connu.
+function etabSql(params, etabId, alias) {
+  if (!etabId) return '';
+  params.push(etabId);
+  return ` AND ${alias}.etablissement_id = $${params.length}`;
+}
+
+// GET /api/messages/canaux-standard — ids des canaux standard (administration, bde,
+// professeurs, admin_profs, admin_filiere, admin_delegues) de MON établissement.
+// L'app s'en sert au lieu des anciens numéros fixes 1 à 6.
+const getCanauxStandard = async (req, res) => {
+  try {
+    const data = await ensureCanauxStandard(req.etablissementId || null);
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('[getCanauxStandard]', err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+async function ensureCanalExists(canalId, etabId) {
   const numId = parseInt(canalId, 10);
   if (!numId) return null;
-  const { rows: existing } = await pool.query('SELECT id, type, nom, professeur_id, filiere_id, niveau FROM canaux WHERE id = $1', [numId]);
+  const { rows: existing } = await pool.query('SELECT id, type, nom, professeur_id, filiere_id, niveau, etablissement_id FROM canaux WHERE id = $1', [numId]);
   if (existing.length) return existing[0];
 
   // Si c'est un canal standard manquant, le créer automatiquement dans la base
@@ -41,11 +77,11 @@ async function ensureCanalExists(canalId) {
     const std = STANDARD_CANAUX[numId];
     try {
       const { rows } = await pool.query(
-        `INSERT INTO canaux (id, nom, description, type)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO canaux (id, nom, description, type, etablissement_id)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (id) DO UPDATE SET type = EXCLUDED.type
-         RETURNING id, type, nom, professeur_id, filiere_id, niveau`,
-        [numId, std.nom, std.description, std.type]
+         RETURNING id, type, nom, professeur_id, filiere_id, niveau, etablissement_id`,
+        [numId, std.nom, std.description, std.type, etabId || null]
       );
       return rows[0];
     } catch (e) {
@@ -60,11 +96,16 @@ async function ensureCanalExists(canalId) {
 // les canaux prof/admin par rôle JWT — SAUF pour les types à audience
 // restreinte ou gérée différemment (TYPES_ACCES_RESTREINT, et
 // admin_filiere_niveau qui a sa propre règle ci-dessous).
-async function accesCanal(canalId, userId, userRole) {
+async function accesCanal(canalId, userId, userRole, etabId) {
   const normRole = String(userRole || '').toLowerCase().trim();
 
   // 0. Résoudre le canal d'abord, pour connaître son type et sa règle d'accès.
-  const canal = await ensureCanalExists(canalId);
+  const canal = await ensureCanalExists(canalId, etabId);
+  // Étanchéité : un canal d'un autre établissement n'est jamais accessible
+  // (même pour un admin ou un professeur).
+  if (etabId && canal && canal.etablissement_id && String(canal.etablissement_id) !== String(etabId)) {
+    return false;
+  }
   const numId = parseInt(canalId, 10);
   const type = canal ? canal.type : (STANDARD_CANAUX[numId] ? STANDARD_CANAUX[numId].type : null);
 
@@ -159,16 +200,18 @@ async function peutEcrireCanal(canal, userId, userRole) {
 // Liste des canaux accessibles par l'utilisateur connecté
 const getCanaux = async (req, res) => {
   try {
+    const pCan = [req.user.id];
+    const etabCan = etabSql(pCan, req.etablissementId, 'c');
     const { rows } = await pool.query(
             `SELECT c.id, c.nom, c.description, c.type, c.professeur_id, c.filiere_id, c.niveau,
               COALESCE(cm.role, 'membre') AS role,
               (SELECT COUNT(*) FROM messages m WHERE m.canal_id = c.id) AS nb_messages
        FROM canaux c
              LEFT JOIN canal_membres cm ON cm.canal_id = c.id AND cm.user_id = $1
-             WHERE cm.user_id IS NOT NULL
-                OR c.type IN ('administration', 'admin_filiere', 'bde', 'general', 'professeurs', 'prof_admin', 'admin_profs')
+             WHERE (cm.user_id IS NOT NULL
+                OR c.type IN ('administration', 'admin_filiere', 'bde', 'general', 'professeurs', 'prof_admin', 'admin_profs'))${etabCan}
        ORDER BY c.nom ASC`,
-            [req.user.id]
+            pCan
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -185,7 +228,7 @@ const getMessagesCanal = async (req, res) => {
 
   try {
     // Vérifier l'accès (membre, canal public, ou rôle autorisé)
-    if (!(await accesCanal(id, req.user.id, req.user.role))) {
+    if (!(await accesCanal(id, req.user.id, req.user.role, req.etablissementId))) {
       return res.status(403).json({ success: false, error: 'Accès refusé à ce canal' });
     }
 
@@ -248,6 +291,7 @@ const getMessagesCanal = async (req, res) => {
           WHERE a.statut = 'publie'
         `;
         const params = [];
+        annonceQuery += etabSql(params, req.etablissementId, 'a');
 
         if (id === '1') {
           // Canal Administration
@@ -325,11 +369,11 @@ const envoyerMessageCanal = async (req, res) => {
 
   try {
     // Vérifier les droits de lecture (membre, canal public, ou rôle autorisé)
-    if (!(await accesCanal(id, req.user.id, req.user.role))) {
+    if (!(await accesCanal(id, req.user.id, req.user.role, req.etablissementId))) {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
-    const canal = await ensureCanalExists(id);
+    const canal = await ensureCanalExists(id, req.etablissementId);
     if (!(await peutEcrireCanal(canal, req.user.id, req.user.role))) {
       return res.status(403).json({
         success: false,
@@ -374,6 +418,8 @@ const envoyerMessageCanal = async (req, res) => {
 // Liste des conversations privées de l'utilisateur
 const getConversationsPrivees = async (req, res) => {
   try {
+    const pConv = [req.user.id];
+    const etabConv = etabSql(pConv, req.etablissementId, 'u');
     const { rows } = await pool.query(
       `SELECT DISTINCT ON (correspondant_id)
               correspondant_id,
@@ -392,8 +438,9 @@ const getConversationsPrivees = async (req, res) => {
        ) mp
        JOIN users u ON u.id = mp.correspondant_id
        LEFT JOIN etudiants e ON e.user_id = u.id
+       WHERE 1=1${etabConv}
        ORDER BY correspondant_id, mp.created_at DESC`,
-      [req.user.id]
+      pConv
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -443,6 +490,9 @@ const envoyerMessagePrive = async (req, res) => {
   }
 
   try {
+    if (!(await userDeMonEtab(userId, req.etablissementId))) {
+      return res.status(403).json({ success: false, error: 'Destinataire introuvable.' });
+    }
     const { rows } = await pool.query(
       `INSERT INTO messages_prives (expediteur_id, destinataire_id, contenu, created_at)
        VALUES ($1, $2, $3, NOW())
@@ -511,6 +561,13 @@ const ajouterMembreCanal = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Accès refusé' });
     }
 
+    if (req.etablissementId) {
+      const c = await ensureCanalExists(id, req.etablissementId);
+      if (!c || (c.etablissement_id && String(c.etablissement_id) !== String(req.etablissementId)) ||
+          !(await userDeMonEtab(userId, req.etablissementId))) {
+        return res.status(403).json({ success: false, error: 'Accès refusé' });
+      }
+    }
     await pool.query(
       `INSERT INTO canal_membres (canal_id, user_id, role)
        VALUES ($1, $2, $3)
@@ -539,13 +596,15 @@ const getProfFilieres = async (req, res) => {
     // vraie table d'affectation (module + niveau + semestre). Le filet de
     // sécurité "toutes les filières" est retiré : un prof sans aucun
     // module affecté ne doit voir aucune filière ici, pas toutes.
+    const pPF = [req.user.id];
+    const etabPF = etabSql(pPF, req.etablissementId, 'f');
     const { rows } = await pool.query(
       `SELECT DISTINCT f.id, f.nom, f.description
        FROM professeur_modules pm
        JOIN filieres f ON f.id = pm.filiere_id
-       WHERE pm.professeur_id = $1
+       WHERE pm.professeur_id = $1${etabPF}
        ORDER BY f.nom`,
-      [req.user.id]
+      pPF
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -560,6 +619,9 @@ const getMessagesGroupe = async (req, res) => {
   const limite = parseInt(req.query.limite) || 50;
 
   try {
+    if (!(await filiereDeMonEtab(filiereId, req.etablissementId))) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
     const role = String(req.user.role || '').toLowerCase();
     const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role);
 
@@ -616,6 +678,9 @@ const envoyerMessageGroupe = async (req, res) => {
   }
 
   try {
+    if (!(await filiereDeMonEtab(filiereId, req.etablissementId))) {
+      return res.status(403).json({ success: false, error: 'Vous n\'appartenez pas à cette filière' });
+    }
     const role = String(req.user.role || '').toLowerCase();
     const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role);
 
@@ -811,8 +876,11 @@ const supprimerMessageType = async (req, res) => {
 // Renvoie l'identité du compte administration à contacter en privé
 const getAdminContact = async (req, res) => {
   try {
+    const pAc = [];
+    const etabAc = etabSql(pAc, req.etablissementId, 'users');
     const { rows } = await pool.query(
-      `SELECT id, nom, prenoms FROM users WHERE role = 'admin' ORDER BY matricule NULLS LAST LIMIT 1`
+      `SELECT id, nom, prenoms FROM users WHERE role = 'admin'${etabAc} ORDER BY matricule NULLS LAST LIMIT 1`,
+      pAc
     );
     if (!rows.length) {
       return res.status(404).json({ success: false, error: 'Aucun administrateur disponible' });
@@ -828,11 +896,14 @@ const getAdminContact = async (req, res) => {
 // Renvoie tous les comptes de l'administration disponibles
 const getAdminContacts = async (req, res) => {
   try {
+    const pAcs = [];
+    const etabAcs = etabSql(pAcs, req.etablissementId, 'users');
     const { rows } = await pool.query(
       `SELECT id, nom, prenoms, email, tel, COALESCE(domaine, 'Administration') AS domaine, role
        FROM users
-       WHERE role = 'admin' AND COALESCE(statut, 'actif') = 'actif'
-       ORDER BY matricule NULLS LAST, nom ASC`
+       WHERE role = 'admin' AND COALESCE(statut, 'actif') = 'actif'${etabAcs}
+       ORDER BY matricule NULLS LAST, nom ASC`,
+      pAcs
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -869,6 +940,7 @@ const getContacts = async (req, res) => {
           AND u.id != $1
       `;
       const params = [currentUserId];
+      profQuery += etabSql(params, req.etablissementId, 'u');
       if (search) {
         params.push(search);
         profQuery += ` AND (LOWER(u.nom) LIKE $${params.length} OR LOWER(u.prenoms) LIKE $${params.length} OR LOWER(COALESCE(p.specialite, '')) LIKE $${params.length})`;
@@ -889,6 +961,7 @@ const getContacts = async (req, res) => {
           AND u.id != $1
       `;
       const params = [currentUserId];
+      adminQuery += etabSql(params, req.etablissementId, 'u');
       if (search) {
         params.push(search);
         adminQuery += ` AND (LOWER(u.nom) LIKE $${params.length} OR LOWER(u.prenoms) LIKE $${params.length} OR LOWER(COALESCE(u.domaine, '')) LIKE $${params.length})`;
@@ -913,6 +986,7 @@ const getContacts = async (req, res) => {
           AND u.id != $1
       `;
       const params = [currentUserId];
+      etuQuery += etabSql(params, req.etablissementId, 'u');
       if (req.query.filiere_id) {
         params.push(req.query.filiere_id);
         etuQuery += ` AND (e.filiere_id = $${params.length} OR u.filiere_id = $${params.length})`;
@@ -967,6 +1041,9 @@ const getUsersOnline = (req, res) => {
 const getMembresGroupe = async (req, res) => {
   const { filiereId } = req.params;
   try {
+    if (!(await filiereDeMonEtab(filiereId, req.etablissementId))) {
+      return res.status(403).json({ success: false, error: 'Accès refusé' });
+    }
     const role = String(req.user.role || '').toLowerCase();
     const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role);
     const appartientJwt = req.user.filiere_id != null &&
@@ -1114,4 +1191,5 @@ module.exports = {
   getAdminContacts,
   getContacts,
   getUsersOnline,
+  getCanauxStandard,
 };

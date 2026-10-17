@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import '../app/scolar_hub_app.dart';
 import '../models/student_profile.dart';
@@ -10,6 +11,8 @@ import 'bureau_des_etudiants.dart';
 import 'parent/parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/api_service.dart';
+import '../pages/register_page.dart';
+import '../config/etablissement_config.dart';
 import '../services/socket_service.dart';
 import '../services/supabase_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +37,7 @@ class _AuthPageState extends State<AuthPage> {
   static const Map<String, Map<String, dynamic>> _dbEtudiants = {};
   int _tab = 0;
   _Etape _etape = _Etape.saisie;
+  bool _inscOuverte = EtablissementConfig.instance.inscriptionOuverte;
 
   final _matriculeCtrl = TextEditingController();
   final _nomCtrl = TextEditingController();
@@ -60,9 +64,42 @@ class _AuthPageState extends State<AuthPage> {
   // à la place de _userId qui reste null tant que le compte n'existe pas.
   String? _parentId;
 
+  // Relit l'état de l'inscription auprès du serveur (le Super Admin peut l'avoir fermée).
+  Future<void> _rafraichirInscription() async {
+    final code = EtablissementConfig.instance.code;
+    if (code.isEmpty) return;
+    final res = await ApiService.getEtablissementParCode(code);
+    if (!mounted || res['success'] != true) return;
+    final e = Map<String, dynamic>.from(res['etablissement'] as Map);
+    final ouverte = e['inscription_ouverte'] == true;
+    final cfg = EtablissementConfig.instance;
+    await cfg.appliquerEtablissement(
+      id: cfg.id,
+      nom: cfg.nom,
+      sigle: cfg.sigle,
+      ville: cfg.ville,
+      campus: cfg.campus,
+      code: cfg.code,
+      modeleMatricule: (e['modele_matricule'] ?? cfg.modeleMatricule).toString(),
+      inscriptionOuverte: ouverte,
+      logoUrl: cfg.logoUrl,
+    );
+    if (mounted) setState(() => _inscOuverte = ouverte);
+  }
+
   @override
   void initState() {
     super.initState();
+        if (EtablissementConfig.instance.code.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const ChooseSchoolPage()),
+        );
+      });
+      return;
+    }
+    _rafraichirInscription();
     final pre = widget.matriculePrefill?.trim();
     if (pre != null && pre.isNotEmpty) {
       _tab = 0;
@@ -73,6 +110,7 @@ class _AuthPageState extends State<AuthPage> {
       });
     }
   }
+
 
   @override
   void dispose() {
@@ -747,7 +785,7 @@ class _AuthPageState extends State<AuthPage> {
           _lbl('Matricule ${e.abreviation}'),
           _champ(
             _matriculeCtrl,
-            e.abreviation == 'IST' ? 'Ex: 24IST-O2/1851' : 'Votre matricule',
+            e.modeleMatricule.isNotEmpty ? 'Ex: ${_exempleMatricule(e.modeleMatricule)}' : 'Votre matricule',
             Icons.badge_outlined,
             TextInputType.text,
           ),
@@ -811,6 +849,28 @@ class _AuthPageState extends State<AuthPage> {
                   ),
           ),
         ),
+        if (_inscOuverte) ...[
+          const SizedBox(height: 18),
+          Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text('Ancien étudiant sans compte ? ',
+                    style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600)),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const RegisterPage())),
+                  child: const Text('Créer mon compte',
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppPalette.blue)),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 28),
         Row(
           children: [
@@ -827,7 +887,8 @@ class _AuthPageState extends State<AuthPage> {
           ],
         ),
         const SizedBox(height: 20),
-        if (e.abreviation == 'IST') ...[
+        // Comptes démo : uniquement en développement (jamais en production).
+        if (kDebugMode && e.abreviation == 'IST') ...[
           _demoBtn(
             '⚡',
             'Accès Démo — Ibrahim KOURAOGO',
@@ -1479,6 +1540,11 @@ class _AuthPageState extends State<AuthPage> {
         ),
       );
 
+  // Transforme un modèle comme {AA}IST-O2/{NNNN} en exemple lisible.
+  String _exempleMatricule(String m) => m
+      .replaceAll('{AA}', '${DateTime.now().year % 100}')
+      .replaceAllMapped(RegExp(r'\{N+\}|\{N\}'), (x) => '0001');
+
   Widget _infoMatricule(Etablissement e) => Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -1506,7 +1572,21 @@ class _AuthPageState extends State<AuthPage> {
               ],
             ),
             const SizedBox(height: 10),
-            if (e.abreviation == 'IST') ...[
+            if (e.modeleMatricule.isNotEmpty) ...[
+              Text(
+                'Modèle : ${e.modeleMatricule}',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Exemple : ${_exempleMatricule(e.modeleMatricule)}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppPalette.blue,
+                ),
+              ),
+            ] else if (kDebugMode && e.abreviation == 'IST') ...[
               _fmtLigne('24', "Année d'entrée (2024)"),
               _fmtLigne('IST', 'Institut Supérieur de Technologies'),
               _fmtLigne('-O2/', 'Campus Ouaga 2000'),
@@ -1561,90 +1641,202 @@ class _AuthPageState extends State<AuthPage> {
         ),
       );
 
+  // Mot de passe oublié : étape 1 code envoyé par email, étape 2 code + nouveau mot de passe.
   void _motDePasseOublie() {
+    final idCtrl = TextEditingController(text: _matriculeReel ?? '');
+    final codeCtrl = TextEditingController();
+    final pass1Ctrl = TextEditingController();
+    final pass2Ctrl = TextEditingController();
+    bool codeEnvoye = false;
+    bool enCours = false;
+    String? erreur;
+    String? info;
+
+    InputDecoration deco(String hint, IconData ico) => InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Color(0xFF64748B)),
+          prefixIcon: Icon(ico, color: const Color(0xFF64748B), size: 20),
+          filled: true,
+          fillColor: const Color(0xFFF8FAFC),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        );
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.lock_reset, color: AppPalette.blue),
-            SizedBox(width: 10),
-            Text(
-              'Mot de passe oublié',
-              style:
-                  TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Un lien sera envoyé à votre adresse email.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF64748B),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const TextField(
-                style: TextStyle(fontSize: 15),
-                decoration: InputDecoration(
-                  hintText: 'votre@email.com',
-                  hintStyle: TextStyle(color: Color(0xFF64748B)),
-                  prefixIcon: Icon(
-                    Icons.email_outlined,
-                    color: Color(0xFF64748B),
-                    size: 20,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Annuler',
-              style: TextStyle(color: Color(0xFF64748B)),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          Future<void> envoyerCode() async {
+            final id = idCtrl.text.trim();
+            if (id.isEmpty) {
+              setD(() => erreur = 'Saisissez votre matricule ou votre email.');
+              return;
+            }
+            setD(() {
+              enCours = true;
+              erreur = null;
+            });
+            final res = await ApiService.forgotPassword(identifiant: id);
+            if (!mounted) return;
+            if (res['success'] == true) {
+              final devCode = res['code']?.toString();
+              setD(() {
+                enCours = false;
+                codeEnvoye = true;
+                info = (res['message'] ?? 'Code envoyé.').toString() +
+                    (kDebugMode && devCode != null ? '\n(Dev) Code : $devCode' : '');
+              });
+            } else {
+              setD(() {
+                enCours = false;
+                erreur = (res['error'] ?? 'Erreur lors de la demande.').toString();
+              });
+            }
+          }
+
+          Future<void> reinitialiser() async {
+            final code = codeCtrl.text.trim();
+            if (code.isEmpty || pass1Ctrl.text.isEmpty || pass2Ctrl.text.isEmpty) {
+              setD(() => erreur = 'Remplissez tous les champs.');
+              return;
+            }
+            if (pass1Ctrl.text.length < 4) {
+              setD(() => erreur = 'Mot de passe : minimum 4 caractères.');
+              return;
+            }
+            if (pass1Ctrl.text != pass2Ctrl.text) {
+              setD(() => erreur = 'Les mots de passe ne correspondent pas.');
+              return;
+            }
+            setD(() {
+              enCours = true;
+              erreur = null;
+            });
+            final res = await ApiService.resetPassword(
+              identifiant: idCtrl.text.trim(),
+              code: code,
+              newPassword: pass1Ctrl.text,
+            );
+            if (!mounted) return;
+            if (res['success'] == true) {
+              Navigator.of(dialogCtx).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content:
-                      Text('Lien envoyé ! Vérifiez votre email.'),
+                  content: Text('Mot de passe réinitialisé. Vous pouvez vous connecter.'),
                   backgroundColor: Color(0xFF15803D),
                 ),
               );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 0,
+            } else {
+              setD(() {
+                enCours = false;
+                erreur = (res['error'] ?? 'Erreur lors de la réinitialisation.').toString();
+              });
+            }
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.lock_reset, color: AppPalette.blue),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Mot de passe oublié',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Envoyer'),
-          ),
-        ],
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    codeEnvoye
+                        ? 'Saisissez le code reçu par email et choisissez un nouveau mot de passe.'
+                        : 'Indiquez votre matricule ou votre email : un code de réinitialisation vous sera envoyé par email.',
+                    style: const TextStyle(
+                        fontSize: 14, color: Color(0xFF64748B), height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: idCtrl,
+                    enabled: !codeEnvoye && !enCours,
+                    decoration: deco('Matricule ou email', Icons.badge_outlined),
+                  ),
+                  if (codeEnvoye) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: codeCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: deco('Code à 6 chiffres', Icons.pin_outlined),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: pass1Ctrl,
+                      obscureText: true,
+                      decoration: deco('Nouveau mot de passe', Icons.lock_outline),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: pass2Ctrl,
+                      obscureText: true,
+                      decoration: deco('Confirmer le mot de passe', Icons.lock_outline),
+                    ),
+                  ],
+                  if (info != null) ...[
+                    const SizedBox(height: 12),
+                    Text(info!,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF15803D))),
+                  ],
+                  if (erreur != null) ...[
+                    const SizedBox(height: 12),
+                    Text(erreur!,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFFC62828))),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: enCours ? null : () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Annuler',
+                    style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton(
+                onPressed: enCours ? null : (codeEnvoye ? reinitialiser : envoyerCode),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+                child: enCours
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
+                    : Text(codeEnvoye ? 'Réinitialiser' : 'Envoyer le code'),
+              ),
+            ],
+          );
+        },
       ),
-    );
+    ).then((_) {
+      idCtrl.dispose();
+      codeCtrl.dispose();
+      pass1Ctrl.dispose();
+      pass2Ctrl.dispose();
+    });
   }
 }

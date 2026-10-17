@@ -138,6 +138,42 @@ class _CanalScreenState extends State<CanalScreen> {
   // badges fixes '3'/'1' précédents), indexé par canalId.
   final Map<String, int> _nonLus = {};
 
+  // ✅ Multi-établissement — ids RÉELS des canaux standard de MON école
+  // (administration, bde, professeurs, admin_profs…), fournis par le serveur.
+  // Valeurs par défaut = anciens numéros fixes (IST), utilisées tant que la
+  // réponse n'est pas arrivée ou si le serveur est ancien.
+  Map<String, String> _std = {
+    'administration': '1',
+    'admin_filiere': '2',
+    'bde': '3',
+    'professeurs': '4',
+    'admin_profs': '5',
+    'admin_delegues': '6',
+  };
+
+  Future<void> _chargerCanauxStandard() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.get(
+        Uri.parse('${ApiService.baseUrl}/messages/canaux-standard'),
+        headers: headers,
+      );
+      if (res.statusCode != 200) return;
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      final data = body is Map ? body['data'] : null;
+      if (data is Map && mounted) {
+        setState(() {
+          _std = {
+            ..._std,
+            for (final e in data.entries) e.key.toString(): e.value.toString(),
+          };
+        });
+      }
+    } catch (_) {
+      // On garde les valeurs par défaut.
+    }
+  }
+
   // Couleurs de l'identité premium
   static const Color _brandBlue = Color(0xFF1E40AF);
   static const Color _textMain = Color(0xFF0F172A);
@@ -150,6 +186,7 @@ class _CanalScreenState extends State<CanalScreen> {
     super.initState();
     final role = widget.profile.role.toLowerCase().trim();
     if (['professeur', 'prof', 'enseignant', 'teacher'].contains(role)) {
+      _chargerCanauxStandard();
       _chargerCanauxProfesseur();
     } else {
       _chargerMonCanalAdminFiliere();
@@ -165,8 +202,9 @@ class _CanalScreenState extends State<CanalScreen> {
   /// 'Bureau des Étudiants', puis pour 'Admin & Filière' une fois son id
   /// résolu par [_chargerMonCanalAdminFiliere].
   Future<void> _chargerNonLus() async {
+    await _chargerCanauxStandard();
     final myId = await ApiService.getUserId();
-    for (final canalId in ['1', '3']) {
+    for (final canalId in [_std['administration']!, _std['bde']!]) {
       final n = await _compterNonLus(canalId, myId);
       if (mounted) setState(() => _nonLus[canalId] = n);
     }
@@ -353,8 +391,8 @@ class _CanalScreenState extends State<CanalScreen> {
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.account_balance_rounded, nom: 'Administration',
                 description: 'Annonces officielles et informations pédagogiques',
-                couleur: _brandBlue, badge: _badgeNonLus('1'), tag: 'Lecture seule',
-                canalId: '1', type: 'administration'),
+                couleur: _brandBlue, badge: _badgeNonLus(_std['administration']), tag: 'Lecture seule',
+                canalId: _std['administration']!, type: 'administration'),
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.campaign_rounded, nom: 'Admin & Filière',
                 description: descriptionAdminFiliere,
@@ -394,8 +432,8 @@ class _CanalScreenState extends State<CanalScreen> {
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.gavel_rounded, nom: 'Bureau des Étudiants',
                 description: 'Événements, activités et annonces du BDE',
-                couleur: const Color(0xFF7C3AED), badge: _badgeNonLus('3'), tag: 'BDE',
-                canalId: '3', type: 'bde'),
+                couleur: const Color(0xFF7C3AED), badge: _badgeNonLus(_std['bde']), tag: 'BDE',
+                canalId: _std['bde']!, type: 'bde'),
             const SizedBox(height: 28),
             _sectionLabel('COMMUNICATIONS PRIVÉES'),
             const SizedBox(height: 12),
@@ -452,11 +490,11 @@ class _CanalScreenState extends State<CanalScreen> {
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.account_balance_rounded, nom: 'Administration & Professeurs',
               description: 'Canal officiel Admin ↔ Tous les professeurs',
-              couleur: const Color(0xFF059669), tag: 'Admin ↔ Professeurs', canalId: '5', type: 'admin_profs'),
+              couleur: const Color(0xFF059669), tag: 'Admin ↔ Professeurs', canalId: _std['admin_profs']!, type: 'admin_profs'),
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.groups_rounded, nom: 'Salle des Professeurs',
               description: 'Canal d\'échanges entre professeurs',
-              couleur: _brandBlue, tag: 'Tous les professeurs', canalId: '4', type: 'professeurs'),
+              couleur: _brandBlue, tag: 'Tous les professeurs', canalId: _std['professeurs']!, type: 'professeurs'),
             const SizedBox(height: 22),
             _sectionLabel('COORDINATION PAR FILIÈRE'),
             const SizedBox(height: 12),

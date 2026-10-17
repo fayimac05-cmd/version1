@@ -66,7 +66,11 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
         }
 
         _loading = false;
-        _error = (_filieres.isEmpty && _professeurs.isEmpty) ? 'Erreur de chargement.' : null;
+        // Erreur seulement si un appel a réellement échoué : un établissement
+        // neuf (aucune filière, aucun professeur) n'est pas une erreur.
+        _error = (resFils['success'] == true && resProfs['success'] == true)
+            ? null
+            : 'Erreur de chargement.';
       });
     } catch (e) {
       setState(() { _error = 'Serveur injoignable.'; _loading = false; });

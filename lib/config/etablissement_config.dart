@@ -154,6 +154,87 @@ class EtablissementConfig extends ChangeNotifier {
   EtablissementOptions _options =
       EtablissementOptions.pourType(TypeEtablissement.superieur);
 
+  String _nom = '';
+  String _logoUrl = '';
+  int? _id;
+  String _code = '';
+  String _sigle = '';
+  String _ville = '';
+  String _campus = '';
+  String _modeleMatricule = '';
+  bool _inscriptionOuverte = false;
+
+  /// L'inscription en ligne des anciens étudiants est-elle ouverte ?
+  bool get inscriptionOuverte => _inscriptionOuverte;
+
+  /// Modèle de matricule de l'établissement (ex. {AA}IST-O2/{NNNN}).
+  String get modeleMatricule => _modeleMatricule;
+
+  /// Identifiant, code (saisi à l'ouverture de l'app), sigle, ville et campus
+  /// de l'établissement choisi — renvoyés par le serveur.
+  int? get id => _id;
+  String get code => _code;
+  String get sigle => _sigle;
+  String get ville => _ville;
+  String get campus => _campus;
+
+  /// Enregistre l'établissement reconnu par son code (réponse du serveur) et
+  /// persiste. Le logo est remplacé (pas conservé) : chaque école a le sien.
+  Future<void> appliquerEtablissement({
+    int? id,
+    required String nom,
+    String sigle = '',
+    String ville = '',
+    String campus = '',
+    String code = '',
+    String modeleMatricule = '',
+    bool inscriptionOuverte = false,
+    String? logoUrl,
+    TypeEtablissement? type,
+  }) async {
+    _id = id;
+    _modeleMatricule = modeleMatricule.trim();
+    _inscriptionOuverte = inscriptionOuverte;
+    _nom = nom.trim();
+    _sigle = sigle.trim();
+    _ville = ville.trim();
+    _campus = campus.trim();
+    _code = code.trim();
+    _logoUrl = (logoUrl ?? '').trim();
+    if (type != null) {
+      _type = type;
+      _options = EtablissementOptions.pourType(type);
+    }
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('etablissement_nom', _nom);
+    await prefs.setString('etablissement_logo', _logoUrl);
+    await prefs.setString('etablissement_code', _code);
+    await prefs.setString('etablissement_sigle', _sigle);
+    await prefs.setString('etablissement_ville', _ville);
+    await prefs.setString('etablissement_campus', _campus);
+    await prefs.setString('etablissement_modele', _modeleMatricule);
+    await prefs.setBool('etablissement_insc_ouverte', _inscriptionOuverte);
+    if (_id != null) await prefs.setInt('etablissement_id', _id!);
+    await prefs.setString('etablissement_type', _type.name);
+  }
+
+  /// Nom de l'établissement concerné (saisi par l'administration).
+  String get nom => _nom;
+
+  /// URL du logo de l'établissement (optionnel).
+  String get logoUrl => _logoUrl;
+
+  /// Enregistre le nom / logo de l'établissement et persiste.
+  Future<void> appliquerIdentite({required String nom, String? logoUrl}) async {
+    _nom = nom.trim();
+    if (logoUrl != null && logoUrl.trim().isNotEmpty) _logoUrl = logoUrl.trim();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('etablissement_nom', _nom);
+    await prefs.setString('etablissement_logo', _logoUrl);
+  }
+
   TypeEtablissement get type => _type;
   EtablissementOptions get options => _options;
   Set<SectionEnseignement> get sectionsActives => _type.sections;
@@ -173,6 +254,15 @@ class EtablissementConfig extends ChangeNotifier {
   /// Recharge la config persistée (à appeler au démarrage).
   Future<void> charger() async {
     final prefs = await SharedPreferences.getInstance();
+    _nom = prefs.getString('etablissement_nom') ?? _nom;
+    _logoUrl = prefs.getString('etablissement_logo') ?? _logoUrl;
+    _code = prefs.getString('etablissement_code') ?? _code;
+    _sigle = prefs.getString('etablissement_sigle') ?? _sigle;
+    _ville = prefs.getString('etablissement_ville') ?? _ville;
+    _campus = prefs.getString('etablissement_campus') ?? _campus;
+    _modeleMatricule = prefs.getString('etablissement_modele') ?? _modeleMatricule;
+    _inscriptionOuverte = prefs.getBool('etablissement_insc_ouverte') ?? _inscriptionOuverte;
+    _id = prefs.getInt('etablissement_id') ?? _id;
     final saved = prefs.getString('etablissement_type');
     if (saved != null) {
       _type = TypeEtablissement.values.firstWhere(

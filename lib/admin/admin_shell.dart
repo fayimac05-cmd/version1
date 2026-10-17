@@ -30,6 +30,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/student_profile.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
@@ -250,7 +251,7 @@ class _AdminShellState extends State<AdminShell>
     // Config multi-établissement : recharge le type persisté puis
     // reconstruit l'interface à chaque changement de type.
     EtablissementConfig.instance.addListener(_onConfigChanged);
-    EtablissementConfig.instance.charger();
+    EtablissementConfig.instance.charger().then((_) => _chargerLogo());
     _chargerBadges();
     _pages = [
       AdminDashboard(profile: widget.profile),
@@ -289,6 +290,32 @@ class _AdminShellState extends State<AdminShell>
     EtablissementConfig.instance.removeListener(_onConfigChanged);
     _pageAnim.dispose();
     super.dispose();
+  }
+
+  /// Récupère le logo de l'établissement (défini par le Super Admin).
+  Future<void> _chargerLogo() async {
+    final url = await ApiService.getLogoEtablissement();
+    if (!mounted) return;
+    await EtablissementConfig.instance.appliquerIdentite(
+        nom: EtablissementConfig.instance.nom, logoUrl: url);
+  }
+
+  /// Super Admin : choisir / remplacer le logo de l'établissement.
+  Future<void> _changerLogo() async {
+    final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom, allowedExtensions: ['jpg', 'jpeg', 'png'], withData: true);
+    if (res == null || res.files.isEmpty || res.files.first.bytes == null) return;
+    final f = res.files.first;
+    final r = await ApiService.uploadLogoEtablissement(f.bytes!, f.name);
+    if (!mounted) return;
+    if (r['success'] == true) {
+      await EtablissementConfig.instance.appliquerIdentite(
+          nom: EtablissementConfig.instance.nom, logoUrl: r['url']?.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logo de l'établissement mis à jour."), behavior: SnackBarBehavior.floating));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r['error']?.toString() ?? 'Erreur.'), behavior: SnackBarBehavior.floating));
+    }
   }
 
   void _onConfigChanged() {
@@ -573,7 +600,7 @@ class _AdminShellState extends State<AdminShell>
       backgroundColor: const Color(0xFFF8FAFC),
       drawer: mobile
           ? Drawer(
-              backgroundColor: Colors.white,
+              backgroundColor: _navy,
               child: _sidebar(isMobile: true),
             )
           : null,
@@ -612,15 +639,19 @@ class _AdminShellState extends State<AdminShell>
   // SIDEBAR
   // ═══════════════════════════════════════════════════════════════
 
+  // ✅ Fond bleu marine plein (cohérent avec la sidebar côté professeur) —
+  // plus proche de la maquette admin. Toute la logique (permissions,
+  // config multi-établissement, badges) reste inchangée ; seul l'habillage
+  // visuel change ici.
+  static const Color _navy = Color(0xFF0B1E4D);
+  static const Color _navyMuted = Color(0xFF9DB4D5);
+  static const Color _navyFaint = Color(0xFF7895BD);
+
   Widget _sidebar({required bool isMobile}) {
     final c = _compact && !isMobile;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border:
-            Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
-      ),
+      color: _navy,
       child: Column(
         children: [
           // ── Logo ─────────────────────────────────────────────────────────
@@ -631,15 +662,28 @@ class _AdminShellState extends State<AdminShell>
               mainAxisAlignment:
                   c ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppPalette.blue.a10,
+                Tooltip(
+                  message: widget.activeRole == AdminRole.superAdmin ? "Changer le logo de l'établissement" : '',
+                  child: InkWell(
+                    onTap: widget.activeRole == AdminRole.superAdmin ? _changerLogo : null,
                     borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                      ),
+                      child: EtablissementConfig.instance.logoUrl.isNotEmpty
+                          ? Image.network(EtablissementConfig.instance.logoUrl, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.admin_panel_settings_rounded,
+                                  color: AppPalette.yellow, size: 22))
+                          : const Icon(Icons.admin_panel_settings_rounded,
+                              color: AppPalette.yellow, size: 22),
+                    ),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded,
-                      color: AppPalette.blue, size: 22),
                 ),
                 if (!c) ...[
                   const SizedBox(width: 12),
@@ -647,18 +691,18 @@ class _AdminShellState extends State<AdminShell>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text('ScolarHub',
                             style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
+                                color: Colors.white,
                                 letterSpacing: -0.5)),
-                        Text('IST Ouaga 2000',
+                        Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom : 'IST Ouaga 2000',
                             style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF64748B))),
+                                color: _navyMuted)),
                       ],
                     ),
                   ),
@@ -674,20 +718,19 @@ class _AdminShellState extends State<AdminShell>
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: Colors.white.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: AppPalette.blue.a15,
+                    backgroundColor: Colors.white.withValues(alpha: 0.12),
                     child: Text(_initials,
                         style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.blue)),
+                            color: Colors.white)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -698,7 +741,7 @@ class _AdminShellState extends State<AdminShell>
                             style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A)),
+                                color: Colors.white),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 3),
@@ -707,8 +750,8 @@ class _AdminShellState extends State<AdminShell>
                               horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: widget.activeRole == AdminRole.superAdmin
-                                ? AppPalette.yellow.a15
-                                : AppPalette.blue.a10,
+                                ? AppPalette.yellow.withValues(alpha: 0.18)
+                                : Colors.white.withValues(alpha: 0.12),
                             // [UX-6] StadiumBorder premium
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -720,8 +763,8 @@ class _AdminShellState extends State<AdminShell>
                                   fontSize: 8,
                                   fontWeight: FontWeight.w800,
                                   color: widget.activeRole == AdminRole.superAdmin
-                                      ? const Color(0xFFB7950B)
-                                      : AppPalette.blue,
+                                      ? AppPalette.yellow
+                                      : Colors.white,
                                   letterSpacing: 0.6)),
                         ),
                       ],
@@ -731,9 +774,9 @@ class _AdminShellState extends State<AdminShell>
               ),
             ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Divider(color: Color(0xFFE2E8F0), height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(color: Colors.white.withValues(alpha: 0.08), height: 10),
           ),
 
           // ── Menu ─────────────────────────────────────────────────────────
@@ -756,13 +799,13 @@ class _AdminShellState extends State<AdminShell>
                               style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF94A3B8),
+                                  color: _navyFaint,
                                   letterSpacing: 1.0)),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Container(
                               height: 1,
-                              color: const Color(0xFFF1F5F9),
+                              color: Colors.white.withValues(alpha: 0.06),
                             ),
                           ),
                         ],
@@ -789,9 +832,9 @@ class _AdminShellState extends State<AdminShell>
             ),
           ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Divider(color: Color(0xFFE2E8F0)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(color: Colors.white.withValues(alpha: 0.08)),
           ),
 
           // ── Bas sidebar ──────────────────────────────────────────────────
@@ -804,13 +847,14 @@ class _AdminShellState extends State<AdminShell>
                         icon: Icons.link_rounded,
                         tooltip: 'Connecter mon établissement',
                         onTap: _ouvrirChoixType,
-                        color: AppPalette.blue,
+                        color: AppPalette.yellow,
                       ),
                       const SizedBox(height: 8),
                       _SideBtn(
                         icon: Icons.dark_mode_outlined,
                         tooltip: 'Mode Sombre',
                         onTap: _toggleDarkMode,
+                        color: Colors.white,
                       ),
                       const SizedBox(height: 8),
                       _SideBtn(
@@ -832,6 +876,7 @@ class _AdminShellState extends State<AdminShell>
                             icon: Icons.dark_mode_outlined,
                             tooltip: 'Mode Sombre',
                             onTap: _toggleDarkMode,
+                            color: Colors.white,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -1041,13 +1086,16 @@ class _MenuItemTileState extends State<_MenuItemTile> {
   Widget build(BuildContext context) {
     final active = widget.active;
     final compact = widget.compact;
-    final color = active ? AppPalette.blue : const Color(0xFF64748B);
+    // ✅ Palette adaptée à la sidebar bleu marine (cohérente avec la sidebar
+    // professeur) : actif = blanc + petit point jaune, inactif = bleu-gris clair.
+    const inactiveColor = Color(0xFF9DB4D5);
+    final color = active ? Colors.white : inactiveColor;
 
     Color bgColor = Colors.transparent;
     if (active) {
-      bgColor = AppPalette.blue.withValues(alpha: 0.08);
+      bgColor = Colors.white.withValues(alpha: 0.12);
     } else if (_hovered) {
-      bgColor = AppPalette.blue.withValues(alpha: 0.04);
+      bgColor = Colors.white.withValues(alpha: 0.06);
     }
 
     return Tooltip(
@@ -1067,12 +1115,8 @@ class _MenuItemTileState extends State<_MenuItemTile> {
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.circular(12),
-                // Indicateur gauche sur item actif
                 border: active
-                    ? Border(
-                        left: BorderSide(
-                            color: AppPalette.blue, width: 3),
-                      )
+                    ? Border.all(color: Colors.white.withValues(alpha: 0.08))
                     : null,
               ),
               child: Row(
@@ -1113,16 +1157,20 @@ class _MenuItemTileState extends State<_MenuItemTile> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: active
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: active
-                              ? AppPalette.blue
-                              : const Color(0xFF334155),
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: color,
                         ),
                       ),
                     ),
+                    if (active)
+                      Container(
+                        width: 5, height: 5,
+                        decoration: const BoxDecoration(
+                            color: AppPalette.yellow, shape: BoxShape.circle),
+                      )
                     // [UX-6] Badge StadiumBorder
-                    if (widget.badge != null)
+                    else if (widget.badge != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 2),
@@ -1159,7 +1207,7 @@ class _SideBtn extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.color = const Color(0xFF64748B),
+    this.color = Colors.white,
   });
 
   @override
@@ -1172,7 +1220,7 @@ class _SideBtn extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
+              color: Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 18),
@@ -1199,13 +1247,13 @@ class _ConnectEtablissementButton extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: AppPalette.blue.withValues(alpha: 0.06),
+          color: AppPalette.yellow.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppPalette.blue.withValues(alpha: 0.2)),
+          border: Border.all(color: AppPalette.yellow.withValues(alpha: 0.18)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.link_rounded, color: AppPalette.blue, size: 16),
+            const Icon(Icons.link_rounded, color: AppPalette.yellow, size: 16),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -1215,20 +1263,20 @@ class _ConnectEtablissementButton extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: AppPalette.blue),
+                          color: Colors.white),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 1),
                   Text(config.type.label,
                       style: const TextStyle(
-                          fontSize: 10, color: Color(0xFF64748B)),
+                          fontSize: 10, color: Color(0xFFB9CBE8)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
             const Icon(Icons.chevron_right_rounded,
-                color: AppPalette.blue, size: 16),
+                color: AppPalette.yellow, size: 16),
           ],
         ),
       ),
@@ -1249,7 +1297,7 @@ class _LogoutButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.06),
+            color: Colors.redAccent.withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Row(

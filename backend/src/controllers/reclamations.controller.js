@@ -10,6 +10,19 @@ const { envoyerNotificationAuto } = require('./notifications.controller');
 // maintenant directement req.user.id partout, plus simple et plus correct.
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Isolation par établissement ─────────────────────────────────────────────
+// Une réclamation appartient à l'établissement de l'étudiant (users.etablissement_id).
+// Sans établissement dans le jeton (anciens jetons) : pas de filtrage.
+async function reclamationDeMonEtab(req, id) {
+  if (!req.etablissementId) return true;
+  const r = await pool.query(
+    `SELECT 1 FROM reclamations r JOIN users u ON u.id = r.etudiant_id
+     WHERE r.id = $1 AND u.etablissement_id = $2`,
+    [id, req.etablissementId]
+  );
+  return r.rows.length > 0;
+}
+
 // POST /api/reclamations (étudiant)
 const createReclamation = async (req, res) => {
     try {
@@ -80,13 +93,20 @@ const getAllReclamations = async (req, res) => {
         const { statut } = req.query;
         const params = [];
         let where = '';
+        const conds = [];
         if (statut) {
             params.push(statut);
-            where = `WHERE r.statut = $${params.length}`;
+            conds.push(`r.statut = $${params.length}`);
         }
+        if (req.etablissementId) {
+            params.push(req.etablissementId);
+            conds.push(`u.etablissement_id = $${params.length}`);
+        }
+        if (conds.length) where = 'WHERE ' + conds.join(' AND ');
         const result = await pool.query(
             `SELECT r.*, e.matricule, e.nom AS etudiant_nom, e.prenoms AS etudiant_prenoms
              FROM reclamations r
+             JOIN users u ON u.id = r.etudiant_id
              LEFT JOIN etudiants e ON e.user_id = r.etudiant_id
              ${where}
              ORDER BY r.created_at DESC`,
@@ -102,7 +122,12 @@ const getAllReclamations = async (req, res) => {
 // GET /api/reclamations/en-attente/count (admin) — badge du menu
 const getNombreEnAttente = async (req, res) => {
     try {
-        const result = await pool.query(`SELECT COUNT(*) FROM reclamations WHERE statut = 'en_attente'`);
+        const result = req.etablissementId
+            ? await pool.query(
+                `SELECT COUNT(*) FROM reclamations r JOIN users u ON u.id = r.etudiant_id
+                 WHERE r.statut = 'en_attente' AND u.etablissement_id = $1`,
+                [req.etablissementId])
+            : await pool.query(`SELECT COUNT(*) FROM reclamations WHERE statut = 'en_attente'`);
         res.json({ success: true, count: parseInt(result.rows[0].count, 10) || 0 });
     } catch (error) {
         console.error('[getNombreEnAttente]', error);
@@ -117,6 +142,9 @@ const transfererReclamation = async (req, res) => {
         const { prof_transfere } = req.body;
         if (!prof_transfere || !prof_transfere.trim()) {
             return res.status(400).json({ success: false, message: 'Le professeur destinataire est requis.' });
+        }
+        if (!(await reclamationDeMonEtab(req, id))) {
+            return res.status(404).json({ success: false, message: 'Réclamation introuvable.' });
         }
         const result = await pool.query(
             `UPDATE reclamations SET statut = 'en_cours', prof_transfere = $1 WHERE id = $2 RETURNING id`,
@@ -139,6 +167,9 @@ const repondreReclamation = async (req, res) => {
         const { reponse } = req.body;
         if (!reponse || !reponse.trim()) {
             return res.status(400).json({ success: false, message: 'La réponse est requise.' });
+        }
+        if (!(await reclamationDeMonEtab(req, id))) {
+            return res.status(404).json({ success: false, message: 'Réclamation introuvable.' });
         }
         const result = await pool.query(
             `UPDATE reclamations SET statut = 'resolu', reponse = $1, date_traitement = now()
@@ -174,6 +205,9 @@ const rejeterReclamation = async (req, res) => {
         const { motif } = req.body;
         const reponseFinale = motif && motif.trim() ? motif.trim() : 'Réclamation rejetée par l\'administration.';
 
+        if (!(await reclamationDeMonEtab(req, id))) {
+            return res.status(404).json({ success: false, message: 'Réclamation introuvable.' });
+        }
         const result = await pool.query(
             `UPDATE reclamations SET statut = 'rejete', reponse = $1, date_traitement = now()
              WHERE id = $2
