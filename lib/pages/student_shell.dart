@@ -25,30 +25,45 @@ class _StudentShellState extends State<StudentShell> {
   int _currentTab = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Copie mutable du profil, tenue à jour après un changement de photo/
+  // couverture (voir _onPhotoChanged) — propage la nouvelle photo à TOUTE
+  // l'app (accueil, canaux, drawer...), pas seulement à l'écran Profil.
+  late StudentProfile _profile = widget.profile;
+
+  void _onPhotoChanged(String? photoUrl, String? coverUrl) {
+    setState(() {
+      _profile = _profile.copyWith(photoUrl: photoUrl, coverUrl: coverUrl);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
       HomeTab(
-        profile: widget.profile,
+        profile: _profile,
         onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
       ),
-      CanalScreen(profile: widget.profile),
-      ChatIAScreen(profile: widget.profile, showBack: false),
-      ProfileTab(profile: widget.profile, onLogout: widget.onLogout),
+      CanalScreen(profile: _profile),
+      ChatIAScreen(profile: _profile, showBack: false),
+      ProfileTab(profile: _profile, onLogout: widget.onLogout, onPhotoChanged: _onPhotoChanged),
     ];
 
     return Scaffold(
       key: _scaffoldKey,
       // Menu latéral : regroupe Planning, Chat IA, Révisions IA, Tickets
-      drawer: AppDrawer(profile: widget.profile),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: KeyedSubtree(
-          key: ValueKey(_currentTab),
-          child: pages[_currentTab],
-        ),
+      drawer: AppDrawer(profile: _profile),
+      // ✅ CORRIGÉ — IndexedStack au lieu d'AnimatedSwitcher+KeyedSubtree :
+      // l'ancienne version détruisait et recréait entièrement l'écran de
+      // l'onglet à chaque changement (clé différente à chaque fois), ce qui
+      // effaçait l'état local de ProfileHeaderCover (photo/couverture tout
+      // juste changées) dès qu'on quittait l'onglet Profil puis y revenait —
+      // elles redémarraient alors depuis widget.profile.photoUrl, jamais mis
+      // à jour. IndexedStack garde tous les onglets vivants en mémoire, donc
+      // cet état survit — même comportement que ParentShell, où ça
+      // fonctionnait déjà.
+      body: IndexedStack(
+        index: _currentTab,
+        children: pages,
       ),
       bottomNavigationBar: _buildNavBar(),
     );

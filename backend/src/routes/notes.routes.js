@@ -28,6 +28,8 @@ router.patch('/sessions/:session_id/rejeter', authMiddleware, requireRole('admin
 router.post('/sessions', authMiddleware, notesController.createGradeSession);
 router.get('/sessions', authMiddleware, notesController.getGradeSessions);
 router.get('/sessions/:session_id', authMiddleware, notesController.getSessionDetail);
+router.get('/liste-classe', authMiddleware, notesController.getListeClasseAvecNotes);
+router.get('/sessions/en-attente/count', authMiddleware, notesController.getNombreSessionsEnAttente);
 router.put('/sessions/:session_id', authMiddleware, notesController.updateGradeSession);
 router.patch('/sessions/:session_id/send', authMiddleware, notesController.markSessionSent);
 

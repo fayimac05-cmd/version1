@@ -6,9 +6,9 @@ import '../widgets/app_bubble_bg.dart';
 
 class _MatiereResultat {
   final String nom;
-  final double moyenne;
-  final int nbDevoirs;
-  const _MatiereResultat({required this.nom, required this.moyenne, required this.nbDevoirs});
+  final double? moyenne;
+  final num coefficient;
+  const _MatiereResultat({required this.nom, required this.moyenne, required this.coefficient});
 }
 
 class _BulletinData {
@@ -76,6 +76,13 @@ class _BulletinScreenState extends State<BulletinScreen> {
   /// Le backend, lui, utilise la clé de service et applique la sécurité
   /// via le token JWT (req.user.id) — chaque étudiant ne peut recevoir
   /// que ses propres données.
+  ///
+  /// ⚠️ CORRIGÉ — l'ancienne version recalculait elle-même la moyenne de
+  /// chaque module via un second appel à getMesNotes() (notes individuelles
+  /// live), pouvant dériver de ce que l'admin a réellement validé/publié si
+  /// des notes sont ajoutées après coup. Utilise maintenant detail_modules,
+  /// figé côté serveur au moment précis de la publication — l'étudiant voit
+  /// exactement ce que l'administration a décidé, coefficient inclus.
   Future<void> _charger() async {
     try {
       final bulletinsResult = await ApiService.getMonBulletin();
@@ -86,42 +93,28 @@ class _BulletinScreenState extends State<BulletinScreen> {
       final etudiantInfo = bulletinsResult['etudiant'] as Map<String, dynamic>?;
       final bulletinsBruts = List<Map<String, dynamic>>.from(bulletinsResult['data'] as List);
 
-      final bulletins = <_BulletinData>[];
-      for (final b in bulletinsBruts) {
-        final semestre = b['semestre'] as String? ?? '';
-        final annee = b['annee_academique'] as String? ?? '';
-
-        // Détail des notes par module pour ce semestre — uniquement les
-        // sessions déjà validées par l'administration (même règle que
-        // "Mes Notes"), scopé côté backend par le JWT.
-        final notesResult = await ApiService.getMesNotes(
-          semestre: semestre,
-          anneeAcademique: annee,
-        );
-
-        final Map<String, List<double>> parModule = {};
-        if (notesResult['success'] == true) {
-          final notesList = List<Map<String, dynamic>>.from(notesResult['data'] as List);
-          for (final n in notesList) {
-            final mod = n['module_nom'] as String? ?? 'Module';
-            final valeur = (n['note'] as num?)?.toDouble();
-            if (valeur != null) parModule.putIfAbsent(mod, () => []).add(valeur);
-          }
-        }
-        final matieres = parModule.entries.map((e) {
-          final moy = e.value.reduce((a, c) => a + c) / e.value.length;
-          return _MatiereResultat(nom: e.key, moyenne: moy, nbDevoirs: e.value.length);
+      final bulletins = bulletinsBruts.map((b) {
+        final detailBrut = b['detail_modules'];
+        final detail = detailBrut is List ? detailBrut : <dynamic>[];
+        final matieres = detail.map((m) {
+          final map = m as Map<String, dynamic>;
+          final moyenneBrute = map['moyenne_module'];
+          return _MatiereResultat(
+            nom: map['module_nom']?.toString() ?? 'Module',
+            moyenne: moyenneBrute != null ? double.tryParse(moyenneBrute.toString()) : null,
+            coefficient: (map['coefficient'] as num?) ?? 1,
+          );
         }).toList();
 
-        bulletins.add(_BulletinData(
-          semestre: semestre,
-          anneeAcademique: annee,
+        return _BulletinData(
+          semestre: b['semestre'] as String? ?? '',
+          anneeAcademique: b['annee_academique'] as String? ?? '',
           moyenneGenerale: b['moyenne_generale'] != null ? double.tryParse(b['moyenne_generale'].toString()) : null,
           statut: b['statut'] as String? ?? '',
           datePublication: (b['date_publication'] as String?)?.split('T').first,
           matieres: matieres,
-        ));
-      }
+        );
+      }).toList();
 
       // Le plus récent en premier.
       bulletins.sort((a, b) => '${b.anneeAcademique}${b.semestre}'.compareTo('${a.anneeAcademique}${a.semestre}'));
@@ -276,8 +269,8 @@ class _BulletinScreenState extends State<BulletinScreen> {
               const Row(
                 children: [
                   Expanded(flex: 5, child: Text('INTITULÉ DE LA MATIÈRE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)))),
-                  Expanded(flex: 2, child: Text('DEVOIRS', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)))),
-                  Expanded(flex: 2, child: Text('NOTE/20', textAlign: TextAlign.end, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)))),
+                  Expanded(flex: 2, child: Text('COEF.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)))),
+                  Expanded(flex: 2, child: Text('MOYENNE/20', textAlign: TextAlign.end, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)))),
                 ],
               ),
               const SizedBox(height: 8),
@@ -287,13 +280,13 @@ class _BulletinScreenState extends State<BulletinScreen> {
                     child: Row(
                       children: [
                         Expanded(flex: 5, child: Text(mat.nom, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textMain))),
-                        Expanded(flex: 2, child: Text('${mat.nbDevoirs}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)))),
+                        Expanded(flex: 2, child: Text('${mat.coefficient}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)))),
                         Expanded(
                           flex: 2,
                           child: Text(
-                            mat.moyenne.toStringAsFixed(1),
+                            mat.moyenne != null ? mat.moyenne!.toStringAsFixed(1) : '—',
                             textAlign: TextAlign.end,
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: mat.moyenne >= 10 ? const Color(0xFF10B981) : Colors.red),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: (mat.moyenne ?? 0) >= 10 ? const Color(0xFF10B981) : Colors.red),
                           ),
                         ),
                       ],

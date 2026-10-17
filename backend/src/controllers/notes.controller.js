@@ -1,5 +1,6 @@
 const PDFDocument = require('pdfkit');
 const pool = require('../config/db');
+const { envoyerNotificationAuto } = require('./notifications.controller');
 
 const getNotesEtudiant = async (req, res) => {
     try {
@@ -18,7 +19,7 @@ const getNotesEtudiant = async (req, res) => {
         }
 
         const result = await pool.query(`
-            SELECT n.id, n.valeur AS note, n.mention, m.nom AS module_nom, m.coefficient,
+            SELECT n.id, n.valeur AS note, n.mention, m.id AS module_id, m.nom AS module_nom, m.coefficient,
                    sn.date_session, sn.semestre, sn.annee_academique,
                    u.nom AS prof_nom, u.prenoms AS prof_prenoms
             FROM notes n
@@ -198,6 +199,18 @@ const createGradeSession = async (req, res) => {
     }
 };
 
+// GET /api/notes/sessions/en-attente/count (admin) — pour le badge du menu
+// "Notes & Moyennes", léger (juste un COUNT, pas les notes détaillées).
+const getNombreSessionsEnAttente = async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT COUNT(*) FROM sessions_notes WHERE statut = 'en_attente'`);
+        res.json({ success: true, count: parseInt(result.rows[0].count, 10) || 0 });
+    } catch (error) {
+        console.error('[getNombreSessionsEnAttente]', error);
+        res.status(500).json({ success: false, message: 'Erreur lors du comptage.' });
+    }
+};
+
 const getAllSessionsAdmin = async (req, res) => {
     try {
         const { statut } = req.query;
@@ -245,11 +258,38 @@ const validateSessionAdmin = async (req, res) => {
         const { session_id } = req.params;
         const result = await pool.query(`
             UPDATE sessions_notes SET statut = 'validee', is_sent = true
-            WHERE id = $1 RETURNING id
+            WHERE id = $1 RETURNING id, module_id
         `, [session_id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Session non trouvée.' });
         }
+
+        // Notifier chaque étudiant qui a une note dans cette session — non
+        // bloquant : un échec ici ne doit jamais empêcher la validation.
+        (async () => {
+            try {
+                const moduleRes = await pool.query('SELECT nom FROM modules WHERE id = $1', [result.rows[0].module_id]);
+                const moduleNom = moduleRes.rows[0]?.nom || 'un module';
+                const etusRes = await pool.query(
+                    `SELECT DISTINCT e.user_id FROM notes n
+                     JOIN etudiants e ON e.id = n.etudiant_id
+                     WHERE n.session_id = $1 AND e.user_id IS NOT NULL`,
+                    [session_id]
+                );
+                for (const row of etusRes.rows) {
+                    await envoyerNotificationAuto(
+                        row.user_id,
+                        'Nouvelle note publiée',
+                        `Une nouvelle note est disponible pour ${moduleNom}.`,
+                        'note',
+                        null
+                    );
+                }
+            } catch (notifErr) {
+                console.error('[validateSessionAdmin] notification', notifErr.message);
+            }
+        })();
+
         res.json({ success: true, message: 'Session validée et envoyée aux étudiants.' });
     } catch (error) {
         console.error('[validateSessionAdmin]', error);
@@ -489,6 +529,89 @@ const getMonApercu = async (req, res) => {
     }
 };
 
+// GET /api/notes/liste-classe?filiere_id=&niveau=&module_id=&semestre=&annee_academique=
+// (professeur / admin) — grille étudiants × sessions de notes validées d'un
+// module, avec coefficient et nombre d'absences comptées sur les appels de
+// ce même module+filière+niveau. Sert à l'export PDF "Liste des étudiants"
+// côté professeur. Les colonnes "Note 1", "Note 2"... sont numérotées par
+// ordre chronologique des sessions validées — pas de titre de session requis.
+const getListeClasseAvecNotes = async (req, res) => {
+    try {
+        const { filiere_id, niveau, module_id, semestre, annee_academique } = req.query;
+        if (!filiere_id || !niveau || !module_id || !semestre || !annee_academique) {
+            return res.status(400).json({
+                success: false,
+                message: 'filiere_id, niveau, module_id, semestre et annee_academique sont requis.',
+            });
+        }
+
+        const moduleRes = await pool.query('SELECT nom, coefficient FROM modules WHERE id = $1', [module_id]);
+        if (moduleRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Module introuvable.' });
+        }
+        const module = moduleRes.rows[0];
+
+        const sessionsRes = await pool.query(
+            `SELECT id FROM sessions_notes
+             WHERE module_id = $1 AND semestre = $2 AND annee_academique = $3 AND statut = 'validee'
+             ORDER BY id ASC`,
+            [module_id, semestre, annee_academique]
+        );
+        const sessionIds = sessionsRes.rows.map(s => s.id);
+
+        const etudiantsRes = await pool.query(
+            `SELECT id, matricule, nom, prenoms FROM etudiants WHERE filiere_id = $1 AND niveau = $2 ORDER BY nom, prenoms`,
+            [filiere_id, niveau]
+        );
+
+        let notesParEtudiant = {};
+        if (sessionIds.length > 0) {
+            const notesRes = await pool.query(
+                `SELECT etudiant_id, session_id, valeur FROM notes WHERE session_id = ANY($1::uuid[])`,
+                [sessionIds]
+            );
+            for (const row of notesRes.rows) {
+                notesParEtudiant[row.etudiant_id] ??= {};
+                notesParEtudiant[row.etudiant_id][row.session_id] = row.valeur;
+            }
+        }
+
+        const absencesRes = await pool.query(
+            `SELECT ap.matricule, COUNT(*) FILTER (WHERE ap.statut = 'absent') AS nb_absences
+             FROM appel_presences ap
+             JOIN appels a ON a.id = ap.appel_id
+             WHERE a.module_id = $1 AND a.filiere_id = $2 AND a.niveau = $3
+             GROUP BY ap.matricule`,
+            [module_id, filiere_id, niveau]
+        );
+        const absencesParMatricule = {};
+        for (const row of absencesRes.rows) {
+            absencesParMatricule[row.matricule] = parseInt(row.nb_absences, 10) || 0;
+        }
+
+        const etudiants = etudiantsRes.rows.map(e => ({
+            matricule: e.matricule,
+            nom: e.nom,
+            prenoms: e.prenoms,
+            notes: sessionIds.map(sid => notesParEtudiant[e.id]?.[sid] ?? null),
+            nb_absences: absencesParMatricule[e.matricule] || 0,
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                module_nom: module.nom,
+                coefficient: module.coefficient,
+                nb_sessions: sessionIds.length,
+                etudiants,
+            },
+        });
+    } catch (error) {
+        console.error('[getListeClasseAvecNotes]', error);
+        res.status(500).json({ success: false, message: 'Erreur lors du chargement de la liste.' });
+    }
+};
+
 module.exports = {
     getNotesEtudiant,
     generateBulletinPdf,
@@ -503,4 +626,6 @@ module.exports = {
     getMoyennesAdmin,
     getNotesBlamables,
     getMonApercu,
+    getListeClasseAvecNotes,
+    getNombreSessionsEnAttente,
 };

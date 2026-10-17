@@ -24,7 +24,22 @@ class SocketService {
 
   io.Socket? _socket;
 
+  // ── Écouteurs "en attente" ────────────────────────────────────────────
+  // connect() est asynchrone (attend le token, puis établit la connexion).
+  // Si un écran s'abonne (onNotification, onCanalMessage...) AVANT que
+  // _socket ne soit prêt, l'ancien code faisait `_socket?.on(...)` → no-op
+  // silencieux, l'écouteur n'était jamais réellement attaché. On mémorise
+  // maintenant chaque abonnement ici, et on les réapplique tous dès que la
+  // connexion aboutit — peu importe l'ordre d'appel entre connect() et les
+  // écrans qui s'abonnent.
+  final Map<String, List<void Function(dynamic)>> _ecouteursEnAttente = {};
+
   bool get isConnected => _socket?.connected ?? false;
+
+  void _sabonner(String event, void Function(dynamic) callback) {
+    _ecouteursEnAttente.putIfAbsent(event, () => []).add(callback);
+    _socket?.on(event, callback);
+  }
 
   /// Ouvre la connexion authentifiée par le token JWT stocké.
   /// Idempotent : ne fait rien si déjà connecté.
@@ -43,6 +58,14 @@ class SocketService {
           .enableForceNew()
           .build(),
     );
+
+    // Réapplique tous les abonnements déjà demandés avant que la connexion
+    // ne soit prête (voir _ecouteursEnAttente ci-dessus).
+    for (final entry in _ecouteursEnAttente.entries) {
+      for (final callback in entry.value) {
+        _socket!.on(entry.key, callback);
+      }
+    }
   }
 
   /// Rejoint une room côté serveur (ex. 'canal:1').
@@ -52,20 +75,20 @@ class SocketService {
   }
 
   void onCanalMessage(void Function(dynamic) callback) {
-    _socket?.on('message:canal', callback);
+    _sabonner('message:canal', callback);
   }
 
   void onPrivateMessage(void Function(dynamic) callback) {
-    _socket?.on('message:prive', callback);
+    _sabonner('message:prive', callback);
   }
 
   void onGroupeMessage(void Function(dynamic) callback) {
-    _socket?.on('message:groupe', callback);
+    _sabonner('message:groupe', callback);
   }
 
   /// Notification temps réel poussée vers la cloche de l'utilisateur.
   void onNotification(void Function(dynamic) callback) {
-    _socket?.on('notification', callback);
+    _sabonner('notification', callback);
   }
 
   /// Envoie un message dans un canal ; le serveur le persiste et le diffuse.
@@ -101,18 +124,33 @@ class SocketService {
 
   /// Écoute les accusés de lecture (l'expéditeur est notifié quand ses messages sont lus).
   void onMessageRead(void Function(dynamic) callback) {
-    _socket?.on('message:read', callback);
+    _sabonner('message:read', callback);
   }
 
   /// Retire les écouteurs d'un événement. Accepte les anciens noms
   /// (`new_canal_message`, …) utilisés avant la refonte.
-  void off(String event) {
+  ///
+  /// [callback] optionnel : si fourni, ne retire QUE cet écouteur précis
+  /// (socket_io_client le supporte nativement). Sans lui, retire TOUS les
+  /// écouteurs de l'événement — ce qui est dangereux dès que plusieurs
+  /// écrans écoutent le même événement en même temps (ex. la cloche de
+  /// l'accueil ET la page Notifications écoutent toutes deux 'notification'
+  /// — fermer la page Notifications effaçait aussi l'écoute de l'accueil).
+  /// Préférez toujours passer votre callback exact quand vous le connaissez.
+  void off(String event, [void Function(dynamic)? callback]) {
     const legacy = {
       'new_canal_message': 'message:canal',
       'new_private_message': 'message:prive',
       'new_group_message': 'message:groupe',
     };
-    _socket?.off(legacy[event] ?? event);
+    final actualEvent = legacy[event] ?? event;
+    if (callback != null) {
+      _socket?.off(actualEvent, callback);
+      _ecouteursEnAttente[actualEvent]?.remove(callback);
+    } else {
+      _socket?.off(actualEvent);
+      _ecouteursEnAttente.remove(actualEvent);
+    }
   }
 
   void disconnect() {

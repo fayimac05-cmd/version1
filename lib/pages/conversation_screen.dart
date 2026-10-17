@@ -1,9 +1,15 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 import '../utils/snackbar_helper.dart';
 import 'messages_screen.dart';
+import 'emoji_data.dart';
+import 'emoji_gif_sticker_picker.dart' show StickerStore;
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE CONVERSATION — Style WhatsApp Web
@@ -28,6 +34,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _showEmojiPicker = false;
   bool _showStickerPicker = false;
   bool _showGifPicker = false;
+  String _categorieEmoji = 'Smileys';
+  List<String> _stickersPerso = [];
+  bool _importSticker = false;
   MessagePrive? _messageEpingle;
   MessagePrive? _messageARepondre;
 
@@ -42,6 +51,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBas());
     _messageEpingle = _conv.messages.where((m) => m.epingle).firstOrNull;
+    _chargerStickersPerso();
+  }
+
+  Future<void> _chargerStickersPerso() async {
+    final chemins = await StickerStore.lister();
+    if (mounted) setState(() => _stickersPerso = chemins);
   }
 
   @override
@@ -449,9 +464,34 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Widget _contenuBulle(MessagePrive msg, bool estMoi) {
     switch (msg.type) {
       case TypeMessagePrive.sticker:
-        return Text(msg.texte, style: const TextStyle(fontSize: 52));
+        final estFichierOuUrl = msg.texte.startsWith('http') || msg.texte.contains('/');
+        if (!estFichierOuUrl) {
+          return Text(msg.texte, style: const TextStyle(fontSize: 52));
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: msg.texte.startsWith('http')
+              ? Image.network(msg.texte, width: 130, height: 130, fit: BoxFit.cover)
+              : Image.file(File(msg.texte), width: 130, height: 130, fit: BoxFit.cover),
+        );
 
       case TypeMessagePrive.image:
+        if (msg.texte.startsWith('http')) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.network(
+              msg.texte,
+              width: 220,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 160, width: 220,
+                color: const Color(0xFFCCD0D5),
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image_outlined, color: Color(0xFF8696A0)),
+              ),
+            ),
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -768,19 +808,31 @@ class _ConversationScreenState extends State<ConversationScreen> {
             ],
           ),
         ),
+        if (_categorieEmoji != 'Récents')
+          SizedBox(
+            height: 34,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              children: EmojiData.ordreCategories
+                  .map((c) => _chipCategorie(c, EmojiData.icones[c]!))
+                  .toList(),
+            ),
+          ),
         Expanded(
           child: GridView.builder(
             padding: const EdgeInsets.all(8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 8,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
+              mainAxisSpacing: 0,
+              crossAxisSpacing: 0,
+              childAspectRatio: 1,
             ),
-            itemCount: _emojisFrequents.length,
+            itemCount: _emojisAffiches.length,
             itemBuilder: (_, i) => GestureDetector(
               onTap: () {
                 setState(() {
-                  _msgCtrl.text += _emojisFrequents[i];
+                  _msgCtrl.text += _emojisAffiches[i];
                   _msgCtrl.selection = TextSelection.fromPosition(
                     TextPosition(offset: _msgCtrl.text.length),
                   );
@@ -788,7 +840,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               },
               child: Center(
                 child: Text(
-                  _emojisFrequents[i],
+                  _emojisAffiches[i],
                   style: const TextStyle(fontSize: 22),
                 ),
               ),
@@ -799,16 +851,46 @@ class _ConversationScreenState extends State<ConversationScreen> {
     ),
   );
 
-  Widget _ongletEmoji(IconData icon, String label, int idx) => Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      Icon(icon, color: const Color(0xFF8696A0), size: 20),
-      const SizedBox(height: 2),
-      Text(
-        label,
-        style: const TextStyle(fontSize: 8, color: Color(0xFF8696A0)),
+  List<String> get _emojisAffiches =>
+      _categorieEmoji == 'Récents' ? _emojisFrequents : (EmojiData.categories[_categorieEmoji] ?? _emojisFrequents);
+
+  Widget _chipCategorie(String nom, String icone) {
+    final actif = _categorieEmoji == nom;
+    return GestureDetector(
+      onTap: () => setState(() => _categorieEmoji = nom),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: actif ? const Color(0xFF00A884).withValues(alpha: 0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(child: Text(icone, style: const TextStyle(fontSize: 15))),
       ),
-    ],
+    );
+  }
+
+  Widget _ongletEmoji(IconData icon, String label, int idx) => Expanded(
+    child: GestureDetector(
+      onTap: () => setState(() {
+        if (idx == 0) _categorieEmoji = 'Récents';
+        if (idx == 1) _categorieEmoji = 'Smileys';
+        if (idx == 2) { _showEmojiPicker = false; _showGifPicker = true; _showStickerPicker = false; }
+        if (idx == 3) { _showEmojiPicker = false; _showStickerPicker = true; _showGifPicker = false; }
+        if (idx == 4) _creerSticker();
+      }),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: const Color(0xFF8696A0), size: 20),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 8, color: Color(0xFF8696A0)),
+          ),
+        ],
+      ),
+    ),
   );
 
   Widget _panneauStickers() {
@@ -881,7 +963,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => _snack('📸 Créer un nouveau sticker'),
+                  onTap: _importSticker ? null : _creerSticker,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -891,7 +973,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       color: const Color(0xFF00A884).withValues(alpha:0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Row(
+                    child: _importSticker
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00A884)))
+                        : const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -923,25 +1007,43 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
               ),
-              itemCount: predefinis.length,
-              itemBuilder: (_, i) => GestureDetector(
-                onTap: () {
-                  setState(() => _showStickerPicker = false);
-                  _envoyerSticker(predefinis[i]);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2A3942),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Text(
-                      predefinis[i],
-                      style: const TextStyle(fontSize: 28),
+              itemCount: _stickersPerso.length + predefinis.length,
+              itemBuilder: (_, i) {
+                if (i < _stickersPerso.length) {
+                  final chemin = _stickersPerso[i];
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _showStickerPicker = false);
+                      _envoyerSticker(chemin);
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: kIsWeb
+                          ? Image.network(chemin, fit: BoxFit.cover)
+                          : Image.file(File(chemin), fit: BoxFit.cover),
+                    ),
+                  );
+                }
+                final emoji = predefinis[i - _stickersPerso.length];
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _showStickerPicker = false);
+                    _envoyerSticker(emoji);
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A3942),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        emoji,
+                        style: const TextStyle(fontSize: 28),
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -949,23 +1051,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
   }
 
-  Widget _panneauGIF() => Container(
-    height: 240,
-    color: const Color(0xFF1F2C34),
-    child: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('GIF', style: TextStyle(fontSize: 48)),
-          const SizedBox(height: 8),
-          const Text(
-            'Fonctionnalité GIF bientôt disponible',
-            style: TextStyle(fontSize: 13, color: Color(0xFF8696A0)),
-          ),
-        ],
-      ),
-    ),
-  );
+  Widget _panneauGIF() => _PanneauGifPrive(onGif: (url) => _envoyerMedia(TypeMessagePrive.image, url));
 
   // ── Menu pièces jointes ───────────────────────────────────────────────
   void _menuPieceJointe() {
@@ -1400,6 +1486,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   void _envoyerMedia(TypeMessagePrive type, String nom) {
     setState(() {
+      _showGifPicker = false;
+      _showStickerPicker = false;
+      _showEmojiPicker = false;
       _conv.messages.add(
         MessagePrive(
           id: 'MD${DateTime.now().millisecondsSinceEpoch}',
@@ -1411,6 +1500,24 @@ class _ConversationScreenState extends State<ConversationScreen> {
       );
     });
     Future.delayed(const Duration(milliseconds: 100), _scrollBas);
+  }
+
+  // ── Créer un sticker depuis la galerie (photo/vidéo de l'appareil) ────
+  Future<void> _creerSticker() async {
+    setState(() { _importSticker = true; _showEmojiPicker = false; _showGifPicker = false; _showStickerPicker = true; });
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+      if (picked != null) {
+        final chemin = await StickerStore.enregistrerDepuisFichier(picked.path, picked.name);
+        if (chemin != null) {
+          await _chargerStickersPerso();
+        } else {
+          _snack('La création de sticker n\'est pas disponible sur cette plateforme.');
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _importSticker = false);
+    }
   }
 
   void _voirProfil() {
@@ -1771,4 +1878,113 @@ class _ProfilEtudiant extends StatelessWidget {
       ],
     ),
   );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Panneau GIF (style sombre WhatsApp) — recherche GIPHY via le backend.
+// ════════════════════════════════════════════════════════════════════════
+class _PanneauGifPrive extends StatefulWidget {
+  const _PanneauGifPrive({required this.onGif});
+  final void Function(String url) onGif;
+
+  @override
+  State<_PanneauGifPrive> createState() => _PanneauGifPriveState();
+}
+
+class _PanneauGifPriveState extends State<_PanneauGifPrive> {
+  bool _chargement = true;
+  String? _erreur;
+  List<Map<String, dynamic>> _gifs = [];
+  final _rechercheCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  @override
+  void dispose() {
+    _rechercheCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _charger([String? q]) async {
+    setState(() { _chargement = true; _erreur = null; });
+    final result = await ApiService.rechercherGifs(q);
+    if (!mounted) return;
+    setState(() {
+      if (result['success'] == true) {
+        _gifs = List<Map<String, dynamic>>.from(result['data'] as List);
+      } else {
+        _erreur = result['error']?.toString() ?? 'Erreur lors du chargement des GIF.';
+      }
+      _chargement = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 240,
+      color: const Color(0xFF1F2C34),
+      child: Column(
+        children: [
+          Container(
+            height: 40,
+            color: const Color(0xFF2A3942),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.search_rounded, color: Color(0xFF8696A0), size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _rechercheCtrl,
+                    onSubmitted: (v) => _charger(v.trim().isEmpty ? null : v.trim()),
+                    style: const TextStyle(fontSize: 13, color: Colors.white),
+                    decoration: const InputDecoration(
+                      hintText: 'Rechercher un GIF...',
+                      hintStyle: TextStyle(fontSize: 12, color: Color(0xFF8696A0)),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _chargement
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00A884)))
+                : _erreur != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(_erreur!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Color(0xFF8696A0))),
+                        ),
+                      )
+                    : _gifs.isEmpty
+                        ? const Center(child: Text('Aucun résultat.', style: TextStyle(fontSize: 12, color: Color(0xFF8696A0))))
+                        : GridView.builder(
+                            padding: const EdgeInsets.all(8),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4, mainAxisSpacing: 3, crossAxisSpacing: 3,
+                            ),
+                            itemCount: _gifs.length,
+                            itemBuilder: (_, i) {
+                              final g = _gifs[i];
+                              return GestureDetector(
+                                onTap: () => widget.onGif(g['url'].toString()),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(g['preview'].toString(), fit: BoxFit.cover),
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
 }

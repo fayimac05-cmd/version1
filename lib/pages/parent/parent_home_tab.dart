@@ -1,31 +1,24 @@
 import 'package:flutter/material.dart';
 import 'parent_styles.dart';
-import 'parent_assistant_ia_screen.dart';
+import '../../models/enfant_apercu.dart';
 import 'parent_paiements_screen.dart';
 
 class ParentHomeTab extends StatelessWidget {
-  final String nomEnfant;
-  final Function(int) onNavigateToTab;
+  final List<EnfantApercu> enfants;
+  final String? selectedEtudiantId;
+  final ValueChanged<String> onSelectEnfant;
+  final ValueChanged<int> onNavigateToTab;
 
   const ParentHomeTab({
     super.key,
-    required this.nomEnfant,
+    required this.enfants,
+    required this.selectedEtudiantId,
+    required this.onSelectEnfant,
     required this.onNavigateToTab,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Extract child initials for avatar
-    final String initials = nomEnfant.isNotEmpty
-        ? nomEnfant
-            .split(' ')
-            .where((word) => word.isNotEmpty)
-            .map((word) => word[0])
-            .take(2)
-            .join()
-            .toUpperCase()
-        : 'E';
-
     return Scaffold(
       backgroundColor: ParentStyles.bgLight,
       body: SafeArea(
@@ -35,51 +28,31 @@ class ParentHomeTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ─── HEADER DE BIENVENUE ─────────────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Bonjour 👋',
-                          style: ParentStyles.mutedText,
-                        ),
+                        const Text('Bonjour 👋', style: ParentStyles.mutedText),
                         const SizedBox(height: 4),
-                        Text(
-                          'Espace Parent',
-                          style: ParentStyles.headerTitle(context),
-                        ),
+                        Text('Espace Parent', style: ParentStyles.headerTitle(context)),
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: ParentStyles.primary.withValues(alpha:0.1),
+                        color: ParentStyles.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: ParentStyles.primary.withValues(alpha:0.2),
-                        ),
+                        border: Border.all(color: ParentStyles.primary.withValues(alpha: 0.2)),
                       ),
                       child: Row(
-                        children: const [
-                          Icon(
-                            Icons.verified_user_rounded,
-                            size: 14,
-                            color: ParentStyles.primary,
-                          ),
-                          SizedBox(width: 4),
+                        children: [
+                          const Icon(Icons.verified_user_rounded, size: 14, color: ParentStyles.primary),
+                          const SizedBox(width: 4),
                           Text(
-                            'Tuteur légal',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: ParentStyles.primary,
-                            ),
+                            enfants.length > 1 ? '${enfants.length} enfants' : 'Tuteur légal',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: ParentStyles.primary),
                           ),
                         ],
                       ),
@@ -87,224 +60,36 @@ class ParentHomeTab extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // ─── CARTE ENFANT SUIVI ──────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [ParentStyles.primary, Color(0xFF1E3A8A)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(ParentStyles.borderRadiusCards),
-                    boxShadow: [
-                      BoxShadow(
-                        color: ParentStyles.primary.withValues(alpha:0.3),
-                        blurRadius: 14,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Child initials logo in gradient circle
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha:0.2),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha:0.6),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initials,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Enfant suivi',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              nomEnfant,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: -0.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: const [
-                                Icon(
-                                  Icons.location_on_rounded,
-                                  size: 12,
-                                  color: ParentStyles.accent,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'IST Campus Ouaga 2000',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.school_rounded,
-                        color: Colors.white30,
-                        size: 36,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // ─── SECTION RÉSUMÉ ACADÉMIQUE ───────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Résumé académique',
-                      style: ParentStyles.sectionTitle(context),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => onNavigateToTab(1), // Nav to Grades
-                      icon: const Text('Détails'),
-                      label: const Icon(Icons.arrow_forward_rounded, size: 16),
-                      style: TextButton.styleFrom(
-                        foregroundColor: ParentStyles.primary,
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // Stats Cards
-                Row(
-                  children: [
-                    _buildStatCard(
-                      context: context,
-                      icon: Icons.analytics_rounded,
-                      label: 'Moyenne Générale',
-                      value: '12.85 / 20',
-                      subtext: 'Semestre 3',
-                      color: ParentStyles.success,
-                      bgColor: ParentStyles.successLight,
-                      onTap: () => onNavigateToTab(1),
-                    ),
-                    const SizedBox(width: 14),
-                    _buildStatCard(
-                      context: context,
-                      icon: Icons.how_to_reg_rounded,
-                      label: 'Présence globale',
-                      value: '95.5 %',
-                      subtext: '0 absence injustifiée',
-                      color: ParentStyles.primary,
-                      bgColor: const Color(0xFFEAF2FF),
-                      onTap: () => onNavigateToTab(2), // Nav to Schedule
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-
-                // ─── SECTION ALERTES ─────────────────────────────────────────
                 Text(
-                  'Alertes & Informations',
+                  enfants.length > 1 ? 'Vos enfants' : 'Enfant suivi',
                   style: ParentStyles.sectionTitle(context),
                 ),
                 const SizedBox(height: 12),
-
-                // Alerts list
-                _buildAlertCard(
-                  title: 'Scolarité administrative',
-                  message: 'Reste à payer : 0 FCFA (Scolarité entièrement réglée !)',
-                  type: 'success',
-                ),
+                ...enfants.map((e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _carteEnfant(context, e),
+                    )),
                 const SizedBox(height: 10),
-                _buildAlertCard(
-                  title: 'Inscriptions pédagogiques',
-                  message: 'Veuillez vérifier que l\'inscription pédagogique du S4 est finalisée.',
-                  type: 'warning',
-                ),
-                const SizedBox(height: 10),
-                _buildAlertCard(
-                  title: 'Suivi de l\'assiduité',
-                  message: 'Aucun retard ni absence injustifiée à signaler cette semaine.',
-                  type: 'info',
-                ),
-                const SizedBox(height: 24),
 
                 // ─── ACCÈS RAPIDES ───────────────────────────────────────────
-                Text(
-                  'Accès rapides',
-                  style: ParentStyles.sectionTitle(context),
-                ),
+                Text('Accès rapides', style: ParentStyles.sectionTitle(context)),
                 const SizedBox(height: 12),
-
-                // Quick links row
                 Row(
                   children: [
-                    _buildQuickLink(
-                      icon: Icons.smart_toy_rounded,
-                      label: 'Assistant IA',
-                      color: const Color(0xFF7C3AED),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ParentAssistantIAScreen(nomEnfant: nomEnfant),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     _buildQuickLink(
                       icon: Icons.credit_card_rounded,
                       label: 'Paiements',
                       color: const Color(0xFF0891B2),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ParentPaiementsScreen(nomEnfant: nomEnfant),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    _buildQuickLink(
-                      icon: Icons.calendar_month_rounded,
-                      label: 'Planning',
-                      color: const Color(0xFF0D9488),
-                      onTap: () => onNavigateToTab(2),
+                      onTap: () {
+                        final enfantActif = enfants.where((e) => e.etudiantId == selectedEtudiantId).firstOrNull ??
+                            (enfants.isNotEmpty ? enfants.first : null);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ParentPaiementsScreen(nomEnfant: enfantActif?.nomComplet ?? ''),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -316,131 +101,135 @@ class ParentHomeTab extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required String value,
-    required String subtext,
-    required Color color,
-    required Color bgColor,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: ParentStyles.cardDecoration(
-            color: bgColor,
-            border: Border.all(color: color.withValues(alpha:0.2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: ParentStyles.textMuted,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtext,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: ParentStyles.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  String _initiales(EnfantApercu e) {
+    final p = e.prenoms.isNotEmpty ? e.prenoms[0] : '';
+    final n = e.nom.isNotEmpty ? e.nom[0] : '';
+    return '$p$n'.toUpperCase().isEmpty ? 'E' : '$p$n'.toUpperCase();
   }
 
-  Widget _buildAlertCard({
-    required String title,
-    required String message,
-    required String type,
-  }) {
-    Color primaryColor;
-    Color bgColor;
-    IconData icon;
+  Widget _carteEnfant(BuildContext context, EnfantApercu e) {
+    final estSelectionne = e.etudiantId == selectedEtudiantId;
+    final aDuNouveau = e.notesNonLues > 0 || e.bulletinsNonLus > 0;
 
-    switch (type) {
-      case 'success':
-        primaryColor = ParentStyles.success;
-        bgColor = ParentStyles.successLight;
-        icon = Icons.check_circle_outline_rounded;
-        break;
-      case 'warning':
-        primaryColor = ParentStyles.warning;
-        bgColor = ParentStyles.warningLight;
-        icon = Icons.error_outline_rounded;
-        break;
-      case 'danger':
-        primaryColor = ParentStyles.danger;
-        bgColor = ParentStyles.dangerLight;
-        icon = Icons.report_problem_outlined;
-        break;
-      default:
-        primaryColor = ParentStyles.primary;
-        bgColor = const Color(0xFFF1F5F9);
-        icon = Icons.info_outline_rounded;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: ParentStyles.cardDecoration(
-        color: bgColor,
-        border: Border.all(color: primaryColor.withValues(alpha:0.25)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: primaryColor, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: () => onSelectEnfant(e.etudiantId),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [ParentStyles.primary, Color(0xFF1E3A8A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(ParentStyles.borderRadiusCards),
+          border: estSelectionne ? Border.all(color: ParentStyles.accent, width: 2) : null,
+          boxShadow: [
+            BoxShadow(color: ParentStyles.primary.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor == ParentStyles.primary
-                        ? ParentStyles.textDark
-                        : primaryColor,
-                  ),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.2),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+                      ),
+                      child: Center(
+                        child: Text(
+                          _initiales(e),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1),
+                        ),
+                      ),
+                    ),
+                    if (aDuNouveau)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  message,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: ParentStyles.textDark,
-                    height: 1.35,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        e.nomComplet,
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.3),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${e.filiere} · ${e.niveau}',
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _miniStat(
+                    icon: Icons.analytics_rounded,
+                    label: 'Moyenne',
+                    value: e.moyenne != null ? '${e.moyenne!.toStringAsFixed(2)}/20' : '—',
+                    onTap: () {
+                      onSelectEnfant(e.etudiantId);
+                      onNavigateToTab(1);
+                    },
+                    badge: e.notesNonLues > 0 ? e.notesNonLues : null,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _miniStat(
+                    icon: Icons.workspace_premium_rounded,
+                    label: 'Bulletins',
+                    value: e.bulletinsNonLus > 0 ? '${e.bulletinsNonLus} nouveau(x)' : 'À jour',
+                    onTap: () {
+                      onSelectEnfant(e.etudiantId);
+                      onNavigateToTab(2);
+                    },
+                    badge: e.bulletinsNonLus > 0 ? e.bulletinsNonLus : null,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _miniStat(
+                    icon: Icons.how_to_reg_rounded,
+                    label: 'Présence',
+                    value: e.tauxPresence != null ? '${e.tauxPresence!.toStringAsFixed(1)}%' : '—',
+                    onTap: () {},
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -450,36 +239,58 @@ class ParentHomeTab extends StatelessWidget {
     required String label,
     required Color color,
     required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
+  }) =>
+      Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: ParentStyles.cardDecoration(),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(height: 8),
+                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ParentStyles.textDark)),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Widget _miniStat({
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+    int? badge,
+  }) =>
+      GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: ParentStyles.cardDecoration(),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha:0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(height: 8),
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(height: 6),
+              Text(label, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+              const SizedBox(height: 2),
               Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: ParentStyles.textDark,
-                ),
+                value,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
 }

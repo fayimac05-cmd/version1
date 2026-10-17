@@ -6,7 +6,7 @@ const uploadController = require('../controllers/upload.controller');
 
 /**
  * Routes pour les uploads de fichiers
- * (copies d'examen, pièces jointes, etc.)
+ * (copies d'examen, photos de profil/couverture, pièces jointes, etc.)
  */
 
 // POST /api/upload/copie - Upload une copie d'examen
@@ -17,5 +17,44 @@ router.post(
   uploadToCloudinary('scolarhub/copies-examen'),
   uploadController.uploadExamCopy
 );
+
+// POST /api/upload/message — pièce jointe de message (doc/photo/vidéo/audio)
+router.post(
+  '/message',
+  authMiddleware,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/messages'),
+  uploadController.uploadMessageFile
+);
+
+// Photo de profil / couverture — ouvert à tout utilisateur connecté, quel
+// que soit son rôle (étudiant, professeur, admin, parent).
+router.post(
+  '/photo-profil',
+  authMiddleware,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/photos-profil'),
+  uploadController.uploadPhotoProfil
+);
+router.delete('/photo-profil', authMiddleware, uploadController.deletePhotoProfil);
+
+router.post(
+  '/photo-couverture',
+  authMiddleware,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/photos-couverture'),
+  uploadController.uploadPhotoCouverture
+);
+router.delete('/photo-couverture', authMiddleware, uploadController.deletePhotoCouverture);
+
+// Attestation de service — même schéma que photo-profil/photo-couverture.
+router.post(
+  '/attestation-service',
+  authMiddleware,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/attestations-service'),
+  uploadController.uploaderAttestationService
+);
+router.delete('/attestation-service', authMiddleware, uploadController.supprimerAttestationService);
 
 module.exports = router;

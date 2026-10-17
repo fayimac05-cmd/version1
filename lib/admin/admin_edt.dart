@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_annonces.dart' show istNiveaux;
 import '../services/api_service.dart';
@@ -7,14 +8,6 @@ import '../services/api_service.dart';
 // CONFIGURATION GRILLE
 // ════════════════════════════════════════════════════════════════════════════
 const List<String> joursSemaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-
-const List<Map<String, String>> creneauxHoraires = [
-  {'debut': '08:00', 'fin': '10:00'},
-  {'debut': '10:00', 'fin': '12:00'},
-  {'debut': '12:00', 'fin': '14:00'},
-  {'debut': '14:00', 'fin': '16:00'},
-  {'debut': '16:00', 'fin': '18:00'},
-];
 
 const List<Map<String, String>> typeCoursOptions = [
   {'val': 'cours', 'label': 'Cours'},
@@ -36,14 +29,16 @@ String labelPourType(String type) {
   return typeCoursOptions.firstWhere((t) => t['val'] == type, orElse: () => typeCoursOptions[0])['label']!;
 }
 
+final DateFormat _formatDateAffichage = DateFormat('dd/MM/yyyy');
+
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
 // ════════════════════════════════════════════════════════════════════════════
 class Creneau {
-  String jour, heureDebut, heureFin, matiere, salle, type;
+  String jour, heureDebut, heureFin, matiere, salle, type, prof;
   Creneau({
     required this.jour, required this.heureDebut, required this.heureFin,
-    required this.matiere, required this.salle, this.type = 'cours',
+    required this.matiere, required this.salle, this.type = 'cours', this.prof = '',
   });
 
   factory Creneau.fromJson(Map<String, dynamic> json) => Creneau(
@@ -53,11 +48,12 @@ class Creneau {
         matiere: json['matiere'] ?? '',
         salle: json['salle'] ?? '',
         type: json['type'] ?? 'cours',
+        prof: json['prof'] ?? '',
       );
 
   Map<String, dynamic> toJson() => {
         'jour': jour, 'heureDebut': heureDebut, 'heureFin': heureFin,
-        'matiere': matiere, 'salle': salle, 'type': type,
+        'matiere': matiere, 'salle': salle, 'type': type, 'prof': prof,
       };
 }
 
@@ -67,11 +63,14 @@ class EdtEntry {
   final String filiereNom, niveau, anneeAcademique;
   final bool archive;
   final List<Creneau> creneaux;
+  final DateTime? dateDebut;
+  final DateTime? dateFin;
 
   EdtEntry({
     required this.id, this.filiereId, required this.filiereNom,
     required this.niveau, required this.anneeAcademique,
     required this.archive, required this.creneaux,
+    this.dateDebut, this.dateFin,
   });
 
   factory EdtEntry.fromJson(Map<String, dynamic> json) => EdtEntry(
@@ -84,7 +83,13 @@ class EdtEntry {
         creneaux: (json['creneaux'] as List<dynamic>? ?? [])
             .map((c) => Creneau.fromJson(c as Map<String, dynamic>))
             .toList(),
+        dateDebut: json['dateDebut'] != null ? DateTime.tryParse(json['dateDebut'].toString()) : null,
+        dateFin: json['dateFin'] != null ? DateTime.tryParse(json['dateFin'].toString()) : null,
       );
+
+  String get periodeAffichee => (dateDebut != null && dateFin != null)
+      ? 'Semaine du ${_formatDateAffichage.format(dateDebut!)} au ${_formatDateAffichage.format(dateFin!)}'
+      : '';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -222,7 +227,11 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
         child: const Icon(Icons.grid_view_rounded, color: AdminTheme.iconBg, size: 20),
       ),
       title: Text(e.filiereNom, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text('${e.niveau} · ${e.anneeAcademique} · ${e.creneaux.length} créneau(x)'),
+      subtitle: Text(
+        e.periodeAffichee.isNotEmpty
+            ? '${e.periodeAffichee} · ${e.niveau} · ${e.creneaux.length} créneau(x)'
+            : '${e.niveau} · ${e.anneeAcademique} · ${e.creneaux.length} créneau(x)',
+      ),
       trailing: PopupMenuButton<String>(
         icon: const Icon(Icons.more_vert),
         onSelected: (value) => _handleAction(value, e),
@@ -246,7 +255,12 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
 
   Future<void> _handleAction(String action, EdtEntry e) async {
     if (action == 'modifier') {
-      _ouvrirEditeurGrille(filiereId: e.filiereId, filiereNom: e.filiereNom, niveau: e.niveau, existant: e);
+      _ouvrirEditeurGrille(
+        filiereId: e.filiereId,
+        filiereNom: e.filiereNom,
+        niveau: e.niveau,
+        existant: e,
+      );
       return;
     }
     if (action == 'envoyer') {
@@ -329,11 +343,13 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
     }
   }
 
-  // ── Étape 1 : sélection filière + niveau ──────────────────────────────
+  // ── Étape 1 : sélection filière + niveau + dates de la semaine ────────
   void _demarrerCreation() {
     String? selectedFiliere;
     String? selectedNiveau;
     final anneeController = TextEditingController(text: DateTime.now().year.toString());
+    DateTime? dateDebut;
+    DateTime? dateFin;
 
     showDialog(
       context: context,
@@ -343,38 +359,74 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
           title: const Text('Nouvel emploi du temps', style: TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: 360,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Align(alignment: Alignment.centerLeft, child: Text('Filière', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-              const SizedBox(height: 6),
-              _buildDropdownContainer(
-                child: DropdownButton<String>(
-                  value: selectedFiliere,
-                  hint: const Text('Choisir la filière', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
-                  isExpanded: true, underline: const SizedBox(),
-                  items: _filieres.map((f) => DropdownMenuItem(value: f['id'].toString(), child: Text(f['nom'], style: const TextStyle(fontSize: 13)))).toList(),
-                  onChanged: (v) => setDialogState(() => selectedFiliere = v),
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Align(alignment: Alignment.centerLeft, child: Text('Filière', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 6),
+                _buildDropdownContainer(
+                  child: DropdownButton<String>(
+                    value: selectedFiliere,
+                    hint: const Text('Choisir la filière', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+                    isExpanded: true, underline: const SizedBox(),
+                    items: _filieres.map((f) => DropdownMenuItem(value: f['id'].toString(), child: Text(f['nom'], style: const TextStyle(fontSize: 13)))).toList(),
+                    onChanged: (v) => setDialogState(() => selectedFiliere = v),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Align(alignment: Alignment.centerLeft, child: Text('Niveau', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-              const SizedBox(height: 6),
-              _buildDropdownContainer(
-                child: DropdownButton<String>(
-                  value: selectedNiveau,
-                  hint: const Text('Choisir le niveau', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
-                  isExpanded: true, underline: const SizedBox(),
-                  items: istNiveaux.map((n) => DropdownMenuItem(value: n, child: Text(n, style: const TextStyle(fontSize: 13)))).toList(),
-                  onChanged: (v) => setDialogState(() => selectedNiveau = v),
+                const SizedBox(height: 16),
+                const Align(alignment: Alignment.centerLeft, child: Text('Niveau', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 6),
+                _buildDropdownContainer(
+                  child: DropdownButton<String>(
+                    value: selectedNiveau,
+                    hint: const Text('Choisir le niveau', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+                    isExpanded: true, underline: const SizedBox(),
+                    items: istNiveaux.map((n) => DropdownMenuItem(value: n, child: Text(n, style: const TextStyle(fontSize: 13)))).toList(),
+                    onChanged: (v) => setDialogState(() => selectedNiveau = v),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Align(alignment: Alignment.centerLeft, child: Text('Année académique', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-              const SizedBox(height: 6),
-              TextField(
-                controller: anneeController,
-                decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
-              ),
-            ]),
+                const SizedBox(height: 16),
+                const Align(alignment: Alignment.centerLeft, child: Text('Année académique', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: anneeController,
+                  decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                ),
+                const SizedBox(height: 16),
+                const Align(alignment: Alignment.centerLeft, child: Text('Semaine du programme *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(
+                    child: _boutonDate(
+                      label: dateDebut != null ? _formatDateAffichage.format(dateDebut!) : 'Date de début',
+                      onTap: () async {
+                        final d = await showDatePicker(
+                          context: dialogContext,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+                        if (d != null) setDialogState(() => dateDebut = d);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _boutonDate(
+                      label: dateFin != null ? _formatDateAffichage.format(dateFin!) : 'Date de fin',
+                      onTap: () async {
+                        final d = await showDatePicker(
+                          context: dialogContext,
+                          initialDate: dateDebut ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+                        if (d != null) setDialogState(() => dateFin = d);
+                      },
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
@@ -386,6 +438,12 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
                   );
                   return;
                 }
+                if (dateDebut == null || dateFin == null) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('⚠️ Indiquez la date de début et de fin de la semaine.'), backgroundColor: Colors.redAccent),
+                  );
+                  return;
+                }
                 final filiereNom = _filieres.firstWhere((f) => f['id'].toString() == selectedFiliere)['nom'] as String;
                 Navigator.pop(dialogContext);
                 _ouvrirEditeurGrille(
@@ -393,6 +451,8 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
                   filiereNom: filiereNom,
                   niveau: selectedNiveau!,
                   anneeAcademique: anneeController.text.trim(),
+                  dateDebut: dateDebut,
+                  dateFin: dateFin,
                 );
               },
               style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt),
@@ -404,18 +464,33 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
     );
   }
 
+  Widget _boutonDate({required String label, required VoidCallback onTap}) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+          child: Row(children: [
+            const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF64748B)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF334155)), overflow: TextOverflow.ellipsis)),
+          ]),
+        ),
+      );
+
   Widget _buildDropdownContainer({required Widget child}) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
         child: DropdownButtonHideUnderline(child: child),
       );
 
-  // ── Étape 2 : éditeur de grille façon Excel ───────────────────────────
+  // ── Étape 2 : éditeur de grille ────────────────────────────────────────
   void _ouvrirEditeurGrille({
     required String? filiereId,
     required String filiereNom,
     required String niveau,
     String anneeAcademique = '',
+    DateTime? dateDebut,
+    DateTime? dateFin,
     EdtEntry? existant,
   }) {
     Navigator.of(context).push(MaterialPageRoute(
@@ -426,6 +501,8 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
         anneeAcademique: existant?.anneeAcademique ?? (anneeAcademique.isEmpty ? DateTime.now().year.toString() : anneeAcademique),
         creneauxInitiaux: existant?.creneaux ?? [],
         edtId: existant?.id,
+        dateDebutInitiale: existant?.dateDebut ?? dateDebut,
+        dateFinInitiale: existant?.dateFin ?? dateFin,
       ),
     )).then((saved) {
       if (saved == true) _loadData();
@@ -434,17 +511,20 @@ class _AdminEDTState extends State<AdminEDT> with SingleTickerProviderStateMixin
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ÉCRAN GRILLE — FORMAT EXCEL (JOURS × HEURES)
+// ÉCRAN GRILLE
 // ════════════════════════════════════════════════════════════════════════════
 class _GrilleEdtScreen extends StatefulWidget {
   final String? filiereId;
   final String filiereNom, niveau, anneeAcademique;
   final List<Creneau> creneauxInitiaux;
   final String? edtId;
+  final DateTime? dateDebutInitiale;
+  final DateTime? dateFinInitiale;
 
   const _GrilleEdtScreen({
     required this.filiereId, required this.filiereNom, required this.niveau,
     required this.anneeAcademique, required this.creneauxInitiaux, this.edtId,
+    this.dateDebutInitiale, this.dateFinInitiale,
   });
 
   @override State<_GrilleEdtScreen> createState() => _GrilleEdtScreenState();
@@ -452,19 +532,23 @@ class _GrilleEdtScreen extends StatefulWidget {
 
 class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
   late List<Creneau> _creneaux;
+  late DateTime? _dateDebut;
+  late DateTime? _dateFin;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _creneaux = List.from(widget.creneauxInitiaux);
+    _dateDebut = widget.dateDebutInitiale;
+    _dateFin = widget.dateFinInitiale;
   }
 
-  Creneau? _findCreneau(String jour, String debut) {
-    for (final c in _creneaux) {
-      if (c.jour == jour && c.heureDebut == debut) return c;
-    }
-    return null;
+  /// Cours d'un jour donné, triés chronologiquement.
+  List<Creneau> _coursDuJour(String jour) {
+    final liste = _creneaux.where((c) => c.jour == jour).toList();
+    liste.sort((a, b) => a.heureDebut.compareTo(b.heureDebut));
+    return liste;
   }
 
   @override
@@ -479,13 +563,14 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
       ),
       body: Column(
         children: [
+          _buildEnTete(),
           _buildLegende(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: _buildGrilleTable(),
+                child: _buildGrilleParJour(),
               ),
             ),
           ),
@@ -508,6 +593,72 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
     );
   }
 
+  // ── Bandeau : dates de la semaine + bouton ajouter un cours ───────────
+  Widget _buildEnTete() => Container(
+        width: double.infinity,
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: Row(children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _choisirDates,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.date_range_rounded, size: 16, color: AdminTheme.iconBgAlt),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      (_dateDebut != null && _dateFin != null)
+                          ? 'Semaine du ${_formatDateAffichage.format(_dateDebut!)} au ${_formatDateAffichage.format(_dateFin!)}'
+                          : 'Définir la semaine (date début / fin)',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminTheme.iconBgAlt),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(Icons.edit_rounded, size: 14, color: AdminTheme.iconBgAlt),
+                ]),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: () => _editerCellule(),
+            icon: const Icon(Icons.add_rounded, size: 18, color: AdminTheme.iconFgAlt),
+            label: const Text('Ajouter un cours', style: TextStyle(color: AdminTheme.iconFgAlt, fontSize: 12, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.iconBgAlt, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+          ),
+        ]),
+      );
+
+  Future<void> _choisirDates() async {
+    final debut = await showDatePicker(
+      context: context,
+      initialDate: _dateDebut ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      helpText: 'Date de début de la semaine',
+    );
+    if (debut == null || !mounted) return;
+    final fin = await showDatePicker(
+      context: context,
+      initialDate: _dateFin ?? debut,
+      firstDate: debut,
+      lastDate: DateTime(2100),
+      helpText: 'Date de fin de la semaine',
+    );
+    if (fin == null) return;
+    setState(() {
+      _dateDebut = debut;
+      _dateFin = fin;
+    });
+  }
+
   Widget _buildLegende() => Container(
         width: double.infinity,
         color: Colors.white,
@@ -525,123 +676,284 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
         ),
       );
 
-  Widget _buildGrilleTable() {
-    const double colWidth = 170;
-    const double timeColWidth = 100;
-    const double rowHeight = 88;
+  Widget _buildGrilleParJour() {
+    const double colWidth = 200;
 
-    return Table(
-      border: TableBorder.all(color: const Color(0xFFE2E8F0), width: 1),
-      columnWidths: {
-        0: const FixedColumnWidth(timeColWidth),
-        for (int i = 1; i <= joursSemaine.length; i++) i: const FixedColumnWidth(colWidth),
-      },
-      children: [
-        TableRow(
-          decoration: const BoxDecoration(color: Color(0xFF0A4DA2)),
-          children: [
-            const SizedBox(height: 44),
-            ...joursSemaine.map((j) => Container(
-                  height: 44, alignment: Alignment.center,
-                  child: Text(j, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                )),
-          ],
-        ),
-        for (final horaire in creneauxHoraires)
-          TableRow(
-            children: [
-              Container(
-                height: rowHeight, alignment: Alignment.center,
-                color: const Color(0xFFF1F5F9),
-                child: Text('${horaire['debut']}\n${horaire['fin']}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-              ),
-              ...joursSemaine.map((jour) => _buildCellule(jour, horaire['debut']!, horaire['fin']!, rowHeight)),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // En-tête : une seule barre continue (pas de séparation entre les
+          // jours ici) pour que l'ensemble se lise clairement comme UN SEUL
+          // tableau, pas des cases indépendantes les unes des autres.
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: joursSemaine.map((jour) => Container(
+                  width: colWidth,
+                  height: 44,
+                  color: const Color(0xFF0A4DA2),
+                  alignment: Alignment.center,
+                  child: Text(jour, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                )).toList(),
           ),
-      ],
-    );
-  }
-
-  Widget _buildCellule(String jour, String debut, String fin, double height) {
-    final creneau = _findCreneau(jour, debut);
-    final couleur = creneau != null ? couleurPourType(creneau.type) : const Color(0xFF94A3B8);
-
-    return InkWell(
-      onTap: () => _editerCellule(jour, debut, fin, creneau),
-      child: Container(
-        height: height,
-        padding: const EdgeInsets.all(6),
-        color: creneau != null ? couleur.withValues(alpha: 0.10) : Colors.white,
-        child: creneau == null
-            ? const Center(child: Icon(Icons.add_rounded, color: Color(0xFFCBD5E1), size: 18))
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: couleur, borderRadius: BorderRadius.circular(4)),
-                    child: Text(labelPourType(creneau.type), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(creneau.matiere, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Row(children: [
-                    const Icon(Icons.room_outlined, size: 11, color: Color(0xFF64748B)),
-                    const SizedBox(width: 2),
-                    Expanded(child: Text(creneau.salle, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ]),
+          // Corps : les colonnes restent indépendantes en hauteur (chaque
+          // jour garde ses propres cases), mais un fin séparateur vertical
+          // les relie visuellement pour rester UN SEUL tableau.
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int i = 0; i < joursSemaine.length; i++) ...[
+                  if (i > 0) const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+                  SizedBox(width: colWidth, child: _corpsJour(joursSemaine[i])),
                 ],
-              ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  void _editerCellule(String jour, String debut, String fin, Creneau? existant) {
+  static const double _caseHeight = 96;
+
+  /// Contenu empilé d'une colonne jour : cartes de cours, séparées par un
+  /// espace proportionnel à l'écart réel entre elles (ex. 2h d'écart entre
+  /// deux cours → un vrai blanc visible et étiqueté "2h", pas juste un
+  /// simple filet comme avant). Minimum 2 cases si le jour a moins de 2
+  /// cours, pour garder un point de départ visuel identique sur toute la
+  /// semaine.
+  Widget _corpsJour(String jour) {
+    final cours = _coursDuJour(jour);
+    final children = <Widget>[];
+
+    if (cours.isEmpty) {
+      children.add(SizedBox(height: _caseHeight, child: _caseVide(jour)));
+      children.add(const Divider(height: 1, color: Color(0xFFE2E8F0)));
+      children.add(SizedBox(height: _caseHeight, child: _caseVide(jour)));
+    } else {
+      for (var i = 0; i < cours.length; i++) {
+        children.add(SizedBox(height: _caseHeight, child: _carteCoursRemplie(jour, cours[i])));
+        if (i < cours.length - 1) {
+          children.add(_spacerEcart(_ecartMinutes(cours[i].heureFin, cours[i + 1].heureDebut)));
+        }
+      }
+      if (cours.length < 2) {
+        children.add(const Divider(height: 1, color: Color(0xFFE2E8F0)));
+        children.add(SizedBox(height: _caseHeight, child: _caseVide(jour)));
+      }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+  }
+
+  /// Écart en minutes entre la fin d'un cours et le début du suivant (0 si
+  /// horaires invalides ou s'ils s'enchaînent directement).
+  int _ecartMinutes(String finA, String debutB) {
+    final fa = _parseHeure(finA);
+    final db = _parseHeure(debutB);
+    if (fa == null || db == null) return 0;
+    final diff = (db.hour * 60 + db.minute) - (fa.hour * 60 + fa.minute);
+    return diff > 0 ? diff : 0;
+  }
+
+  /// Espace entre deux cours du même jour. Hauteur proportionnelle à
+  /// l'écart réel (~28px par heure, plafonnée) avec l'écart affiché en
+  /// clair ("2h", "45min"...) — pour vraiment "sentir" le vide entre deux
+  /// cours plutôt qu'un simple filet de séparation.
+  Widget _spacerEcart(int minutes) {
+    if (minutes <= 0) {
+      return const Divider(height: 1, color: Color(0xFFE2E8F0));
+    }
+    final hauteur = (minutes / 60 * 28).clamp(22.0, 64.0);
+    final heures = minutes / 60.0;
+    final label = heures == heures.roundToDouble()
+        ? '${heures.toStringAsFixed(0)}h'
+        : (minutes < 60 ? '${minutes}min' : '${heures.toStringAsFixed(1)}h');
+    return Container(
+      height: hauteur,
+      width: double.infinity,
+      alignment: Alignment.center,
+      color: const Color(0xFFF8FAFC),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(child: Container(height: 1, margin: const EdgeInsets.only(right: 6), color: const Color(0xFFE2E8F0))),
+          Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+          Expanded(child: Container(height: 1, margin: const EdgeInsets.only(left: 6), color: const Color(0xFFE2E8F0))),
+        ],
+      ),
+    );
+  }
+
+  Widget _caseVide(String jour) => InkWell(
+        onTap: () => _editerCellule(jourPreselectionne: jour),
+        child: const Center(child: Icon(Icons.add_rounded, color: Color(0xFFCBD5E1), size: 20)),
+      );
+
+  Widget _carteCoursRemplie(String jour, Creneau creneau) {
+    final couleur = couleurPourType(creneau.type);
+    return InkWell(
+      onTap: () => _editerCellule(jourPreselectionne: jour, existant: creneau),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        color: couleur.withValues(alpha: 0.10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: couleur, borderRadius: BorderRadius.circular(4)),
+                child: Text(labelPourType(creneau.type), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+              const SizedBox(width: 6),
+              Text('${creneau.heureDebut} - ${creneau.heureFin}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
+            ]),
+            const SizedBox(height: 4),
+            Text(creneau.matiere, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), maxLines: 2, overflow: TextOverflow.ellipsis),
+            if (creneau.prof.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Row(children: [
+                const Icon(Icons.person_outline_rounded, size: 11, color: Color(0xFF64748B)),
+                const SizedBox(width: 2),
+                Expanded(child: Text(creneau.prof, style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ]),
+            ],
+            const SizedBox(height: 2),
+            Row(children: [
+              const Icon(Icons.room_outlined, size: 11, color: Color(0xFF64748B)),
+              const SizedBox(width: 2),
+              Expanded(child: Text(creneau.salle, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  TimeOfDay? _parseHeure(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final parts = raw.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _formatHeure(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// Chaque jour étant maintenant une colonne indépendante, jour ET horaires
+  /// sont toujours librement modifiables ici (plus de ligne partagée entre
+  /// les jours). [existant] non-null == modification d'un cours déjà posé
+  /// (l'objet est retiré de la liste par référence puis remplacé) ;
+  /// [jourPreselectionne] présélectionne le jour (case vide d'une colonne),
+  /// laissé modifiable si l'admin veut finalement le déplacer.
+  void _editerCellule({String? jourPreselectionne, Creneau? existant}) {
     final matiereController = TextEditingController(text: existant?.matiere ?? '');
     final salleController = TextEditingController(text: existant?.salle ?? '');
+    final profController = TextEditingController(text: existant?.prof ?? '');
     String selectedType = existant?.type ?? 'cours';
+    String? selectedJour = existant?.jour ?? jourPreselectionne;
+    TimeOfDay? heureDebut = _parseHeure(existant?.heureDebut);
+    TimeOfDay? heureFin = _parseHeure(existant?.heureFin);
 
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('$jour · $debut - $fin', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          title: Text(existant == null ? 'Nouveau cours' : 'Modifier le cours', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           content: SizedBox(
-            width: 340,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(
-                controller: matiereController,
-                decoration: InputDecoration(labelText: 'Matière / Module', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: salleController,
-                decoration: InputDecoration(labelText: 'Salle', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
-              ),
-              const SizedBox(height: 14),
-              Align(alignment: Alignment.centerLeft, child: Wrap(
-                spacing: 8,
-                children: typeCoursOptions.map((t) {
-                  final isSelected = selectedType == t['val'];
-                  final color = couleurPourType(t['val']!);
-                  return ChoiceChip(
-                    label: Text(t['label']!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : color)),
-                    selected: isSelected,
-                    selectedColor: color,
-                    backgroundColor: color.withValues(alpha: 0.08),
-                    onSelected: (_) => setDialogState(() => selectedType = t['val']!),
-                  );
-                }).toList(),
-              )),
-            ]),
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Align(alignment: Alignment.centerLeft, child: Text('Jour', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedJour,
+                      hint: const Text('Choisir le jour', style: TextStyle(fontSize: 13)),
+                      isExpanded: true,
+                      items: joursSemaine.map((j) => DropdownMenuItem(value: j, child: Text(j, style: const TextStyle(fontSize: 13)))).toList(),
+                      onChanged: (v) => setDialogState(() => selectedJour = v),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(children: [
+                  Expanded(
+                    child: _champHeure(
+                      label: 'Heure début',
+                      valeur: heureDebut,
+                      onTap: () async {
+                        final t = await showTimePicker(context: dialogContext, initialTime: heureDebut ?? const TimeOfDay(hour: 8, minute: 0));
+                        if (t != null) setDialogState(() => heureDebut = t);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _champHeure(
+                      label: 'Heure fin',
+                      valeur: heureFin,
+                      onTap: () async {
+                        final t = await showTimePicker(context: dialogContext, initialTime: heureFin ?? const TimeOfDay(hour: 10, minute: 0));
+                        if (t != null) setDialogState(() => heureFin = t);
+                      },
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: matiereController,
+                  decoration: InputDecoration(labelText: 'Matière / Module', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: profController,
+                  decoration: InputDecoration(labelText: 'Professeur', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: salleController,
+                  decoration: InputDecoration(labelText: 'Salle', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                ),
+                const SizedBox(height: 14),
+                Align(alignment: Alignment.centerLeft, child: Wrap(
+                  spacing: 8,
+                  children: typeCoursOptions.map((t) {
+                    final isSelected = selectedType == t['val'];
+                    final color = couleurPourType(t['val']!);
+                    return ChoiceChip(
+                      label: Text(t['label']!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : color)),
+                      selected: isSelected,
+                      selectedColor: color,
+                      backgroundColor: color.withValues(alpha: 0.08),
+                      onSelected: (_) => setDialogState(() => selectedType = t['val']!),
+                    );
+                  }).toList(),
+                )),
+              ]),
+            ),
           ),
           actions: [
             if (existant != null)
               TextButton(
                 onPressed: () {
-                  setState(() => _creneaux.removeWhere((c) => c.jour == jour && c.heureDebut == debut));
+                  setState(() => _creneaux.remove(existant));
                   Navigator.pop(dialogContext);
                 },
                 child: const Text('Supprimer', style: TextStyle(color: Colors.redAccent)),
@@ -651,15 +963,29 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
               onPressed: () {
                 final matiere = matiereController.text.trim();
                 final salle = salleController.text.trim();
+                final prof = profController.text.trim();
+
+                if (selectedJour == null || heureDebut == null || heureFin == null) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('⚠️ Choisissez le jour et les horaires.'), backgroundColor: Colors.redAccent),
+                  );
+                  return;
+                }
                 if (matiere.isEmpty || salle.isEmpty) {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     const SnackBar(content: Text('⚠️ Renseignez la matière et la salle.'), backgroundColor: Colors.redAccent),
                   );
                   return;
                 }
+
                 setState(() {
-                  _creneaux.removeWhere((c) => c.jour == jour && c.heureDebut == debut);
-                  _creneaux.add(Creneau(jour: jour, heureDebut: debut, heureFin: fin, matiere: matiere, salle: salle, type: selectedType));
+                  if (existant != null) _creneaux.remove(existant);
+                  _creneaux.add(Creneau(
+                    jour: selectedJour!,
+                    heureDebut: _formatHeure(heureDebut!),
+                    heureFin: _formatHeure(heureFin!),
+                    matiere: matiere, salle: salle, type: selectedType, prof: prof,
+                  ));
                 });
                 Navigator.pop(dialogContext);
               },
@@ -672,10 +998,29 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
     );
   }
 
+  Widget _champHeure({required String label, required TimeOfDay? valeur, required VoidCallback onTap}) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+          child: Row(children: [
+            const Icon(Icons.access_time_rounded, size: 16, color: Color(0xFF64748B)),
+            const SizedBox(width: 8),
+            Text(valeur != null ? _formatHeure(valeur) : label, style: const TextStyle(fontSize: 13, color: Color(0xFF334155))),
+          ]),
+        ),
+      );
+
   Future<void> _enregistrer() async {
     if (_creneaux.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('⚠️ Ajoutez au moins un créneau avant d\'enregistrer.'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    if (_dateDebut == null || _dateFin == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ Indiquez la date de début et de fin de la semaine.'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -686,6 +1031,8 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
       'niveau': widget.niveau,
       'anneeAcademique': widget.anneeAcademique,
       'creneaux': _creneaux.map((c) => c.toJson()).toList(),
+      'dateDebut': _dateDebut!.toIso8601String().split('T').first,
+      'dateFin': _dateFin!.toIso8601String().split('T').first,
     };
 
     final result = widget.edtId == null
@@ -696,7 +1043,6 @@ class _GrilleEdtScreenState extends State<_GrilleEdtScreen> {
     setState(() => _isSaving = false);
 
     if (result['success'] == true) {
-      // Récupère l'id (nouvel EDT ou EDT existant) pour proposer l'envoi.
       final newId = (widget.edtId ??
               (result['data'] is Map ? result['data']['id'] : null))
           ?.toString();

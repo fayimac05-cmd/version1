@@ -36,11 +36,19 @@ class ScolarHubApp extends StatelessWidget {
 
       title: 'ScolarHub',
 
+      // ✅ CORRIGÉ — l'app n'est pas conçue pour le mode sombre (quasi tout
+      // l'UI utilise des couleurs codées en dur pensées pour un fond clair :
+      // champs de saisie blancs, texte bleu foncé, etc.). Avec
+      // ThemeMode.system, un téléphone en mode sombre système (ou un
+      // navigateur mobile qui force le mode sombre sur les sites web, ex.
+      // Chrome Android) pouvait rendre certains éléments illisibles
+      // (champs sombres, texte invisible). On force donc le thème clair
+      // partout, indépendamment du thème système/navigateur.
       theme: AdminTheme.buildTheme(Brightness.light),
 
-      darkTheme: AdminTheme.buildTheme(Brightness.dark),
+      darkTheme: AdminTheme.buildTheme(Brightness.light),
 
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
 
       home: accueil,
     );

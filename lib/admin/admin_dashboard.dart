@@ -3,7 +3,6 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../admin/admin_theme.dart';
-import '../services/api_service.dart';
 
 class AdminDashboard extends StatefulWidget {
   final StudentProfile profile;
@@ -18,7 +17,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _nbSciencesTech = 0;
   int _nbSciencesGestion = 0;
   int _nbSuspendus = 0;
-
   bool _loadingRecl = true;
   List<dynamic> _reclamations = [];
 
@@ -186,7 +184,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(height: 24),
 
           // ── KPI Cards ───────────────────────────────────────────────
-          _kpiRow(isDesktop, {}),
+          _kpiRow(isDesktop),
           const SizedBox(height: 28),
 
           // ── Ligne widgets ────────────────────────────────────────────
@@ -220,7 +218,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           // ── Publications BDE en attente ──────────────────────────────
           _bdeWidget(),
           const SizedBox(height: 28),
-
           // ── Majors de promo ──────────────────────────────────────────
           _majorsWidget(),
           const SizedBox(height: 32),
@@ -339,7 +336,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   );
 
   // ── KPI Cards ─────────────────────────────────────────────────────────
-  Widget _kpiRow(bool isDesktop, Map<String, dynamic> kpisData) {
+  Widget _kpiRow(bool isDesktop) {
     final kpis = [
       {'label': 'Étudiants actifs', 'value': _loadingKpis ? '…' : '$_nbEtudiants',
        'sub': 'Total actifs',

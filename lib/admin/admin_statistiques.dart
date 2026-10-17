@@ -23,6 +23,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../models/etudiant_model.dart';
+import '../services/api_service.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 1 — Données simulées isolées [ARCH-1]
@@ -129,10 +130,129 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   late TabController _tab;
   String _filtreHistorique = 'domaine';
 
+  // ── Données réelles (remplacent _StatsMock) ─────────────────────────────
+  bool _loadingStats = true;
+  List<dynamic> _moyennes = [];
+  List<dynamic> _inscriptionsRaw = []; // [{mois, domaine, filiere_nom, total}]
+
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 3, vsync: this);
+    _chargerStats();
+  }
+
+  Future<void> _chargerStats() async {
+    final results = await Future.wait([
+      ApiService.getMoyennesAdmin(),
+      ApiService.getStatsInscriptions(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      if (results[0]['success'] == true) {
+        _moyennes = results[0]['data'] as List<dynamic>;
+      }
+      if (results[1]['success'] == true) {
+        _inscriptionsRaw = results[1]['data'] as List<dynamic>;
+      }
+      _loadingStats = false;
+    });
+  }
+
+  DateTime _moisDe(dynamic row) => DateTime.parse(row['mois'].toString());
+  int _totalDe(dynamic row) => (row['total'] as num).toInt();
+
+  /// Taux de réussite réel (% moyenne >= 10) pour un domaine, à partir des
+  /// moyennes réellement calculées (notes validées). 0 si aucune donnée.
+  double _tauxReussite(String motDomaine) {
+    final avec = _moyennes
+        .where((m) => m['moyenne'] != null && (m['domaine'] ?? '').toString().contains(motDomaine))
+        .toList();
+    if (avec.isEmpty) return 0;
+    final reussis = avec.where((m) => (m['moyenne'] as num) >= 10).length;
+    return reussis / avec.length * 100;
+  }
+
+  /// Top étudiants par moyenne réelle — remplace l'ancien _majorsWidget qui
+  /// utilisait Etudiant.notes, jamais rempli par l'API (toujours vide).
+  List<dynamic> get _topMoyennes {
+    final avec = _moyennes.where((m) => m['moyenne'] != null).toList();
+    avec.sort((a, b) => (b['moyenne'] as num).compareTo(a['moyenne'] as num));
+    return avec.take(3).toList();
+  }
+
+  /// Courbe cumulée des inscriptions sur l'année académique en cours
+  /// (déterminée par la donnée la plus récente disponible), en mois réels
+  /// uniquement — pas de mois inventés au-delà des données existantes.
+  List<FlSpot> get _spotsMoisCourants {
+    if (_inscriptionsRaw.isEmpty) return [];
+    final dates = _inscriptionsRaw.map(_moisDe).toList()..sort();
+    final dernier = dates.last;
+    final anneeDebut = dernier.month >= 9 ? dernier.year : dernier.year - 1;
+    final debut = DateTime(anneeDebut, 9);
+    final fin = DateTime(anneeDebut + 1, 9);
+    final parMois = <int, int>{};
+    for (final row in _inscriptionsRaw) {
+      final d = _moisDe(row);
+      if (!d.isBefore(debut) && d.isBefore(fin)) {
+        final idx = (d.year - anneeDebut) * 12 + (d.month - 9);
+        parMois[idx] = (parMois[idx] ?? 0) + _totalDe(row);
+      }
+    }
+    if (parMois.isEmpty) return [];
+    final maxIdx = parMois.keys.reduce((a, b) => a > b ? a : b);
+    int cumul = 0;
+    final spots = <FlSpot>[];
+    for (int i = 0; i <= maxIdx; i++) {
+      cumul += parMois[i] ?? 0;
+      spots.add(FlSpot(i.toDouble(), cumul.toDouble()));
+    }
+    return spots;
+  }
+
+  List<String> get _moisLabelsCourants {
+    const noms = ['Sep', 'Oct', 'Nov', 'Déc', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû'];
+    return List.generate(_spotsMoisCourants.length, (i) => noms[i]);
+  }
+
+  /// Années réellement présentes dans les données (année civile de
+  /// création de compte) — pas 5 années fixes : juste ce qui existe.
+  List<String> get _anneesReelles {
+    final annees = <String>{};
+    for (final row in _inscriptionsRaw) {
+      annees.add('${_moisDe(row).year}');
+    }
+    final liste = annees.toList()..sort();
+    return liste;
+  }
+
+  Map<String, int> _totalParAnneePourDomaine(String annee, String motDomaine) {
+    int total = 0;
+    for (final row in _inscriptionsRaw) {
+      if ('${_moisDe(row).year}' == annee && (row['domaine'] ?? '').toString().contains(motDomaine)) {
+        total += _totalDe(row);
+      }
+    }
+    return {'total': total};
+  }
+
+  List<String> get _filiereNomsReels {
+    final set = <String>{};
+    for (final row in _inscriptionsRaw) {
+      set.add((row['filiere_nom'] ?? 'Autre').toString());
+    }
+    final list = set.toList()..sort();
+    return list.length > 6 ? list.sublist(0, 6) : list;
+  }
+
+  int _totalParAnneePourFiliere(String annee, String filiereNom) {
+    int total = 0;
+    for (final row in _inscriptionsRaw) {
+      if ('${_moisDe(row).year}' == annee && (row['filiere_nom'] ?? 'Autre').toString() == filiereNom) {
+        total += _totalDe(row);
+      }
+    }
+    return total;
   }
 
   @override
@@ -185,11 +305,15 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
           ),
         ),
         adminDivider,
-        Expanded(child: TabBarView(controller: _tab, children: [
-          _tabGeneral(),
-          _tabHistorique(),
-          _tabListes(),
-        ])),
+        Expanded(
+          child: _loadingStats
+              ? const Center(child: CircularProgressIndicator())
+              : TabBarView(controller: _tab, children: [
+                  _tabGeneral(),
+                  _tabHistorique(),
+                  _tabListes(),
+                ]),
+        ),
       ]),
     );
   }
@@ -233,7 +357,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
               Expanded(
                 flex: 2,
                 child: _chartCard(
-                  'Inscriptions mensuelles 2024-2025',
+                  'Inscriptions mensuelles${_anneesReelles.isNotEmpty ? ' ${_anneesReelles.last}' : ''}',
                   Icons.show_chart_rounded,
                   _inscriptionsChart(),
                 ),
@@ -243,11 +367,11 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
                 flex: 1,
                 child: _metricCard(
                   'Taux de réussite',
-                  '81.0%',
-                  'Sciences & Tech 2024-25',
+                  _moyennes.isEmpty ? '—' : '${_tauxReussite('Technologies').toStringAsFixed(1)}%',
+                  'Sciences & Tech',
                   Icons.trending_up_rounded,
                   AdminTheme.success,
-                  sous: 'SG : 76.5%',
+                  sous: _moyennes.isEmpty ? null : 'SG : ${_tauxReussite('Gestion').toStringAsFixed(1)}%',
                 ),
               ),
             ],
@@ -379,7 +503,16 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
 
   // ── Courbe inscriptions mensuelles avec tooltip [UX-2] ──────────────────
 
-  Widget _inscriptionsChart() => SizedBox(
+  Widget _inscriptionsChart() {
+    final spots = _spotsMoisCourants;
+    if (spots.isEmpty) {
+      return const SizedBox(
+        height: 170,
+        child: Center(child: Text('Pas encore de données d\'inscription.', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))),
+      );
+    }
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    return SizedBox(
         height: 170,
         child: LineChart(
           LineChartData(
@@ -405,10 +538,10 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
                   showTitles: true,
                   getTitlesWidget: (v, _) {
                     final i = v.toInt();
-                    if (i < 0 || i >= _StatsMock.moisLabels.length) {
+                    if (i < 0 || i >= _moisLabelsCourants.length) {
                       return const SizedBox();
                     }
-                    return Text(_StatsMock.moisLabels[i],
+                    return Text(_moisLabelsCourants[i],
                         style: const TextStyle(
                             fontSize: 9, color: Color(0xFF9CA3AF)));
                   },
@@ -428,7 +561,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
                 getTooltipItems: (spots) => spots
                     .map((s) => LineTooltipItem(
                           '${s.y.toInt()} inscrits\n'
-                          '${_StatsMock.moisLabels[s.x.toInt()]}',
+                          '${_moisLabelsCourants[s.x.toInt()]}',
                           const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -439,7 +572,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
             ),
             lineBarsData: [
               LineChartBarData(
-                spots: _StatsMock.inscriptionsMensuelles,
+                spots: spots,
                 isCurved: true,
                 color: AdminTheme.primary,
                 barWidth: 2.5,
@@ -448,10 +581,11 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
                 dotData: const FlDotData(show: false),
               ),
             ],
-            minX: 0, maxX: 8, minY: 150, maxY: 270,
+            minX: 0, maxX: (spots.length - 1).toDouble(), minY: 0, maxY: maxY * 1.15,
           ),
         ),
       );
+  }
 
   // ── Donut domaines ────────────────────────────────────────────────────────
 
@@ -531,15 +665,23 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   // ── Majors widget [SEC-3] ─────────────────────────────────────────────────
 
   Widget _majorsWidget() {
-    final avecNotes = adminEtudiants.where((e) => e.notes.isNotEmpty).toList();
-    avecNotes.sort((a, b) => _moy(b.notes).compareTo(_moy(a.notes)));
-    final top3   = avecNotes.take(3).toList();
+    final top3 = _topMoyennes;
     const medals = ['🥇', '🥈', '🥉'];
+
+    if (top3.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(child: Text('Aucune note validée pour le moment.', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))),
+      );
+    }
 
     return Column(
       children: List.generate(top3.length, (i) {
-        final e   = top3[i];
-        final moy = _moy(e.notes);
+        final m = top3[i] as Map;
+        final moy = (m['moyenne'] as num).toDouble();
+        final prenoms = (m['prenoms'] ?? '').toString();
+        final nom = (m['nom'] ?? '').toString();
+        final initiales = '${prenoms.isNotEmpty ? prenoms[0].toUpperCase() : '?'}${nom.isNotEmpty ? nom[0].toUpperCase() : ''}';
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(children: [
@@ -548,8 +690,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
             CircleAvatar(
               radius: 18,
               backgroundColor: AdminTheme.primaryLight,
-              // [SEC-3] Initiales sécurisées
-              child: Text(_initiales(e),
+              child: Text(initiales,
                   style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -560,12 +701,12 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${e.prenoms} ${e.nom}',
+                  Text('$prenoms $nom',
                       style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF1A1A2E))),
-                  Text(e.filiere,
+                  Text('${m['filiere_nom'] ?? ''}',
                       style: const TextStyle(
                           fontSize: 10, color: Color(0xFF6B7280)),
                       maxLines: 1,
@@ -657,9 +798,6 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
             _comparaisonDomainesChart(),
           ),
           const SizedBox(height: 16),
-
-          // ── Analyse & Tendances ────────────────────────────────────────
-          _resumeHistorique(),
         ],
       ),
     );
@@ -691,19 +829,19 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   // ── Barres groupées domaines ──────────────────────────────────────────────
 
   Widget _inscriptionsHistoDomaine() {
-    final annees = _StatsMock.inscriptionsParAnnee.keys.toList();
-    final stData = annees
-        .map((a) => _StatsMock.inscriptionsParAnnee[a]![0].toDouble())
-        .toList();
-    final sgData = annees
-        .map((a) => _StatsMock.inscriptionsParAnnee[a]![1].toDouble())
-        .toList();
+    final annees = _anneesReelles;
+    if (annees.isEmpty) {
+      return const SizedBox(height: 210, child: Center(child: Text('Pas encore de données.', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))));
+    }
+    final stData = annees.map((a) => _totalParAnneePourDomaine(a, 'Technologies')['total']!.toDouble()).toList();
+    final sgData = annees.map((a) => _totalParAnneePourDomaine(a, 'Gestion')['total']!.toDouble()).toList();
+    final maxVal = [...stData, ...sgData].fold<double>(1, (m, v) => v > m ? v : m);
 
     return SizedBox(
       height: 210,
       child: BarChart(BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: 220,
+        maxY: maxVal * 1.2,
         // [UX-2] Tooltip personnalisé
         barTouchData: BarTouchData(
           enabled: true,
@@ -723,7 +861,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
             },
           ),
         ),
-        titlesData: _barTitles(annees.map((a) => a.substring(0, 4)).toList()),
+        titlesData: _barTitles(annees),
         gridData: _gridData(),
         borderData: FlBorderData(show: false),
         barGroups: List.generate(
@@ -769,22 +907,29 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   );
 
   Widget _inscriptionsHistoFiliere() {
-    final annees = _StatsMock.inscriptionsParFiliere.keys.toList();
+    final annees = _anneesReelles;
+    final filiereNoms = _filiereNomsReels;
+    if (annees.isEmpty || filiereNoms.isEmpty) {
+      return const SizedBox(height: 210, child: Center(child: Text('Pas encore de données.', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))));
+    }
+    final maxVal = annees
+        .expand((a) => filiereNoms.map((f) => _totalParAnneePourFiliere(a, f)))
+        .fold<int>(1, (m, v) => v > m ? v : m);
 
     return Column(children: [
       SizedBox(
         height: 210,
         child: BarChart(BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: 70,
+          maxY: maxVal * 1.2,
           barTouchData: BarTouchData(
             enabled: true,
             touchTooltipData: BarTouchTooltipData(
               getTooltipColor: (_) => const Color(0xFF1A1A2E),
               tooltipBorderRadius: BorderRadius.circular(8),
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final filiere = rodIndex < _StatsMock.filiereLabels.length
-                    ? _StatsMock.filiereLabels[rodIndex]
+                final filiere = rodIndex < filiereNoms.length
+                    ? filiereNoms[rodIndex]
                     : '—';
                 return BarTooltipItem(
                   '$filiere\n${rod.toY.toInt()} inscrits',
@@ -796,19 +941,16 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
               },
             ),
           ),
-          titlesData:
-              _barTitles(annees.map((a) => a.substring(0, 4)).toList()),
+          titlesData: _barTitles(annees),
           gridData: _gridData(),
           borderData: FlBorderData(show: false),
           barGroups: List.generate(annees.length, (i) {
-            final data = _StatsMock.inscriptionsParFiliere[annees[i]]!;
-            final max6 = data.length > 6 ? 6 : data.length;
             return BarChartGroupData(
               x: i,
               barRods: List.generate(
-                max6,
+                filiereNoms.length,
                 (j) => BarChartRodData(
-                  toY: data[j].toDouble(),
+                  toY: _totalParAnneePourFiliere(annees[i], filiereNoms[j]).toDouble(),
                   color: _StatsMock.filiereCouleurs[j % _StatsMock.filiereCouleurs.length],
                   width: 7,
                   borderRadius: BorderRadius.circular(2),
@@ -823,9 +965,9 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
         spacing: 8,
         runSpacing: 4,
         children: List.generate(
-          _StatsMock.filiereLabels.length > 6 ? 6 : _StatsMock.filiereLabels.length,
+          filiereNoms.length,
           (i) => _dot(_StatsMock.filiereCouleurs[i % _StatsMock.filiereCouleurs.length],
-              _StatsMock.filiereLabels[i]),
+              filiereNoms[i]),
         ),
       ),
     ]);
@@ -833,10 +975,20 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
 
   // ── Courbe réussite / échec ───────────────────────────────────────────────
 
+  // ⚠️ Le calcul des moyennes (getMoyennesAdmin) ne distingue pas encore par
+  // année académique — on ne dispose donc que d'UN taux de réussite global
+  // actuel, pas d'un historique par année. On l'applique tel quel à chaque
+  // année réellement présente plutôt que d'inventer une évolution — c'est
+  // honnête vu la profondeur de données actuelle (une seule vraie année).
   Widget _tauxReussiteChart() {
-    final annees  = _StatsMock.tauxReussiteParAnnee.keys.toList();
-    final stData  = annees.map((a) => _StatsMock.tauxReussiteParAnnee[a]![0]).toList();
-    final sgData  = annees.map((a) => _StatsMock.tauxReussiteParAnnee[a]![1]).toList();
+    final annees  = _anneesReelles;
+    if (annees.isEmpty) {
+      return const SizedBox(height: 190, child: Center(child: Text('Pas encore de données.', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))));
+    }
+    final tauxST = _tauxReussite('Technologies');
+    final tauxSG = _tauxReussite('Gestion');
+    final stData  = List.generate(annees.length, (_) => tauxST);
+    final sgData  = List.generate(annees.length, (_) => tauxSG);
     final echecST = stData.map((v) => 100 - v).toList();
     final echecSG = sgData.map((v) => 100 - v).toList();
 
@@ -861,7 +1013,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
                 getTitlesWidget: (v, _) {
                   final i = v.toInt();
                   if (i < 0 || i >= annees.length) return const SizedBox();
-                  return Text(annees[i].substring(0, 4),
+                  return Text(annees[i],
                       style: const TextStyle(
                           fontSize: 9, color: Color(0xFF6B7280)));
                 },
@@ -897,7 +1049,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
             _line(echecST, AdminTheme.danger, dashed: true),
             _line(echecSG, AdminTheme.warning, dashed: true),
           ],
-          minX: 0, maxX: 4, minY: 0, maxY: 100,
+          minX: 0, maxX: (annees.length - 1).toDouble().clamp(0, double.infinity), minY: 0, maxY: 100,
         )),
       ),
       const SizedBox(height: 12),
@@ -1065,13 +1217,14 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   // ── Comparaison domaines ──────────────────────────────────────────────────
 
   Widget _comparaisonDomainesChart() {
-    final annees = _StatsMock.inscriptionsParAnnee.keys.toList();
-    final stData = annees
-        .map((a) => _StatsMock.inscriptionsParAnnee[a]![0].toDouble())
-        .toList();
-    final sgData = annees
-        .map((a) => _StatsMock.inscriptionsParAnnee[a]![1].toDouble())
-        .toList();
+    final annees = _anneesReelles;
+    if (annees.isEmpty) {
+      return const SizedBox(height: 170, child: Center(child: Text('Pas encore de données.', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))));
+    }
+    final stData = annees.map((a) => _totalParAnneePourDomaine(a, 'Technologies')['total']!.toDouble()).toList();
+    final sgData = annees.map((a) => _totalParAnneePourDomaine(a, 'Gestion')['total']!.toDouble()).toList();
+    final maxVal = [...stData, ...sgData].fold<double>(1, (m, v) => v > m ? v : m);
+    final minVal = [...stData, ...sgData].fold<double>(maxVal, (m, v) => v < m ? v : m);
 
     return Column(children: [
       SizedBox(
@@ -1094,7 +1247,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
                 getTitlesWidget: (v, _) {
                   final i = v.toInt();
                   if (i < 0 || i >= annees.length) return const SizedBox();
-                  return Text(annees[i].substring(0, 4),
+                  return Text(annees[i],
                       style: const TextStyle(
                           fontSize: 9, color: Color(0xFF6B7280)));
                 },
@@ -1140,7 +1293,8 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
               ),
             ),
           ],
-          minX: 0, maxX: 4, minY: 60, maxY: 200,
+          minX: 0, maxX: (annees.length - 1).toDouble().clamp(0, double.infinity),
+          minY: (minVal * 0.8), maxY: maxVal * 1.2,
         )),
       ),
       const SizedBox(height: 10),

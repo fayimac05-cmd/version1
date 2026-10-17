@@ -5,6 +5,7 @@ import 'planning_tab.dart';
 import 'chat_ia_screen.dart';
 import 'revision_ia_screen.dart';
 import 'tickets_screen.dart';
+import 'evaluations_a_faire_page.dart';
 
 /// Menu latéral accessible via l'icône ☰ du header de HomeTab.
 /// Regroupe les fonctionnalités retirées de l'écran d'accueil
@@ -123,6 +124,15 @@ class AppDrawer extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                       builder: (_) => TicketsScreen(profile: profile))),
+            ),
+            _item(
+              context,
+              icon: Icons.rate_review_outlined,
+              label: 'Évaluer mes profs',
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const EvaluationsAFairePage())),
             ),
 
             const Spacer(),

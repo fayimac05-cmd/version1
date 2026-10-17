@@ -1,0 +1,81 @@
+lib\main.dart:17:     debugPrint('ÔÜá´©Å  Impossible de charger .env : $e');
+lib\main.dart:31:     debugPrint('Ô£à Supabase initialis├® : $supabaseUrl');
+lib\main.dart:33:     debugPrint('ÔØî Erreur Supabase init : $e');
+lib\admin\admin_annonces.dart:395:             _showSnack('­ƒÜÇ ├ëv├®nement cr├®├® et approuv├® ÔÇö visible dans le carrousel ├®tudiant.');
+lib\admin\admin_annonces.dart:575:           ? '­ƒÜÇ L\'avis d\'information a ├®t├® publi├® sur les terminaux ├®tudiants.'
+lib\admin\admin_annonces.dart:576:           : '­ƒÆ¥ Document consign├® dans vos brouillons.');
+lib\admin\admin_annonces.dart:605:                 ? '­ƒÜÇ L\'avis d\'information a ├®t├® publi├® sur les terminaux ├®tudiants.'
+lib\admin\admin_annonces.dart:606:                 : '­ƒÆ¥ Document consign├® dans vos brouillons.');
+lib\admin\admin_annonces.dart:909:         const SnackBar(content: Text('ÔÜá´©Å Veuillez remplir les champs obligatoires (Titre et Corps de texte).'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+lib\admin\admin_bde.dart:115:                           _showSnack('­ƒÜÇ ├ëv├®nement cr├®├® et approuv├® ÔÇö il est visible dans le carrousel ├®tudiant.');
+lib\admin\admin_bde.dart:486:           ? '­ƒÜÇ ├ëv├®nement approuv├® ÔÇö il appara├«t maintenant dans le carrousel ├®tudiant.'
+lib\admin\admin_bulletins.dart:207:       _snack('Ô£à ${result['message'] ?? 'Bulletins publi├®s.'}');
+lib\admin\admin_bulletins.dart:243:                   'ÔÜá´©Å Le statut (Valid├®/Ajourn├®/Invalid├®) est coch├® manuellement pour chaque ├®tudiant ÔÇö jamais calcul├® automatiquement ├á partir d\'un seuil.',
+lib\admin\admin_dashboard.dart:235:       Text('Bonjour, ${widget.profile.prenoms} ­ƒæï',
+lib\admin\admin_dashboard.dart:823:     const medailles = ['­ƒÑç', '­ƒÑê', '­ƒÑë'];
+lib\admin\admin_edt.dart:385:                     const SnackBar(content: Text('ÔÜá´©Å S├®lectionnez une fili├¿re et un niveau.'), backgroundColor: Colors.redAccent),
+lib\admin\admin_edt.dart:656:                     const SnackBar(content: Text('ÔÜá´©Å Renseignez la mati├¿re et la salle.'), backgroundColor: Colors.redAccent),
+lib\admin\admin_edt.dart:678:         const SnackBar(content: Text('ÔÜá´©Å Ajoutez au moins un cr├®neau avant d\'enregistrer.'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+lib\admin\admin_edt.dart:755:         const SnackBar(content: Text('Ô£à Emploi du temps enregistr├® avec succ├¿s.'), backgroundColor: Color(0xFF1E293B), behavior: SnackBarBehavior.floating),
+lib\admin\admin_etudiants.dart:1042:                                     '­ƒÅà $b',
+lib\admin\admin_evaluations.dart:110:               child: Text(ev.ouverte ? '­ƒƒó Ouverte' : 'ÔÜ½ Ferm├®e',
+lib\admin\admin_evaluations.dart:174:               Expanded(child: _btn('­ƒöÆ Cl├┤turer', AdminTheme.danger, AdminTheme.dangerLight,
+lib\admin\admin_evaluations.dart:180:               Expanded(child: _btn('­ƒôè Voir rapport complet',
+lib\admin\admin_evaluations.dart:182:                 () => _snack('­ƒôè Rapport en cours de g├®n├®ration...'))),
+lib\admin\admin_evaluations.dart:184:               Expanded(child: _btn('­ƒƒó Ouvrir la p├®riode',
+lib\admin\admin_filieres.dart:1127:                   _step < 2 ? 'Continuer ÔåÆ' : 'Ô£à Cr├®er la fili├¿re',
+lib\admin\admin_membres.dart:289:     _snack('­ƒùæ´©Å Membre supprim├®');
+lib\admin\admin_membres.dart:527:                     _snack('Ô£à Enregistrement en base de donn├®es...');
+lib\admin\admin_membres.dart:533:                     _snack('Ô£à Droits synchronis├®s avec succ├¿s !');
+lib\admin\admin_membres.dart:710:                       _snack('ÔÜá´©Å Veuillez remplir tous les champs obligatoires (Nom, Pr├®nom, Email, T├®l├®phone, Mot de passe)');
+lib\admin\admin_membres.dart:715:                       _snack('ÔÜá´©Å Le mot de passe doit contenir au moins 6 caract├¿res');
+lib\admin\admin_membres.dart:756:                         _snack('Ô£à Administrateur enregistr├® avec succ├¿s en base de donn├®es !');
+lib\admin\admin_membres.dart:761:                         _snack('ÔÜá´©Å ${res['error'] ?? 'Enregistrement local uniquement'}');
+lib\admin\admin_messages.dart:987:                 ...['­ƒæì','ÔØñ´©Å','­ƒÿé','­ƒÿ«','­ƒÿó','­ƒÖÅ'].map((e) =>
+lib\admin\admin_messages.dart:1035:                 _snack('­ƒÆ¥ Enregistrement...'); }),
+lib\admin\admin_messages.dart:1038:                 _snack('­ƒôñ Partage...'); }),
+lib\admin\admin_messages.dart:1057:     const emojis = ['­ƒÿÇ','­ƒÿâ','­ƒÿä','­ƒÿü','­ƒÿå','­ƒÿà','­ƒñú','­ƒÿé','­ƒÖé','­ƒÿë',
+lib\admin\admin_messages.dart:1058:       '­ƒÿè','­ƒÿç','­ƒÑ░','­ƒÿì','­ƒÿÿ','­ƒÿï','­ƒÿø','­ƒÿ£','­ƒñ¬','­ƒñæ','­ƒñù','­ƒñö',
+lib\admin\admin_messages.dart:1059:       '­ƒÿÉ','­ƒÿæ','­ƒÿÂ','­ƒÿÅ','­ƒÿÆ','­ƒÖä','­ƒÿ¼','­ƒÿî','­ƒÿö','­ƒÿ┤','­ƒÑ║','­ƒÿó',
+lib\admin\admin_messages.dart:1060:       '­ƒÿ¡','­ƒÿ▒','­ƒÿí','­ƒÿá','­ƒÆÇ','­ƒæì','­ƒæÄ','ÔØñ´©Å','­ƒöÑ','­ƒÆ»','­ƒÄë','­ƒÖÅ',
+lib\admin\admin_messages.dart:1061:       'Ô£à','­ƒæÅ','­ƒÆ¬','­ƒñØ','­ƒæî','­ƒ½Â','­ƒñ×','Ô£î´©Å','Ô¡É','­ƒîƒ','­ƒÄ»','­ƒÆ½'];
+lib\admin\admin_messages.dart:1283:     const emojis = ['­ƒÿÇ','­ƒÿâ','­ƒÿä','­ƒÿü','­ƒÿå','­ƒÿà','­ƒñú','­ƒÿé','­ƒÖé','­ƒÿë',
+lib\admin\admin_messages.dart:1284:       '­ƒÿè','­ƒÿç','­ƒÑ░','­ƒÿì','­ƒÿÿ','­ƒÿï','­ƒÿø','­ƒÿ£','­ƒñ¬','­ƒñæ','­ƒñù','­ƒñö',
+lib\admin\admin_messages.dart:1285:       '­ƒÿÉ','­ƒÿæ','­ƒÿÂ','­ƒÿÅ','­ƒÿÆ','­ƒÖä','­ƒÿ¼','­ƒÿî','­ƒÿö','­ƒÿ┤','­ƒÑ║','­ƒÿó',
+lib\admin\admin_messages.dart:1286:       '­ƒÿ¡','­ƒÿ▒','­ƒÿí','­ƒÿá','­ƒÆÇ','­ƒæì','­ƒæÄ','ÔØñ´©Å','­ƒöÑ','­ƒÆ»','­ƒÄë','­ƒÖÅ',
+lib\admin\admin_messages.dart:1287:       'Ô£à','­ƒæÅ','­ƒÆ¬','­ƒñØ','­ƒæî','­ƒ½Â','­ƒñ×','Ô£î´©Å','Ô¡É','­ƒîƒ','­ƒÄ»'];
+lib\admin\admin_messages.dart:1317:     const stickers = ['­ƒÿé','­ƒöÑ','­ƒÆ»','­ƒÄë','­ƒææ','­ƒÆ¬','­ƒÿì','­ƒñú','­ƒÿ¡','­ƒÖÅ',
+lib\admin\admin_messages.dart:1318:       '­ƒÿñ','­ƒÑ│','­ƒÿÄ','­ƒñö','­ƒÿà','Ô£¿','­ƒÆÇ','­ƒ½í','­ƒñ»','­ƒÿ┤','­ƒ½Â','ÔØñ´©Å',
+lib\admin\admin_messages.dart:1319:       '­ƒÆÜ','­ƒÆÖ','Ô¡É','­ƒîƒ','­ƒÄ»','­ƒÅå','­ƒÉ▒','­ƒÉÂ','­ƒªü','­ƒìò','­ƒÄ«','­ƒÜÇ'];
+lib\admin\admin_messages.dart:1368:                 _snack('­ƒô© Cam├®ra...'); }),
+lib\admin\admin_messages.dart:1374:                 _snack('­ƒôè Sondage'); }),
+lib\admin\admin_messages.dart:1413:               child: const Center(child: Text('­ƒÆ¼',
+lib\admin\admin_messages.dart:1418:               _snack('Ô£à Ouverture WhatsApp...'); }),
+lib\admin\admin_messages.dart:1439:                   _snack('Ô£à Transf├®r├® !'); });
+lib\admin\admin_messages.dart:1494:         child: const Center(child: Text('­ƒÆ¼',
+lib\admin\admin_notes.dart:129:   // Ô£à CORRIG├ë : compare d├®sormais le vrai champ `domaine` renvoy├® par le
+lib\admin\admin_notes.dart:133:   // ÔÜá´©Å Comportement "fail-closed" assum├® : si `domaine` est absent (cas
+lib\admin\admin_notes.dart:205:                   'ÔÜá´©Å R├¿gle d\'or : Chaque ├®tudiant re├ºoit UNIQUEMENT sa propre note. Aucun ├®tudiant ne peut voir la note d\'un autre.',
+lib\admin\admin_notes.dart:317:                   child: Text('ÔÜá´©Å $notesBlam bl├ómable(s)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AdminTheme.danger))),
+lib\admin\admin_notes.dart:448:               _snack('Ô£à Notes envoy├®es individuellement ├á ${s.notes.length} ├®tudiant(s) !');
+lib\admin\admin_notes.dart:489:             medal = '­ƒÑç';
+lib\admin\admin_notes.dart:491:             medal = '­ƒÑê';
+lib\admin\admin_notes.dart:493:             medal = '­ƒÑë';
+lib\admin\admin_notes.dart:687:   // Ô£à CORRIG├ë (round 2, confirm├® par le vrai code backend) : la fonction
+lib\admin\admin_notes.dart:876:       _snack('Ô£à ${notesSaisies.length} note(s) enregistr├®e(s) et envoy├®e(s) aux ├®tudiants.');
+lib\admin\admin_parents.dart:150:             child: Text(p.credentialsEnvoyes ? 'Ô£à Acc├¿s OK' : 'ÔÅ│ En attente',
+lib\admin\admin_parents.dart:185:                 child: _btn('­ƒôº Envoyer acc├¿s', AdminTheme.primary, () {
+lib\admin\admin_parents.dart:187:               _snack('Ô£à Identifiants envoy├®s ├á ${p.email.isNotEmpty ? p.email : p.telephone}');
+lib\admin\admin_parents.dart:192:               child: _btn('­ƒÆ¼ Message', AdminTheme.info, () => _snack('­ƒÆ¼ Ouverture conversation avec ${p.prenoms}'))),
+lib\admin\admin_parents.dart:240:             if (mounted) _snack('Ô£à Parent ajout├® avec succ├¿s !');
+lib\admin\admin_parents.dart:244:             if (mounted) _snack('ÔØî ${result['error'] ?? 'Erreur lors de la cr├®ation'}', isError: true);
+lib\admin\admin_reclamations.dart:142:     _searchCtrl.dispose(); // Ô£à dispose propre
+lib\admin\admin_reclamations.dart:174:     _snack('Ô£à Transf├®r├® ├á $prof', AdminTheme.info);
+lib\admin\admin_reclamations.dart:183:     _snack('Ô£à R├®clamation r├®solue', AdminTheme.success);
+lib\admin\admin_risque.dart:174:                 child: Center(child: Text('Aucun ├®tudiant dans cette cat├®gorie. ­ƒÄë',
+lib\admin\admin_statistiques.dart:76:     _Tendance('­ƒôê', 'Croissance inscriptions',
+lib\admin\admin_statistiques.dart:78:     _Tendance('­ƒÄ»', 'Taux de r├®ussite en hausse',
+lib\admin\admin_statistiques.dart:80:     _Tendance('ÔÜá´©Å', 'Taux d\'├®chec en baisse',
+lib\admin\admin_statistiques.dart:82:     _Tendance('­ƒÆí', 'Sciences & Tech dominantes',
+lib\admin\admin_statistiques.dart:282:             '­ƒÅå Majors de promotion',
+Total: 571

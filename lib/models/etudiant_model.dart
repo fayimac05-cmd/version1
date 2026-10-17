@@ -1,4 +1,5 @@
 class Etudiant {
+  final String id;
   final String matricule, nom, prenoms, filiere, domaine, niveau;
   String email, telephone, dateNaissance, nationalite, adresse;
   final String nomParent, telParent, emailParent;
@@ -8,6 +9,7 @@ class Etudiant {
   final List<String> badges;
 
   Etudiant({
+    required this.id,
     required this.matricule,
     required this.nom,
     required this.prenoms,
@@ -45,6 +47,7 @@ class Etudiant {
 List<Etudiant> adminEtudiants = [];
 
 Etudiant etudiantFromApi(Map<String, dynamic> j) => Etudiant(
+  id: j['id']?.toString() ?? '',
   matricule: j['matricule'] ?? '',
   nom: j['nom'] ?? '',
   prenoms: j['prenoms'] ?? '',

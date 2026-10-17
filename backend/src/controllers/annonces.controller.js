@@ -6,14 +6,22 @@ const { envoyerNotificationAuto } = require('./notifications.controller');
 
 async function notifierPublication(annonce) {
   const roleCible = annonce.cibleRole === 'tous' ? null : annonce.cibleRole;
+  // ⚠️ BUG CORRIGÉ — u.filiere_id n'existe pas sur `users` (seulement sur
+  // `etudiants`), même bug récurrent que sur ce projet (EDT, listEtudiants,
+  // envoyerEdt...). Cette requête plantait systématiquement dès qu'une
+  // annonce ciblait une filière précise, et l'admin voyait une erreur 500
+  // alors que l'annonce avait déjà été créée et synchronisée dans le canal
+  // juste avant (voir syncAnnonceToCanalAndNotify, non affectée).
   const { rows: destinataires } = await pool.query(
-    `SELECT id FROM users
-     WHERE ($2::integer IS NULL OR filiere_id = $2)
-     ${roleCible ? 'AND role = $1' : ''}`,
+    `SELECT DISTINCT u.id
+     FROM users u
+     LEFT JOIN etudiants e ON e.user_id = u.id
+     WHERE ($2::integer IS NULL OR e.filiere_id = $2)
+     ${roleCible ? 'AND u.role = $1' : ''}`,
     roleCible ? [roleCible, annonce.filiere || null] : [null, annonce.filiere || null],
   );
   await Promise.all(destinataires.map(({ id }) =>
-    envoyerNotificationAuto(id, annonce.titre, annonce.contenu),
+    envoyerNotificationAuto(id, annonce.titre, annonce.contenu, 'annonce', null),
   ));
 }
 

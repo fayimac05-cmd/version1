@@ -29,12 +29,12 @@ class _PlanningTabState extends State<PlanningTab>
     'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'
   ];
 
-  // ── Programme actif (table edt, archive = false) ─────────────────────────
+  // ── Programme actif (table edt, semaine en cours) ─────────────────────────
   bool _loadingProgramme = true;
   Map<String, dynamic>? _edtActif;
   List<Map<String, dynamic>> _creneaux = [];
 
-  // ── Historique (table edt, archive = true) ────────────────────────────────
+  // ── Historique (table edt : archivés OU dateFin dépassée) ─────────────────
   bool _loadingHistorique = true;
   List<Map<String, dynamic>> _historique = [];
 
@@ -56,10 +56,29 @@ class _PlanningTabState extends State<PlanningTab>
     _fetchCalendrier();
   }
 
-  // ── Récupère le programme actif (non archivé) de la filière/niveau ───────
+  String get _aujourdhuiIso => DateTime.now().toIso8601String().split('T').first;
+
+  // ── Récupère le programme de la semaine EN COURS (dateDebut <= aujourd'hui
+  // <= dateFin), pas simplement "le plus récent créé" — sinon un vieux
+  // programme jamais archivé peut passer devant celui qu'on vient de
+  // modifier (createdAt ne change pas lors d'une modification, seulement
+  // updatedAt). Repli sur l'ancien comportement pour les programmes créés
+  // avant l'ajout de dateDebut/dateFin (encore sans ces champs).
   Future<void> _fetchProgrammeActif() async {
     try {
-      final row = await Supabase.instance.client
+      var row = await Supabase.instance.client
+          .from('edt')
+          .select()
+          .eq('filiere_nom', widget.profile.filiere)
+          .eq('niveau', widget.profile.niveau)
+          .eq('archive', false)
+          .lte('dateDebut', _aujourdhuiIso)
+          .gte('dateFin', _aujourdhuiIso)
+          .order('dateDebut', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      row ??= await Supabase.instance.client
           .from('edt')
           .select()
           .eq('filiere_nom', widget.profile.filiere)
@@ -80,7 +99,9 @@ class _PlanningTabState extends State<PlanningTab>
     }
   }
 
-  // ── Récupère les programmes archivés (semaines précédentes) ──────────────
+  // ── Historique : programmes explicitement archivés OU dont la semaine
+  // (dateFin) est déjà passée — transition automatique, sans dépendre d'un
+  // archivage manuel côté admin.
   Future<void> _fetchHistorique() async {
     try {
       final rows = await Supabase.instance.client
@@ -88,8 +109,8 @@ class _PlanningTabState extends State<PlanningTab>
           .select()
           .eq('filiere_nom', widget.profile.filiere)
           .eq('niveau', widget.profile.niveau)
-          .eq('archive', true)
-          .order('archivedAt', ascending: false);
+          .or('archive.eq.true,dateFin.lt.$_aujourdhuiIso')
+          .order('dateFin', ascending: false);
 
       if (!mounted) return;
       setState(() {
@@ -164,6 +185,16 @@ class _PlanningTabState extends State<PlanningTab>
     }
   }
 
+  String _formatDateAffichage(String? iso) {
+    if (iso == null) return '';
+    try {
+      final d = DateTime.parse(iso);
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
   Future<void> _genererEtTelechargerPDF(
       BuildContext context, List<Map<String, dynamic>> creneaux) async {
     if (creneaux.isEmpty) return;
@@ -199,11 +230,12 @@ class _PlanningTabState extends State<PlanningTab>
                 ),
                 pw.SizedBox(height: 16),
                 pw.TableHelper.fromTextArray(
-                  headers: ['Jour', 'Horaire', 'Intitulé du Cours / Module', 'Type', 'Salle'],
+                  headers: ['Jour', 'Horaire', 'Intitulé du Cours / Module', 'Professeur', 'Type', 'Salle'],
                   data: creneaux.map((c) => [
                     c['jour']?.toString() ?? '',
                     '${c['heureDebut'] ?? ''} - ${c['heureFin'] ?? ''}',
                     c['matiere']?.toString() ?? '',
+                    c['prof']?.toString() ?? '',
                     _typeLabel(c['type']?.toString() ?? ''),
                     c['salle']?.toString() ?? '',
                   ]).toList(),
@@ -309,7 +341,7 @@ class _PlanningTabState extends State<PlanningTab>
     );
   }
 
-  // ── Onglet 1 : programme actif (réel, non archivé) ───────────────────────
+  // ── Onglet 1 : programme de la semaine en cours ───────────────────────────
 
   Widget _buildProgrammeActifTab() {
     if (_loadingProgramme) {
@@ -345,127 +377,209 @@ class _PlanningTabState extends State<PlanningTab>
       );
     }
 
-    return _buildGrilleSemaine(_creneaux);
+    return _buildGrilleSemaine(
+      _creneaux,
+      dateDebut: _edtActif?['dateDebut']?.toString(),
+      dateFin: _edtActif?['dateFin']?.toString(),
+    );
   }
 
-  Widget _buildGrilleSemaine(List<Map<String, dynamic>> creneaux) {
-    return ListView.builder(
+  // ── Tableau semaine, même présentation que côté administration ───────────
+
+  Widget _buildGrilleSemaine(List<Map<String, dynamic>> creneaux, {String? dateDebut, String? dateFin}) {
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       physics: const BouncingScrollPhysics(),
-      itemCount: _joursSemaine.length,
-      itemBuilder: (context, jIdx) {
-        final jour = _joursSemaine[jIdx];
-        final coursDuJour = creneaux.where((c) => c['jour'] == jour).toList();
-        final jourImportant = coursDuJour.any(
-            (c) => _estImportant(c['type']?.toString() ?? ''));
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 4, top: 8, bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (dateDebut != null && dateFin != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
               child: Row(children: [
+                const Icon(Icons.date_range_rounded, size: 16, color: _brandBlue),
+                const SizedBox(width: 8),
                 Text(
-                  jour.toUpperCase(),
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _brandBlue, letterSpacing: 0.6),
+                  'Semaine du ${_formatDateAffichage(dateDebut)} au ${_formatDateAffichage(dateFin)}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _brandBlue),
                 ),
-                if (jourImportant) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                        color: _jauneFond,
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(color: _jaune.withValues(alpha: 0.4))),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.warning_amber_rounded, size: 11, color: _jaune),
-                      const SizedBox(width: 4),
-                      Text('Examen/Devoir',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: _jaune.withValues(alpha: 0.9))),
-                    ]),
-                  ),
-                ],
               ]),
             ),
-            if (coursDuJour.isEmpty)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-                child: const Text('Aucun cours programmé', style: TextStyle(fontSize: 13, color: _textMuted, fontStyle: FontStyle.italic)),
-              )
-            else
-              ...coursDuJour.map((cours) {
-                final type = cours['type']?.toString() ?? '';
-                final Color typeColor = _getTypeColor(type);
-                final important = _estImportant(type);
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: important ? _jauneFond : Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                        color: important ? _jaune.withValues(alpha: 0.35) : _border),
-                  ),
-                  child: IntrinsicHeight(
-                    child: Row(children: [
-                      Container(
-                        width: 6,
-                        decoration: BoxDecoration(
-                          color: typeColor,
-                          borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), bottomLeft: Radius.circular(18)),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                                Row(children: [
-                                  const Icon(Icons.access_time_filled_rounded, size: 14, color: _textMuted),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                      '${cours['heureDebut'] ?? ''} - ${cours['heureFin'] ?? ''}',
-                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textMain)),
-                                ]),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(color: typeColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                    if (important)
-                                      const Padding(
-                                        padding: EdgeInsets.only(right: 3),
-                                        child: Icon(Icons.warning_amber_rounded, size: 11, color: _jaune),
-                                      ),
-                                    Text(_typeLabel(type), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: typeColor)),
-                                  ]),
-                                ),
-                              ]),
-                              const SizedBox(height: 6),
-                              Text(cours['matiere']?.toString() ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textMain)),
-                              const SizedBox(height: 8),
-                              Row(children: [
-                                const Icon(Icons.room_rounded, size: 14, color: _brandBlue),
-                                const SizedBox(width: 4),
-                                Text(cours['salle']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: _brandBlue, fontWeight: FontWeight.w600)),
-                              ]),
-                            ],
-                          ),
-                        ),
-                      )
-                    ]),
-                  ),
-                );
-              }),
+            const SizedBox(height: 14),
           ],
-        );
-      },
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: _buildTableauJours(creneaux),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _coursDuJour(List<Map<String, dynamic>> creneaux, String jour) {
+    final liste = creneaux.where((c) => c['jour'] == jour).toList();
+    liste.sort((a, b) => (a['heureDebut']?.toString() ?? '').compareTo(b['heureDebut']?.toString() ?? ''));
+    return liste;
+  }
+
+  TimeOfDay? _parseHeure(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final parts = raw.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  int _ecartMinutes(String? finA, String? debutB) {
+    final fa = _parseHeure(finA);
+    final db = _parseHeure(debutB);
+    if (fa == null || db == null) return 0;
+    final diff = (db.hour * 60 + db.minute) - (fa.hour * 60 + fa.minute);
+    return diff > 0 ? diff : 0;
+  }
+
+  Widget _spacerEcart(int minutes) {
+    if (minutes <= 0) {
+      return const Divider(height: 1, color: _border);
+    }
+    final hauteur = (minutes / 60 * 28).clamp(22.0, 64.0);
+    final heures = minutes / 60.0;
+    final label = heures == heures.roundToDouble()
+        ? '${heures.toStringAsFixed(0)}h'
+        : (minutes < 60 ? '${minutes}min' : '${heures.toStringAsFixed(1)}h');
+    return Container(
+      height: hauteur,
+      width: double.infinity,
+      alignment: Alignment.center,
+      color: const Color(0xFFF8FAFC),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(child: Container(height: 1, margin: const EdgeInsets.only(right: 6), color: _border)),
+          Text(label, style: const TextStyle(fontSize: 10, color: _textMuted, fontWeight: FontWeight.w600)),
+          Expanded(child: Container(height: 1, margin: const EdgeInsets.only(left: 6), color: _border)),
+        ],
+      ),
+    );
+  }
+
+  Widget _carteCoursTableau(Map<String, dynamic> c) {
+    final type = c['type']?.toString() ?? '';
+    final couleur = _getTypeColor(type);
+    final important = _estImportant(type);
+    final prof = c['prof']?.toString() ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      color: important ? _jauneFond : couleur.withValues(alpha: 0.10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: couleur, borderRadius: BorderRadius.circular(4)),
+              child: Text(_typeLabel(type), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
+            const SizedBox(width: 6),
+            if (important) const Padding(padding: EdgeInsets.only(right: 3), child: Icon(Icons.warning_amber_rounded, size: 11, color: _jaune)),
+            Expanded(
+              child: Text('${c['heureDebut'] ?? ''} - ${c['heureFin'] ?? ''}',
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _textMain),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(c['matiere']?.toString() ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textMain), maxLines: 2, overflow: TextOverflow.ellipsis),
+          if (prof.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Row(children: [
+              const Icon(Icons.person_outline_rounded, size: 11, color: _textMuted),
+              const SizedBox(width: 2),
+              Expanded(child: Text(prof, style: const TextStyle(fontSize: 10.5, color: _textMuted), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            ]),
+          ],
+          const SizedBox(height: 2),
+          Row(children: [
+            const Icon(Icons.room_outlined, size: 11, color: _brandBlue),
+            const SizedBox(width: 2),
+            Expanded(child: Text(c['salle']?.toString() ?? '', style: const TextStyle(fontSize: 11, color: _brandBlue, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _corpsJourTableau(List<Map<String, dynamic>> creneaux, String jour) {
+    const double caseHeight = 100;
+    final cours = _coursDuJour(creneaux, jour);
+
+    if (cours.isEmpty) {
+      return const SizedBox(
+        height: caseHeight,
+        child: Center(
+          child: Text('Aucun cours', style: TextStyle(fontSize: 11, color: _textMuted, fontStyle: FontStyle.italic)),
+        ),
+      );
+    }
+
+    final children = <Widget>[];
+    for (var i = 0; i < cours.length; i++) {
+      children.add(SizedBox(height: caseHeight, child: _carteCoursTableau(cours[i])));
+      if (i < cours.length - 1) {
+        children.add(_spacerEcart(_ecartMinutes(cours[i]['heureFin']?.toString(), cours[i + 1]['heureDebut']?.toString())));
+      }
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+  }
+
+  /// Même présentation que la grille admin : une seule barre d'en-tête
+  /// continue (pas de coupure entre les jours), colonnes indépendantes
+  /// reliées par un simple filet, écarts entre cours proportionnels et
+  /// affichés en clair.
+  Widget _buildTableauJours(List<Map<String, dynamic>> creneaux) {
+    const double colWidth = 180;
+
+    return Container(
+      decoration: BoxDecoration(border: Border.all(color: _border), borderRadius: BorderRadius.circular(10)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: _joursSemaine.map((j) => Container(
+                  width: colWidth,
+                  height: 40,
+                  color: _brandBlue,
+                  alignment: Alignment.center,
+                  child: Text(j, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                )).toList(),
+          ),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int i = 0; i < _joursSemaine.length; i++) ...[
+                  if (i > 0) const VerticalDivider(width: 1, thickness: 1, color: _border),
+                  SizedBox(width: colWidth, child: _corpsJourTableau(creneaux, _joursSemaine[i])),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -498,7 +612,7 @@ class _PlanningTabState extends State<PlanningTab>
     );
   }
 
-  // ── Onglet 3 : historique des semaines archivées ──────────────────────────
+  // ── Onglet 3 : historique (archivés ou semaine terminée) ──────────────────
 
   Widget _buildHistoriqueTab() {
     if (_loadingHistorique) {
@@ -524,8 +638,12 @@ class _PlanningTabState extends State<PlanningTab>
       itemCount: _historique.length,
       itemBuilder: (context, index) {
         final edt = _historique[index];
+        final dateDebut = edt['dateDebut']?.toString();
+        final dateFin = edt['dateFin']?.toString();
         final archivedAt = edt['archivedAt']?.toString();
-        final createdAt = edt['createdAt']?.toString();
+        final sousTitre = (dateDebut != null && dateFin != null)
+            ? 'Semaine du ${_formatDateAffichage(dateDebut)} au ${_formatDateAffichage(dateFin)}'
+            : (archivedAt != null ? 'Archivé le ${archivedAt.split('T').first}' : '');
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -544,11 +662,7 @@ class _PlanningTabState extends State<PlanningTab>
             title: Text(
                 'Programme ${edt['anneeAcademique'] ?? ''}',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textMain)),
-            subtitle: Text(
-                archivedAt != null
-                    ? 'Archivé le ${archivedAt.split('T').first}'
-                    : (createdAt != null ? 'Créé le ${createdAt.split('T').first}' : ''),
-                style: const TextStyle(fontSize: 11, color: _textMuted)),
+            subtitle: Text(sousTitre, style: const TextStyle(fontSize: 11, color: _textMuted)),
             trailing: const Icon(Icons.chevron_right_rounded, color: _textMuted),
             onTap: () => _ouvrirHistoriqueDetail(edt),
           ),
@@ -596,7 +710,11 @@ class _PlanningTabState extends State<PlanningTab>
             Expanded(
               child: creneaux.isEmpty
                   ? const Center(child: Text('Aucun créneau enregistré.'))
-                  : _buildGrilleSemaine(creneaux),
+                  : _buildGrilleSemaine(
+                      creneaux,
+                      dateDebut: edt['dateDebut']?.toString(),
+                      dateFin: edt['dateFin']?.toString(),
+                    ),
             ),
           ]),
         ),

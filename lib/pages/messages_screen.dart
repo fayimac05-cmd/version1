@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/student_profile.dart';
@@ -6,6 +7,7 @@ import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../utils/snackbar_helper.dart';
 import '../widgets/delegue_badge.dart';
+import 'emoji_gif_sticker_picker.dart';
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
 // ════════════════════════════════════════════════════════════════════════════
@@ -972,7 +974,6 @@ class _ConversationViewState extends State<_ConversationView> {
   final _focusNode = FocusNode();
   bool _hasText = false;
   bool _showEmoji = false;
-  bool _showSticker = false;
 
   ConversationPrivee get _conv => widget.conversation;
   ContactEtudiant get _contact => _conv.contact;
@@ -1055,7 +1056,6 @@ class _ConversationViewState extends State<_ConversationView> {
             child: GestureDetector(
               onTap: () => setState(() {
                 _showEmoji = false;
-                _showSticker = false;
               }),
               child: ListView.builder(
                 controller: _scrollCtrl,
@@ -1079,8 +1079,20 @@ class _ConversationViewState extends State<_ConversationView> {
             ),
           ),
           _zoneSaisie(),
-          if (_showEmoji) _panneauEmoji(),
-          if (_showSticker) _panneauStickers(),
+          if (_showEmoji)
+            EmojiGifStickerPicker(
+              onEmoji: (emoji) {
+                _msgCtrl.text += emoji;
+                _msgCtrl.selection = TextSelection.fromPosition(TextPosition(offset: _msgCtrl.text.length));
+              },
+              onEnvoiDirect: (type, valeur) {
+                if (type == 'gif') {
+                  _envoyerGif(valeur);
+                } else {
+                  _envoyerSticker(valeur);
+                }
+              },
+            ),
         ],
       ),
     );
@@ -1183,20 +1195,7 @@ class _ConversationViewState extends State<_ConversationView> {
       children: [
         _icnBtn(
           Icons.emoji_emotions_outlined,
-          () => setState(() {
-            _showEmoji = !_showEmoji;
-            _showSticker = false;
-          }),
-        ),
-        const SizedBox(width: 4),
-        _icnBtn(Icons.gif_box_outlined, () => _snack('GIF bientôt disponible')),
-        const SizedBox(width: 4),
-        _icnBtn(
-          Icons.sticky_note_2_outlined,
-          () => setState(() {
-            _showSticker = !_showSticker;
-            _showEmoji = false;
-          }),
+          () => setState(() => _showEmoji = !_showEmoji),
         ),
         const SizedBox(width: 4),
         _icnBtn(Icons.add_rounded, _menuPieceJointe),
@@ -1290,249 +1289,6 @@ class _ConversationViewState extends State<_ConversationView> {
     ),
   );
 
-  Widget _panneauEmoji() {
-    const emojis = [
-      '😀',
-      '😃',
-      '😄',
-      '😁',
-      '😆',
-      '😅',
-      '🤣',
-      '😂',
-      '🙂',
-      '😉',
-      '😊',
-      '😇',
-      '🥰',
-      '😍',
-      '😘',
-      '😋',
-      '😛',
-      '😜',
-      '🤪',
-      '🤑',
-      '🤗',
-      '🤔',
-      '😐',
-      '😑',
-      '😶',
-      '😏',
-      '😒',
-      '🙄',
-      '😬',
-      '😌',
-      '😔',
-      '😴',
-      '🥺',
-      '😢',
-      '😭',
-      '😱',
-      '😡',
-      '😠',
-      '💀',
-      '👍',
-      '👎',
-      '❤️',
-      '🔥',
-      '💯',
-      '🎉',
-      '🙏',
-      '✅',
-      '👏',
-      '💪',
-      '🤝',
-      '👌',
-      '🫶',
-      '🤞',
-      '✌️',
-      '⭐',
-      '🌟',
-      '🎯',
-    ];
-    return Container(
-      height: 210,
-      color: Colors.white,
-      child: Column(
-        children: [
-          Container(height: 1, color: const Color(0xFFE2E8F0)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-            child: Row(
-              children: [
-                const Text(
-                  'Émojis',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => setState(() => _showEmoji = false),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 9,
-                mainAxisSpacing: 2,
-                crossAxisSpacing: 2,
-              ),
-              itemCount: emojis.length,
-              itemBuilder: (_, i) => GestureDetector(
-                onTap: () => setState(() {
-                  _msgCtrl.text += emojis[i];
-                  _msgCtrl.selection = TextSelection.fromPosition(
-                    TextPosition(offset: _msgCtrl.text.length),
-                  );
-                }),
-                child: Center(
-                  child: Text(emojis[i], style: const TextStyle(fontSize: 20)),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _panneauStickers() {
-    const stickers = [
-      '😂',
-      '🔥',
-      '💯',
-      '🎉',
-      '👑',
-      '💪',
-      '😍',
-      '🤣',
-      '😭',
-      '🙏',
-      '😤',
-      '🥳',
-      '😎',
-      '🤔',
-      '😅',
-      '✨',
-      '💀',
-      '🫡',
-      '🤯',
-      '😴',
-      '🫶',
-      '❤️',
-      '💚',
-      '💙',
-      '⭐',
-      '🌟',
-      '🎯',
-      '🏆',
-      '🐱',
-      '🐶',
-      '🦁',
-      '🍕',
-      '🎮',
-      '🚀',
-      '🌈',
-    ];
-    return Container(
-      height: 210,
-      color: Colors.white,
-      child: Column(
-        children: [
-          Container(height: 1, color: const Color(0xFFE2E8F0)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-            child: Row(
-              children: [
-                const Text(
-                  'Stickers',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => _snack('📸 Créer un sticker'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppPalette.blue.withValues(alpha:0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add_rounded,
-                          color: AppPalette.blue,
-                          size: 14,
-                        ),
-                        SizedBox(width: 3),
-                        Text(
-                          'Créer',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppPalette.blue,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => setState(() => _showSticker = false),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                    color: Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                mainAxisSpacing: 4,
-                crossAxisSpacing: 4,
-              ),
-              itemCount: stickers.length,
-              itemBuilder: (_, i) => GestureDetector(
-                onTap: () {
-                  setState(() => _showSticker = false);
-                  _envoyerSticker(stickers[i]);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F7FA),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Text(
-                      stickers[i],
-                      style: const TextStyle(fontSize: 26),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _menuMsg(MessagePrive msg) {
     showModalBottomSheet(
@@ -1974,10 +1730,7 @@ class _ConversationViewState extends State<_ConversationView> {
               const Color(0xFF20C997),
               () {
                 Navigator.pop(context);
-                setState(() {
-                  _showSticker = true;
-                  _showEmoji = false;
-                });
+                setState(() => _showEmoji = true);
               },
             ),
             const SizedBox(height: 8),
@@ -2132,8 +1885,31 @@ class _ConversationViewState extends State<_ConversationView> {
     ApiService.post('/messages/prives/${_contact.id}', {'contenu': text});
   }
 
+  // ── GIF réel (URL publique GIPHY, envoyé via le même canal texte que
+  // les messages normaux — vu par le destinataire) ──────────────────────
+  void _envoyerGif(String url) {
+    final contenu = '[GIF]$url';
+    final newMsg = MessagePrive(
+      id: 'M${DateTime.now().millisecondsSinceEpoch}',
+      texte: contenu,
+      heure: _now(),
+      type: TypeMessagePrive.texte,
+      estMoi: true,
+      lu: false,
+    );
+    setState(() {
+      _showEmoji = false;
+      _conv.messages.add(newMsg);
+    });
+    Future.delayed(const Duration(milliseconds: 100), _scrollBas);
+    widget.onUpdate();
+    SocketService().sendPrivateMessage(_contact.id, {'contenu': contenu});
+    ApiService.post('/messages/prives/${_contact.id}', {'contenu': contenu});
+  }
+
   void _envoyerSticker(String e) {
     setState(() {
+      _showEmoji = false;
       _conv.messages.add(
         MessagePrive(
           id: 'S${DateTime.now().millisecondsSinceEpoch}',
@@ -2550,8 +2326,31 @@ class _BulleMessageState extends State<_BulleMessage> {
   Widget _contenu() {
     switch (msg.type) {
       case TypeMessagePrive.sticker:
-        return Text(msg.texte, style: const TextStyle(fontSize: 52));
+        final estFichierOuUrl = msg.texte.startsWith('http') || msg.texte.contains('/');
+        if (!estFichierOuUrl) {
+          return Text(msg.texte, style: const TextStyle(fontSize: 52));
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: msg.texte.startsWith('http')
+              ? Image.network(msg.texte, width: 130, height: 130, fit: BoxFit.cover)
+              : Image.file(File(msg.texte), width: 130, height: 130, fit: BoxFit.cover),
+        );
       case TypeMessagePrive.image:
+        if (msg.texte.startsWith('http')) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.network(
+              msg.texte, width: 200, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 200, height: 140,
+                color: const Color(0xFFCCD0D5),
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image_outlined, color: Color(0xFF8696A0)),
+              ),
+            ),
+          );
+        }
         return Container(
           width: 200,
           height: 140,
@@ -2670,6 +2469,16 @@ class _BulleMessageState extends State<_BulleMessage> {
           ],
         );
       default:
+        if (msg.texte.startsWith('[GIF]')) {
+          final url = msg.texte.substring(5);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              url, width: 160, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Text('[GIF]', style: TextStyle(fontSize: 13, color: Color(0xFF8696A0))),
+            ),
+          );
+        }
         return Text(
           msg.texte,
           style: const TextStyle(

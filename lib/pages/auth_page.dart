@@ -7,7 +7,7 @@ import '../professeur/professor_shell.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
 import 'bureau_des_etudiants.dart';
-import 'parent_shell.dart';
+import 'parent/parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
@@ -54,6 +54,11 @@ class _AuthPageState extends State<AuthPage> {
   String? _cleTrouvee;
   String? _matriculeReel; // vrai matricule (null si généré artificiellement)
   String? _userId; // id backend, requis pour setupPassword (1ère connexion)
+  // Rempli uniquement pour un parent en première connexion (pas encore de
+  // ligne `users` — voir auth.controller.js::lookup, fallback parents).
+  // Sert à identifier le compte auprès de POST /api/parents/finaliser,
+  // à la place de _userId qui reste null tant que le compte n'existe pas.
+  String? _parentId;
 
   @override
   void initState() {
@@ -102,12 +107,21 @@ class _AuthPageState extends State<AuthPage> {
 
     // Utilise le navigateur global : le context de cette page n'existe plus
     // au moment où l'utilisateur se déconnecte depuis son tableau de bord.
+    // ✅ CORRIGÉ — clearToken() n'était pas attendu avant la navigation.
+    // Maintenant que clearToken() efface plusieurs entrées (token, user_id,
+    // matricule, tous les caches), il faut impérativement attendre sa fin
+    // avant de permettre une nouvelle connexion — sinon l'effacement
+    // pourrait se terminer APRÈS que le nouveau compte ait déjà écrit ses
+    // propres données, les effaçant par erreur. On garde `void Function()`
+    // (compatible VoidCallback, attendu par les écrans onLogout:) tout en
+    // chaînant via .then() pour préserver l'ordre.
     void logout() {
-      ApiService.clearToken();
-      ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const SplashScreen()),
-        (_) => false,
-      );
+      ApiService.clearToken().then((_) {
+        ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
+          (_) => false,
+        );
+      });
     }
 
     final String r = profile.role.toLowerCase().trim();
@@ -119,9 +133,7 @@ class _AuthPageState extends State<AuthPage> {
     } else if (r == 'parent' || r == 'tuteur') {
       destination = ParentShell(
         profile: profile,
-        nomEnfant: '${profile.prenoms} ${profile.nom}',
         onLogout: logout,
-        etudiantId: profile.matricule,
       );
     } else if (r == 'bde') {
       destination = const BureauDesEtudiantsScreen();
@@ -239,6 +251,9 @@ class _AuthPageState extends State<AuthPage> {
             _matriculeReel = _cleTrouvee;
           }
           _userId = result['userId']?.toString();
+          // Parent en première connexion : userId est null, mais parentId
+          // permet de l'identifier auprès de /api/parents/finaliser.
+          _parentId = result['parentId']?.toString();
           _loading = false;
           _etape = premierLogin ? _Etape.premiereFois : _Etape.motDePasse;
         });
@@ -273,7 +288,18 @@ class _AuthPageState extends State<AuthPage> {
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
-      final roleUtilisateur = (user['role'] ?? 'etudiant').toString();
+      // ✅ CORRIGÉ (v2) — la v1 utilisait user['etudiant_role'] ?? user['role'],
+      // mais ?? ne traite que null comme absent, pas une chaîne vide ''. Si
+      // etudiant_role valait '' (plutôt que NULL) pour un compte non-étudiant
+      // (ex: professeur), ça écrasait 'professeur' par '' → rôle non reconnu
+      // → l'app retombait sur l'écran étudiant par défaut. On ne fait donc
+      // passer etudiant_role en priorité QUE s'il vaut explicitement
+      // 'delegue' ou 'delegue_adjoint' — jamais pour toute autre valeur.
+      final rawRole = (user['role'] ?? 'etudiant').toString();
+      final rawEtudiantRole = (user['etudiant_role'] ?? '').toString();
+      final roleUtilisateur = (rawEtudiantRole == 'delegue' || rawEtudiantRole == 'delegue_adjoint')
+          ? rawEtudiantRole
+          : rawRole;
       
       String domaineAdmin = user['admin_domaine'] ?? user['domaine_admin'] ?? user['domaineAdmin'] ?? 'Tous';
       // ignore: avoid_print
@@ -359,6 +385,36 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
+    // Parent en première connexion : pas de userId (aucune ligne `users`
+    // n'existe encore), on active le compte via parentId.
+    if (isParent && _parentId != null) {
+      final result = await ApiService.finaliserParent(
+        parentId: _parentId!,
+        password: _newPassCtrl.text,
+        email: emailText.isNotEmpty ? emailText : null,
+        telephone: _numeroCtrl.text.trim().isNotEmpty ? _numeroCtrl.text.trim() : null,
+      );
+      if (result['success'] == true) {
+        setState(() => _loading = false);
+        final user = Map<String, dynamic>.from(result['user'] as Map);
+        _goToDashboard(StudentProfile(
+          nom: user['nom'] ?? '',
+          prenoms: user['prenoms'] ?? '',
+          matricule: '',
+          email: user['email'] ?? '',
+          telephone: user['telephone'] ?? '',
+          filiere: "Parent d'élève",
+          niveau: '',
+          motDePasse: '',
+          domaine: '',
+          role: 'parent',
+        ));
+      } else {
+        _setError(result['error']?.toString() ?? 'Erreur lors de l\'activation du compte.');
+      }
+      return;
+    }
+
     // Compte backend : on confirme l'inscription en définissant le mot de passe.
     if (_userId != null) {
       final result = await ApiService.setupPassword(
@@ -392,10 +448,17 @@ class _AuthPageState extends State<AuthPage> {
       niveau: u['niveau'] ?? '',
       motDePasse: mdp,
       domaine: u['domaine'] ?? '',
-      role: u['role'] ?? 'etudiant',
+      // ✅ CORRIGÉ (v2) — même correctif que dans _seConnecter : n'écrase
+      // le rôle générique que si etudiant_role vaut explicitement
+      // 'delegue'/'delegue_adjoint' (jamais pour '' ou autre valeur).
+      role: (u['etudiant_role'] == 'delegue' || u['etudiant_role'] == 'delegue_adjoint')
+          ? u['etudiant_role']
+          : (u['role'] ?? 'etudiant'),
       adminSubRole: u['admin_sub_role'] ?? u['adminSubRole'],
       // Domaine restreint de l'admin (ex: 'Sciences & Technologies', 'Sciences de Gestion', 'Tous')
       domaineAdmin: u['admin_domaine'] ?? u['domaine_admin'] ?? u['domaineAdmin'] ?? 'Tous',
+      photoUrl: u['photo_url'] ?? u['photoUrl'],
+      coverUrl: u['cover_url'] ?? u['coverUrl'],
     );
   }
 
@@ -473,6 +536,7 @@ class _AuthPageState extends State<AuthPage> {
     _etape = _Etape.saisie;
     _userTrouve = null;
     _userId = null;
+    _parentId = null;
     _error = null;
     for (final c in [
       _matriculeCtrl,

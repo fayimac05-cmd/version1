@@ -32,6 +32,7 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../models/admin_role.dart';
+import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_dashboard.dart';
@@ -57,7 +58,8 @@ import '../pages/choose_etablissement_type_page.dart';
 import '../pages/splash_screen.dart';
 import '../widgets/profile_header_cover.dart';
 import '../admin/admin_delegues.dart';
-// TODO: décommenter quand les services sont prêts
+import '../admin/admin_bde_membres.dart';
+import '../admin/admin_cantine.dart';
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
 // import 'package:shared_preferences/shared_preferences.dart';
@@ -100,15 +102,18 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.warning_amber_outlined,      iconActive: Icons.warning_amber_rounded,      label: 'Élèves à risque',    group: 'RAPPORTS'),
   _MenuItem(icon: Icons.workspace_premium_outlined,  iconActive: Icons.workspace_premium_rounded,  label: 'Bulletins',          group: 'ACADÉMIQUE'),
   _MenuItem(icon: Icons.groups_2_outlined, iconActive: Icons.groups_2_rounded, label: 'Délégués', group: 'PERSONNES'),
+  _MenuItem(icon: Icons.restaurant_menu_outlined, iconActive: Icons.restaurant_menu_rounded, label: 'Cantine', group: 'SERVICES'),
+  _MenuItem(icon: Icons.diversity_3_outlined, iconActive: Icons.diversity_3_rounded, label: 'Bureau des Étudiants', group: 'PERSONNES'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
   {'key': 'GÉNÉRAL',    'items': [0, 1]},
   {'key': 'SECTIONS',   'items': [14, 15]},
   {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5, 17]},
-  {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18]},
+  {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18, 20]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
+  {'key': 'SERVICES',   'items': [19]},
   {'key': 'RAPPORTS',   'items': [12, 13, 16]},
 ];
 
@@ -125,8 +130,8 @@ class AdminMenuService {
   static Set<int> allowedItems(AdminRole role) {
     switch (role) {
       case AdminRole.superAdmin:
-        // Accès total (0..18)
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18};
+        // Accès total (0..20)
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
       case AdminRole.scolarite:
         // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
         return {0, 2, 3, 6, 7, 12};
@@ -137,11 +142,14 @@ class AdminMenuService {
         // Tableau de bord, Annonces, Réclamations, Étudiants, Parents
         return {0, 1, 5, 6, 8, 18};
       case AdminRole.communication:
-        // Tableau de bord, Annonces, Groupes & Messages, BDE & Événements
-        return {0, 1, 10, 11};
+        // Tableau de bord, Annonces, Groupes & Messages, BDE & Événements, Bureau des Étudiants (nomination)
+        return {0, 1, 10, 11, 20};
       case AdminRole.cycleDirecteur:
         // Tableau de bord, Statistiques, Collège & Lycée, Primaire
         return {0, 12, 14, 15};
+      case AdminRole.cantiniere:
+        // Tableau de bord, Cantine — rien d'autre.
+        return {0, 19};
     }
   }
 
@@ -219,11 +227,22 @@ class _AdminShellState extends State<AdminShell>
   late final List<Widget> _pages;
   final GlobalKey<AdminMessagesState> _messagesKey = GlobalKey<AdminMessagesState>();
 
-  // [ARCH-2] Badges dynamiques (connecter à un stream Firestore/API)
-  final Map<int, int> _badges = {
-    4: 3, // Notes à valider    — TODO: stream
-    5: 2, // Réclamations       — TODO: stream
-  };
+  // [ARCH-2] Badges dynamiques du menu — chargés depuis le backend
+  // (voir _chargerBadges). Réclamations pas encore branchée : en attente
+  // du contrôleur correspondant.
+  final Map<int, int> _badges = {};
+
+  Future<void> _chargerBadges() async {
+    final results = await Future.wait([
+      ApiService.getNombreSessionsEnAttente(),
+      ApiService.getNombreReclamationsEnAttente(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      if (results[0] > 0) { _badges[4] = results[0]; } else { _badges.remove(4); }
+      if (results[1] > 0) { _badges[5] = results[1]; } else { _badges.remove(5); }
+    });
+  }
 
   @override
   void initState() {
@@ -232,6 +251,7 @@ class _AdminShellState extends State<AdminShell>
     // reconstruit l'interface à chaque changement de type.
     EtablissementConfig.instance.addListener(_onConfigChanged);
     EtablissementConfig.instance.charger();
+    _chargerBadges();
     _pages = [
       AdminDashboard(profile: widget.profile),
       const AdminAnnonces(),
@@ -252,7 +272,8 @@ class _AdminShellState extends State<AdminShell>
       const AdminRisque(),
       AdminBulletins(profile: widget.profile),
       const AdminDelegues(),
-      
+      const AdminCantine(),
+      const AdminBdeMembres(),
     ];
 
     _pageAnim = AnimationController(
@@ -469,6 +490,8 @@ class _AdminShellState extends State<AdminShell>
                 badgeColor: const Color(0xFFD97706),
                 accentColor: const Color(0xFF1E40AF),
                 bannerGradient: const [Color(0xFF0C1A3D), Color(0xFF1A237E), Color(0xFF283593)],
+                initialPhotoUrl: widget.profile.photoUrl,
+                initialCoverUrl: widget.profile.coverUrl,
               ),
               const SizedBox(height: 20),
               _adminInfoTile(Icons.badge_outlined, 'Matricule', widget.profile.matricule),
@@ -893,6 +916,8 @@ class _AdminShellState extends State<AdminShell>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_items[_idx].label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -900,6 +925,8 @@ class _AdminShellState extends State<AdminShell>
                 const SizedBox(height: 2),
                 Text(
                   'Administration · ${_items[_idx].group}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 11, color: Color(0xFF94A3B8)),
                 ),

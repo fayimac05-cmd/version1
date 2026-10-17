@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const supabase = require('../config/supabase');
 const emailService = require('../services/email.service');
+const { envoyerNotificationAuto } = require('./notifications.controller');
 
 const genToken = (user) => jwt.sign(
   { id: user.id, matricule: user.matricule, role: user.role, filiere_id: user.filiere_id },
@@ -24,7 +25,7 @@ const login = async (req, res) => {
                   COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
                   COALESCE(e.tel, u.tel) AS tel_etudiant,
-                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.domaine_admin, 'Tous') AS admin_domaine,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   CASE 
                     WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
@@ -48,7 +49,7 @@ const login = async (req, res) => {
                   COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
                   COALESCE(e.tel, u.tel) AS tel_etudiant,
-                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.domaine_admin, 'Tous') AS admin_domaine,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   CASE 
                     WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
@@ -73,7 +74,7 @@ const login = async (req, res) => {
                   COALESCE(e.niveau, p_etu.niveau, u.niveau) AS niveau_etudiant,
                   COALESCE(e.email, u.email) AS email_etudiant,
                   COALESCE(e.tel, u.tel) AS tel_etudiant,
-                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.admin_domaine, 'Tous') AS admin_domaine,
+                  COALESCE(adm.domaine_admin, adm.permissions->>'domaine', m.permissions->>'domaine', u.domaine_admin, 'Tous') AS admin_domaine,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   CASE 
                     WHEN p_etu.nom IS NOT NULL THEN TRIM(COALESCE(p_etu.prenoms, '') || ' ' || p_etu.nom)
@@ -146,6 +147,49 @@ const login = async (req, res) => {
       }
     }
 
+    // ── Fallback 3 : parent pas encore matérialisé en `users` ──────────────────
+    // Un parent créé à l'inscription d'un étudiant n'a QUE sa ligne dans
+    // `parents` (user_id = null) tant qu'il ne s'est jamais connecté. Il ne
+    // peut donc pas être trouvé dans `users` par les recherches ci-dessus.
+    // On le cherche ici directement dans `parents` par nom+prénom+téléphone.
+    // S'il est trouvé sans user_id, on renvoie le signal de première
+    // connexion — la création réelle du `users` se fait dans
+    // parent.controller.js::finaliserPremiereConnexionParent.
+    if (!user && nom && (tel || req.body.telephone)) {
+      const telClean = (tel || req.body.telephone).trim().replace(/\s+/g, '');
+      const prenomVal = (prenom || prenoms || req.body.prenom || req.body.prenoms || '').trim();
+      try {
+        const pRes = await pool.query(
+          `SELECT id, nom, prenoms, tel, email, user_id
+           FROM parents
+           WHERE LOWER(TRIM(nom)) = LOWER(TRIM($1))
+             AND REPLACE(COALESCE(tel,''), ' ', '') = $2
+             ${prenomVal ? "AND LOWER(TRIM(prenoms)) = LOWER(TRIM($3))" : ""}`,
+          prenomVal ? [nom.trim(), telClean, prenomVal] : [nom.trim(), telClean]
+        );
+        const p = pRes.rows[0];
+        if (p && !p.user_id) {
+          // Parent connu, jamais connecté : signal première connexion
+          return res.status(200).json({
+            premiereFois: true,
+            parent: {
+              parentId: p.id,
+              nom: p.nom,
+              prenoms: p.prenoms,
+              telephone: p.tel,
+              email: p.email || '',
+              role: 'parent',
+            },
+          });
+        }
+        // Si p existe ET a déjà un user_id, on laisse la suite gérer via `users`
+        // (cas normal déjà couvert par la recherche nom+tel ci-dessus, donc on
+        // ne fait rien de plus ici — cette branche ne devrait pas arriver).
+      } catch (e) {
+        console.warn('[LOGIN] Fallback parents:', e.message);
+      }
+    }
+
     if (!user) return res.status(404).json({ message: 'Matricule non reconnu.' });
     if (user.statut === 'suspendu') return res.status(403).json({ message: 'Compte suspendu.' });
     if (user.statut === 'renvoye') return res.status(403).json({ message: 'Compte desactive.' });
@@ -170,7 +214,7 @@ const login = async (req, res) => {
             filiere: user.filiere || user.filiere_nom || '',
             filiere_id: user.filiere_id,
             niveau: user.niveau_etudiant || user.niveau || '',
-            role: user.role || 'etudiant',
+            role: (user.role === 'etudiant' && user.etudiant_role) ? user.etudiant_role : (user.role || 'etudiant'),
           }
         });
       }
@@ -222,7 +266,19 @@ const login = async (req, res) => {
 
     const responseUser = {
       ...safeUser,
-      role: safeUser.role || 'etudiant',
+      // ✅ CORRIGÉ — le rôle générique du compte (users.role, toujours
+      // 'etudiant' pour un élève) écrasait le rôle spécifique de l'élève
+      // (users.etudiant_role : 'delegue', 'bde_president', etc.), envoyé à
+      // Flutter dans le champ que StudentProfile.role attend précisément
+      // pour ce rôle spécifique. Résultat : un président BDE fraîchement
+      // nommé restait "etudiant" simple à ses yeux même après reconnexion,
+      // et ne pouvait jamais écrire dans le canal BDE (peutEcrireBDE testait
+      // ce champ). On préfère désormais etudiant_role quand il existe pour
+      // un compte de type étudiant ; les autres types de compte (admin,
+      // professeur, parent) ne sont pas concernés.
+      role: (safeUser.role === 'etudiant' && safeUser.etudiant_role)
+        ? safeUser.etudiant_role
+        : (safeUser.role || 'etudiant'),
       admin_sub_role: safeUser.admin_sub_role || null,
       admin_domaine: safeUser.admin_domaine || 'Tous',
     };
@@ -380,6 +436,50 @@ const lookup = async (req, res) => {
       return res.status(400).json({ found: false, message: 'Matricule ou détails (nom, prenom, tel) requis.' });
     }
 
+    // ── Fallback : parent pas encore matérialisé en `users` ─────────────────
+    // Même situation que dans login() : un parent créé à l'inscription d'un
+    // étudiant n'a que sa ligne dans `parents` (user_id = null) tant qu'il ne
+    // s'est jamais connecté. Le flux Flutter "Nom & Prénom" (profs ET
+    // parents) passe par CETTE fonction (lookup), pas par login() — le
+    // fallback doit donc exister ici aussi, avec la même logique.
+    if (!row && nom && prenom && tel) {
+      const telClean = tel.trim().replace(/\s+/g, '');
+      try {
+        const pRes = await pool.query(
+          `SELECT id, nom, prenoms, tel, email, user_id
+           FROM parents
+           WHERE LOWER(TRIM(nom)) = LOWER(TRIM($1))
+             AND LOWER(TRIM(prenoms)) = LOWER(TRIM($2))
+             AND REPLACE(COALESCE(tel,''), ' ', '') = $3`,
+          [nom.trim(), prenom.trim(), telClean]
+        );
+        const p = pRes.rows[0];
+        if (p && !p.user_id) {
+          return res.status(200).json({
+            found: true,
+            premierLogin: true,
+            userId: null,
+            parentId: p.id,
+            user: {
+              id: null,
+              nom: p.nom,
+              prenoms: p.prenoms,
+              matricule: '',
+              role: 'parent',
+              admin_sub_role: null,
+              filiere: '',
+              domaine: '',
+              niveau: '',
+              enfant_nom: '',
+              matricule_enfant: '',
+            },
+          });
+        }
+      } catch (e) {
+        console.warn('[LOOKUP] Fallback parents:', e.message);
+      }
+    }
+
     if (!row) return res.status(404).json({ found: false, message: 'Utilisateur non reconnu.' });
     if (row.statut === 'suspendu' || row.statut === 'renvoye') {
       return res.status(403).json({ found: false, message: 'Compte désactivé. Contactez l\'administration.' });
@@ -416,13 +516,51 @@ const lookup = async (req, res) => {
 const me = async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.statut, e.filiere_id FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1',
+      `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.role, u.etudiant_role, u.statut,
+              u.adresse, u.attestation_url, u.langue, u.notifications_actives,
+              e.filiere_id
+       FROM users u LEFT JOIN etudiants e ON u.id = e.user_id WHERE u.id = $1`,
       [req.user.id]
     );
     if (!r.rows[0]) return res.status(404).json({ message: 'Introuvable.' });
-    return res.status(200).json(r.rows[0]);
+    const row = r.rows[0];
+    // ✅ CORRIGÉ — même correctif que dans login() : le rôle spécifique de
+    // l'élève (etudiant_role : délégué, président BDE...) doit prévaloir
+    // sur le rôle générique du compte pour les comptes étudiants, sinon
+    // le profil rechargé au démarrage de l'app "efface" une nomination
+    // qui venait d'avoir lieu.
+    return res.status(200).json({
+      ...row,
+      role: (row.role === 'etudiant' && row.etudiant_role) ? row.etudiant_role : (row.role || 'etudiant'),
+    });
   } catch (err) {
     return res.status(500).json({ message: 'Erreur serveur.' });
+  }
+};
+
+// ── PATCH /api/auth/profil ──────────────────────────────────────────────
+// Mise à jour partielle du profil connecté : adresse, préférences (langue,
+// notifications). Chaque champ est optionnel — seuls ceux envoyés sont
+// modifiés. Téléphone/email restent en lecture seule ici volontairement
+// (déjà gérés par leurs propres flux existants ailleurs dans l'app).
+const modifierProfil = async (req, res) => {
+  try {
+    const { adresse, langue, notifications_actives } = req.body;
+    const champs = [];
+    const valeurs = [];
+    let i = 1;
+    if (adresse !== undefined) { champs.push(`adresse = $${i++}`); valeurs.push(adresse); }
+    if (langue !== undefined) { champs.push(`langue = $${i++}`); valeurs.push(langue); }
+    if (notifications_actives !== undefined) { champs.push(`notifications_actives = $${i++}`); valeurs.push(notifications_actives); }
+    if (champs.length === 0) {
+      return res.status(400).json({ success: false, message: 'Aucun champ à mettre à jour.' });
+    }
+    valeurs.push(req.user.id);
+    await pool.query(`UPDATE users SET ${champs.join(', ')} WHERE id = $${i}`, valeurs);
+    res.status(200).json({ success: true, message: 'Profil mis à jour.' });
+  } catch (err) {
+    console.error('[modifierProfil]', err);
+    res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour du profil.' });
   }
 };
 
@@ -443,6 +581,13 @@ const changePassword = async (req, res) => {
     if (!isValid) return res.status(401).json({ message: 'Ancien mot de passe incorrect.' });
     const hashed = await bcrypt.hash(nouveauMotDePasse, 10);
     await pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [hashed, req.user.id]);
+    envoyerNotificationAuto(
+      req.user.id,
+      'Mot de passe modifié',
+      'Votre mot de passe a été changé avec succès. Si ce n\'était pas vous, contactez l\'administration immédiatement.',
+      'mot_de_passe',
+      null
+    ).catch(() => {});
     return res.status(200).json({ message: 'Mot de passe mis a jour.' });
   } catch (err) {
     console.error('Change password error:', err);
@@ -649,6 +794,7 @@ module.exports = {
   login,
   setupPassword,
   me,
+  modifierProfil,
   changePassword,
   register,
   lookup,

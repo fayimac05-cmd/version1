@@ -11,7 +11,7 @@ import 'register_page.dart';
 import 'first_connection_page.dart';
 import 'forgot_password_page.dart';
 import '../professeur/professor_shell.dart';
-import 'parent_shell.dart';
+import 'parent/parent_shell.dart';
 import '../admin/admin_shell.dart';
 import 'bureau_des_etudiants.dart';
 
@@ -326,12 +326,9 @@ class _LoginPageState extends State<LoginPage> {
     } else if (r == 'prof' || r == 'professeur' || r == 'enseignant' || r == 'teacher') {
       destination = ProfessorShell(profile: profile, onLogout: logout);
     } else if (r == 'parent' || r == 'tuteur') {
+      
       destination = ParentShell(
         profile: profile,
-        nomEnfant: (profile.enfantNom != null && profile.enfantNom!.trim().isNotEmpty)
-            ? profile.enfantNom!
-            : 'Étudiant suivi',
-        etudiantId: profile.matriculeEnfant,
         onLogout: logout,
       );
     } else if (r == 'bde') {

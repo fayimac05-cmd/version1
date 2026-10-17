@@ -19,6 +19,10 @@ class StudentProfile {
     this.coverUrl,
     this.enfantNom,
     this.matriculeEnfant,
+    this.adresse,
+    this.attestationUrl,
+    this.langue = 'fr',
+    this.notificationsActives = true,
   });
 
   final String nom;
@@ -34,6 +38,14 @@ class StudentProfile {
   final String? coverUrl;
   final String? enfantNom;
   final String? matriculeEnfant;
+
+  // ── Adresse, document et préférences ────────────────────────────────
+  // Tous les trois sont persistés côté serveur (users.adresse/.attestation_url/
+  // .langue/.notifications_actives) — voir auth.controller.js `modifierProfil`.
+  final String? adresse;
+  final String? attestationUrl;
+  final String langue;
+  final bool notificationsActives;
 
   // ── Rôle dans l'établissement ──────────────────────────────────────
   // 'etudiant'        → étudiant normal
@@ -128,6 +140,10 @@ class StudentProfile {
     String? coverUrl,
     String? enfantNom,
     String? matriculeEnfant,
+    String? adresse,
+    String? attestationUrl,
+    String? langue,
+    bool? notificationsActives,
   }) =>
       StudentProfile(
         nom: nom ?? this.nom,
@@ -147,6 +163,9 @@ class StudentProfile {
         coverUrl: coverUrl ?? this.coverUrl,
         enfantNom: enfantNom ?? this.enfantNom,
         matriculeEnfant: matriculeEnfant ?? this.matriculeEnfant,
+        adresse: adresse ?? this.adresse,
+        attestationUrl: attestationUrl ?? this.attestationUrl,
+        langue: langue ?? this.langue,
+        notificationsActives: notificationsActives ?? this.notificationsActives,
       );
 }
-
