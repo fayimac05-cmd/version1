@@ -30,18 +30,29 @@ exports.getAllProfesseurs = async (req, res) => {
     const pa = [];
     const fa = etabCol(pa, req.etablissementId, 'u.etablissement_id');
     const result = await db.query(
-      `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine,
-              COALESCE(
-                json_agg(
-                  json_build_object('filiere_id', f.id, 'filiere_nom', f.nom, 'niveau', pf.niveau)
-                  ORDER BY f.nom, pf.niveau
-                ) FILTER (WHERE pf.id IS NOT NULL), '[]'
-              ) AS affectations
+      `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine, u.photo_url,
+              u.date_naissance, u.nationalite,
+              p.sexe, p.lieu_naissance, p.grade, p.matricule, p.expertise, p.diplome, p.note,
+              (SELECT COALESCE(json_agg(
+                        json_build_object('filiere_id', f.id, 'filiere_nom', f.nom,
+                                          'abreviation', f.abreviation, 'niveau', pf.niveau)
+                        ORDER BY f.nom, pf.niveau), '[]')
+                 FROM professeur_filieres pf
+                 JOIN filieres f ON f.id = pf.filiere_id
+                WHERE pf.professeur_id = u.id) AS affectations,
+              (SELECT COALESCE(json_agg(
+                        json_build_object('affectation_id', pm.id, 'module_id', m.id, 'module_nom', m.nom,
+                                          'filiere_id', pm.filiere_id, 'filiere_nom', f2.nom,
+                                          'abreviation', f2.abreviation, 'niveau', pm.niveau,
+                                          'semestre', pm.semestre)
+                        ORDER BY f2.nom, pm.niveau, pm.semestre, m.nom), '[]')
+                 FROM professeur_modules pm
+                 JOIN modules m ON m.id = pm.module_id
+                 LEFT JOIN filieres f2 ON f2.id = pm.filiere_id
+                WHERE pm.professeur_id = u.id) AS modules
        FROM users u
-       LEFT JOIN professeur_filieres pf ON pf.professeur_id = u.id
-       LEFT JOIN filieres f ON f.id = pf.filiere_id
+       LEFT JOIN LATERAL (SELECT * FROM professeurs WHERE user_id = u.id ORDER BY id DESC LIMIT 1) p ON true
        WHERE u.role = 'professeur'${fa}
-       GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine
        ORDER BY u.nom ASC`,
       pa
     );
@@ -125,6 +136,37 @@ const remplacerAffectations = async (client, professeurId, affectations, etabId)
   }
 };
 
+// ── Utilitaire : enregistre les champs d'identité / complémentaires ───────────
+// (sexe, lieu de naissance, grade, matricule, spécialité, diplôme, note → professeurs ;
+//  date de naissance, nationalité → users). Ne touche que les champs envoyés.
+const enregistrerChampsProf = async (client, userId, b) => {
+  const v = (x) => (x === undefined ? undefined : (x === null || String(x).trim() === '' ? null : String(x).trim()));
+  const dn = v(b.date_naissance ?? b.dateNaissance);
+  const nat = v(b.nationalite);
+  const setsU = []; const pu = [];
+  if (dn !== undefined)  { pu.push(dn);  setsU.push(`date_naissance = $${pu.length}`); }
+  if (nat !== undefined) { pu.push(nat); setsU.push(`nationalite = $${pu.length}`); }
+  if (setsU.length) {
+    pu.push(userId);
+    await client.query(`UPDATE users SET ${setsU.join(', ')} WHERE id = $${pu.length}`, pu);
+  }
+  const map = {
+    sexe: v(b.sexe) ? String(v(b.sexe)).toUpperCase().slice(0, 1) : v(b.sexe),
+    lieu_naissance: v(b.lieu_naissance ?? b.lieuNaissance),
+    grade: v(b.grade), matricule: v(b.matricule), expertise: v(b.expertise),
+    diplome: v(b.diplome), note: v(b.note),
+  };
+  const setsP = []; const pp = [];
+  for (const [col, val] of Object.entries(map)) {
+    if (val === undefined) continue;
+    pp.push(val); setsP.push(`${col} = $${pp.length}`);
+  }
+  if (setsP.length) {
+    pp.push(userId);
+    await client.query(`UPDATE professeurs SET ${setsP.join(', ')} WHERE user_id = $${pp.length}`, pp);
+  }
+};
+
 // ── POST /api/professeurs ─────────────────────────────────────────────────────
 // Plus de matricule ni de mot de passe générés : le prof se connecte par
 // nom+prénom+téléphone et définit son mot de passe à sa première connexion
@@ -180,13 +222,16 @@ exports.createProfesseur = async (req, res) => {
     // 3. Affectations filière + niveau (plusieurs possibles)
     await remplacerAffectations(client, user.id, affectations, etabId);
 
+    // 4. Champs d'identité / complémentaires (p35)
+    await enregistrerChampsProf(client, user.id, req.body);
+
     res.status(201).json({
       message: 'Professeur créé avec succès. Il pourra se connecter avec son nom, prénom et numéro de téléphone.',
       professeur: user,
     });
   } catch (err) {
     console.error('createProfesseur:', err.message);
-    if (err.code === '23505') return res.status(409).json({ error: 'Email déjà utilisé.' });
+    if (err.code === '23505') return res.status(409).json({ error: 'Email ou matricule déjà utilisé.' });
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -217,6 +262,9 @@ exports.updateProfesseur = async (req, res) => {
       await remplacerAffectations(client, id, affectations, req.etablissementId || null);
     }
 
+    // Champs d'identité / complémentaires (p35)
+    await enregistrerChampsProf(client, id, req.body);
+
     const result = await client.query(
       `SELECT id, nom, prenoms, email, tel, role, domaine, statut FROM users WHERE id=$1 AND role='professeur'`,
       [id]
@@ -228,9 +276,25 @@ exports.updateProfesseur = async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     console.error('updateProfesseur:', err.message);
+    if (err.code === '23505') return res.status(409).json({ error: 'Email ou matricule déjà utilisé.' });
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+};
+
+// ── POST /api/professeurs/:id/photo — photo d'identité (multipart `file`) ─────
+exports.uploaderPhotoProfesseur = async (req, res) => {
+  try {
+    if (!req.uploadedFileUrl) return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
+    if (!(await profDeMonEtab(req.params.id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Professeur introuvable.' });
+    }
+    await db.query('UPDATE users SET photo_url = $1 WHERE id = $2 AND role = \'professeur\'', [req.uploadedFileUrl, req.params.id]);
+    res.status(200).json({ success: true, url: req.uploadedFileUrl });
+  } catch (err) {
+    console.error('[uploaderPhotoProfesseur]', err);
+    res.status(500).json({ success: false, message: "Erreur lors de l'enregistrement de la photo." });
   }
 };
 

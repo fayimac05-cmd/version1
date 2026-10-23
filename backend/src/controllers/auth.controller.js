@@ -80,8 +80,8 @@ const login = async (req, res) => {
                   END AS enfant_nom
            FROM users u
            LEFT JOIN etudiants e ON u.id = e.user_id
-           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
-           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND (p.etablissement_id IS NULL OR p.etablissement_id = u.etablissement_id)
+           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND p_etu.etablissement_id = u.etablissement_id
            LEFT JOIN membres m ON u.id = m.user_id
            LEFT JOIN administrateurs adm ON (adm.user_id = u.id OR adm.email = u.email OR adm.tel = u.tel)
            WHERE u.id::text = $1${etabClause(paramsId, etabId)}`,
@@ -105,8 +105,8 @@ const login = async (req, res) => {
                   END AS enfant_nom
            FROM users u
            LEFT JOIN etudiants e ON u.id = e.user_id
-           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
-           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND (p.etablissement_id IS NULL OR p.etablissement_id = u.etablissement_id)
+           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND p_etu.etablissement_id = u.etablissement_id
            LEFT JOIN membres m ON u.id = m.user_id
            LEFT JOIN administrateurs adm ON (adm.user_id = u.id OR adm.email = u.email OR adm.tel = u.tel)
            WHERE (LOWER(u.matricule) = $1 OR LOWER(u.email) = $1)${etabClause(paramsMat, etabId)}`,
@@ -134,8 +134,8 @@ const login = async (req, res) => {
                   END AS enfant_nom
            FROM users u 
            LEFT JOIN etudiants e ON u.id = e.user_id 
-           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
-           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND (p.etablissement_id IS NULL OR p.etablissement_id = u.etablissement_id)
+           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND p_etu.etablissement_id = u.etablissement_id
            LEFT JOIN membres m ON u.id = m.user_id
            LEFT JOIN administrateurs adm ON (adm.user_id = u.id OR adm.email = u.email OR adm.tel = u.tel)
            WHERE LOWER(TRIM(u.nom)) = LOWER(TRIM($1)) 
@@ -373,10 +373,10 @@ const setupPassword = async (req, res) => {
     const hashed = await bcrypt.hash(motDePasse, 10);
 
     try {
-      await pool.query('UPDATE users SET mot_de_passe = $1, email = $2 WHERE id = $3', [hashed, email || null, userId]);
+      await pool.query('UPDATE users SET mot_de_passe = $1, email = COALESCE($2, email) WHERE id = $3', [hashed, email || null, userId]);
     } catch (dbErr) {
       if (supabase && typeof supabase.from === 'function') {
-        await supabase.from('users').update({ mot_de_passe: hashed, email: email || null }).eq('id', userId);
+        await supabase.from('users').update(email ? { mot_de_passe: hashed, email } : { mot_de_passe: hashed }).eq('id', userId);
       }
     }
 
@@ -413,13 +413,18 @@ const lookup = async (req, res) => {
                   COALESCE(e.filiere_nom, p_etu.filiere_nom, u.filiere_nom) AS filiere_nom,
                   COALESCE(e.domaine, p_etu.domaine, u.domaine)        AS domaine,
                   COALESCE(e.niveau, p_etu.niveau, u.niveau)          AS niveau,
+                  COALESCE(e.regime, 'jour') AS regime, e.sexe AS sexe,
+                  COALESCE(e.nationalite, u.nationalite) AS nationalite,
+                  COALESCE(e.date_naissance, u.date_naissance) AS date_naissance,
+                  e.lieu_naissance AS lieu_naissance,
+                  COALESCE(e.email, u.email) AS email_aff, COALESCE(e.tel, u.tel) AS tel_aff,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   p_etu.nom AS enfant_nom,
                   p_etu.prenoms AS enfant_prenoms
            FROM users u
            LEFT JOIN etudiants e ON u.id = e.user_id
-           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
-           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND (p.etablissement_id IS NULL OR p.etablissement_id = u.etablissement_id)
+           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND p_etu.etablissement_id = u.etablissement_id
            WHERE (UPPER(TRIM(u.matricule)) = $1 OR LOWER(TRIM(u.email)) = LOWER(TRIM($1)))${etabClause(paramsLk, etabId)}`,
           paramsLk
         );
@@ -461,13 +466,18 @@ const lookup = async (req, res) => {
                   COALESCE(e.filiere_nom, p_etu.filiere_nom, u.filiere_nom) AS filiere_nom,
                   COALESCE(e.domaine, p_etu.domaine, u.domaine)        AS domaine,
                   COALESCE(e.niveau, p_etu.niveau, u.niveau)          AS niveau,
+                  COALESCE(e.regime, 'jour') AS regime, e.sexe AS sexe,
+                  COALESCE(e.nationalite, u.nationalite) AS nationalite,
+                  COALESCE(e.date_naissance, u.date_naissance) AS date_naissance,
+                  e.lieu_naissance AS lieu_naissance,
+                  COALESCE(e.email, u.email) AS email_aff, COALESCE(e.tel, u.tel) AS tel_aff,
                   COALESCE(p.matricule, p_etu.matricule) AS matricule_enfant,
                   p_etu.nom AS enfant_nom,
                   p_etu.prenoms AS enfant_prenoms
            FROM users u
            LEFT JOIN etudiants e ON u.id = e.user_id
-           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
-           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', ''))
+           LEFT JOIN parents p ON (p.user_id = u.id OR REPLACE(COALESCE(p.tel, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND (p.etablissement_id IS NULL OR p.etablissement_id = u.etablissement_id)
+           LEFT JOIN etudiants p_etu ON (p.matricule = p_etu.matricule OR REPLACE(COALESCE(p_etu.tel_parent, ''), ' ', '') = REPLACE(COALESCE(u.tel, ''), ' ', '')) AND p_etu.etablissement_id = u.etablissement_id
            WHERE LOWER(TRIM(u.nom)) = LOWER(TRIM($1))
              AND (LOWER(TRIM(u.prenoms)) = LOWER(TRIM($2)) OR LOWER(u.prenoms) LIKE LOWER($3) OR LOWER(u.nom) LIKE LOWER($3))
              AND (REPLACE(COALESCE(u.tel, ''), ' ', '') = $4 OR REPLACE(COALESCE(u.tel, ''), ' ', '') LIKE $5 OR $4 LIKE ('%' || REPLACE(COALESCE(u.tel, ''), ' ', '') || '%'))${etabSqlLd}`,
@@ -560,6 +570,30 @@ const lookup = async (req, res) => {
       ? `${row.enfant_prenoms || ''} ${row.enfant_nom || ''}`.trim()
       : (row.enfant_nom || '');
 
+    // Première connexion d'un étudiant : on affiche aussi quelques informations de son
+    // inscription pour qu'il se reconnaisse. Endpoint public → email / téléphone masqués
+    // et date de naissance limitée à l'année.
+    const masquerEmail = (e) => {
+      if (!e || /@sans-email\.scolarhub$/i.test(e) || !e.includes('@')) return '';
+      const [l, d] = e.split('@');
+      return `${l.slice(0, 1)}${'*'.repeat(Math.max(l.length - 1, 2))}@${d}`;
+    };
+    const masquerTel = (t) => {
+      const c = String(t || '').replace(/\s+/g, '');
+      return c.length < 4 ? '' : `${'*'.repeat(c.length - 2)}${c.slice(-2)}`;
+    };
+    const detailsEtudiant = (!row.a_mot_de_passe && row.role === 'etudiant')
+      ? {
+          email: masquerEmail(row.email_aff),
+          telephone: masquerTel(row.tel_aff),
+          regime: row.regime === 'soir' ? 'soir' : 'jour',
+          sexe: row.sexe || '',
+          nationalite: row.nationalite || '',
+          annee_naissance: row.date_naissance ? String(row.date_naissance).slice(0, 4) : '',
+          lieu_naissance: row.lieu_naissance || '',
+        }
+      : {};
+
     return res.status(200).json({
       found: true,
       premierLogin: !row.a_mot_de_passe,
@@ -576,6 +610,7 @@ const lookup = async (req, res) => {
         niveau: row.niveau || '',
         enfant_nom: enfantNomComplet,
         matricule_enfant: row.matricule_enfant || '',
+        ...detailsEtudiant,
       },
     });
   } catch (err) {
@@ -650,8 +685,16 @@ const changePassword = async (req, res) => {
     }
     const isValid = await bcrypt.compare(ancienMotDePasse, r.rows[0].mot_de_passe);
     if (!isValid) return res.status(401).json({ message: 'Ancien mot de passe incorrect.' });
+    if (String(nouveauMotDePasse).length < 8) {
+      return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 8 caractères.' });
+    }
+    if (nouveauMotDePasse === ancienMotDePasse) {
+      return res.status(400).json({ message: "Le nouveau mot de passe doit être différent de l'ancien." });
+    }
     const hashed = await bcrypt.hash(nouveauMotDePasse, 10);
     await pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [hashed, req.user.id]);
+    // Le mot de passe provisoire n'est plus à changer (colonne absente avant la migration : sans gravité).
+    pool.query('UPDATE users SET mdp_a_changer = false WHERE id = $1', [req.user.id]).catch(() => {});
     envoyerNotificationAuto(
       req.user.id,
       'Mot de passe modifié',
@@ -945,7 +988,7 @@ const etablissementParCode = async (req, res) => {
     const code = String(req.query.code || '').trim();
     if (!code) return res.status(400).json({ found: false, message: "Code d'établissement requis." });
     const r = await pool.query(
-      `SELECT id, nom, sigle, ville, campus, type, logo_url, modele_matricule, inscription_ouverte
+      `SELECT id, nom, sigle, ville, campus, type, logo_url, photo_accueil_url, modele_matricule, inscription_ouverte
        FROM etablissements WHERE UPPER(code) = UPPER($1) AND COALESCE(actif, true) = true`,
       [code]
     );

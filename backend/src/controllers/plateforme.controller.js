@@ -42,6 +42,17 @@ async function codeLibre(base) {
   throw new Error('Impossible de générer un code libre.');
 }
 
+// Journal d'activité (best-effort : si la table n'existe pas encore, on continue sans erreur).
+async function journaliser(type, etab, detail, ip) {
+  try {
+    await pool.query(
+      `INSERT INTO plateforme_activite (type, etablissement_id, etablissement_sigle, etablissement_nom, detail, ip)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [type, etab?.id ?? null, etab?.sigle ?? null, etab?.nom ?? null, detail || null, ip || null]
+    );
+  } catch (e) { console.warn('[plateforme] journal indisponible :', e.message); }
+}
+
 // Crée un Super Admin pour l'école (users + membres + administrateurs).
 async function creerSuperAdmin(etabId, a) {
   const email = String(a.email || '').trim().toLowerCase();
@@ -70,6 +81,9 @@ async function creerSuperAdmin(etabId, a) {
     [matricule, nom, prenoms, email, tel, hash, etabId]
   );
   const user = u.rows[0];
+  // Mot de passe fixé par Nexilys = provisoire : à changer à la première connexion.
+  try { await pool.query('UPDATE users SET mdp_a_changer = true WHERE id = $1', [user.id]); }
+  catch (e) { console.warn('[plateforme] mdp_a_changer (migration non exécutée ?) :', e.message); }
   const permissions = JSON.stringify({ domaine: 'Tous' });
   try {
     await pool.query(
@@ -102,7 +116,7 @@ function validerAdmin(a) {
 const listerEtablissements = async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT e.id, e.nom, e.sigle, e.ville, e.campus, e.type, e.code, e.modele_matricule,
+      `SELECT e.id, e.nom, e.sigle, e.ville, e.campus, e.type, e.code, e.modele_matricule, e.logo_url, e.photo_accueil_url,
               COALESCE(e.actif, true) AS actif,
               COALESCE(e.inscription_ouverte, false) AS inscription_ouverte,
               COALESCE(e.inscription_validation, true) AS inscription_validation,
@@ -160,6 +174,7 @@ const creerEtablissement = async (req, res) => {
 
     const canaux = await ensureCanauxStandard(etabId);
     const superAdmin = await creerSuperAdmin(etabId, admin);
+    journaliser('creation', etab, `Super Admin : ${superAdmin.email}`, req.ip);
 
     res.status(201).json({
       success: true,
@@ -218,7 +233,13 @@ const modifierEtablissement = async (req, res) => {
       params
     );
     if (!r.rows[0]) return res.status(404).json({ success: false, message: 'Établissement introuvable.' });
-    res.json({ success: true, data: r.rows[0] });
+    const maj = r.rows[0];
+    if (b.actif !== undefined) {
+      journaliser(maj.actif ? 'reactivation' : 'suspension', maj, null, req.ip);
+    } else {
+      journaliser('modification', maj, `Champs : ${Object.keys(b).join(', ')}`, req.ip);
+    }
+    res.json({ success: true, data: maj });
   } catch (err) {
     console.error('[plateforme] modification', err);
     res.status(500).json({ success: false, message: 'Erreur serveur.' });
@@ -230,11 +251,22 @@ const modifierEtablissement = async (req, res) => {
 const ajouterSuperAdmin = async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const e = await pool.query('SELECT id FROM etablissements WHERE id = $1', [id]);
+    const e = await pool.query('SELECT id, nom, sigle FROM etablissements WHERE id = $1', [id]);
     if (!e.rows[0]) return res.status(404).json({ success: false, message: 'Établissement introuvable.' });
+    // Ce droit appartient à l'établissement : on ne crée un Super Admin que si
+    // l'école n'en a plus aucun d'actif (compte perdu). Sinon, c'est son Super Admin
+    // qui gère les autres membres depuis l'application.
+    const actifs = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM users WHERE role = 'admin' AND admin_sub_role = 'super_admin'
+       AND statut = 'actif' AND etablissement_id = $1`, [id]
+    );
+    if (actifs.rows[0].c > 0) {
+      return res.status(409).json({ success: false, message: 'Cet établissement a déjà un Super Admin actif. C\'est lui qui gère les autres membres de son administration.' });
+    }
     const errAdmin = validerAdmin(req.body);
     if (errAdmin) return res.status(400).json({ success: false, message: errAdmin });
     const user = await creerSuperAdmin(id, req.body);
+    journaliser('super_admin', e.rows[0], `Accès récupéré — nouveau Super Admin : ${user.email}`, req.ip);
     res.status(201).json({ success: true, data: { id: user.id, matricule: user.matricule, email: user.email } });
   } catch (err) {
     console.error('[plateforme] super-admin', err);
@@ -242,4 +274,94 @@ const ajouterSuperAdmin = async (req, res) => {
   }
 };
 
-module.exports = { listerEtablissements, creerEtablissement, modifierEtablissement, ajouterSuperAdmin };
+// GET /api/plateforme/stats — chiffres de la vue d'ensemble
+const stats = async (req, res) => {
+  try {
+    const e = await pool.query(
+      `SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE COALESCE(actif, true))::int AS actifs,
+              COUNT(*) FILTER (WHERE NOT COALESCE(actif, true))::int AS suspendus
+       FROM etablissements`
+    );
+    const u = await pool.query('SELECT COUNT(*)::int AS total FROM users');
+    res.json({ success: true, data: { ...e.rows[0], utilisateurs: u.rows[0].total } });
+  } catch (err) {
+    console.error('[plateforme] stats', err);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+// GET /api/plateforme/activite?limit=&offset= — journal des actions
+const activite = async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const r = await pool.query(
+      `SELECT id, type, etablissement_id, etablissement_sigle, etablissement_nom, detail, created_at
+       FROM plateforme_activite ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    const t = await pool.query('SELECT COUNT(*)::int AS total FROM plateforme_activite');
+    res.json({ success: true, data: r.rows, total: t.rows[0].total });
+  } catch (err) {
+    // Table pas encore créée : on répond « vide » plutôt que de casser l'écran.
+    if (err.code === '42P01') return res.json({ success: true, data: [], total: 0, journal_absent: true });
+    console.error('[plateforme] activité', err);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+// GET /api/plateforme/administrateurs?etablissement_id= — comptes administrateurs
+const administrateurs = async (req, res) => {
+  try {
+    const params = [];
+    let filtre = '';
+    const id = parseInt(req.query.etablissement_id, 10);
+    if (Number.isInteger(id)) { params.push(id); filtre = ' AND u.etablissement_id = $1'; }
+    const r = await pool.query(
+      `SELECT u.id, u.matricule, u.nom, u.prenoms, u.email, u.tel, u.admin_sub_role, u.statut,
+              u.etablissement_id, e.nom AS etablissement_nom, e.sigle AS etablissement_sigle
+       FROM users u LEFT JOIN etablissements e ON e.id = u.etablissement_id
+       WHERE u.role = 'admin' AND u.admin_sub_role = 'super_admin'${filtre}
+       ORDER BY e.id, u.nom`,
+      params
+    );
+    res.json({ success: true, data: r.rows });
+  } catch (err) {
+    console.error('[plateforme] administrateurs', err);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+// POST /api/plateforme/etablissements/:id/photo-accueil   (multipart, champ « file »)
+// Photo d'accueil (affichée après la saisie du code). Posée UNE fois, tant que l'école n'en a
+// pas. Ensuite, seule l'administration de l'école (Super Admin ou membre autorisé) la gère.
+// Le logo officiel (documents) est géré uniquement par l'école.
+const poserPhotoAccueil = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ success: false, message: 'Établissement invalide.' });
+    if (!req.uploadedFileUrl) return res.status(400).json({ success: false, message: 'Aucun fichier fourni.' });
+    if (!/\.(png|jpe?g)$/i.test(String(req.uploadedFileName || ''))) {
+      return res.status(400).json({ success: false, message: 'La photo doit être une image PNG ou JPG.' });
+    }
+    const e = await pool.query('SELECT id, nom, sigle, photo_accueil_url FROM etablissements WHERE id = $1', [id]);
+    if (!e.rows.length) return res.status(404).json({ success: false, message: 'Établissement introuvable.' });
+    if (e.rows[0].photo_accueil_url) {
+      return res.status(409).json({ success: false, message: "Cet établissement a déjà une photo d'accueil. Seule son administration peut la modifier." });
+    }
+    const u = await pool.query('UPDATE etablissements SET photo_accueil_url = $1 WHERE id = $2 AND photo_accueil_url IS NULL RETURNING photo_accueil_url', [req.uploadedFileUrl, id]);
+    if (!u.rows.length) return res.status(409).json({ success: false, message: "Cet établissement a déjà une photo d'accueil." });
+    journaliser('photo_accueil', e.rows[0], "Photo d'accueil ajoutée par la plateforme", req.ip);
+    res.json({ success: true, url: u.rows[0].photo_accueil_url });
+  } catch (err) {
+    console.error('[plateforme] photo accueil', err);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+module.exports = {
+  poserPhotoAccueil,
+  listerEtablissements, creerEtablissement, modifierEtablissement, ajouterSuperAdmin,
+  stats, activite, administrateurs, journaliser,
+};

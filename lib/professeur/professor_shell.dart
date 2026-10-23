@@ -17,6 +17,7 @@ import 'professeur_liste_etudiants.dart';
 import '../admin/admin_messages.dart';
 import '../pages/discussion_privee_page.dart';
 import 'professor_dashboard.dart';
+import 'professeur_reclamations.dart';
 
 // ── Shell principal ────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ class ProfessorShell extends StatefulWidget {
 
 class _ProfessorShellState extends State<ProfessorShell> {
   // 0 = Accueil, 1 = Classes, 2 = Cours, 3 = Appel,
-  // 4 = Notes, 5 = Messages, 6 = Profil.
+  // 4 = Notes, 5 = Messages, 6 = Profil, 7 = Réclamations.
   int _currentTab = 0;
 
   // Classe présélectionnée depuis "Mes Classes" pour l'appel ou les notes.
@@ -72,6 +73,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
         return const AdminMessages(role: 'professeur');
       case 6:
         return _ProfilTab(profile: widget.profile, onLogout: widget.onLogout);
+      case 7:
+        return const ProfesseurReclamations();
       default:
         return const SizedBox.shrink();
     }
@@ -210,6 +213,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
                       _sideItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 3),
                       _sideItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 4),
                       _sideItem(Icons.forum_outlined, Icons.forum_rounded, 'Messages', 5),
+                      _sideItem(Icons.report_gmailerrorred_outlined, Icons.report_gmailerrorred_rounded, 'Réclamations', 7),
                       _sideItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 6),
                     ],
                   ),
@@ -301,6 +305,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
               Expanded(child: _navItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 3, const Color(0xFF0EA5E9))),
               Expanded(child: _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 4, const Color(0xFF10B981))),
               Expanded(child: _navItem(Icons.forum_outlined, Icons.forum_rounded, 'Messages', 5, const Color(0xFF0891B2))),
+              Expanded(child: _navItem(Icons.report_gmailerrorred_outlined, Icons.report_gmailerrorred_rounded, 'Réclam.', 7, const Color(0xFFEF4444))),
               Expanded(child: _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 6, const Color(0xFF42A5F5))),
             ],
           ),

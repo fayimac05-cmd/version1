@@ -145,9 +145,10 @@ class AdminMessagesState extends State<AdminMessages>
   final _keyboardFocusNode = FocusNode();
   final _textFocusNode     = FocusNode();
 
+  bool _filtreNonLus = false;
   bool _hasText     = false;
   bool _showEmoji   = false;
-  String _themeId   = ChatThemes.classique.id;
+  String _themeId   = ChatThemes.defaut.id;
   bool   _isRecording   = false;
   bool   _isPaused      = false;
   int    _recordSeconds = 0;
@@ -615,24 +616,53 @@ class AdminMessagesState extends State<AdminMessages>
     );
   }
 
-  Widget _layoutDesktop() => Row(children: [
-    Container(width: 340,
-      decoration: const BoxDecoration(color: Colors.white,
-          border: Border(right: BorderSide(color: Color(0xFFE5E7EB)))),
-      child: _sidebar()),
-    Expanded(child: _groupeActif == null
-        ? _accueilVide() : _chatView(_groupeActif!)),
-  ]);
+  // Deux cartes arrondies sur fond clair (maquette « Groupes & Messagerie »)
+  BoxDecoration get _carteDecor => BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE5E7EB)));
+
+  Widget _layoutDesktop() => Container(
+    color: const Color(0xFFF4F7FB),
+    padding: const EdgeInsets.all(16),
+    child: Row(children: [
+      Container(width: 360, clipBehavior: Clip.antiAlias,
+        decoration: _carteDecor, child: _sidebar()),
+      const SizedBox(width: 16),
+      Expanded(child: Container(clipBehavior: Clip.antiAlias,
+        decoration: _carteDecor,
+        child: _groupeActif == null
+            ? _accueilVide() : _chatView(_groupeActif!))),
+    ]));
+
+  // Fond de la discussion : papier peint du thème choisi (par défaut « Maquette »),
+  // les autres thèmes choisis par l'utilisateur gardent leur papier peint.
+  Widget _fond(Widget child) =>
+      ChatWallpaper(theme: ChatThemes.byId(_themeId), child: child);
+
+  Widget _noteMembres(GroupeAdmin g) => (g.type == 'prive')
+      ? const SizedBox.shrink()
+      : Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+          child: const Row(children: [
+            Icon(Icons.info_rounded, size: 13, color: Color(0xFF64748B)),
+            SizedBox(width: 6),
+            Expanded(child: Text(
+                'Les membres du groupe peuvent consulter les messages.',
+                style: TextStyle(fontSize: 11, color: Color(0xFF64748B)))),
+          ]));
 
   Widget _layoutMobile() => _groupeActif == null
       ? Scaffold(backgroundColor: const Color(0xFFF5F7FA), body: _sidebar())
       : Scaffold(
-          backgroundColor: const Color(0xFFEBE5DD),
+          backgroundColor: const Color(0xFFF8FAFD),
           appBar: _chatAppBar(_groupeActif!),
           body: Column(children: [
             if (_groupeActif!.readonly) _banniereBroadcast(),
             _banniereEpingle(_groupeActif!),
-            Expanded(child: ChatWallpaper(theme: ChatThemes.byId(_themeId), child: _listeMessages(_groupeActif!))),
+            Expanded(child: _fond(_listeMessages(_groupeActif!))),
+            if (_groupeActif!.type != 'bde') _noteMembres(_groupeActif!),
             if (_groupeActif!.type == 'bde') _banniereLectureSeuleBde() else _zoneSaisie(_groupeActif!),
             if (_showEmoji) _panneauEmojiGifSticker(_groupeActif!),
           ]));
@@ -785,7 +815,7 @@ class AdminMessagesState extends State<AdminMessages>
         Row(children: [
           Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(_estProf ? 'Messages' : 'Messagerie', style: const TextStyle(fontSize: 18,
+            Text(_estProf ? 'Messages' : 'Messagerie', style: const TextStyle(fontSize: 22,
                 fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
             if (_estProf)
               const Text('Restez en contact avec vos étudiants',
@@ -799,39 +829,56 @@ class AdminMessagesState extends State<AdminMessages>
           GestureDetector(
             onTap: _initierNouvelleDiscussion,
             child: Container(
-              width: 34, height: 34,
+              width: 44, height: 44,
               decoration: BoxDecoration(
                 color: AdminTheme.primary,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+              child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
             ),
           ),
         ]),
         const SizedBox(height: 10),
-        Container(height: 36,
-          decoration: BoxDecoration(color: AdminTheme.surfaceAlt,
-              borderRadius: BorderRadius.circular(8),
+        const SizedBox(height: 4),
+        Container(height: 46,
+          decoration: BoxDecoration(color: const Color(0xFFF4F7FB),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AdminTheme.border)),
           child: TextField(
             onChanged: (v) => setState(() => _query = v),
             decoration: const InputDecoration(
-              hintText: 'Rechercher...',
+              hintText: 'Rechercher une conversation ou un groupe…',
               hintStyle: TextStyle(fontSize: 13, color: AdminTheme.textMuted),
               prefixIcon: Icon(Icons.search_rounded,
-                  color: AdminTheme.textMuted, size: 16),
+                  color: AdminTheme.textMuted, size: 18),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: 9)))),
+              contentPadding: EdgeInsets.symmetric(vertical: 13)))),
         const SizedBox(height: 10),
-        TabBar(controller: _tabCtrl,
-          labelColor: AdminTheme.primary,
-          unselectedLabelColor: AdminTheme.textSecondary,
-          indicatorColor: AdminTheme.primary,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-          tabs: [
-            _tabLabel('Conversations', _prives.fold(0, (s, g) => s + g.nbNonLus)),
-            _tabLabel('Groupes', _officiels.fold(0, (s, g) => s + g.nbNonLus) + _filieres.fold(0, (s, g) => s + g.nbNonLus)),
-          ]),
+        Row(children: [
+          Expanded(child: TabBar(controller: _tabCtrl,
+            labelColor: AdminTheme.primary,
+            unselectedLabelColor: AdminTheme.textSecondary,
+            indicatorColor: AdminTheme.primary,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            tabs: [
+              _tabLabel('Conversations', _prives.fold(0, (s, g) => s + g.nbNonLus)),
+              _tabLabel('Groupes', _officiels.fold(0, (s, g) => s + g.nbNonLus) + _filieres.fold(0, (s, g) => s + g.nbNonLus)),
+            ])),
+          // Filtre : n'afficher que les conversations non lues
+          Tooltip(
+            message: _filtreNonLus ? 'Afficher tout' : 'Non lus seulement',
+            child: GestureDetector(
+              onTap: () => setState(() => _filtreNonLus = !_filtreNonLus),
+              child: Container(
+                width: 38, height: 38,
+                margin: const EdgeInsets.only(left: 8),
+                decoration: BoxDecoration(
+                  color: _filtreNonLus ? AdminTheme.primaryLight : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _filtreNonLus ? AdminTheme.primary : AdminTheme.border)),
+                child: Icon(Icons.filter_alt_outlined, size: 18,
+                    color: _filtreNonLus ? AdminTheme.primary : AdminTheme.textSecondary)))),
+        ]),
       ])),
     Container(height: 1, color: AdminTheme.border),
     Expanded(child: TabBarView(controller: _tabCtrl, children: [
@@ -854,8 +901,9 @@ class AdminMessagesState extends State<AdminMessages>
     ]));
 
   Widget _listeGroupes(List<GroupeAdmin> groupes) {
-    final f = _query.isEmpty ? groupes : groupes.where((g) =>
+    var f = _query.isEmpty ? groupes : groupes.where((g) =>
         g.nom.toLowerCase().contains(_query.toLowerCase())).toList();
+    if (_filtreNonLus) f = f.where((g) => g.nbNonLus > 0).toList();
     if (f.isEmpty) {
       return const Center(child: Text('Aucun groupe',
           style: TextStyle(fontSize: 13, color: AdminTheme.textMuted)));
@@ -932,6 +980,7 @@ class AdminMessagesState extends State<AdminMessages>
               photoUrl: m['photo_url']?.toString(),
               lu: true,
               reactions: _reactionsDepuisJson(m['reactions']),
+              epingle: m['epingle'] == true,
             ));
           }
         });
@@ -948,6 +997,25 @@ class AdminMessagesState extends State<AdminMessages>
     }
   }
 
+  /// Aperçu lisible du dernier message (au lieu du texte brut « [FICHIER]… »).
+  String _apercu(MessageAdmin m) {
+    final t = m.texte;
+    if (t.startsWith('[FICHIER]')) {
+      switch (t.substring(9).split('|').first) {
+        case 'image': return '📷 Photo';
+        case 'video': return '🎥 Vidéo';
+        case 'vocal': return '🎤 Message vocal';
+        case 'audio': return '🎵 Audio';
+        default:      return '📎 Document';
+      }
+    }
+    if (t.startsWith('[GIF]')) return 'GIF';
+    if (t.startsWith('[SONDAGE]')) return '📊 Sondage';
+    if (m.type == 'image') return '📷 Photo';
+    if (m.type == 'sticker') return 'Sticker';
+    return t;
+  }
+
   Widget _itemGroupe(GroupeAdmin g) {
     final active    = _groupeActif?.id == g.id;
     final dernMsg   = g.messages.isNotEmpty ? g.messages.last : null;
@@ -958,18 +1026,20 @@ class AdminMessagesState extends State<AdminMessages>
     return GestureDetector(
       onTap: () => _selectionnerGroupe(g),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        color: active ? AdminTheme.primaryLight : Colors.transparent,
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+        decoration: BoxDecoration(
+          color: active ? AdminTheme.primaryLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(14)),
         child: Row(children: [
-          Container(width: 44, height: 44,
+          Container(width: 48, height: 48,
             decoration: BoxDecoration(
-              color: color.withValues(alpha:0.12),
-              borderRadius: isPrive ? null : BorderRadius.circular(12),
-              shape: isPrive ? BoxShape.circle : BoxShape.rectangle),
+              color: isPrive ? color.withValues(alpha:0.12) : color,
+              shape: BoxShape.circle),
             child: Center(child: isPrive
                 ? Text(g.avatar, style: TextStyle(fontSize: 14,
                     fontWeight: FontWeight.bold, color: color))
-                : Icon(_getIconForSection(g.type), size: 22, color: color))),
+                : Icon(_getIconForSection(g.type), size: 24, color: Colors.white))),
           const SizedBox(width: 10),
           Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -986,24 +1056,24 @@ class AdminMessagesState extends State<AdminMessages>
             Row(children: [
               if (isFiliere)
                 Container(margin: const EdgeInsets.only(right: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(4)),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(5)),
                   child: Text(
-                    g.type == 'prof_delegues' ? 'Coordination' : 'Broadcast',
-                    style: TextStyle(
-                        fontSize: 8, fontWeight: FontWeight.w700,
-                        color: color))),
+                    g.type == 'prof_delegues' ? 'COORDINATION' : 'ANNONCE',
+                    style: const TextStyle(
+                        fontSize: 8.5, fontWeight: FontWeight.w800,
+                        color: Color(0xFFB45309)))),
               Expanded(child: Text(
-                dernMsg != null ? dernMsg.texte : 'Aucun message',
+                dernMsg != null ? _apercu(dernMsg) : 'Aucun message',
                 style: const TextStyle(fontSize: 11, color: AdminTheme.textSecondary),
                 maxLines: 1, overflow: TextOverflow.ellipsis)),
               if (g.nbNonLus > 0)
-                Container(width: 18, height: 18,
+                Container(width: 20, height: 20,
                   decoration: const BoxDecoration(
                       color: AdminTheme.primary, shape: BoxShape.circle),
                   child: Center(child: Text('${g.nbNonLus}',
-                      style: const TextStyle(fontSize: 9,
+                      style: const TextStyle(fontSize: 10,
                           color: Colors.white, fontWeight: FontWeight.bold)))),
             ]),
           ])),
@@ -1011,64 +1081,113 @@ class AdminMessagesState extends State<AdminMessages>
   }
 
   Widget _chatView(GroupeAdmin g) => Scaffold(
-      backgroundColor: const Color(0xFFEBE5DD),
+      backgroundColor: const Color(0xFFF8FAFD),
       appBar: _chatAppBar(g),
       body: Column(children: [
         if (g.readonly) _banniereBroadcast(),
         _banniereEpingle(g),
-        Expanded(child: ChatWallpaper(theme: ChatThemes.byId(_themeId), child: GestureDetector(
+        Expanded(child: _fond(GestureDetector(
             onTap: () => setState(() => _showEmoji = false),
             child: _listeMessages(g)))),
+        if (g.type != 'bde') _noteMembres(g),
         if (g.type == 'bde') _banniereLectureSeuleBde() else _zoneSaisie(g),
         if (_showEmoji) _panneauEmojiGifSticker(g),
       ]));
 
   PreferredSizeWidget _chatAppBar(GroupeAdmin g) => AppBar(
-      backgroundColor: AdminTheme.primary,
-      foregroundColor: Colors.white,
+      backgroundColor: Colors.white,
+      foregroundColor: const Color(0xFF1A1A2E),
+      surfaceTintColor: Colors.white,
       elevation: 0,
+      toolbarHeight: 72,
       leading: !_isDesktop
           ? IconButton(
               icon: const Icon(Icons.arrow_back_ios_new, size: 18),
               onPressed: () => setState(() => _groupeActif = null))
           : null,
       automaticallyImplyLeading: !_isDesktop,
-      titleSpacing: 0,
+      titleSpacing: _isDesktop ? 16 : 0,
       title: Row(children: [
         Container(
-            width: 34, height: 34,
+            width: 44, height: 44,
             decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha:0.2),
-                borderRadius: g.type == 'prive' ? null : BorderRadius.circular(8),
-                shape: g.type == 'prive' ? BoxShape.circle : BoxShape.rectangle),
-            child: Center(child: Text(g.avatar,
-                style: TextStyle(
-                    fontSize: g.type == 'prive' ? 12 : 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white)))),
-        const SizedBox(width: 10),
+                color: g.type == 'prive'
+                    ? AdminTheme.primaryLight : _couleurGroupe(g),
+                shape: BoxShape.circle),
+            child: Center(child: g.type == 'prive'
+                ? Text(g.avatar, style: const TextStyle(fontSize: 14,
+                    fontWeight: FontWeight.bold, color: AdminTheme.primary))
+                : Icon(_getIconForSection(g.type), size: 22, color: Colors.white))),
+        const SizedBox(width: 12),
         Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(g.nom, style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w700),
+              fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
               maxLines: 1, overflow: TextOverflow.ellipsis),
-          Text('${g.membres.length} membres',
-              style: const TextStyle(fontSize: 10, color: Colors.white70)),
+          Text(g.type == 'prive'
+                  ? 'Conversation privée'
+                  : 'Groupe · ${g.membres.length} membres',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
         ])),
       ]),
       actions: [
-        IconButton(
-            icon: const Icon(Icons.palette_outlined,
-                color: Colors.white70, size: 20),
-            onPressed: () => _choisirTheme(g)),
-        IconButton(
-            icon: const Icon(Icons.info_outline_rounded,
-                color: Colors.white70, size: 20),
-            onPressed: () => _infoGroupe(g)),
+        _boutonEntete(Icons.search_rounded, 'Rechercher', () => _rechercherDansDiscussion(g)),
+        _boutonEntete(Icons.people_alt_outlined, 'Membres et infos', () => _infoGroupe(g)),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: PopupMenuButton<String>(
+            tooltip: 'Plus',
+            onSelected: (v) {
+              if (v == 'theme') _choisirTheme(g);
+              if (v == 'infos') _infoGroupe(g);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'theme', child: Text('Thème de la discussion')),
+              PopupMenuItem(value: 'infos', child: Text('Infos du groupe')),
+            ],
+            child: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AdminTheme.border)),
+              child: const Icon(Icons.more_vert_rounded, size: 20, color: Color(0xFF475569))))),
       ],
       bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.white.withValues(alpha:0.2))));
+          child: Container(height: 1, color: const Color(0xFFE5E7EB))));
+
+  Widget _boutonEntete(IconData icon, String tip, VoidCallback onTap) => Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(message: tip, child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AdminTheme.border)),
+              child: Icon(icon, size: 20, color: const Color(0xFF475569))))));
+
+  /// Recherche un mot dans la discussion ouverte et saute au dernier message trouvé.
+  Future<void> _rechercherDansDiscussion(GroupeAdmin g) async {
+    final ctrl = TextEditingController();
+    final q = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Rechercher dans la discussion'),
+        content: TextField(
+          controller: ctrl, autofocus: true,
+          decoration: const InputDecoration(hintText: 'Mot ou phrase…'),
+          onSubmitted: (v) => Navigator.pop(c, v)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Annuler')),
+          ElevatedButton(onPressed: () => Navigator.pop(c, ctrl.text), child: const Text('Chercher')),
+        ]));
+    if (q == null || q.trim().isEmpty) return;
+    final qq = q.trim().toLowerCase();
+    final trouves = g.messages.where((m) => m.texte.toLowerCase().contains(qq)).toList();
+    if (trouves.isEmpty) { _snack('Aucun message trouvé.'); return; }
+    _scrollerVersMessage(trouves.last.id);
+  }
 
   Widget _banniereBroadcast() => Container(
       color: AdminTheme.infoLight,
@@ -1107,10 +1226,14 @@ class AdminMessagesState extends State<AdminMessages>
     return GestureDetector(
       onTap: () => _scrollerVersMessage(dernier.id),
       child: Container(
-        color: const Color(0xFFF0F2F5),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        margin: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+        decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFBFDBFE))),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(children: [
-          const Icon(Icons.push_pin_rounded, color: AdminTheme.primary, size: 15),
+          const Icon(Icons.push_pin_rounded, color: AdminTheme.primary, size: 16),
           const SizedBox(width: 10),
           if (epingles.length > 1)
             Container(
@@ -1121,15 +1244,15 @@ class AdminMessagesState extends State<AdminMessages>
             ),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(dernier.expediteur,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AdminTheme.primary)),
-              Text(dernier.texte,
+              const Text('Message épinglé',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AdminTheme.primary)),
+              Text(_apercu(dernier),
                   style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
             ]),
           ),
           GestureDetector(
-            onTap: () => setState(() => dernier.epingle = false),
+            onTap: () => _epinglerMessage(dernier, g, false),
             child: const Padding(
               padding: EdgeInsets.all(4),
               child: Icon(Icons.close_rounded, size: 16, color: Color(0xFF8696A0)),
@@ -1138,6 +1261,31 @@ class AdminMessagesState extends State<AdminMessages>
         ]),
       ),
     );
+  }
+
+  /// Épingle / désépingle un message : mise à jour immédiate, puis enregistrement
+  /// côté serveur (visible par tous les membres). Annule en cas d'échec.
+  Future<void> _epinglerMessage(MessageAdmin msg, GroupeAdmin g, bool epingle) async {
+    final idNum = int.tryParse(msg.id);
+    setState(() => msg.epingle = epingle);
+    if (idNum == null) return; // message local pas encore confirmé / annonce
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.patch(
+        Uri.parse('${ApiService.baseUrl}/messages/${_typeBackend(g)}/$idNum/epingle'),
+        headers: headers,
+        body: jsonEncode({'epingle': epingle}),
+      );
+      if (res.statusCode != 200) {
+        String m = 'Impossible de modifier l\'épingle.';
+        try { m = (jsonDecode(utf8.decode(res.bodyBytes))['error'] ?? m).toString(); } catch (_) {}
+        if (mounted) setState(() => msg.epingle = !epingle);
+        _snack(m);
+      }
+    } catch (_) {
+      if (mounted) setState(() => msg.epingle = !epingle);
+      _snack('Serveur injoignable.');
+    }
   }
 
   // ── Scroll précis vers le message cité via GlobalKey ─────────────────
@@ -1216,15 +1364,16 @@ class AdminMessagesState extends State<AdminMessages>
   /// locale uniquement pour l'instant.
   void _envoyerReaction(MessageAdmin msg, GroupeAdmin g, String emoji) {
     setState(() => msg.reactions[emoji] = (msg.reactions[emoji] ?? 0) + 1);
-    if (g.type == 'prive') return;
     final idNumerique = int.tryParse(msg.id);
     if (idNumerique == null) return;
     () async {
       try {
         final headers = await ApiService.getHeaders();
-        final body = g.type == 'groupe_etudiants'
-            ? {'emoji': emoji, 'type': 'groupe', 'filiereId': g.filiereId}
-            : {'emoji': emoji, 'type': 'canal', 'canalId': g.id};
+        final body = g.type == 'prive'
+            ? {'emoji': emoji, 'type': 'prive', 'destinataireId': g.id}
+            : g.type == 'groupe_etudiants'
+                ? {'emoji': emoji, 'type': 'groupe', 'filiereId': g.filiereId}
+                : {'emoji': emoji, 'type': 'canal', 'canalId': g.id};
         await http.post(
           Uri.parse('${ApiService.baseUrl}/messages/$idNumerique/reaction'),
           headers: headers,
@@ -1314,7 +1463,7 @@ class AdminMessagesState extends State<AdminMessages>
           _act(msg.epingle ? Icons.push_pin_outlined : Icons.push_pin_rounded,
             msg.epingle ? 'Désépingler' : 'Épingler',
             const Color(0xFF54656F), () { Navigator.pop(context);
-              setState(() => msg.epingle = !msg.epingle); }),
+              _epinglerMessage(msg, g, !msg.epingle); }),
           _act(msg.important ? Icons.star_rounded : Icons.star_outline_rounded,
             msg.important ? 'Retirer des importants' : 'Marquer comme important',
             const Color(0xFF54656F), () { Navigator.pop(context);
@@ -2001,13 +2150,15 @@ class AdminMessagesState extends State<AdminMessages>
   }
 
   Widget _separateurDate(String d) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Center(child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(color: const Color(0xFFD9F2E4),
-          borderRadius: BorderRadius.circular(8)),
-      child: Text(d, style: const TextStyle(fontSize: 11,
-          color: Color(0xFF54656F), fontWeight: FontWeight.w500)))));
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Row(children: [
+      const Expanded(child: Divider(color: Color(0xFFE2E8F0), height: 1)),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Text(d, style: const TextStyle(fontSize: 12,
+            color: Color(0xFF475569), fontWeight: FontWeight.w600))),
+      const Expanded(child: Divider(color: Color(0xFFE2E8F0), height: 1)),
+    ]));
 
   String _now() {
     final t = TimeOfDay.now();
@@ -2047,6 +2198,13 @@ class _BulleAdmin extends StatefulWidget {
 class _BulleAdminState extends State<_BulleAdmin>
     with SingleTickerProviderStateMixin {
   bool _hovered = false;
+
+  // Les couleurs viennent du thème (par défaut : thème « Maquette »).
+  bool get _modeMaquette => widget.theme.id == ChatThemes.maquette.id;
+  Color get _cMoi    => widget.theme.bulleMoi;
+  Color get _cAutre  => widget.theme.bulleAutre;
+  Color get _tMoi    => widget.theme.texteMoi;
+  Color get _tAutre  => widget.theme.texteAutre;
 
   // ── Swipe-to-reply ────────────────────────────────────────────────────
   double _dragOffset = 0;
@@ -2189,13 +2347,13 @@ class _BulleAdminState extends State<_BulleAdmin>
                           color: msg.type == 'sticker'
                               ? Colors.transparent
                               : estMoi
-                                  ? widget.theme.bulleMoi
-                                  : widget.theme.bulleAutre,
+                                  ? _cMoi
+                                  : _cAutre,
                           borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(8),
-                            topRight: const Radius.circular(8),
-                            bottomLeft: Radius.circular(estMoi ? 8 : 0),
-                            bottomRight: Radius.circular(estMoi ? 0 : 8)),
+                            topLeft: const Radius.circular(14),
+                            topRight: const Radius.circular(14),
+                            bottomLeft: Radius.circular(estMoi ? 14 : 4),
+                            bottomRight: Radius.circular(estMoi ? 4 : 14)),
                           boxShadow: msg.type == 'sticker' ? null
                               : [BoxShadow(
                                   color: Colors.black.withValues(alpha:0.07),
@@ -2226,8 +2384,8 @@ class _BulleAdminState extends State<_BulleAdmin>
                                   margin: const EdgeInsets.fromLTRB(5, 5, 5, 0),
                                   decoration: BoxDecoration(
                                     color: estMoi
-                                        ? const Color(0xFFB2DFB0)
-                                        : const Color(0xFFECECEC),
+                                        ? (_modeMaquette ? Colors.white.withValues(alpha: 0.25) : const Color(0xFFB2DFB0))
+                                        : const Color(0xFFE2E8F0),
                                     borderRadius: BorderRadius.circular(6),
                                     border: Border(
                                       left: BorderSide(
@@ -2295,8 +2453,8 @@ class _BulleAdminState extends State<_BulleAdmin>
                                       padding: EdgeInsets.only(right: 3),
                                       child: Icon(Icons.push_pin_rounded,
                                           size: 10, color: Color(0xFF8696A0))),
-                                  Text(msg.heure, style: const TextStyle(
-                                      fontSize: 10, color: Color(0xFF667781))),
+                                  Text(msg.heure, style: TextStyle(
+                                      fontSize: 10, color: (_modeMaquette && estMoi) ? Colors.white70 : const Color(0xFF667781))),
                                   if (estMoi) ...[
                                     const SizedBox(width: 3),
                                     Icon(
@@ -2454,7 +2612,7 @@ class _BulleAdminState extends State<_BulleAdmin>
         return VoiceMessagePlayer(
           url: url, dureeLabel: nom,
           couleur: AdminTheme.primary,
-          texteColor: msg.estMoi ? widget.theme.texteMoi : widget.theme.texteAutre,
+          texteColor: msg.estMoi ? _tMoi : _tAutre,
         );
       }
       final icone = fType == 'video'
@@ -2495,7 +2653,7 @@ class _BulleAdminState extends State<_BulleAdmin>
       return SizedBox(width: 240, child: _SondageWidget(sondageId: sondageId));
     }
     return Text(msg.texte, style: TextStyle(
-        fontSize: 14, color: msg.estMoi ? widget.theme.texteMoi : widget.theme.texteAutre, height: 1.4));
+        fontSize: 14, color: msg.estMoi ? _tMoi : _tAutre, height: 1.4));
   }
 }
 

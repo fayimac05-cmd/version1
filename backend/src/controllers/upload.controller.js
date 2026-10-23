@@ -138,7 +138,7 @@ exports.supprimerAttestationService = async (req, res) => {
 // ── Logo de l'établissement ───────────────────────────────────────────────
 // Stocké dans une petite table clé/valeur (créée à la volée si besoin, voir
 // aussi migration_logo_etablissement.sql). Lecture : tout utilisateur connecté.
-// Écriture : Super Admin uniquement.
+// Écriture : Super Admin, ou membre autorisé (permission « logo »).
 async function assurerTableIdentite() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS etablissement_identite (
@@ -177,11 +177,48 @@ exports.getLogoEtablissement = async (req, res) => {
   }
 };
 
-// POST /api/upload/logo-etablissement (Super Admin)
+// Droit de gérer le logo : le Super Admin, ou un membre de l'administration à qui le
+// Super Admin a activé l'autorisation « logo » (Membres & Rôles).
+async function peutGerer(userId, cle) {
+  if (await estSuperAdmin(userId)) return true;
+  try {
+    const r = await pool.query(
+      `SELECT u.role, COALESCE(m.permissions, '{}'::jsonb) AS permissions
+       FROM users u LEFT JOIN membres m ON m.user_id = u.id WHERE u.id = $1`, [userId]
+    );
+    const row = r.rows[0];
+    if (!row || String(row.role).toLowerCase() !== 'admin') return false;
+    let perms = row.permissions || {};
+    if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch (_) { perms = {}; } }
+    return perms[cle] === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Middleware placé AVANT l'envoi du fichier : on refuse sans rien téléverser.
+// Deux autorisations distinctes dans Membres & Rôles : « logo » (logo officiel, documents)
+// et « photo_accueil » (image de bienvenue après le code).
+const exiger = (cle, libelle) => async (req, res, next) => {
+  try {
+    if (await peutGerer(req.user.id, cle)) return next();
+    return res.status(403).json({ success: false, message: `Vous n'avez pas l'autorisation de gérer ${libelle}.` });
+  } catch (error) {
+    console.error('[exiger ' + cle + '] Erreur :', error);
+    return res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+exports.exigerGestionLogo = exiger('logo', "le logo de l'établissement");
+exports.exigerGestionPhotoAccueil = exiger('photo_accueil', "la photo d'accueil");
+
+// POST /api/upload/logo-etablissement (Super Admin ou membre autorisé)
 exports.uploadLogoEtablissement = async (req, res) => {
   try {
-    if (!(await estSuperAdmin(req.user.id))) {
-      return res.status(403).json({ success: false, message: 'Réservé au Super Admin.' });
+    if (!(await peutGerer(req.user.id, 'logo'))) {
+      return res.status(403).json({ success: false, message: "Vous n'avez pas l'autorisation de gérer le logo de l'établissement." });
+    }
+    if (!/\.(png|jpe?g)$/i.test(String(req.uploadedFileName || ''))) {
+      return res.status(400).json({ success: false, message: 'Le logo doit être une image PNG ou JPG.' });
     }
     if (!req.uploadedFileUrl) {
       return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
@@ -203,11 +240,60 @@ exports.uploadLogoEtablissement = async (req, res) => {
   }
 };
 
-// DELETE /api/upload/logo-etablissement (Super Admin)
+// ── Photo d'accueil ─────────────────────────────────────────────────────────
+// Image de bienvenue (photo d'étudiants, affiche...) montrée après la saisie du code
+// de l'établissement. Distincte du logo officiel (documents). Même droit que le logo.
+// GET /api/upload/photo-accueil
+exports.getPhotoAccueil = async (req, res) => {
+  try {
+    if (!req.etablissementId) return res.status(200).json({ success: true, url: '' });
+    const r = await pool.query('SELECT photo_accueil_url FROM etablissements WHERE id = $1', [req.etablissementId]);
+    res.status(200).json({ success: true, url: r.rows[0]?.photo_accueil_url || '' });
+  } catch (error) {
+    console.error('[getPhotoAccueil] Erreur :', error);
+    res.status(500).json({ success: false, message: "Erreur lors de la lecture de la photo d'accueil." });
+  }
+};
+
+// POST /api/upload/photo-accueil
+exports.uploadPhotoAccueil = async (req, res) => {
+  try {
+    if (!(await peutGerer(req.user.id, 'photo_accueil'))) {
+      return res.status(403).json({ success: false, message: "Vous n'avez pas l'autorisation de gérer la photo d'accueil." });
+    }
+    if (!req.etablissementId) return res.status(400).json({ success: false, message: 'Établissement inconnu.' });
+    if (!/\.(png|jpe?g)$/i.test(String(req.uploadedFileName || ''))) {
+      return res.status(400).json({ success: false, message: 'La photo doit être une image PNG ou JPG.' });
+    }
+    if (!req.uploadedFileUrl) return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
+    await pool.query('UPDATE etablissements SET photo_accueil_url = $1 WHERE id = $2', [req.uploadedFileUrl, req.etablissementId]);
+    res.status(200).json({ success: true, url: req.uploadedFileUrl });
+  } catch (error) {
+    console.error('[uploadPhotoAccueil] Erreur :', error);
+    res.status(500).json({ success: false, message: "Erreur lors de l'enregistrement de la photo d'accueil." });
+  }
+};
+
+// DELETE /api/upload/photo-accueil
+exports.deletePhotoAccueil = async (req, res) => {
+  try {
+    if (!(await peutGerer(req.user.id, 'photo_accueil'))) {
+      return res.status(403).json({ success: false, message: "Vous n'avez pas l'autorisation de gérer la photo d'accueil." });
+    }
+    if (!req.etablissementId) return res.status(400).json({ success: false, message: 'Établissement inconnu.' });
+    await pool.query('UPDATE etablissements SET photo_accueil_url = NULL WHERE id = $1', [req.etablissementId]);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('[deletePhotoAccueil] Erreur :', error);
+    res.status(500).json({ success: false, message: "Erreur lors de la suppression de la photo d'accueil." });
+  }
+};
+
+// DELETE /api/upload/logo-etablissement (Super Admin ou membre autorisé)
 exports.deleteLogoEtablissement = async (req, res) => {
   try {
-    if (!(await estSuperAdmin(req.user.id))) {
-      return res.status(403).json({ success: false, message: 'Réservé au Super Admin.' });
+    if (!(await peutGerer(req.user.id, 'logo'))) {
+      return res.status(403).json({ success: false, message: "Vous n'avez pas l'autorisation de gérer le logo de l'établissement." });
     }
     if (req.etablissementId) {
       await pool.query('UPDATE etablissements SET logo_url = NULL WHERE id = $1', [req.etablissementId]);

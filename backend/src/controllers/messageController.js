@@ -244,7 +244,8 @@ const getMessagesCanal = async (req, res) => {
               COALESCE(MAX(e.niveau), u.niveau) AS niveau,
               COALESCE(
                 JSON_AGG(r.emoji) FILTER (WHERE r.emoji IS NOT NULL), '[]'
-              ) AS reactions
+              ) AS reactions,
+              EXISTS (SELECT 1 FROM messages_epingles me WHERE me.message_id = m.id AND me.message_type = 'canal') AS epingle
        FROM messages m
        JOIN users u ON u.id = m.auteur_id
        LEFT JOIN etudiants e ON e.user_id = u.id
@@ -338,7 +339,8 @@ const getMessagesCanal = async (req, res) => {
             contenu: `📢 **${a.titre}**\n\n${a.contenu}${extra}`,
             type: 'annonce',
             created_at: a.created_at,
-            reactions: []
+            reactions: [],
+            epingle: false
           };
         });
 
@@ -459,7 +461,10 @@ const getMessagesPrives = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mp.id, mp.contenu, mp.created_at, mp.is_read,
               mp.expediteur_id, mp.destinataire_id,
-              u.prenoms, u.nom, u.role, u.photo_url
+              u.prenoms, u.nom, u.role, u.photo_url,
+              COALESCE((SELECT JSON_AGG(r.emoji) FROM reactions r
+                        WHERE r.message_id = mp.id AND r.message_type = 'prive'), '[]') AS reactions,
+              EXISTS (SELECT 1 FROM messages_epingles me WHERE me.message_id = mp.id AND me.message_type = 'prive') AS epingle
        FROM messages_prives mp
        JOIN users u ON u.id = mp.expediteur_id
        WHERE ((mp.expediteur_id = $1 AND mp.destinataire_id = $2)
@@ -645,7 +650,8 @@ const getMessagesGroupe = async (req, res) => {
               COALESCE(MAX(e.niveau), u.niveau) AS niveau,
               COALESCE(
                 JSON_AGG(r.emoji) FILTER (WHERE r.emoji IS NOT NULL), '[]'
-              ) AS reactions
+              ) AS reactions,
+              EXISTS (SELECT 1 FROM messages_epingles me WHERE me.message_id = mg.id AND me.message_type = 'groupe') AS epingle
       FROM messages_groupe mg
       JOIN users u ON u.id = mg.auteur_id
       LEFT JOIN etudiants e ON e.user_id = u.id
@@ -773,6 +779,78 @@ const ajouterReaction = async (req, res) => {
     res.json({ success: true, message: 'Réaction ajoutée' });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+};
+
+// ── PATCH /api/messages/:type/:id/epingle ─────────────────
+// body: { epingle: true|false }. type = 'canal' | 'groupe' | 'prive'.
+// Canal / groupe filière : réservé à l'administration et aux professeurs
+// (qui ont accès au canal). Conversation privée : l'un des deux participants.
+const epinglerMessage = async (req, res) => {
+  const { type, id } = req.params;
+  const epingle = req.body.epingle !== false;
+  const cfg = TABLE_PAR_TYPE[type];
+  if (!cfg) return res.status(400).json({ success: false, error: 'Type de message invalide' });
+  try {
+    const { rows } = await pool.query(
+      type === 'prive'
+        ? `SELECT expediteur_id, destinataire_id FROM messages_prives WHERE id = $1`
+        : `SELECT ${cfg.roomCol} AS contexte FROM ${cfg.table} WHERE id = $1`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Message introuvable' });
+
+    const role = String(req.user.role || '').toLowerCase();
+    const isStaff = ['admin', 'professeur', 'prof', 'enseignant', 'teacher'].includes(role);
+    let room = null;
+
+    if (type === 'prive') {
+      const m = rows[0];
+      if (String(m.expediteur_id) !== String(req.user.id) && String(m.destinataire_id) !== String(req.user.id)) {
+        return res.status(403).json({ success: false, error: 'Non autorisé' });
+      }
+    } else {
+      if (!isStaff) return res.status(403).json({ success: false, error: 'Seuls l\'administration et les professeurs peuvent épingler.' });
+      if (type === 'canal') {
+        if (!(await accesCanal(rows[0].contexte, req.user.id, req.user.role, req.etablissementId))) {
+          return res.status(403).json({ success: false, error: 'Accès refusé' });
+        }
+        room = `canal:${rows[0].contexte}`;
+      } else {
+        if (!(await filiereDeMonEtab(rows[0].contexte, req.etablissementId))) {
+          return res.status(403).json({ success: false, error: 'Accès refusé' });
+        }
+        room = `filiere:${rows[0].contexte}`;
+      }
+    }
+
+    if (epingle) {
+      await pool.query(
+        `INSERT INTO messages_epingles (message_id, message_type, epingle_par)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (message_id, message_type) DO NOTHING`,
+        [id, type, req.user.id]
+      );
+    } else {
+      await pool.query(
+        `DELETE FROM messages_epingles WHERE message_id = $1 AND message_type = $2`,
+        [id, type]
+      );
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      const payload = { messageId: id, type, epingle };
+      if (room) io.to(room).emit('message:epingle', payload);
+      else {
+        const autre = String(rows[0].expediteur_id) === String(req.user.id) ? rows[0].destinataire_id : rows[0].expediteur_id;
+        notifierUser(io, autre, 'message:epingle', payload);
+      }
+    }
+    res.json({ success: true, epingle });
+  } catch (err) {
+    console.error('[epinglerMessage]', err);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 };
@@ -1185,6 +1263,7 @@ module.exports = {
   getProfFilieres,
   ajouterReaction,
   masquerMessage,
+  epinglerMessage,
   supprimerMessage,
   supprimerMessageType,
   getAdminContact,

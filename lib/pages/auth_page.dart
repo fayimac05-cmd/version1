@@ -11,6 +11,7 @@ import 'bureau_des_etudiants.dart';
 import 'parent/parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/api_service.dart';
+import '../services/api_extra.dart';
 import '../pages/register_page.dart';
 import '../config/etablissement_config.dart';
 import '../services/socket_service.dart';
@@ -219,6 +220,14 @@ class _AuthPageState extends State<AuthPage> {
             'domaine': u['domaine'] ?? '',
             'role': u['role'] ?? 'etudiant',
             'premiereFois': premierLogin,
+            // Détails d'inscription (renvoyés par le backend uniquement à la 1ère connexion)
+            'email': u['email'] ?? '',
+            'telephone': u['telephone'] ?? '',
+            'regime': u['regime'] ?? '',
+            'sexe': u['sexe'] ?? '',
+            'nationalite': u['nationalite'] ?? '',
+            'annee_naissance': u['annee_naissance'] ?? '',
+            'lieu_naissance': u['lieu_naissance'] ?? '',
           };
           _cleTrouvee = u['matricule']?.toString() ?? mat;
           _matriculeReel = _cleTrouvee;
@@ -277,6 +286,14 @@ class _AuthPageState extends State<AuthPage> {
             'domaine': u['domaine'] ?? '',
             'role': u['role'] ?? '',
             'premiereFois': premierLogin,
+            // Détails d'inscription (renvoyés par le backend uniquement à la 1ère connexion)
+            'email': u['email'] ?? '',
+            'telephone': u['telephone'] ?? '',
+            'regime': u['regime'] ?? '',
+            'sexe': u['sexe'] ?? '',
+            'nationalite': u['nationalite'] ?? '',
+            'annee_naissance': u['annee_naissance'] ?? '',
+            'lieu_naissance': u['lieu_naissance'] ?? '',
           };
           _cleTrouvee = u['matricule']?.toString();
           // Si le backend n'a pas retourné de vrai matricule,
@@ -326,6 +343,12 @@ class _AuthPageState extends State<AuthPage> {
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
+      // Mot de passe provisoire (ex. Super Admin créé par la plateforme) : changement
+      // obligatoire avant d'entrer dans l'application.
+      if (user['mdp_a_changer'] == true && mounted) {
+        await afficherChangementMotDePasse(context, ancien: _passCtrl.text, obligatoire: true);
+        if (!mounted) return;
+      }
       // ✅ CORRIGÉ (v2) — la v1 utilisait user['etudiant_role'] ?? user['role'],
       // mais ?? ne traite que null comme absent, pas une chaîne vide ''. Si
       // etudiant_role valait '' (plutôt que NULL) pour un compte non-étudiant
@@ -1172,7 +1195,73 @@ class _AuthPageState extends State<AuthPage> {
         ],
       );
 
+  /// Carte de l'utilisateur + (1ère connexion d'un étudiant) ses informations d'inscription,
+  /// pour qu'il vérifie que c'est bien lui.
   Widget _carteUser(Map<String, dynamic> u) {
+    final base = _carteUserBase(u);
+    final premiere = u['premiereFois'] == true || u['premiere_fois'] == true;
+    if (!premiere || (u['role'] ?? 'etudiant') != 'etudiant') return base;
+    String v(String k) => (u[k] ?? '').toString();
+    final lignes = <List<String>>[
+      ['Email', v('email')],
+      ['Téléphone', v('telephone')],
+      ['Régime', v('regime').isEmpty ? '' : (v('regime') == 'soir' ? 'Cours du soir' : 'Cours du jour')],
+      ['Nationalité', v('nationalite')],
+      ['Sexe', v('sexe') == 'M' ? 'Masculin' : (v('sexe') == 'F' ? 'Féminin' : '')],
+      [
+        'Né(e)',
+        [
+          if (v('annee_naissance').isNotEmpty) 'en ${v('annee_naissance')}',
+          if (v('lieu_naissance').isNotEmpty) 'à ${v('lieu_naissance')}',
+        ].join(' '),
+      ],
+      ['Niveau', v('niveau')],
+    ].where((l) => l[1].isNotEmpty).toList();
+    if (lignes.isEmpty) return base;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        base,
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Vos informations d\'inscription',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 8),
+              for (final l in lignes)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(width: 90, child: Text(l[0], style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)))),
+                      Expanded(child: Text(l[1], style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 6),
+              const Text(
+                'Ce n\'est pas vous ? Contactez l\'administration.',
+                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _carteUserBase(Map<String, dynamic> u) {
     final role = u['role'] as String? ?? 'etudiant';
     final domaine = (u['domaine'] ?? '') as String;
     Color rc;

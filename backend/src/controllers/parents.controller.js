@@ -81,7 +81,7 @@ const getParents = async (req, res) => {
     const pp = [];
     const fp = etabCol(pp, req.etablissementId, 'e.etablissement_id');
     const parentsResult = await pool.query(`
-      SELECT p.id, p.nom, p.prenoms, p.tel, p.email, (p.user_id IS NOT NULL) AS compte_actif,
+      SELECT p.id, p.nom, p.prenoms, p.tel, p.email, COALESCE(p.statut, 'actif') AS statut, (p.user_id IS NOT NULL) AS compte_actif,
              json_agg(
                json_build_object(
                  'etudiantId', e.id,
@@ -97,19 +97,20 @@ const getParents = async (req, res) => {
       JOIN parent_etudiants pe ON pe.parent_id = p.id
       JOIN etudiants e ON e.id = pe.etudiant_id
       WHERE 1=1${fp}
-      GROUP BY p.id, p.nom, p.prenoms, p.tel, p.email, p.user_id
+      GROUP BY p.id, p.nom, p.prenoms, p.tel, p.email, p.statut, p.user_id
       ORDER BY p.nom
     `, pp);
 
     const ps = [];
     const fs = etabCol(ps, req.etablissementId, 'e.etablissement_id');
     const sansLienResult = await pool.query(`
-      SELECT e.id AS etudiant_id, e.matricule, e.nom, e.prenoms,
+      SELECT e.id AS etudiant_id, e.matricule, e.nom, e.prenoms, e.filiere_nom, e.niveau,
              e.nom_parent, e.tel_parent, e.email_parent
       FROM etudiants e
       LEFT JOIN parent_etudiants pe ON pe.etudiant_id = e.id
       WHERE pe.etudiant_id IS NULL
-        AND e.tel_parent IS NOT NULL AND e.tel_parent != ''${fs}
+        AND (COALESCE(TRIM(e.tel_parent), '') != '' OR COALESCE(TRIM(e.nom_parent), '') != ''
+             OR COALESCE(TRIM(e.email_parent), '') != '')${fs}
       ORDER BY e.nom
     `, ps);
 
@@ -137,11 +138,14 @@ const createParent = async (req, res) => {
   try {
     const { nom, prenoms, telephone, email, matriculeEnfant, relation, remplacerExistant } = req.body;
 
-    if (!nom?.trim() || !telephone?.trim() || !matriculeEnfant?.trim()) {
+    if (!nom?.trim() || !prenoms?.trim() || !telephone?.trim() || !matriculeEnfant?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Nom, téléphone et matricule de l\'enfant sont obligatoires.',
+        message: 'Nom, prénom, téléphone et matricule de l\'enfant sont obligatoires.',
       });
+    }
+    if (!['Père', 'Mère', 'Tuteur'].includes((relation || '').trim())) {
+      return res.status(400).json({ success: false, message: 'Relation requise (Père, Mère ou Tuteur).' });
     }
 
     const pm = [matriculeEnfant.trim()];
@@ -180,6 +184,10 @@ const createParent = async (req, res) => {
     const { parentId, cree } = await trouverOuCreerParent(client, {
       nom, prenoms, tel: telephone, email, etabId: req.etablissementId || null,
     });
+
+    if (!cree && email?.trim()) {
+      await client.query("UPDATE parents SET email = $1 WHERE id = $2 AND COALESCE(email, '') = ''", [email.trim(), parentId]);
+    }
 
     // Lier
     await client.query(
@@ -253,16 +261,26 @@ const finaliserPremiereConnexion = async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
     const parentEtab = parent.etablissement_id || null;
+
+    // Un même parent peut avoir un compte dans deux établissements avec le même
+    // email. `users.email` étant unique, le second compte est créé SANS email
+    // (l'email reste conservé sur la fiche `parents`) au lieu d'échouer.
+    const emailSouhaite = (email?.trim() || parent.email || '').trim();
+    let emailUser = null;
+    if (emailSouhaite) {
+      const dejaPris = await pool.query('SELECT 1 FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1', [emailSouhaite]);
+      emailUser = dejaPris.rows.length ? null : emailSouhaite;
+    }
     const userRes = parentEtab
       ? await pool.query(
           `INSERT INTO users (nom, prenoms, email, tel, role, statut, mot_de_passe, etablissement_id)
            VALUES ($1, $2, $3, $4, 'parent', 'actif', $5, $6) RETURNING id`,
-          [parent.nom, parent.prenoms, email?.trim() || parent.email || null, telephone?.trim() || parent.tel, hashed, parentEtab]
+          [parent.nom, parent.prenoms, emailUser, telephone?.trim() || parent.tel, hashed, parentEtab]
         )
       : await pool.query(
           `INSERT INTO users (nom, prenoms, email, tel, role, statut, mot_de_passe)
            VALUES ($1, $2, $3, $4, 'parent', 'actif', $5) RETURNING id`,
-          [parent.nom, parent.prenoms, email?.trim() || parent.email || null, telephone?.trim() || parent.tel, hashed]
+          [parent.nom, parent.prenoms, emailUser, telephone?.trim() || parent.tel, hashed]
         );
     const userId = userRes.rows[0].id;
 
@@ -297,7 +315,12 @@ const finaliserPremiereConnexion = async (req, res) => {
   } catch (err) {
     console.error('[finaliserPremiereConnexion]', err);
     if (err.code === '23505') {
-      return res.status(409).json({ message: 'Email déjà utilisé.' });
+      const c = String(err.constraint || '');
+      return res.status(409).json({
+        message: /tel/i.test(c) ? 'Ce numéro de téléphone est déjà utilisé par un autre compte.'
+               : /email/i.test(c) ? 'Cet email est déjà utilisé.'
+               : 'Un compte existe déjà avec ces informations.',
+      });
     }
     res.status(500).json({ message: err.message || 'Erreur lors de l\'activation du compte.' });
   }
@@ -516,9 +539,120 @@ const getMonProfil = async (req, res) => {
   }
 };
 
+// ── Le parent appartient-il à mon établissement ? ───────────────────────────
+// Soit par sa propre colonne etablissement_id, soit (anciens parents) parce
+// qu'un de ses enfants est dans mon établissement.
+const parentDeMonEtab = async (parentId, etabId) => {
+  const r = await pool.query(
+    `SELECT p.id, p.user_id, p.etablissement_id FROM parents p WHERE p.id = $1`, [parentId]
+  );
+  const p = r.rows[0];
+  if (!p) return null;
+  if (!etabId) return p;
+  if (p.etablissement_id && Number(p.etablissement_id) === Number(etabId)) return p;
+  const e = await pool.query(
+    `SELECT 1 FROM parent_etudiants pe JOIN etudiants e ON e.id = pe.etudiant_id
+     WHERE pe.parent_id = $1 AND e.etablissement_id = $2 LIMIT 1`, [parentId, etabId]
+  );
+  return e.rows.length ? p : null;
+};
+
+// ── PUT /api/parents/:id (admin) ────────────────────────────────────────────
+// Modifie les informations du parent. Nom, prénom et téléphone obligatoires.
+const modifierParent = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { nom, prenoms, tel, email } = req.body;
+    if (!nom?.trim() || !prenoms?.trim() || !tel?.trim()) {
+      return res.status(400).json({ success: false, message: 'Nom, prénom et téléphone sont obligatoires.' });
+    }
+    const parent = await parentDeMonEtab(req.params.id, req.etablissementId);
+    if (!parent) return res.status(404).json({ success: false, message: 'Parent introuvable.' });
+
+    const telClean = tel.trim();
+    const pc = [telClean, parent.id];
+    const doublon = await client.query(
+      `SELECT 1 FROM parents WHERE tel = $1 AND id <> $2${etabCol(pc, req.etablissementId, 'etablissement_id')}`, pc
+    );
+    if (doublon.rows.length) {
+      return res.status(409).json({ success: false, message: 'Ce numéro est déjà utilisé par un autre parent.' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE parents SET nom = $1, prenoms = $2, tel = $3, email = $4 WHERE id = $5`,
+      [nom.trim().toUpperCase(), prenoms.trim(), telClean, email?.trim() || null, parent.id]
+    );
+    if (parent.user_id) {
+      await client.query(
+        `UPDATE users SET nom = $1, prenoms = $2, tel = $3, email = COALESCE($4, email) WHERE id = $5`,
+        [nom.trim().toUpperCase(), prenoms.trim(), telClean, email?.trim() || null, parent.user_id]
+      );
+    }
+    await client.query(
+      `UPDATE etudiants SET nom_parent = $1, tel_parent = $2, email_parent = $3
+       WHERE id IN (SELECT etudiant_id FROM parent_etudiants WHERE parent_id = $4)`,
+      [`${nom.trim().toUpperCase()} ${prenoms.trim()}`, telClean, email?.trim() || null, parent.id]
+    );
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Informations mises à jour.' });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('[parents.controller] PUT /:id', err.message);
+    if (err.code === '23505') {
+      return res.status(409).json({ success: false, message: 'Email ou téléphone déjà utilisé.' });
+    }
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── POST /api/parents/:id/reinitialiser (admin) ─────────────────────────────
+// Efface le mot de passe : le parent repasse par l'écran « première connexion »
+// (nom, prénom, téléphone) et en crée un nouveau.
+const reinitialiserAcces = async (req, res) => {
+  try {
+    const parent = await parentDeMonEtab(req.params.id, req.etablissementId);
+    if (!parent) return res.status(404).json({ success: false, message: 'Parent introuvable.' });
+    if (!parent.user_id) {
+      return res.status(400).json({ success: false, message: 'Ce parent ne s\'est pas encore connecté : rien à réinitialiser.' });
+    }
+    await pool.query('UPDATE users SET mot_de_passe = NULL WHERE id = $1', [parent.user_id]);
+    res.json({ success: true, message: 'Accès réinitialisé. Le parent créera un nouveau mot de passe à sa prochaine connexion.' });
+  } catch (err) {
+    console.error('[parents.controller] POST /:id/reinitialiser', err.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+// ── PATCH /api/parents/:id/statut (admin) ───────────────────────────────────
+// body: { statut: 'actif' | 'inactif' } — un parent inactif ne peut plus se connecter.
+const changerStatutParent = async (req, res) => {
+  try {
+    const { statut } = req.body;
+    if (!['actif', 'inactif'].includes(statut)) {
+      return res.status(400).json({ success: false, message: 'Statut invalide.' });
+    }
+    const parent = await parentDeMonEtab(req.params.id, req.etablissementId);
+    if (!parent) return res.status(404).json({ success: false, message: 'Parent introuvable.' });
+    await pool.query('UPDATE parents SET statut = $1 WHERE id = $2', [statut, parent.id]);
+    if (parent.user_id) {
+      await pool.query('UPDATE users SET statut = $1 WHERE id = $2', [statut === 'actif' ? 'actif' : 'suspendu', parent.user_id]);
+    }
+    res.json({ success: true, message: statut === 'actif' ? 'Compte réactivé.' : 'Compte désactivé.' });
+  } catch (err) {
+    console.error('[parents.controller] PATCH /:id/statut', err.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
 module.exports = {
   getParents,
   createParent,
+  modifierParent,
+  reinitialiserAcces,
+  changerStatutParent,
   supprimerLien,
   finaliserPremiereConnexion,
   getMesEnfants,

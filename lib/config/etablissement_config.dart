@@ -235,6 +235,14 @@ class EtablissementConfig extends ChangeNotifier {
     await prefs.setString('etablissement_logo', _logoUrl);
   }
 
+  /// Efface le logo (suppression par l'administration de l'école).
+  Future<void> effacerLogo() async {
+    _logoUrl = '';
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('etablissement_logo', '');
+  }
+
   TypeEtablissement get type => _type;
   EtablissementOptions get options => _options;
   Set<SectionEnseignement> get sectionsActives => _type.sections;
