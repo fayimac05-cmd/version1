@@ -10,6 +10,7 @@ const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const c = require('../controllers/plateforme.controller');
+const { upload, uploadToCloudinary } = require('../middleware/upload.middleware');
 
 const router = express.Router();
 const DOSSIER_UI = path.join(__dirname, '..', 'plateforme');
@@ -44,19 +45,41 @@ function exigerCle(req, res, next) {
   if (bloque(ip)) return res.status(429).json({ success: false, message: 'Trop d\'essais. Réessayez plus tard.' });
   if (!cleValide(req.get('x-platform-key'))) {
     noterEchec(ip);
+    c.journaliser('echec_cle', null, `Tentative refusée (${ip})`, ip);
     return res.status(401).json({ success: false, message: 'Clé plateforme invalide.' });
   }
   next();
 }
 
 // Interface web (pages sans secret)
-router.get('/ui', (req, res) => res.sendFile(path.join(DOSSIER_UI, 'index.html')));
-router.get('/ui/app.js', (req, res) => res.sendFile(path.join(DOSSIER_UI, 'app.js')));
+// Politique de sécurité propre à cette page : autorise les images Cloudinary (logos/photos)
+// que la politique par défaut (helmet) bloque.
+const CSP_UI = "default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com; "
+  + "style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; "
+  + "script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'";
+const poserCsp = (req, res, next) => { res.setHeader('Content-Security-Policy', CSP_UI); next(); };
+router.get('/ui', poserCsp, (req, res) => res.sendFile(path.join(DOSSIER_UI, 'index.html')));
+router.get('/ui/app.js', poserCsp, (req, res) => res.sendFile(path.join(DOSSIER_UI, 'app.js')));
 
 // API protégée
+router.post('/connexion', exigerCle, (req, res) => {
+  c.journaliser('connexion', null, 'Connexion à l\'espace plateforme', req.ip);
+  res.json({ success: true });
+});
+router.get('/stats', exigerCle, c.stats);
+router.get('/activite', exigerCle, c.activite);
+router.get('/administrateurs', exigerCle, c.administrateurs);
 router.get('/etablissements', exigerCle, c.listerEtablissements);
 router.post('/etablissements', exigerCle, c.creerEtablissement);
 router.patch('/etablissements/:id', exigerCle, c.modifierEtablissement);
 router.post('/etablissements/:id/super-admin', exigerCle, c.ajouterSuperAdmin);
+// Photo d'accueil à la création : la clé est vérifiée AVANT de recevoir le fichier.
+router.post(
+  '/etablissements/:id/photo-accueil',
+  exigerCle,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/photo-accueil'),
+  c.poserPhotoAccueil
+);
 
 module.exports = router;

@@ -11,6 +11,7 @@ import 'bureau_des_etudiants.dart';
 import 'parent/parent_shell.dart';
 import '../admin/admin_shell.dart';
 import '../services/api_service.dart';
+import '../services/api_extra.dart';
 import '../pages/register_page.dart';
 import '../config/etablissement_config.dart';
 import '../services/socket_service.dart';
@@ -342,6 +343,12 @@ class _AuthPageState extends State<AuthPage> {
     if (result['success'] == true) {
       setState(() => _loading = false);
       final user = result['user'];
+      // Mot de passe provisoire (ex. Super Admin créé par la plateforme) : changement
+      // obligatoire avant d'entrer dans l'application.
+      if (user['mdp_a_changer'] == true && mounted) {
+        await afficherChangementMotDePasse(context, ancien: _passCtrl.text, obligatoire: true);
+        if (!mounted) return;
+      }
       // ✅ CORRIGÉ (v2) — la v1 utilisait user['etudiant_role'] ?? user['role'],
       // mais ?? ne traite que null comme absent, pas une chaîne vide ''. Si
       // etudiant_role valait '' (plutôt que NULL) pour un compte non-étudiant

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../admin/admin_theme.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
+import '../services/api_extra.dart';
 import '../utils/snackbar_helper.dart';
 
 class Membre {
@@ -44,7 +45,7 @@ const List<_Groupe> _groupesDroits = [
   _Groupe('Données académiques', Icons.school_outlined, ['etudiants', 'professeurs', 'filieres', 'parents']),
   _Groupe('Scolarité', Icons.fact_check_outlined, ['notes', 'bulletins', 'reclamations']),
   _Groupe('Communication', Icons.forum_outlined, ['messages', 'annonces', 'publications', 'bde']),
-  _Groupe('Administration', Icons.admin_panel_settings_outlined, ['membres', 'stats']),
+  _Groupe('Administration', Icons.admin_panel_settings_outlined, ['membres', 'logo', 'photo_accueil', 'stats']),
 ];
 
 const Map<String, String> _sectionsLabels = {
@@ -60,6 +61,8 @@ const Map<String, String> _sectionsLabels = {
   'publications': 'Publications statiques',
   'bde': 'BDE & Événements',
   'membres': 'Créer des membres',
+  'logo': 'Logo officiel (documents)',
+  'photo_accueil': "Photo d'accueil",
   'stats': 'Statistiques',
 };
 
@@ -89,6 +92,10 @@ IconData _iconeSection(String key) {
       return Icons.celebration_outlined;
     case 'membres':
       return Icons.group_add_outlined;
+    case 'logo':
+      return Icons.verified_outlined;
+    case 'photo_accueil':
+      return Icons.photo_library_outlined;
     case 'stats':
       return Icons.insert_chart_outlined_rounded;
     default:
@@ -104,7 +111,7 @@ Map<String, bool> _droitsParDefaut(AdminRole role) {
     AdminRole.examens => {'notes', 'bulletins', 'reclamations', 'stats'},
     AdminRole.secretariat => {'etudiants', 'parents', 'reclamations', 'messages', 'annonces'},
     AdminRole.communication => {'messages', 'annonces', 'publications', 'bde'},
-    AdminRole.cycleDirecteur => toutes.where((k) => k != 'membres').toSet(),
+    AdminRole.cycleDirecteur => toutes.where((k) => k != 'membres' && k != 'logo' && k != 'photo_accueil').toSet(),
     AdminRole.cantiniere => <String>{},
   };
   return {for (final k in toutes) k: actifs.contains(k)};
@@ -284,6 +291,27 @@ class _AdminMembresState extends State<AdminMembres> {
     } else {
       _snack('⚠️ ${res['error'] ?? 'Suppression impossible'}');
     }
+  }
+
+  Future<void> _reinitialiserMdp(Membre m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Réinitialiser le mot de passe ?'),
+        content: Text('${m.prenoms} ${m.nom} pourra choisir un nouveau mot de passe à sa prochaine connexion '
+            '(avec son nom, son prénom et son téléphone). Son ancien mot de passe ne fonctionnera plus.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Réinitialiser')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final res = await ApiExtra.reinitialiserMotDePasseMembre(m.id);
+    if (!mounted) return;
+    _snack(res['success'] == true
+        ? '🔑 Mot de passe réinitialisé'
+        : '⚠️ ${res['error'] ?? 'Réinitialisation impossible'}');
   }
 
   /// Création ou modification ; renvoie un message d'erreur, ou null si tout va bien.
@@ -826,10 +854,12 @@ class _AdminMembresState extends State<AdminMembres> {
           tooltip: 'Plus',
           onSelected: (v) {
             if (v == 'statut') _changerStatut([m], !m.actif);
+            if (v == 'mdp') _reinitialiserMdp(m);
             if (v == 'suppr') _supprimer(m);
           },
           itemBuilder: (_) => [
             PopupMenuItem(value: 'statut', child: Text(m.actif ? 'Suspendre' : 'Réactiver')),
+            const PopupMenuItem(value: 'mdp', child: Text('Réinitialiser le mot de passe')),
             const PopupMenuItem(value: 'suppr', child: Text('Supprimer', style: TextStyle(color: Colors.red))),
           ],
           child: carre(const Icon(Icons.more_vert, size: 18, color: _texteFonce)),

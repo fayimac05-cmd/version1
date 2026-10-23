@@ -685,8 +685,16 @@ const changePassword = async (req, res) => {
     }
     const isValid = await bcrypt.compare(ancienMotDePasse, r.rows[0].mot_de_passe);
     if (!isValid) return res.status(401).json({ message: 'Ancien mot de passe incorrect.' });
+    if (String(nouveauMotDePasse).length < 8) {
+      return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 8 caractères.' });
+    }
+    if (nouveauMotDePasse === ancienMotDePasse) {
+      return res.status(400).json({ message: "Le nouveau mot de passe doit être différent de l'ancien." });
+    }
     const hashed = await bcrypt.hash(nouveauMotDePasse, 10);
     await pool.query('UPDATE users SET mot_de_passe = $1 WHERE id = $2', [hashed, req.user.id]);
+    // Le mot de passe provisoire n'est plus à changer (colonne absente avant la migration : sans gravité).
+    pool.query('UPDATE users SET mdp_a_changer = false WHERE id = $1', [req.user.id]).catch(() => {});
     envoyerNotificationAuto(
       req.user.id,
       'Mot de passe modifié',
@@ -980,7 +988,7 @@ const etablissementParCode = async (req, res) => {
     const code = String(req.query.code || '').trim();
     if (!code) return res.status(400).json({ found: false, message: "Code d'établissement requis." });
     const r = await pool.query(
-      `SELECT id, nom, sigle, ville, campus, type, logo_url, modele_matricule, inscription_ouverte
+      `SELECT id, nom, sigle, ville, campus, type, logo_url, photo_accueil_url, modele_matricule, inscription_ouverte
        FROM etablissements WHERE UPPER(code) = UPPER($1) AND COALESCE(actif, true) = true`,
       [code]
     );

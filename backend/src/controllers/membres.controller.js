@@ -13,6 +13,25 @@ const membreDeMonEtab = async (id, etabId) => {
   return r.rows.length > 0;
 };
 
+// ── Garde-fous Super Admin ───────────────────────────────────────────────────
+// Le compte visé est-il un Super Admin ? Et est-ce le DERNIER actif de son école ?
+const infoSuperAdmin = async (id) => {
+  const r = await pool.query(
+    `SELECT admin_sub_role, statut, etablissement_id FROM users WHERE id = $1`, [id]
+  );
+  const u = r.rows[0];
+  if (!u || u.admin_sub_role !== 'super_admin') return { superAdmin: false, dernier: false };
+  if (u.statut !== 'actif') return { superAdmin: true, dernier: false };
+  const c = await pool.query(
+    `SELECT COUNT(*)::int AS c FROM users
+     WHERE role = 'admin' AND admin_sub_role = 'super_admin' AND statut = 'actif'
+       AND etablissement_id IS NOT DISTINCT FROM $1 AND id <> $2`,
+    [u.etablissement_id, id]
+  );
+  return { superAdmin: true, dernier: c.rows[0].c === 0 };
+};
+const MSG_DERNIER = "C'est le dernier Super Admin actif de l'établissement : nommez d'abord un autre Super Admin.";
+
 // ── Autorisations de l'administrateur connecté ───────────────────────────────
 const lireAutorisations = async (userId) => {
   const r = await pool.query(
@@ -301,6 +320,13 @@ const updatePermissions = async (req, res) => {
     if (!(await membreDeMonEtab(id, req.etablissementId))) {
       return res.status(404).json({ success: false, message: 'Membre introuvable.' });
     }
+    if (role && role !== 'super_admin') {
+      const info = await infoSuperAdmin(id);
+      if (info.superAdmin && !req.estSuperAdmin) {
+        return res.status(403).json({ success: false, message: 'Seul un Super Admin peut modifier un Super Admin.' });
+      }
+      if (info.dernier) return res.status(409).json({ success: false, message: MSG_DERNIER });
+    }
 
     try {
       await pool.query(
@@ -349,6 +375,13 @@ const updateMembre = async (req, res) => {
     const subRole = admin_sub_role || role || undefined;
     if (subRole === 'super_admin' && !req.estSuperAdmin) {
       return res.status(403).json({ success: false, message: 'Seul un Super Admin peut attribuer ce rôle.' });
+    }
+    if (subRole && subRole !== 'super_admin') {
+      const info = await infoSuperAdmin(id);
+      if (info.superAdmin && !req.estSuperAdmin) {
+        return res.status(403).json({ success: false, message: 'Seul un Super Admin peut modifier un Super Admin.' });
+      }
+      if (info.dernier) return res.status(409).json({ success: false, message: MSG_DERNIER });
     }
     const telBrut = tel ?? telephone ?? numero;
     const telFinal = telBrut === undefined || telBrut === null ? undefined : String(telBrut).trim();
@@ -418,6 +451,11 @@ const changerStatutMembre = async (req, res) => {
     if (!(await membreDeMonEtab(id, req.etablissementId))) {
       return res.status(404).json({ success: false, message: 'Membre introuvable.' });
     }
+    const info = await infoSuperAdmin(id);
+    if (info.superAdmin && !req.estSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Seul un Super Admin peut modifier un Super Admin.' });
+    }
+    if (statut === 'suspendu' && info.dernier) return res.status(409).json({ success: false, message: MSG_DERNIER });
     await pool.query('UPDATE users SET statut = $1 WHERE id = $2', [statut, id]);
     try { await pool.query('UPDATE administrateurs SET statut = $1 WHERE user_id = $2', [statut, id]); } catch (_) {}
     return res.status(200).json({ success: true, message: statut === 'actif' ? 'Membre réactivé.' : 'Membre suspendu.' });
@@ -437,6 +475,11 @@ const deleteMembre = async (req, res) => {
     if (!(await membreDeMonEtab(id, req.etablissementId))) {
       return res.status(404).json({ success: false, message: 'Membre introuvable.' });
     }
+    const info = await infoSuperAdmin(id);
+    if (info.superAdmin && !req.estSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Seul un Super Admin peut supprimer un Super Admin.' });
+    }
+    if (info.dernier) return res.status(409).json({ success: false, message: MSG_DERNIER });
     try {
       await pool.query('DELETE FROM users WHERE id = $1', [id]);
     } catch (dbErr) {
@@ -451,7 +494,39 @@ const deleteMembre = async (req, res) => {
   }
 };
 
+// ── POST /api/membres/:id/reinitialiser-mdp — Mot de passe oublié ────────────
+// Efface le mot de passe du membre : à sa prochaine connexion (nom, prénom, téléphone),
+// il en choisit un nouveau, exactement comme à sa première connexion. Personne, pas même
+// le Super Admin, ne voit ni ne connaît le nouveau mot de passe.
+const reinitialiserMotDePasse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (req.user && String(req.user.id) === String(id)) {
+      return res.status(400).json({ success: false, message: 'Pour votre propre compte, utilisez « Changer mon mot de passe ».' });
+    }
+    if (!(await membreDeMonEtab(id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Membre introuvable.' });
+    }
+    const info = await infoSuperAdmin(id);
+    if (info.superAdmin && !req.estSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Seul un Super Admin peut réinitialiser un Super Admin.' });
+    }
+    const u = await pool.query("SELECT id FROM users WHERE id = $1 AND role = 'admin'", [id]);
+    if (!u.rows.length) return res.status(404).json({ success: false, message: 'Membre introuvable.' });
+    await pool.query('UPDATE users SET mot_de_passe = NULL WHERE id = $1', [id]);
+    try { await pool.query('UPDATE users SET mdp_a_changer = false WHERE id = $1', [id]); } catch (_) {}
+    return res.status(200).json({
+      success: true,
+      message: 'Mot de passe réinitialisé. Le membre choisira un nouveau mot de passe à sa prochaine connexion.',
+    });
+  } catch (err) {
+    console.error('reinitialiserMotDePasse error:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
 module.exports = {
+  reinitialiserMotDePasse,
   getAllMembres,
   createMembre,
   exigerGestionMembres,

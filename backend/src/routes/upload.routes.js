@@ -57,16 +57,29 @@ router.post(
 );
 router.delete('/attestation-service', authMiddleware, uploadController.supprimerAttestationService);
 
-// Logo de l'établissement — lecture : tout connecté ; écriture : Super Admin
-// (vérifié dans le contrôleur).
+// Logo de l'établissement — lecture : tout connecté ; écriture : Super Admin ou
+// membre ayant l'autorisation « logo » (vérifiée AVANT l'envoi du fichier).
 router.get('/logo-etablissement', authMiddleware, uploadController.getLogoEtablissement);
 router.post(
   '/logo-etablissement',
   authMiddleware,
+  uploadController.exigerGestionLogo,
   upload.single('file'),
   uploadToCloudinary('scolarhub/logo-etablissement'),
   uploadController.uploadLogoEtablissement
 );
-router.delete('/logo-etablissement', authMiddleware, uploadController.deleteLogoEtablissement);
+router.delete('/logo-etablissement', authMiddleware, uploadController.exigerGestionLogo, uploadController.deleteLogoEtablissement);
+
+// Photo d'accueil (page de bienvenue après le code) — mêmes droits que le logo.
+router.get('/photo-accueil', authMiddleware, uploadController.getPhotoAccueil);
+router.post(
+  '/photo-accueil',
+  authMiddleware,
+  uploadController.exigerGestionPhotoAccueil,
+  upload.single('file'),
+  uploadToCloudinary('scolarhub/photo-accueil'),
+  uploadController.uploadPhotoAccueil
+);
+router.delete('/photo-accueil', authMiddleware, uploadController.exigerGestionPhotoAccueil, uploadController.deletePhotoAccueil);
 
 module.exports = router;

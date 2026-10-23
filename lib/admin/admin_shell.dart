@@ -36,6 +36,7 @@ import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
+import '../services/api_extra.dart';
 import '../theme/app_palette.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_dashboard.dart';
@@ -276,6 +277,13 @@ class _AdminShellState extends State<AdminShell>
   // null tant qu'elles ne sont pas chargées → accès par défaut du sous-rôle.
   Map<String, bool>? _droits;
 
+  /// Logo de l'établissement : le Super Admin, ou un membre à qui il a donné l'autorisation « logo ».
+  bool get _peutGererLogoOfficiel =>
+      widget.activeRole == AdminRole.superAdmin || _droits?['logo'] == true;
+  bool get _peutGererPhotoAccueil =>
+      widget.activeRole == AdminRole.superAdmin || _droits?['photo_accueil'] == true;
+  bool get _peutGererIdentite => _peutGererLogoOfficiel || _peutGererPhotoAccueil;
+
   bool _peutVoir(int i) =>
       AdminMenuService.canAccessWith(widget.activeRole, i, _droits);
 
@@ -374,13 +382,158 @@ class _AdminShellState extends State<AdminShell>
         nom: EtablissementConfig.instance.nom, logoUrl: url);
   }
 
-  /// Super Admin : choisir / remplacer le logo de l'établissement.
+  /// Menu « Identité visuelle » : logo officiel (documents) + photo d'accueil (page de bienvenue).
+  Future<void> _menuLogo() async {
+    final aLogo = EtablissementConfig.instance.logoUrl.isNotEmpty;
+    final peutLogo = _peutGererLogoOfficiel;
+    final peutPhoto = _peutGererPhotoAccueil;
+    final photo = peutPhoto ? await ApiExtra.getPhotoAccueil() : '';
+    if (!mounted) return;
+    final aPhoto = photo.isNotEmpty;
+    final choix = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: Text("Identité de l'établissement",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            if (peutLogo) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Text('Logo officiel',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 2, 20, 4),
+              child: Text("Apparaît sur les documents : bulletins, emplois du temps… Image PNG ou JPG.",
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+            ),
+            ListTile(
+              leading: const Icon(Icons.verified_outlined),
+              title: Text(aLogo ? 'Remplacer le logo' : 'Ajouter le logo'),
+              onTap: () => Navigator.pop(ctx, 'logo'),
+            ),
+            if (aLogo)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                title: const Text('Supprimer le logo', style: TextStyle(color: Colors.redAccent)),
+                onTap: () => Navigator.pop(ctx, 'logo_suppr'),
+              ),
+            ],
+            if (peutLogo && peutPhoto) const Divider(),
+            if (peutPhoto) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Text("Photo d'accueil",
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 2, 20, 4),
+              child: Text("Image de bienvenue montrée à tous quand ils saisissent le code de l'établissement (photo d'étudiants, affiche…). Elle n'apparaît jamais sur les documents.",
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+            ),
+            if (aPhoto)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(photo, height: 110, width: double.infinity, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                ),
+              ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(aPhoto ? "Remplacer la photo d'accueil" : "Ajouter une photo d'accueil"),
+              onTap: () => Navigator.pop(ctx, 'photo'),
+            ),
+            if (aPhoto)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                title: const Text("Supprimer la photo d'accueil", style: TextStyle(color: Colors.redAccent)),
+                onTap: () => Navigator.pop(ctx, 'photo_suppr'),
+              ),
+            ],
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
+    );
+    if (choix == 'logo') await _changerLogo();
+    if (choix == 'logo_suppr') await _supprimerLogo();
+    if (choix == 'photo') await _changerPhotoAccueil();
+    if (choix == 'photo_suppr') await _supprimerPhotoAccueil();
+  }
+
+  Future<void> _supprimerLogo() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer le logo ?'),
+        content: const Text("Les documents n'afficheront plus le logo de l'établissement."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Supprimer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final fait = await ApiService.supprimerLogoEtablissement();
+    if (!mounted) return;
+    if (fait) await EtablissementConfig.instance.effacerLogo();
+    _snackMsg(fait ? 'Logo supprimé.' : 'Suppression impossible (autorisation requise).');
+  }
+
+  void _snackMsg(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), behavior: SnackBarBehavior.floating));
+  }
+
+  Future<void> _changerPhotoAccueil() async {
+    final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom, allowedExtensions: ['jpg', 'jpeg', 'png'], withData: true);
+    if (res == null || res.files.isEmpty || res.files.first.bytes == null) return;
+    final f = res.files.first;
+    if (!mounted) return;
+    final rogne = await afficherRecadrage(context, f.bytes!, titre: "Recadrer la photo d'accueil");
+    if (rogne == null) return; // annulé : rien n'est envoyé
+    final r = await ApiExtra.uploadPhotoAccueil(rogne, 'photo-accueil.png');
+    _snackMsg(r['success'] == true ? "Photo d'accueil mise à jour." : (r['error']?.toString() ?? 'Erreur.'));
+  }
+
+  Future<void> _supprimerPhotoAccueil() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Supprimer la photo d'accueil ?"),
+        content: const Text("L'écran de bienvenue affichera les initiales de l'établissement à la place."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Supprimer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final fait = await ApiExtra.supprimerPhotoAccueil();
+    _snackMsg(fait ? "Photo d'accueil supprimée." : 'Suppression impossible (autorisation requise).');
+  }
+
+  /// Choisir / remplacer le logo de l'établissement (Super Admin ou membre autorisé).
   Future<void> _changerLogo() async {
     final res = await FilePicker.platform.pickFiles(
         type: FileType.custom, allowedExtensions: ['jpg', 'jpeg', 'png'], withData: true);
     if (res == null || res.files.isEmpty || res.files.first.bytes == null) return;
     final f = res.files.first;
-    final r = await ApiService.uploadLogoEtablissement(f.bytes!, f.name);
+    if (!mounted) return;
+    final rogne = await afficherRecadrage(context, f.bytes!,
+        titre: 'Recadrer le logo',
+        formats: const [MapEntry('Libre', null), MapEntry('1:1', 1.0), MapEntry('4:3', 4 / 3)],
+        formatInitial: null);
+    if (rogne == null) return; // annulé : rien n'est envoyé
+    final r = await ApiService.uploadLogoEtablissement(rogne, 'logo.png');
     if (!mounted) return;
     if (r['success'] == true) {
       await EtablissementConfig.instance.appliquerIdentite(
@@ -542,6 +695,7 @@ class _AdminShellState extends State<AdminShell>
       items: [
         _popItem('profile',  Icons.person_outline_rounded, 'Mon profil',  const Color(0xFF334155)),
         _popItem('settings', Icons.settings_outlined,      'Paramètres',  const Color(0xFF334155)),
+        _popItem('mdp',      Icons.lock_reset_rounded,     'Changer mon mot de passe', const Color(0xFF334155)),
         const PopupMenuDivider(),
         _popItem('logout',   Icons.logout_rounded,         'Déconnexion', Colors.redAccent,
             bold: true),
@@ -550,6 +704,14 @@ class _AdminShellState extends State<AdminShell>
       if (!mounted) return;
       if (val == 'logout') _showLogoutDialog();
       if (val == 'profile') _showAdminProfileSheet(context);
+      if (val == 'mdp') {
+        afficherChangementMotDePasse(context).then((ok) {
+          if (ok && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Mot de passe modifié.'), behavior: SnackBarBehavior.floating));
+          }
+        });
+      }
     });
   }
 
@@ -738,9 +900,9 @@ class _AdminShellState extends State<AdminShell>
                   c ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 Tooltip(
-                  message: widget.activeRole == AdminRole.superAdmin ? "Changer le logo de l'établissement" : '',
+                  message: _peutGererIdentite ? "Identité de l'établissement" : '',
                   child: InkWell(
-                    onTap: widget.activeRole == AdminRole.superAdmin ? _changerLogo : null,
+                    onTap: _peutGererIdentite ? _menuLogo : null,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       width: 38,
