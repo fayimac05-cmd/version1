@@ -291,7 +291,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEBE5DD),
+      backgroundColor: const Color(0xFFF8FAFD),
       appBar: _modeSelection ? _buildAppBarSelection() : _buildAppBar(),
       body: LayoutBuilder(builder: (context, constraints) {
         final conversation = Column(

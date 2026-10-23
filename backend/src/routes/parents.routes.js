@@ -10,6 +10,10 @@ router.get('/', authMiddleware, requireRole('admin', 'direction'), parentsContro
 router.post('/', authMiddleware, requireRole('admin', 'direction'), parentsController.createParent);
 // Retirer un lien tuteur↔enfant (ne supprime pas le compte parent lui-même)
 router.delete('/lien/:etudiantId', authMiddleware, requireRole('admin', 'direction'), parentsController.supprimerLien);
+// Fiche parent : modifier, réinitialiser l'accès, activer/désactiver le compte
+router.put('/:id', authMiddleware, requireRole('admin', 'direction'), parentsController.modifierParent);
+router.post('/:id/reinitialiser', authMiddleware, requireRole('admin', 'direction'), parentsController.reinitialiserAcces);
+router.patch('/:id/statut', authMiddleware, requireRole('admin', 'direction'), parentsController.changerStatutParent);
 
 // ── Public : première connexion parent ──────────────────────────────────────
 // Appelée après que /api/auth/login a renvoyé { premiereFois: true, parent }

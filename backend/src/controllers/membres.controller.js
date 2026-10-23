@@ -13,6 +13,51 @@ const membreDeMonEtab = async (id, etabId) => {
   return r.rows.length > 0;
 };
 
+// ── Autorisations de l'administrateur connecté ───────────────────────────────
+const lireAutorisations = async (userId) => {
+  const r = await pool.query(
+    `SELECT u.admin_sub_role, COALESCE(m.permissions, '{}'::jsonb) AS permissions
+     FROM users u LEFT JOIN membres m ON m.user_id = u.id
+     WHERE u.id = $1`,
+    [userId]
+  );
+  const row = r.rows[0];
+  if (!row) return null;
+  let perms = row.permissions || {};
+  if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch (_) { perms = {}; } }
+  return { role: row.admin_sub_role || 'super_admin', permissions: perms };
+};
+
+// Middleware : seul un Super Admin — ou un membre dont l'autorisation « membres »
+// (Créer des membres) est activée — peut lister / créer / modifier / supprimer des
+// membres. Évite qu'un Resp. Scolarité s'octroie des droits en appelant l'API.
+const exigerGestionMembres = async (req, res, next) => {
+  try {
+    const a = await lireAutorisations(req.user.id);
+    if (!a) return res.status(403).json({ success: false, message: 'Accès refusé.' });
+    req.estSuperAdmin = a.role === 'super_admin';
+    if (req.estSuperAdmin || a.permissions.membres === true) return next();
+    return res.status(403).json({ success: false, message: "Vous n'avez pas l'autorisation de gérer les membres." });
+  } catch (err) {
+    console.error('exigerGestionMembres error:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
+// ── GET /api/membres/moi — Droits de l'administrateur connecté (pour le menu) ──
+const getMesPermissions = async (req, res) => {
+  try {
+    const a = await lireAutorisations(req.user.id);
+    if (!a) return res.status(404).json({ success: false, message: 'Compte introuvable.' });
+    const droits = {};
+    Object.entries(a.permissions).forEach(([k, v]) => { if (typeof v === 'boolean') droits[k] = v; });
+    return res.status(200).json({ success: true, data: { role: a.role, droits } });
+  } catch (err) {
+    console.error('getMesPermissions error:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
 // ── GET /api/membres — Récupérer tous les administrateurs et membres ────────
 const getAllMembres = async (req, res) => {
   try {
@@ -79,13 +124,18 @@ const createMembre = async (req, res) => {
   try {
     const { nom, prenoms, email, tel, telephone, numero, motDePasse, role, admin_sub_role, domaine, permissions } = req.body;
 
-    if (!nom || !email || !motDePasse) {
-      return res.status(400).json({ success: false, message: 'Nom, Email et Mot de passe sont requis.' });
+    const telFinal = (tel || telephone || numero || '').toString().trim() || null;
+    if (!nom || !prenoms || !email || !telFinal) {
+      return res.status(400).json({ success: false, message: 'Nom, prénoms, email et téléphone sont requis.' });
     }
 
-    const telFinal = tel || telephone || numero || null;
-    const pass = motDePasse;
-    const hashedPassword = await bcrypt.hash(pass, 10);
+    // Plus de mot de passe à la création : le membre se connecte avec son nom, son
+    // prénom et son téléphone, puis définit son mot de passe à la première connexion
+    // (comme les professeurs). Un mot de passe fourni (anciens clients) reste accepté.
+    const hashedPassword = motDePasse ? await bcrypt.hash(String(motDePasse), 10) : null;
+    if ((admin_sub_role || role) === 'super_admin' && !req.estSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Seul un Super Admin peut créer un Super Admin.' });
+    }
     const subRole = admin_sub_role || role || 'scolarite';
     const domaineFinal = domaine || 'Tous';
     const permissionsObj = { ...(permissions || {}), domaine: domaineFinal };
@@ -213,6 +263,11 @@ const createMembre = async (req, res) => {
       if (client) client.release();
     }
 
+    // Domaine d'attribution (colonne utilisée à la connexion) — hors transaction, non bloquant.
+    try {
+      await pool.query('UPDATE administrateurs SET domaine_admin = $1 WHERE user_id = $2', [domaineFinal, createdUser.id]);
+    } catch (_) { /* colonne absente : le domaine reste lu depuis permissions.domaine */ }
+
     return res.status(201).json({
       success: true,
       message: 'Administrateur créé avec succès en base de données.',
@@ -240,6 +295,9 @@ const updatePermissions = async (req, res) => {
     const { id } = req.params;
     const { permissions, role } = req.body;
 
+    if (role === 'super_admin' && !req.estSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Seul un Super Admin peut attribuer ce rôle.' });
+    }
     if (!(await membreDeMonEtab(id, req.etablissementId))) {
       return res.status(404).json({ success: false, message: 'Membre introuvable.' });
     }
@@ -269,10 +327,113 @@ const updatePermissions = async (req, res) => {
   }
 };
 
+// ── PUT /api/membres/:id — Modifier les informations, le sous-rôle, le domaine ──
+// et les autorisations d'un membre (panneau « Modifier le membre »).
+const updateMembre = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nom, prenoms, email, tel, telephone, numero, role, admin_sub_role, domaine, permissions } = req.body;
+
+    if (!(await membreDeMonEtab(id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Membre introuvable.' });
+    }
+
+    const emailFinal = email ? String(email).trim().toLowerCase() : undefined;
+    if (emailFinal) {
+      const dup = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2', [emailFinal, id]);
+      if (dup.rows.length > 0) {
+        return res.status(409).json({ success: false, message: 'Cet email est déjà utilisé par un autre compte.' });
+      }
+    }
+
+    const subRole = admin_sub_role || role || undefined;
+    if (subRole === 'super_admin' && !req.estSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Seul un Super Admin peut attribuer ce rôle.' });
+    }
+    const telBrut = tel ?? telephone ?? numero;
+    const telFinal = telBrut === undefined || telBrut === null ? undefined : String(telBrut).trim();
+    const nomFinal = nom ? String(nom).trim().toUpperCase() : undefined;
+    const prenomsFinal = prenoms ? String(prenoms).trim() : undefined;
+
+    // 1. users
+    const sets = []; const p = [];
+    const add = (col, val) => { if (val === undefined || val === null || val === '') return; p.push(val); sets.push(`${col} = $${p.length}`); };
+    add('nom', nomFinal); add('prenoms', prenomsFinal); add('email', emailFinal);
+    add('tel', telFinal); add('admin_sub_role', subRole);
+    if (sets.length) {
+      p.push(id);
+      await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${p.length}`, p);
+    }
+
+    // 2. membres.permissions (droits + domaine)
+    let permsFinal = null;
+    if (permissions !== undefined || domaine !== undefined) {
+      const cur = await pool.query('SELECT permissions FROM membres WHERE user_id = $1', [id]);
+      let actuel = cur.rows[0]?.permissions || {};
+      if (typeof actuel === 'string') { try { actuel = JSON.parse(actuel); } catch (_) { actuel = {}; } }
+      permsFinal = { ...(permissions !== undefined ? permissions : actuel) };
+      permsFinal.domaine = domaine || actuel.domaine || 'Tous';
+      await pool.query(
+        `INSERT INTO membres (user_id, permissions) VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE SET permissions = EXCLUDED.permissions`,
+        [id, JSON.stringify(permsFinal)]
+      );
+    }
+
+    // 3. administrateurs (miroir, non bloquant)
+    try {
+      await pool.query(
+        `UPDATE administrateurs SET nom = COALESCE($1, nom), prenoms = COALESCE($2, prenoms),
+                email = COALESCE($3, email), tel = COALESCE($4, tel),
+                admin_sub_role = COALESCE($5, admin_sub_role)
+         WHERE user_id = $6`,
+        [nomFinal ?? null, prenomsFinal ?? null, emailFinal ?? null, telFinal ?? null, subRole ?? null, id]
+      );
+      if (permsFinal) {
+        await pool.query('UPDATE administrateurs SET permissions = $1, domaine_admin = $2 WHERE user_id = $3',
+          [JSON.stringify(permsFinal), permsFinal.domaine, id]);
+      }
+    } catch (admErr) {
+      console.warn('[updateMembre] miroir administrateurs:', admErr.message);
+    }
+
+    return res.status(200).json({ success: true, message: 'Membre mis à jour.' });
+  } catch (err) {
+    console.error('updateMembre error:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur lors de la modification.' });
+  }
+};
+
+// ── PATCH /api/membres/:id/statut — Suspendre / réactiver un membre ──────────
+const changerStatutMembre = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { statut } = req.body;
+    if (!['actif', 'suspendu'].includes(statut)) {
+      return res.status(400).json({ success: false, message: "Statut invalide (actif ou suspendu)." });
+    }
+    if (req.user && String(req.user.id) === String(id)) {
+      return res.status(400).json({ success: false, message: 'Vous ne pouvez pas modifier votre propre statut.' });
+    }
+    if (!(await membreDeMonEtab(id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Membre introuvable.' });
+    }
+    await pool.query('UPDATE users SET statut = $1 WHERE id = $2', [statut, id]);
+    try { await pool.query('UPDATE administrateurs SET statut = $1 WHERE user_id = $2', [statut, id]); } catch (_) {}
+    return res.status(200).json({ success: true, message: statut === 'actif' ? 'Membre réactivé.' : 'Membre suspendu.' });
+  } catch (err) {
+    console.error('changerStatutMembre error:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur.' });
+  }
+};
+
 // ── DELETE /api/membres/:id — Supprimer un administrateur ────────────────────
 const deleteMembre = async (req, res) => {
   try {
     const { id } = req.params;
+    if (req.user && String(req.user.id) === String(id)) {
+      return res.status(400).json({ success: false, message: 'Vous ne pouvez pas supprimer votre propre compte.' });
+    }
     if (!(await membreDeMonEtab(id, req.etablissementId))) {
       return res.status(404).json({ success: false, message: 'Membre introuvable.' });
     }
@@ -293,6 +454,10 @@ const deleteMembre = async (req, res) => {
 module.exports = {
   getAllMembres,
   createMembre,
+  exigerGestionMembres,
+  getMesPermissions,
   updatePermissions,
+  updateMembre,
+  changerStatutMembre,
   deleteMembre,
 };

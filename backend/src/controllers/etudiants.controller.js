@@ -36,6 +36,13 @@ const mapRowToEtudiant = (row) => ({
   niveau: row.niveau || '',
   dateNaissance: row.date_naissance || '',
   nationalite: row.nationalite || 'Burkinabè',
+  sexe: row.sexe || '',
+  regime: row.regime === 'soir' ? 'soir' : 'jour',
+  lieuNaissance: row.lieu_naissance || '',
+  urgenceNom: row.urgence_nom || '',
+  urgenceTel: row.urgence_tel || '',
+  urgenceLien: row.urgence_lien || '',
+  photoUrl: row.photo_url || '',
   adresse: row.adresse || '',
   nomParent: row.nom_parent || '',
   telParent: row.tel_parent || '',
@@ -204,6 +211,13 @@ const listEtudiants = async (req, res) => {
         COALESCE(e.niveau, u.niveau) AS niveau,
         COALESCE(e.date_naissance, u.date_naissance) AS date_naissance,
         COALESCE(e.nationalite, u.nationalite, 'Burkinabè') AS nationalite,
+        e.sexe AS sexe,
+        COALESCE(e.regime, 'jour') AS regime,
+        e.lieu_naissance AS lieu_naissance,
+        e.urgence_nom AS urgence_nom,
+        e.urgence_tel AS urgence_tel,
+        e.urgence_lien AS urgence_lien,
+        u.photo_url AS photo_url,
         COALESCE(e.adresse, u.adresse) AS adresse,
         COALESCE(e.nom_parent, u.nom_parent) AS nom_parent,
         COALESCE(e.tel_parent, u.tel_parent) AS tel_parent,
@@ -263,6 +277,12 @@ const inscrireEtudiant = async (req, res) => {
       telParent,
       emailParent,
       nationalite,
+      sexe,
+      regime,
+      lieuNaissance,
+      urgenceNom,
+      urgenceTel,
+      urgenceLien,
       matricule: matriculeBody,
       anneeEntree,
     } = req.body;
@@ -389,6 +409,28 @@ const inscrireEtudiant = async (req, res) => {
     const etuRow = await client.query('SELECT id FROM etudiants WHERE user_id = $1', [userId]);
     const etuId = etuRow.rows[0]?.id;
 
+    // Compléments d'identité (sexe, lieu de naissance, personne à prévenir).
+    // Colonnes ajoutées par migration_etudiants_identite.sql ; non bloquant si absente.
+    try {
+      const sexeNorm = ['M', 'F'].includes(String(sexe || '').trim().toUpperCase())
+        ? String(sexe).trim().toUpperCase() : null;
+      await client.query(
+        `UPDATE etudiants SET sexe = $1, lieu_naissance = $2, urgence_nom = $3,
+                urgence_tel = $4, urgence_lien = $5, regime = $7 WHERE user_id = $6`,
+        [
+          sexeNorm,
+          lieuNaissance?.trim() || null,
+          urgenceNom?.trim() || null,
+          urgenceTel?.trim() || null,
+          urgenceLien?.trim() || null,
+          userId,
+          regime === 'soir' ? 'soir' : 'jour',
+        ]
+      );
+    } catch (idErr) {
+      console.error('[inscrireEtudiant] identité complémentaire (migration manquante ?)', idErr.message);
+    }
+
     // Intégration groupe filière (non-bloquant, erreur ignorée)
     let groupesInfo = null;
     if (filiereId) {
@@ -464,6 +506,12 @@ const inscrireEtudiant = async (req, res) => {
         niveau: niveau?.trim() || '',
         dateNaissance: dateNaissance?.trim() || '',
         nationalite: nationalite?.trim() || 'Burkinabè',
+        sexe: ['M', 'F'].includes(String(sexe || '').trim().toUpperCase()) ? String(sexe).trim().toUpperCase() : '',
+        regime: regime === 'soir' ? 'soir' : 'jour',
+        lieuNaissance: lieuNaissance?.trim() || '',
+        urgenceNom: urgenceNom?.trim() || '',
+        urgenceTel: urgenceTel?.trim() || '',
+        urgenceLien: urgenceLien?.trim() || '',
         adresse: adresse?.trim() || '',
         nomParent: nomParent?.trim() || '',
         telParent: telParent?.trim() || '',
@@ -998,7 +1046,170 @@ const refuserInscriptions = async (req, res) => {
   }
 };
 
+// ── PUT /api/etudiants/:id/identite — compléter l'identité (carte d'étudiant) ──
+// :id = id de la table etudiants. Sert aux étudiants inscrits avant l'ajout des champs
+// sexe / lieu de naissance / personne à prévenir.
+const completerIdentite = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const b = req.body || {};
+    const p = [id];
+    const check = await pool.query(
+      `SELECT e.id FROM etudiants e JOIN users u ON u.id = e.user_id WHERE e.id = $1${etabClause(p, req.etablissementId, 'u')}`,
+      p
+    );
+    if (!check.rows.length) return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+
+    const sexe = ['M', 'F'].includes(String(b.sexe || '').trim().toUpperCase())
+      ? String(b.sexe).trim().toUpperCase() : null;
+    const t = (v) => (v === undefined || v === null || String(v).trim() === '' ? null : String(v).trim());
+    await pool.query(
+      `UPDATE etudiants SET sexe = $1, lieu_naissance = $2, date_naissance = $3, nationalite = $4,
+              urgence_nom = $5, urgence_tel = $6, urgence_lien = $7 WHERE id = $8`,
+      [sexe, t(b.lieuNaissance), t(b.dateNaissance), t(b.nationalite) || 'Burkinabè',
+       t(b.urgenceNom), t(b.urgenceTel), t(b.urgenceLien), id]
+    );
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('[completerIdentite]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour.' });
+  }
+};
+
+// Vérifie que l'étudiant :id (table etudiants) appartient à l'établissement de l'admin.
+const etudiantDeMonEtab = async (id, etabId) => {
+  const p = [id];
+  const r = await pool.query(
+    `SELECT e.id, e.user_id FROM etudiants e JOIN users u ON u.id = e.user_id WHERE e.id = $1${etabClause(p, etabId, 'u')}`,
+    p
+  );
+  return r.rows[0] || null;
+};
+
+// ── POST /api/etudiants/:id/photo — photo d'identité (facultative) ────────────
+// Passe par upload.single('file') + uploadToCloudinary (voir etudiants.routes.js).
+const uploaderPhotoEtudiant = async (req, res) => {
+  try {
+    if (!req.uploadedFileUrl) return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
+    const etu = await etudiantDeMonEtab(req.params.id, req.etablissementId);
+    if (!etu) return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+    await pool.query('UPDATE users SET photo_url = $1 WHERE id = $2', [req.uploadedFileUrl, etu.user_id]);
+    return res.status(200).json({ success: true, url: req.uploadedFileUrl });
+  } catch (err) {
+    console.error('[uploaderPhotoEtudiant]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de l\'enregistrement de la photo.' });
+  }
+};
+
+// ── POST /api/etudiants/:id/document — CNIB / acte de naissance / autre ───────
+// multipart : file + champ texte `type` ('cnib' | 'autre').
+const ajouterDocumentEtudiant = async (req, res) => {
+  try {
+    if (!req.uploadedFileUrl) return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
+    const etu = await etudiantDeMonEtab(req.params.id, req.etablissementId);
+    if (!etu) return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+    const type = ['cnib', 'autre'].includes(req.body?.type) ? req.body.type : 'autre';
+    await pool.query(
+      'INSERT INTO etudiant_documents (etudiant_id, type, nom_fichier, url) VALUES ($1, $2, $3, $4)',
+      [etu.id, type, req.file?.originalname || null, req.uploadedFileUrl]
+    );
+    return res.status(201).json({ success: true, url: req.uploadedFileUrl });
+  } catch (err) {
+    console.error('[ajouterDocumentEtudiant]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de l\'enregistrement du document.' });
+  }
+};
+
+// ── GET /api/etudiants/:id/documents ──────────────────────────────────────────
+const listerDocumentsEtudiant = async (req, res) => {
+  try {
+    const etu = await etudiantDeMonEtab(req.params.id, req.etablissementId);
+    if (!etu) return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+    const r = await pool.query(
+      'SELECT id, type, nom_fichier, url, created_at FROM etudiant_documents WHERE etudiant_id = $1 ORDER BY created_at DESC',
+      [etu.id]
+    );
+    return res.status(200).json({ success: true, data: r.rows });
+  } catch (err) {
+    console.error('[listerDocumentsEtudiant]', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors du chargement des documents.' });
+  }
+};
+
+// ── PUT /api/etudiants/:id — modifier la fiche d'un étudiant ──────────────────
+// :id = id de la table etudiants. Seuls les champs présents dans le body sont modifiés.
+// Le matricule n'est jamais modifiable ici.
+const modifierEtudiant = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const b = req.body || {};
+    const etu = await etudiantDeMonEtab(id, req.etablissementId);
+    if (!etu) return res.status(404).json({ success: false, message: 'Étudiant introuvable.' });
+
+    const t = (v) => (v === undefined || v === null || String(v).trim() === '' ? null : String(v).trim());
+    const has = (k) => Object.prototype.hasOwnProperty.call(b, k);
+    if (has('nom') && !t(b.nom)) return res.status(400).json({ success: false, message: 'Le nom ne peut pas être vide.' });
+    if (has('prenoms') && !t(b.prenoms)) return res.status(400).json({ success: false, message: 'Les prénoms ne peuvent pas être vides.' });
+
+    // Filière (par nom, dans l'établissement) -> filiere_id / filiere_nom / domaine
+    let filiereId = null; let filiereNom = null; let domaine = null;
+    if (has('filiere') && t(b.filiere)) {
+      const pf = [t(b.filiere)];
+      const fr = await pool.query(
+        `SELECT id, nom FROM filieres WHERE LOWER(TRIM(nom)) = LOWER($1)${etabClause(pf, req.etablissementId, 'filieres')}`, pf
+      );
+      if (!fr.rows[0]) return res.status(400).json({ success: false, message: 'Filière introuvable dans votre établissement.' });
+      filiereId = fr.rows[0].id; filiereNom = fr.rows[0].nom; domaine = domaineFromFiliere(filiereNom);
+    }
+
+    const sets = []; const vals = [];
+    const add = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+    const setsU = []; const valsU = [];
+    const addU = (col, v) => { valsU.push(v); setsU.push(`${col} = $${valsU.length}`); };
+    const both = (col, v) => { add(col, v); addU(col, v); };
+
+    if (has('nom')) both('nom', t(b.nom).toUpperCase());
+    if (has('prenoms')) both('prenoms', t(b.prenoms));
+    if (has('email') && t(b.email)) both('email', t(b.email));
+    if (has('telephone')) both('tel', t(b.telephone));
+    if (has('adresse')) both('adresse', t(b.adresse));
+    if (has('niveau')) both('niveau', t(b.niveau));
+    if (has('dateNaissance')) both('date_naissance', t(b.dateNaissance));
+    if (has('nationalite')) both('nationalite', t(b.nationalite) || 'Burkinabè');
+    if (has('nomParent')) both('nom_parent', t(b.nomParent));
+    if (has('telParent')) both('tel_parent', t(b.telParent));
+    if (has('emailParent')) both('email_parent', t(b.emailParent));
+    if (filiereId) {
+      add('filiere_id', filiereId); both('filiere_nom', filiereNom); both('domaine', domaine);
+    }
+    if (has('sexe')) add('sexe', ['M', 'F'].includes(String(b.sexe).toUpperCase()) ? String(b.sexe).toUpperCase() : null);
+    if (has('regime')) add('regime', b.regime === 'soir' ? 'soir' : 'jour');
+    if (has('lieuNaissance')) add('lieu_naissance', t(b.lieuNaissance));
+    if (has('urgenceNom')) add('urgence_nom', t(b.urgenceNom));
+    if (has('urgenceTel')) add('urgence_tel', t(b.urgenceTel));
+    if (has('urgenceLien')) add('urgence_lien', t(b.urgenceLien));
+
+    if (!sets.length) return res.status(400).json({ success: false, message: 'Rien à modifier.' });
+    vals.push(etu.id);
+    await pool.query(`UPDATE etudiants SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
+    if (setsU.length) {
+      valsU.push(etu.user_id);
+      await pool.query(`UPDATE users SET ${setsU.join(', ')} WHERE id = $${valsU.length}`, valsU);
+    }
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('[modifierEtudiant]', err);
+    if (err.code === '23505') return res.status(409).json({ success: false, message: 'Cet email est déjà utilisé.' });
+    return res.status(500).json({ success: false, message: 'Erreur lors de la modification.' });
+  }
+};
+
 module.exports = {
+  modifierEtudiant,
+  uploaderPhotoEtudiant,
+  ajouterDocumentEtudiant,
+  listerDocumentsEtudiant,
+  completerIdentite,
   listEtudiants,
   inscrireEtudiant,
   finaliserPremiereConnexion,

@@ -1,9 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../admin/admin_theme.dart';
-import '../admin/admin_widgets.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
-import '../services/supabase_service.dart';
 import '../utils/snackbar_helper.dart';
 
 class Membre {
@@ -29,220 +29,104 @@ class Membre {
   });
 }
 
-final List<Membre> adminMembres = [
-  Membre(
-    id: 'M001',
-    nom: 'COMPAORÉ',
-    prenoms: 'Idrissa',
-    email: 'idrissa@ist.bf',
-    role: 'Super Admin',
-    adminRole: AdminRole.superAdmin,
-    dateCreation: '01/09/2020',
-    droits: {
-      'etudiants': true,
-      'notes': true,
-      'reclamations': true,
-      'filieres': true,
-      'professeurs': true,
-      'parents': true,
-      'messages': true,
-      'annonces': true,
-      'stats': true,
-      'membres': true,
-    },
-  ),
-  Membre(
-    id: 'M002',
-    nom: 'KABORÉ',
-    prenoms: 'Sylvie',
-    email: 'sylvie@ist.bf',
-    role: 'Scolarité & Pédagogie',
-    adminRole: AdminRole.scolarite,
-    dateCreation: '01/01/2022',
-    droits: {
-      'etudiants': true,
-      'notes': false,
-      'reclamations': true,
-      'filieres': true,
-      'professeurs': true,
-      'parents': true,
-      'messages': false,
-      'annonces': false,
-      'stats': true,
-      'membres': false,
-    },
-  ),
-  Membre(
-    id: 'M003',
-    nom: 'ZONGO',
-    prenoms: 'Marcel',
-    email: 'marcel@ist.bf',
-    role: 'Secrétariat & Inscriptions',
-    adminRole: AdminRole.secretariat,
-    dateCreation: '15/03/2023',
-    droits: {
-      'etudiants': true,
-      'notes': false,
-      'reclamations': true,
-      'filieres': false,
-      'professeurs': false,
-      'parents': true,
-      'messages': true,
-      'annonces': true,
-      'stats': false,
-      'membres': false,
-    },
-  ),
-  Membre(
-    id: 'M004',
-    nom: 'SAWADOGO',
-    prenoms: 'Aïcha',
-    email: 'aicha@ist.bf',
-    role: 'Resp. Examens & Notes',
-    adminRole: AdminRole.examens,
-    dateCreation: '10/10/2024',
-    droits: {
-      'etudiants': false,
-      'notes': true,
-      'reclamations': true,
-      'filieres': false,
-      'professeurs': false,
-      'parents': false,
-      'messages': false,
-      'annonces': false,
-      'stats': true,
-      'membres': false,
-    },
-  ),
+/// Liste partagée, remplie depuis la base de données (aucune donnée factice).
+final List<Membre> adminMembres = [];
+
+// ── Autorisations (regroupées comme sur la maquette) ─────────────────────────
+class _Groupe {
+  final String titre;
+  final IconData icone;
+  final List<String> cles;
+  const _Groupe(this.titre, this.icone, this.cles);
+}
+
+const List<_Groupe> _groupesDroits = [
+  _Groupe('Données académiques', Icons.school_outlined, ['etudiants', 'professeurs', 'filieres', 'parents']),
+  _Groupe('Scolarité', Icons.fact_check_outlined, ['notes', 'bulletins', 'reclamations']),
+  _Groupe('Communication', Icons.forum_outlined, ['messages', 'annonces', 'publications', 'bde']),
+  _Groupe('Administration', Icons.admin_panel_settings_outlined, ['membres', 'stats']),
 ];
 
-const _sectionsLabels = {
+const Map<String, String> _sectionsLabels = {
   'etudiants': 'Étudiants',
-  'notes': 'Notes & Examens',
-  'reclamations': 'Réclamations',
-  'filieres': 'Filières & EDT',
   'professeurs': 'Professeurs',
+  'filieres': 'Filières & EDT',
   'parents': 'Parents',
+  'notes': 'Notes & examens',
+  'bulletins': 'Bulletins',
+  'reclamations': 'Réclamations',
   'messages': 'Messages',
   'annonces': 'Annonces',
+  'publications': 'Publications statiques',
+  'bde': 'BDE & Événements',
+  'membres': 'Créer des membres',
   'stats': 'Statistiques',
-  'membres': 'Membres & Rôles',
 };
 
-IconData _getIconForSection(String key) {
+IconData _iconeSection(String key) {
   switch (key) {
     case 'etudiants':
       return Icons.school_rounded;
-    case 'notes':
-      return Icons.bar_chart_rounded;
-    case 'reclamations':
-      return Icons.warning_amber_rounded;
-    case 'filieres':
-      return Icons.apartment_rounded;
     case 'professeurs':
       return Icons.person_outline_rounded;
+    case 'filieres':
+      return Icons.apartment_rounded;
     case 'parents':
       return Icons.family_restroom_rounded;
+    case 'notes':
+      return Icons.bar_chart_rounded;
+    case 'bulletins':
+      return Icons.description_outlined;
+    case 'reclamations':
+      return Icons.warning_amber_rounded;
     case 'messages':
       return Icons.forum_outlined;
     case 'annonces':
       return Icons.campaign_outlined;
+    case 'publications':
+      return Icons.article_outlined;
+    case 'bde':
+      return Icons.celebration_outlined;
+    case 'membres':
+      return Icons.group_add_outlined;
     case 'stats':
       return Icons.insert_chart_outlined_rounded;
-    case 'membres':
-      return Icons.shield_outlined;
     default:
       return Icons.widgets_rounded;
   }
 }
 
-Map<String, bool> _getDefaultRightsForRole(AdminRole role) {
-  switch (role) {
-    case AdminRole.superAdmin:
-      return {for (final k in _sectionsLabels.keys) k: true};
-    case AdminRole.scolarite:
-      return {
-        'etudiants': true,
-        'notes': false,
-        'reclamations': true,
-        'filieres': true,
-        'professeurs': true,
-        'parents': true,
-        'messages': false,
-        'annonces': false,
-        'stats': true,
-        'membres': false,
-      };
-    case AdminRole.examens:
-      return {
-        'etudiants': false,
-        'notes': true,
-        'reclamations': true,
-        'filieres': false,
-        'professeurs': false,
-        'parents': false,
-        'messages': false,
-        'annonces': false,
-        'stats': true,
-        'membres': false,
-      };
-    case AdminRole.secretariat:
-      return {
-        'etudiants': true,
-        'notes': false,
-        'reclamations': true,
-        'filieres': false,
-        'professeurs': false,
-        'parents': true,
-        'messages': true,
-        'annonces': true,
-        'stats': false,
-        'membres': false,
-      };
-    case AdminRole.communication:
-      return {
-        'etudiants': false,
-        'notes': false,
-        'reclamations': false,
-        'filieres': false,
-        'professeurs': false,
-        'parents': false,
-        'messages': true,
-        'annonces': true,
-        'stats': false,
-        'membres': false,
-      };
-    case AdminRole.cycleDirecteur:
-      return {
-        'etudiants': true,
-        'notes': true,
-        'reclamations': true,
-        'filieres': true,
-        'professeurs': true,
-        'parents': true,
-        'messages': true,
-        'annonces': true,
-        'stats': true,
-        'membres': false,
-      };
-    case AdminRole.cantiniere:
-      // Aucun droit sur ces sections — son seul accès (menu "Cantine") est
-      // géré séparément par AdminMenuService.allowedItems (admin_shell.dart).
-      return {
-        'etudiants': false,
-        'notes': false,
-        'reclamations': false,
-        'filieres': false,
-        'professeurs': false,
-        'parents': false,
-        'messages': false,
-        'annonces': false,
-        'stats': false,
-        'membres': false,
-      };
-  }
+Map<String, bool> _droitsParDefaut(AdminRole role) {
+  final toutes = _sectionsLabels.keys.toList();
+  final Set<String> actifs = switch (role) {
+    AdminRole.superAdmin => toutes.toSet(),
+    AdminRole.scolarite => {'etudiants', 'professeurs', 'filieres', 'parents', 'reclamations', 'stats'},
+    AdminRole.examens => {'notes', 'bulletins', 'reclamations', 'stats'},
+    AdminRole.secretariat => {'etudiants', 'parents', 'reclamations', 'messages', 'annonces'},
+    AdminRole.communication => {'messages', 'annonces', 'publications', 'bde'},
+    AdminRole.cycleDirecteur => toutes.where((k) => k != 'membres').toSet(),
+    AdminRole.cantiniere => <String>{},
+  };
+  return {for (final k in toutes) k: actifs.contains(k)};
 }
 
+String _roleCourt(AdminRole r) => switch (r) {
+      AdminRole.superAdmin => 'Super Admin',
+      AdminRole.scolarite => 'Resp. Scolarité',
+      AdminRole.examens => 'Resp. Examens',
+      AdminRole.secretariat => 'Secrétariat',
+      AdminRole.communication => 'Communication',
+      AdminRole.cycleDirecteur => 'Dir. de Cycle',
+      AdminRole.cantiniere => 'Cantine',
+    };
+
+const Color _bordureGris = Color(0xFFE5E7EB);
+const Color _bordureChamp = Color(0xFFD1D5DB);
+const Color _texteFonce = Color(0xFF1A1A2E);
+const Color _texteGris = Color(0xFF6B7280);
+const List<String> _domainesParDefaut = ['Sciences & Technologies', 'Sciences de Gestion'];
+
+// ═════════════════════════════════════════════════════════════════════════════
 class AdminMembres extends StatefulWidget {
   const AdminMembres({super.key});
 
@@ -251,568 +135,1065 @@ class AdminMembres extends StatefulWidget {
 }
 
 class _AdminMembresState extends State<AdminMembres> {
-  bool _loading = false;
+  bool _loading = true;
+  String? _erreur;
+  List<String> _domaines = [..._domainesParDefaut];
+
+  String _recherche = '';
+  String _fDomaine = 'tous';
+  String _fRole = 'tous';
+  String _fStatut = 'tous';
+  int _page = 0;
+  static const int _parPage = 8;
+  final Set<String> _coches = {};
+
+  bool _panneau = false;
+  Membre? _edition;
 
   @override
   void initState() {
     super.initState();
-    _chargerMembresDepuisBDD();
+    _charger();
   }
 
-  Future<void> _chargerMembresDepuisBDD() async {
-    setState(() => _loading = true);
+  void _snack(String msg) {
+    if (mounted) showAppSnackBar(context, msg);
+  }
+
+  Future<void> _charger({bool silencieux = false}) async {
+    if (!silencieux) setState(() { _loading = true; _erreur = null; });
     final res = await ApiService.getMembresAdmin();
+    List<String> domaines = _domaines;
+    try {
+      final rf = await ApiService.getFilieres();
+      if (rf['success'] == true) {
+        final d = (rf['data'] as List)
+            .map((f) => (f['domaine'] ?? '').toString().trim())
+            .where((x) => x.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+        if (d.isNotEmpty) domaines = d;
+      }
+    } catch (_) {}
+    if (!mounted) return;
+
     if (res['success'] == true && res['data'] != null) {
-      final list = res['data'] as List<dynamic>;
-      if (list.isNotEmpty) {
-        final bddMembres = list.map((item) {
-          final subRoleCode = item['admin_sub_role']?.toString() ?? item['role']?.toString();
-          final adminRole = AdminRoleExtension.fromCode(subRoleCode);
-          Map<String, bool> droitsMap = {};
-          if (item['droits'] is Map) {
-            (item['droits'] as Map).forEach((k, v) => droitsMap[k.toString()] = v == true);
-          } else {
-            droitsMap = _getDefaultRightsForRole(adminRole);
-          }
+      final bdd = (res['data'] as List<dynamic>).map((item) {
+        final adminRole = AdminRoleExtension.fromCode(item['admin_sub_role']?.toString() ?? item['role']?.toString());
+        final droits = _droitsParDefaut(adminRole);
+        if (item['droits'] is Map) {
+          (item['droits'] as Map).forEach((k, v) {
+            if (v is bool) droits[k.toString()] = v;
+          });
+        }
+        if (adminRole == AdminRole.superAdmin) {
+          for (final k in droits.keys.toList()) { droits[k] = true; }
+        }
+        return Membre(
+          id: item['id']?.toString() ?? '',
+          nom: item['nom']?.toString() ?? '',
+          prenoms: item['prenoms']?.toString() ?? '',
+          email: item['email']?.toString() ?? '',
+          tel: item['tel']?.toString() ?? item['numero']?.toString(),
+          domaine: (item['domaine']?.toString().isNotEmpty ?? false) ? item['domaine'].toString() : 'Tous',
+          role: adminRole.label,
+          adminRole: adminRole,
+          droits: droits,
+          dateCreation: item['dateCreation']?.toString() ?? '',
+          actif: item['actif'] != false,
+        );
+      }).toList();
+      setState(() {
+        adminMembres..clear()..addAll(bdd);
+        _domaines = domaines;
+        _erreur = null;
+        _coches.removeWhere((id) => !adminMembres.any((m) => m.id == id));
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _domaines = domaines;
+        _erreur = res['error']?.toString() ?? 'Erreur de chargement des membres.';
+        _loading = false;
+      });
+    }
+  }
 
-          return Membre(
-            id: item['id']?.toString() ?? 'M${DateTime.now().millisecondsSinceEpoch}',
-            nom: item['nom']?.toString() ?? '',
-            prenoms: item['prenoms']?.toString() ?? '',
-            email: item['email']?.toString() ?? '',
-            tel: item['tel']?.toString() ?? item['numero']?.toString(),
-            domaine: item['domaine']?.toString() ?? 'Tous',
-            role: adminRole.label,
-            adminRole: adminRole,
-            droits: droitsMap,
-            dateCreation: item['dateCreation']?.toString() ?? '01/01/2026',
-            actif: item['actif'] != false,
-          );
-        }).toList();
+  // ── Filtres ───────────────────────────────────────────────────────────────
+  List<Membre> get _filtres {
+    final q = _recherche.trim().toLowerCase();
+    return adminMembres.where((m) {
+      if (_fStatut == 'actif' && !m.actif) return false;
+      if (_fStatut == 'suspendu' && m.actif) return false;
+      if (_fRole != 'tous' && m.adminRole.code != _fRole) return false;
+      if (_fDomaine != 'tous' && m.domaine != _fDomaine && m.domaine != 'Tous') return false;
+      if (q.isNotEmpty) {
+        final t = '${m.nom} ${m.prenoms} ${m.email} ${m.tel ?? ''} ${m.adminRole.label} ${m.domaine}'.toLowerCase();
+        if (!t.contains(q)) return false;
+      }
+      return true;
+    }).toList();
+  }
 
-        setState(() {
-          adminMembres.clear();
-          adminMembres.addAll(bddMembres);
-        });
+  // ── Actions ───────────────────────────────────────────────────────────────
+  void _ouvrirPanneau([Membre? m]) => setState(() { _edition = m; _panneau = true; });
+  void _fermerPanneau() => setState(() { _panneau = false; _edition = null; });
+
+  Future<void> _changerStatut(List<Membre> ms, bool actif) async {
+    int ok = 0;
+    try {
+      final headers = await ApiService.getHeaders();
+      for (final m in ms) {
+        final r = await http.patch(
+          Uri.parse('${ApiService.baseUrl}/membres/${m.id}/statut'),
+          headers: headers,
+          body: jsonEncode({'statut': actif ? 'actif' : 'suspendu'}),
+        );
+        if (r.statusCode == 200) {
+          ok++;
+          m.actif = actif;
+        }
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(_coches.clear);
+    _snack(ok == ms.length
+        ? (actif ? '✅ Membre(s) réactivé(s)' : '⏸️ Membre(s) suspendu(s)')
+        : '⚠️ Certaines modifications ont échoué (vous ne pouvez pas modifier votre propre compte)');
+  }
+
+  Future<void> _supprimer(Membre m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer ce membre ?'),
+        content: Text('${m.prenoms} ${m.nom} n\'aura plus accès au panel administrateur.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Supprimer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final res = await ApiService.deleteMembreAdmin(m.id);
+    if (!mounted) return;
+    if (res['success'] == true) {
+      setState(() => adminMembres.remove(m));
+      _snack('🗑️ Membre supprimé');
+    } else {
+      _snack('⚠️ ${res['error'] ?? 'Suppression impossible'}');
+    }
+  }
+
+  /// Création ou modification ; renvoie un message d'erreur, ou null si tout va bien.
+  Future<String?> _sauver(Membre? existant, Map<String, dynamic> d) async {
+    final AdminRole role = d['role'] as AdminRole;
+    final droits = Map<String, bool>.from(d['droits'] as Map);
+    if (existant == null) {
+      final res = await ApiService.creerMembreAdmin(
+        nom: d['nom'] as String,
+        prenoms: d['prenoms'] as String,
+        email: d['email'] as String,
+        tel: d['tel'] as String,
+        domaine: d['domaine'] as String,
+        role: role.code,
+        permissions: droits,
+      );
+      if (res['success'] != true) return res['error']?.toString() ?? 'Erreur lors de la création.';
+    } else {
+      try {
+        final headers = await ApiService.getHeaders();
+        final r = await http.put(
+          Uri.parse('${ApiService.baseUrl}/membres/${existant.id}'),
+          headers: headers,
+          body: jsonEncode({
+            'nom': d['nom'],
+            'prenoms': d['prenoms'],
+            'email': d['email'],
+            'tel': d['tel'],
+            'domaine': d['domaine'],
+            'role': role.code,
+            'admin_sub_role': role.code,
+            'permissions': droits,
+          }),
+        );
+        if (r.statusCode != 200) {
+          String msg = 'Erreur lors de la modification.';
+          try { msg = jsonDecode(utf8.decode(r.bodyBytes))['message']?.toString() ?? msg; } catch (_) {}
+          return msg;
+        }
+      } catch (_) {
+        return 'Serveur injoignable.';
       }
     }
-    setState(() => _loading = false);
+    await _charger(silencieux: true);
+    if (!mounted) return null;
+    setState(() { _panneau = false; _edition = null; });
+    _snack(existant == null
+        ? '✅ Membre créé. Il se connectera avec son nom, prénom et téléphone.'
+        : '✅ Membre mis à jour');
+    return null;
   }
 
-  Future<void> _supprimerMembre(Membre m) async {
-    setState(() => adminMembres.remove(m));
-    _snack('🗑️ Membre supprimé');
-    await ApiService.deleteMembreAdmin(m.id);
-  }
-
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AdminTheme.background,
-      body: Column(children: [
-        AdminPageHeader(
-          title: 'Membres & Rôles Administrateurs',
-          subtitle: '${adminMembres.length} membres · Subdivisez les accès au panel admin',
-          trailing: AdminAddButton(label: 'Nouveau membre', onTap: () => _creerMembre()),
-        ),
-        adminDivider,
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.all(20),
-            child: Center(child: CircularProgressIndicator()),
+      body: LayoutBuilder(builder: (context, c) {
+        final largeurPanneau = c.maxWidth < 480 ? c.maxWidth : 460.0;
+        return Stack(children: [
+          _contenu(),
+          if (_panneau) ...[
+            Positioned.fill(
+              child: GestureDetector(onTap: _fermerPanneau, child: const ColoredBox(color: Color(0x66000000))),
+            ),
+            Positioned(
+              top: 0,
+              bottom: 0,
+              right: 0,
+              width: largeurPanneau,
+              child: _PanneauMembre(
+                key: ValueKey('panneau-${_edition?.id ?? 'new'}'),
+                membre: _edition,
+                domaines: _domaines,
+                onFermer: _fermerPanneau,
+                onEnregistrer: (d) => _sauver(_edition, d),
+              ),
+            ),
+          ],
+        ]);
+      }),
+    );
+  }
+
+  Widget _contenu() {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_erreur != null) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          const SizedBox(height: 12),
+          Text(_erreur!, style: const TextStyle(color: Colors.red)),
+          const SizedBox(height: 12),
+          ElevatedButton(onPressed: _charger, child: const Text('Réessayer')),
+        ]),
+      );
+    }
+
+    final liste = _filtres;
+    final nbPages = liste.isEmpty ? 1 : ((liste.length - 1) ~/ _parPage) + 1;
+    if (_page >= nbPages) _page = nbPages - 1;
+    final debut = _page * _parPage;
+    final fin = (debut + _parPage) > liste.length ? liste.length : debut + _parPage;
+    final visibles = liste.isEmpty ? <Membre>[] : liste.sublist(debut, fin);
+
+    return RefreshIndicator(
+      onRefresh: () => _charger(silencieux: true),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 10,
+            children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                Text('Membres de l\'administration',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _texteFonce)),
+                SizedBox(height: 2),
+                Text('Gérez les rôles, domaines et autorisations d\'accès.',
+                    style: TextStyle(fontSize: 13, color: _texteGris)),
+              ]),
+              SizedBox(
+                height: 44,
+                child: ElevatedButton.icon(
+                  onPressed: () => _ouvrirPanneau(),
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text('Nouveau membre', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminTheme.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
           ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: adminMembres.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (_, i) => _carteMembre(adminMembres[i]),
+          const SizedBox(height: 16),
+          _kpis(),
+          const SizedBox(height: 16),
+          _barreFiltres(),
+          if (_coches.isNotEmpty) ...[const SizedBox(height: 10), _barreSelection()],
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _bordureGris),
+            ),
+            child: Column(children: [
+              if (visibles.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Text('Aucun membre ne correspond.', style: TextStyle(color: Colors.grey, fontSize: 15)),
+                )
+              else
+                LayoutBuilder(builder: (_, c) => c.maxWidth >= 860 ? _tableau(visibles) : _cartes(visibles)),
+              const SizedBox(height: 12),
+              _pagination(liste.length, debut, fin, nbPages),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ── KPI ───────────────────────────────────────────────────────────────────
+  Widget _kpis() {
+    final actifs = adminMembres.where((m) => m.actif).length;
+    final couleurs = [
+      [AdminTheme.warning, AdminTheme.warningLight],
+      [AdminTheme.success, AdminTheme.successLight],
+      [AdminTheme.info, AdminTheme.infoLight],
+      [const Color(0xFF7C3AED), const Color(0xFFF3E8FF)],
+    ];
+    return LayoutBuilder(builder: (_, c) {
+      final cols = c.maxWidth >= 900 ? 3 : (c.maxWidth >= 560 ? 2 : 1);
+      final w = (c.maxWidth - (cols - 1) * 12) / cols;
+      Widget k(IconData ic, Color fg, Color bg, String label, String val) => SizedBox(
+            width: w,
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _bordureGris),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                  child: Icon(ic, color: fg, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(label, style: const TextStyle(fontSize: 12.5, color: _texteGris), overflow: TextOverflow.ellipsis),
+                    Text(val, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _texteFonce)),
+                  ]),
+                ),
+              ]),
+            ),
+          );
+      final domaines = _domaines.take(4).toList();
+      return Wrap(spacing: 12, runSpacing: 12, children: [
+        k(Icons.groups_rounded, AdminTheme.primary, AdminTheme.primaryLight, 'Membres actifs', '$actifs'),
+        for (int i = 0; i < domaines.length; i++)
+          k(Icons.school_rounded, couleurs[i % couleurs.length][0], couleurs[i % couleurs.length][1], domaines[i],
+              '${adminMembres.where((m) => m.domaine == domaines[i]).length}'),
+      ]);
+    });
+  }
+
+  // ── Filtres ───────────────────────────────────────────────────────────────
+  Widget _liste_(String label, String value, List<String> vals, List<String> labels, ValueChanged<String?> on) {
+    return SizedBox(
+      width: 190,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _bordureGris)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _bordureGris)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: vals.contains(value) ? value : vals.first,
+            isDense: true,
+            isExpanded: true,
+            style: const TextStyle(fontSize: 13, color: _texteFonce),
+            items: [for (int i = 0; i < vals.length; i++) DropdownMenuItem(value: vals[i], child: Text(labels[i], overflow: TextOverflow.ellipsis))],
+            onChanged: on,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _barreFiltres() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _bordureGris),
+      ),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SizedBox(
+            width: 260,
+            height: 44,
+            child: TextField(
+              onChanged: (v) => setState(() { _recherche = v; _page = 0; }),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un membre…',
+                hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                filled: true,
+                fillColor: const Color(0xFFF9FAFB),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _bordureGris)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _bordureGris)),
+              ),
+            ),
+          ),
+          _liste_('Domaine', _fDomaine, ['tous', ..._domaines], ['Tous les domaines', ..._domaines],
+              (v) => setState(() { _fDomaine = v ?? 'tous'; _page = 0; })),
+          _liste_('Rôle', _fRole, ['tous', ...AdminRole.values.map((r) => r.code)],
+              ['Tous les rôles', ...AdminRole.values.map((r) => r.label)],
+              (v) => setState(() { _fRole = v ?? 'tous'; _page = 0; })),
+          _liste_('Statut', _fStatut, ['tous', 'actif', 'suspendu'], ['Tous les statuts', 'Actif', 'Suspendu'],
+              (v) => setState(() { _fStatut = v ?? 'tous'; _page = 0; })),
+        ],
+      ),
+    );
+  }
+
+  Widget _barreSelection() {
+    final ms = adminMembres.where((m) => _coches.contains(m.id) && m.adminRole != AdminRole.superAdmin).toList();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(color: AdminTheme.primaryLight, borderRadius: BorderRadius.circular(10)),
+      child: Wrap(spacing: 10, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        Text('${_coches.length} sélectionné(s)',
+            style: const TextStyle(fontWeight: FontWeight.w700, color: _texteFonce, fontSize: 13)),
+        TextButton.icon(
+          onPressed: ms.isEmpty ? null : () => _changerStatut(ms, true),
+          icon: const Icon(Icons.check_circle_outline, size: 18),
+          label: const Text('Réactiver'),
+        ),
+        TextButton.icon(
+          onPressed: ms.isEmpty ? null : () => _changerStatut(ms, false),
+          icon: const Icon(Icons.pause_circle_outline, size: 18),
+          label: const Text('Suspendre'),
+        ),
+        TextButton(onPressed: () => setState(_coches.clear), child: const Text('Annuler')),
       ]),
     );
   }
 
-  Widget _carteMembre(Membre m) {
-    final isSuperAdmin = m.adminRole == AdminRole.superAdmin;
+  // ── Tableau (écran large) ─────────────────────────────────────────────────
+  Widget _tableau(List<Membre> lignes) {
+    final toutes = lignes.every((m) => _coches.contains(m.id));
+    Widget th(String t, {int flex = 1, double? w}) {
+      final child = Text(t, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _texteFonce));
+      return w != null ? SizedBox(width: w, child: child) : Expanded(flex: flex, child: child);
+    }
 
+    return Column(children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+        child: Row(children: [
+          SizedBox(
+            width: 40,
+            child: Checkbox(
+              value: toutes,
+              onChanged: (v) => setState(() {
+                for (final m in lignes) {
+                  v == true ? _coches.add(m.id) : _coches.remove(m.id);
+                }
+              }),
+            ),
+          ),
+          th('Membre', flex: 26),
+          th('Contact', flex: 24),
+          th('Domaine(s)', flex: 18),
+          th('Rôle', flex: 14),
+          th('Statut', flex: 10),
+          th('Actions', w: 100),
+        ]),
+      ),
+      for (final m in lignes) _ligneTableau(m),
+    ]);
+  }
+
+  Widget _ligneTableau(Membre m) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+      child: Row(children: [
+        SizedBox(
+          width: 40,
+          child: Checkbox(
+            value: _coches.contains(m.id),
+            onChanged: (v) => setState(() { v == true ? _coches.add(m.id) : _coches.remove(m.id); }),
+          ),
+        ),
+        Expanded(
+          flex: 26,
+          child: InkWell(
+            onTap: () => _ouvrirPanneau(m),
+            child: Row(children: [
+              _avatar(m, 44),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${m.prenoms} ${m.nom}'.toUpperCase(),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _texteFonce), overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 3),
+                  _chipRole(m),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+        Expanded(flex: 24, child: _contact(m)),
+        Expanded(flex: 18, child: Align(alignment: Alignment.centerLeft, child: _badgeDomaine(m.domaine))),
+        Expanded(flex: 14, child: Align(alignment: Alignment.centerLeft, child: _badgeRoleCourt(m))),
+        Expanded(flex: 10, child: Align(alignment: Alignment.centerLeft, child: _badgeStatut(m.actif))),
+        SizedBox(width: 100, child: _actions(m)),
+      ]),
+    );
+  }
+
+  // ── Cartes (écran étroit) ─────────────────────────────────────────────────
+  Widget _cartes(List<Membre> lignes) {
+    return Column(children: [
+      for (final m in lignes)
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _bordureGris),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Checkbox(
+                value: _coches.contains(m.id),
+                onChanged: (v) => setState(() { v == true ? _coches.add(m.id) : _coches.remove(m.id); }),
+              ),
+              _avatar(m, 42),
+              const SizedBox(width: 10),
+              Expanded(
+                child: InkWell(
+                  onTap: () => _ouvrirPanneau(m),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${m.prenoms} ${m.nom}'.toUpperCase(),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _texteFonce), overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 3),
+                    _chipRole(m),
+                  ]),
+                ),
+              ),
+              _badgeStatut(m.actif),
+            ]),
+            const SizedBox(height: 8),
+            _contact(m),
+            const SizedBox(height: 8),
+            Row(children: [
+              _badgeDomaine(m.domaine),
+              const Spacer(),
+              _actions(m),
+            ]),
+          ]),
+        ),
+    ]);
+  }
+
+  Widget _avatar(Membre m, double t) {
+    final sup = m.adminRole == AdminRole.superAdmin;
+    final ini = '${m.prenoms.isNotEmpty ? m.prenoms[0] : ''}${m.nom.isNotEmpty ? m.nom[0] : ''}'.toUpperCase();
+    return CircleAvatar(
+      radius: t / 2,
+      backgroundColor: sup ? AdminTheme.primary : const Color(0xFF1E40AF),
+      child: Text(ini, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: t * 0.34)),
+    );
+  }
+
+  Widget _chipRole(Membre m) {
+    final sup = m.adminRole == AdminRole.superAdmin;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSuperAdmin ? AdminTheme.primary.withValues(alpha: 0.3) : const Color(0xFFE5E7EB),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          )
-        ],
+        color: sup ? const Color(0xFFEEF2FF) : AdminTheme.primaryLight,
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: isSuperAdmin ? AdminTheme.primaryLight : const Color(0xFFF5F7FA),
-                  child: Text(
-                    '${m.prenoms.isNotEmpty ? m.prenoms[0] : 'A'}${m.nom.isNotEmpty ? m.nom[0] : 'D'}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isSuperAdmin ? AdminTheme.primary : const Color(0xFF6B7280),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text('${m.prenoms} ${m.nom}',
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isSuperAdmin ? const Color(0xFFEEF2FF) : const Color(0xFFF3F4F6),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              m.adminRole.label,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: isSuperAdmin ? const Color(0xFF4F46E5) : const Color(0xFF4B5563),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Text(
-                            m.tel != null && m.tel!.isNotEmpty ? '${m.email} • ${m.tel}' : m.email,
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-                          ),
-                          if (m.domaine != 'Tous') ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3F4F6),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                m.domaine,
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (!isSuperAdmin) ...[
-                  IconButton(
-                    icon: const Icon(Icons.edit_rounded, size: 20, color: AdminTheme.iconBgAlt),
-                    onPressed: () => _gererDroits(m),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
-                    onPressed: () => _supprimerMembre(m),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: m.droits.entries.map((e) {
-                final label = _sectionsLabels[e.key] ?? e.key;
-                final icon = _getIconForSection(e.key);
-
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: e.value ? AdminTheme.successLight : const Color(0xFFF5F7FA),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: e.value ? AdminTheme.success.withValues(alpha: 0.3) : const Color(0xFFE5E7EB),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, size: 12, color: e.value ? AdminTheme.success : const Color(0xFF9CA3AF)),
-                      const SizedBox(width: 4),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: e.value ? AdminTheme.success : const Color(0xFF9CA3AF),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
+      child: Text(m.adminRole.label,
+          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: sup ? const Color(0xFF4F46E5) : AdminTheme.primary),
+          overflow: TextOverflow.ellipsis),
     );
   }
 
-  void _gererDroits(Membre m) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setS) => Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2)),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Droits — ${m.prenoms} ${m.nom}',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                          Text(m.adminRole.label, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-                        ],
-                      ),
-                    ),
-                    IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
-                  ],
-                ),
-              ),
-              const Divider(color: Color(0xFFE5E7EB)),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: _sectionsLabels.entries
-                      .map(
-                        (e) => SwitchListTile(
-                          title: Text(_sectionsLabels[e.key] ?? e.key,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                          value: m.droits[e.key] ?? false,
-                          activeThumbColor: AdminTheme.iconFg,
-                          activeTrackColor: AdminTheme.iconBg,
-                          onChanged: (v) {
-                            setS(() => m.droits[e.key] = v);
-                            setState(() {});
-                          },
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: GestureDetector(
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    _snack('✅ Enregistrement en base de données...');
-                    await ApiService.updatePermissionsMembre(
-                      m.id,
-                      permissions: m.droits,
-                      role: m.adminRole.code,
-                    );
-                    _snack('✅ Droits synchronisés avec succès !');
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AdminTheme.iconBgAlt,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Enregistrer en base de données',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AdminTheme.iconFgAlt),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Widget _contact(Membre m) {
+    final tel = m.tel ?? '';
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.mail_outline, size: 13, color: _texteGris),
+        const SizedBox(width: 5),
+        Flexible(child: Text(m.email, style: const TextStyle(fontSize: 12, color: _texteGris), overflow: TextOverflow.ellipsis)),
+      ]),
+      if (tel.isNotEmpty)
+        Row(children: [
+          const Icon(Icons.phone, size: 13, color: _texteGris),
+          const SizedBox(width: 5),
+          Flexible(child: Text(tel, style: const TextStyle(fontSize: 12, color: _texteGris), overflow: TextOverflow.ellipsis)),
+        ]),
+    ]);
   }
 
-  void _creerMembre() {
-    final nomCtrl = TextEditingController();
-    final prenomCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-    final telCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
-    AdminRole selectedRole = AdminRole.scolarite;
-    String selectedDomaine = 'Tous';
-    Map<String, bool> droits = Map.from(_getDefaultRightsForRole(selectedRole));
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setS) => Container(
-          height: MediaQuery.of(context).size.height * 0.88,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  Widget _badgeDomaine(String d) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(color: AdminTheme.primaryLight, borderRadius: BorderRadius.circular(16)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.apartment_outlined, size: 13, color: AdminTheme.primary),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(d == 'Tous' ? 'Tous les domaines' : d,
+                style: const TextStyle(fontSize: 11, color: AdminTheme.primary, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis),
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2)),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Nouveau Membre Administrateur',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                    ),
-                    IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
-                  ],
-                ),
-              ),
-              const Divider(color: Color(0xFFE5E7EB)),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _label('Nom *'),
-                      _input(nomCtrl, 'Nom'),
-                      const SizedBox(height: 10),
-                      _label('Prénom *'),
-                      _input(prenomCtrl, 'Prénom'),
-                      const SizedBox(height: 10),
-                      _label('Email *'),
-                      _input(emailCtrl, 'exemple@ist.bf', type: TextInputType.emailAddress),
-                      const SizedBox(height: 10),
-                      _label('Téléphone *'),
-                      _input(telCtrl, '+226 70 00 00 00', type: TextInputType.phone),
-                      const SizedBox(height: 10),
-                      _label('Mot de passe *'),
-                      _input(passCtrl, 'Mot de passe sécurisé (ex: Admin@2026)', obscureText: true),
-                      const SizedBox(height: 14),
-                      _label('Domaine d\'attribution académique *'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: ['Tous', 'Sciences & Technologies', 'Sciences de Gestion'].map((d) {
-                          final active = selectedDomaine == d;
-                          return GestureDetector(
-                            onTap: () => setS(() => selectedDomaine = d),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: active ? AdminTheme.iconBg : Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: active ? AdminTheme.iconBg : const Color(0xFFE5E7EB)),
-                              ),
-                              child: Text(
-                                d,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: active ? Colors.white : const Color(0xFF6B7280),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 14),
-                      _label('Sous-rôle Administrateur'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: AdminRole.values.map((r) {
-                          final active = selectedRole == r;
-                          return GestureDetector(
-                            onTap: () => setS(() {
-                              selectedRole = r;
-                              droits = Map.from(_getDefaultRightsForRole(r));
-                            }),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: active ? AdminTheme.iconBg : Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: active ? AdminTheme.iconBg : const Color(0xFFE5E7EB)),
-                              ),
-                              child: Text(
-                                r.label,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: active ? Colors.white : const Color(0xFF6B7280),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 16),
-                      _label('Sections pré-configurées'),
-                      ...droits.entries.map(
-                        (e) => SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                          title: Text(_sectionsLabels[e.key] ?? e.key,
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                          value: e.value,
-                          activeThumbColor: AdminTheme.iconFg,
-                          activeTrackColor: AdminTheme.iconBg,
-                          onChanged: (v) => setS(() => droits[e.key] = v),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AdminTheme.iconBgAlt,
-                    foregroundColor: AdminTheme.iconFgAlt,
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
-                  onPressed: () async {
-                    if (nomCtrl.text.isEmpty ||
-                        prenomCtrl.text.isEmpty ||
-                        !emailCtrl.text.contains('@') ||
-                        telCtrl.text.isEmpty ||
-                        passCtrl.text.isEmpty) {
-                      _snack('⚠️ Veuillez remplir tous les champs obligatoires (Nom, Prénom, Email, Téléphone, Mot de passe)');
-                      return;
-                    }
-
-                    if (passCtrl.text.length < 6) {
-                      _snack('⚠️ Le mot de passe doit contenir au moins 6 caractères');
-                      return;
-                    }
-
-                    final newMembre = Membre(
-                      id: 'M${DateTime.now().millisecondsSinceEpoch}',
-                      nom: nomCtrl.text.toUpperCase(),
-                      prenoms: prenomCtrl.text,
-                      email: emailCtrl.text,
-                      tel: telCtrl.text,
-                      domaine: selectedDomaine,
-                      role: selectedRole.label,
-                      adminRole: selectedRole,
-                      droits: Map.from(droits),
-                      dateCreation: DateTime.now().toString().split(' ')[0],
-                    );
-
-                    setState(() => adminMembres.add(newMembre));
-                    Navigator.pop(ctx);
-                    _snack('⏳ Enregistrement dans Supabase/Base de données...');
-
-                    final res = await ApiService.creerMembreAdmin(
-                      nom: nomCtrl.text,
-                      prenoms: prenomCtrl.text,
-                      email: emailCtrl.text,
-                      tel: telCtrl.text,
-                      motDePasse: passCtrl.text,
-                      domaine: selectedDomaine,
-                      role: selectedRole.code,
-                      permissions: droits,
-                    );
-
-                    if (res['success'] == true) {
-                      // Synchroniser domaine_admin dans la table 'administrateurs'
-                      try {
-                        await SupabaseService().client
-                            .from('administrateurs')
-                            .update({'domaine_admin': selectedDomaine})
-                            .eq('email', emailCtrl.text.trim());
-                      } catch (_) {}
-                      if (mounted) {
-                        _snack('✅ Administrateur enregistré avec succès en base de données !');
-                        _chargerMembresDepuisBDD();
-                      }
-                    } else {
-                      if (mounted) {
-                        _snack('⚠️ ${res['error'] ?? 'Enregistrement local uniquement'}');
-                      }
-                    }
-                  },
-                  child: const Text('Créer le compte et enregistrer', style: TextStyle(color: Colors.white)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _label(String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+        ]),
       );
 
-  Widget _input(TextEditingController ctrl, String hint,
-          {TextInputType type = TextInputType.text, bool obscureText = false}) =>
-      Container(
+  Widget _badgeRoleCourt(Membre m) {
+    final sup = m.adminRole == AdminRole.superAdmin;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: sup ? AdminTheme.warningLight : AdminTheme.primaryLight,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(_roleCourt(m.adminRole),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: sup ? AdminTheme.warning : AdminTheme.primary),
+          overflow: TextOverflow.ellipsis),
+    );
+  }
+
+  Widget _badgeStatut(bool actif) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: actif ? AdminTheme.successLight : AdminTheme.warningLight,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.circle, size: 8, color: actif ? AdminTheme.success : AdminTheme.warning),
+          const SizedBox(width: 5),
+          Text(actif ? 'Actif' : 'Suspendu',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: actif ? AdminTheme.success : AdminTheme.warning)),
+        ]),
+      );
+
+  Widget _actions(Membre m) {
+    final sup = m.adminRole == AdminRole.superAdmin;
+    Widget carre(Widget child) => Container(
+          width: 34,
+          height: 34,
+          margin: const EdgeInsets.only(left: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _bordureGris),
+          ),
+          child: child,
+        );
+    return Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.end, children: [
+      Tooltip(
+        message: 'Modifier',
+        child: InkWell(
+          onTap: () => _ouvrirPanneau(m),
+          borderRadius: BorderRadius.circular(8),
+          child: carre(const Icon(Icons.edit_outlined, size: 18, color: AdminTheme.primary)),
+        ),
+      ),
+      if (!sup)
+        PopupMenuButton<String>(
+          tooltip: 'Plus',
+          onSelected: (v) {
+            if (v == 'statut') _changerStatut([m], !m.actif);
+            if (v == 'suppr') _supprimer(m);
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'statut', child: Text(m.actif ? 'Suspendre' : 'Réactiver')),
+            const PopupMenuItem(value: 'suppr', child: Text('Supprimer', style: TextStyle(color: Colors.red))),
+          ],
+          child: carre(const Icon(Icons.more_vert, size: 18, color: _texteFonce)),
+        ),
+    ]);
+  }
+
+  Widget _pagination(int total, int debut, int fin, int nbPages) {
+    Widget bouton(String t, int p, {bool actif = false}) => GestureDetector(
+          onTap: () => setState(() => _page = p),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(left: 6),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: actif ? AdminTheme.primary : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: actif ? AdminTheme.primary : _bordureGris),
+            ),
+            child: Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: actif ? Colors.white : const Color(0xFF374151))),
+          ),
+        );
+    int d = _page - 2 < 0 ? 0 : _page - 2;
+    int f = d + 4 >= nbPages ? nbPages - 1 : d + 4;
+    d = f - 4 < 0 ? 0 : f - 4;
+    return Row(children: [
+      Expanded(
+        child: Text(
+          total == 0 ? 'Aucun résultat' : 'Affichage de ${debut + 1} à $fin sur $total membre${total > 1 ? 's' : ''}',
+          style: const TextStyle(fontSize: 12, color: _texteGris),
+        ),
+      ),
+      if (_page > 0) bouton('‹', _page - 1),
+      for (int p = d; p <= f; p++) bouton('${p + 1}', p, actif: p == _page),
+      if (_page < nbPages - 1) bouton('›', _page + 1),
+    ]);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  PANNEAU LATÉRAL « Nouveau membre » / « Modifier le membre »
+// ═════════════════════════════════════════════════════════════════════════════
+class _PanneauMembre extends StatefulWidget {
+  final Membre? membre;
+  final List<String> domaines;
+  final VoidCallback onFermer;
+  final Future<String?> Function(Map<String, dynamic>) onEnregistrer;
+
+  const _PanneauMembre({
+    super.key,
+    required this.membre,
+    required this.domaines,
+    required this.onFermer,
+    required this.onEnregistrer,
+  });
+
+  @override
+  State<_PanneauMembre> createState() => _PanneauMembreState();
+}
+
+class _PanneauMembreState extends State<_PanneauMembre> {
+  final _nomCtrl = TextEditingController();
+  final _prenomsCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _telCtrl = TextEditingController();
+  late String _domaine;
+  late AdminRole _role;
+  late Map<String, bool> _droits;
+  bool _saving = false;
+  String? _erreur;
+
+  bool get _edition => widget.membre != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final m = widget.membre;
+    if (m != null) {
+      _nomCtrl.text = m.nom;
+      _prenomsCtrl.text = m.prenoms;
+      _emailCtrl.text = m.email;
+      _telCtrl.text = m.tel ?? '';
+      _domaine = m.domaine;
+      _role = m.adminRole;
+      _droits = Map<String, bool>.from(m.droits);
+    } else {
+      _domaine = 'Tous';
+      _role = AdminRole.scolarite;
+      _droits = _droitsParDefaut(_role);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nomCtrl.dispose();
+    _prenomsCtrl.dispose();
+    _emailCtrl.dispose();
+    _telCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _soumettre() async {
+    final nom = _nomCtrl.text.trim();
+    final prenoms = _prenomsCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final tel = _telCtrl.text.trim();
+    if (nom.isEmpty || prenoms.isEmpty || tel.isEmpty || !email.contains('@')) {
+      setState(() => _erreur = 'Nom, prénom(s), email valide et téléphone sont obligatoires.');
+      return;
+    }
+    setState(() { _saving = true; _erreur = null; });
+    final err = await widget.onEnregistrer({
+      'nom': nom.toUpperCase(),
+      'prenoms': prenoms,
+      'email': email,
+      'tel': tel,
+      'domaine': _domaine,
+      'role': _role,
+      'droits': _droits,
+    });
+    if (!mounted) return;
+    if (err != null) setState(() { _saving = false; _erreur = err; });
+  }
+
+  // ── Widgets de base ───────────────────────────────────────────────────────
+  Widget _carte({required IconData icone, required String titre, required Widget child}) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _bordureGris),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icone, size: 18, color: AdminTheme.primary),
+            const SizedBox(width: 8),
+            Text(titre, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _texteFonce)),
+          ]),
+          const SizedBox(height: 12),
+          child,
+        ]),
+      );
+
+  Widget _champ(String label, TextEditingController c, String hint, {TextInputType? type}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(TextSpan(
+            text: label,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+            children: const [TextSpan(text: ' *', style: TextStyle(color: Color(0xFFDC2626)))],
+          )),
+          const SizedBox(height: 6),
+          Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _bordureChamp)),
+            child: TextField(
+              controller: c,
+              keyboardType: type,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: hint,
+                hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF9CA3AF)),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      );
+
+  Widget _deuxColonnes(Widget a, Widget b) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [Expanded(child: a), const SizedBox(width: 10), Expanded(child: b)],
+      );
+
+  Widget _puce(String t, bool actif, VoidCallback on) => GestureDetector(
+        onTap: on,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: actif ? AdminTheme.primary : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: actif ? AdminTheme.primary : _bordureGris),
+          ),
+          child: Text(t,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: actif ? Colors.white : const Color(0xFF374151))),
+        ),
+      );
+
+  Widget _groupeDroits(_Groupe g) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: _bordureGris),
         ),
-        child: TextField(
-          controller: ctrl,
-          keyboardType: type,
-          obscureText: obscureText,
-          style: const TextStyle(fontSize: 14),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          ),
-        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(g.icone, size: 16, color: _texteFonce),
+            const SizedBox(width: 6),
+            Text(g.titre, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: _texteFonce)),
+          ]),
+          for (final k in g.cles)
+            SizedBox(
+              height: 40,
+              child: Row(children: [
+                Icon(_iconeSection(k), size: 16, color: _texteGris),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_sectionsLabels[k] ?? k, style: const TextStyle(fontSize: 13, color: _texteFonce))),
+                Switch(
+                  value: _droits[k] ?? false,
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: AdminTheme.primary,
+                  onChanged: (v) => setState(() => _droits[k] = v),
+                ),
+              ]),
+            ),
+        ]),
       );
 
-  void _snack(String msg) => showAppSnackBar(context, msg);
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      elevation: 12,
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
+          color: Colors.white,
+          child: Row(children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: AdminTheme.primary, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.badge_outlined, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_edition ? 'Modifier le membre' : 'Nouveau membre',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _texteFonce)),
+                const Text('Renseignez les informations du membre et ses autorisations.',
+                    style: TextStyle(fontSize: 12, color: _texteGris)),
+              ]),
+            ),
+            IconButton(onPressed: _saving ? null : widget.onFermer, icon: const Icon(Icons.close)),
+          ]),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _carte(
+                icone: Icons.person_outline,
+                titre: 'Informations du membre',
+                child: Column(children: [
+                  _deuxColonnes(
+                    _champ('Nom', _nomCtrl, 'Ex. KABORE'),
+                    _champ('Prénom(s)', _prenomsCtrl, 'Ex. Issa'),
+                  ),
+                  const SizedBox(height: 12),
+                  _deuxColonnes(
+                    _champ('Adresse e-mail', _emailCtrl, 'Ex. nom@domaine.com', type: TextInputType.emailAddress),
+                    _champ('Téléphone', _telCtrl, 'Ex. 70 12 34 56', type: TextInputType.phone),
+                  ),
+                  if (!_edition) ...[
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Pas de mot de passe à saisir : le membre se connecte avec son nom, son prénom et son téléphone, puis choisit son mot de passe.',
+                      style: TextStyle(fontSize: 11.5, color: _texteGris),
+                    ),
+                  ],
+                ]),
+              ),
+              _carte(
+                icone: Icons.shield_outlined,
+                titre: 'Domaine d\'attribution académique',
+                child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final d in ['Tous', ...widget.domaines]) _puce(d, _domaine == d, () => setState(() => _domaine = d)),
+                ]),
+              ),
+              _carte(
+                icone: Icons.admin_panel_settings_outlined,
+                titre: 'Sous-rôle administrateur',
+                child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final r in AdminRole.values)
+                    _puce(r.label, _role == r, () => setState(() {
+                          _role = r;
+                          _droits = _droitsParDefaut(r);
+                        })),
+                ]),
+              ),
+              _carte(
+                icone: Icons.lock_outline,
+                titre: 'Autorisations',
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: AdminTheme.primaryLight, borderRadius: BorderRadius.circular(8)),
+                    child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Icon(Icons.info_outline, size: 16, color: AdminTheme.primary),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Le domaine d\'attribution sélectionné limite l\'accès aux données académiques selon les filières et niveaux concernés.',
+                          style: TextStyle(fontSize: 11.5, color: AdminTheme.primary),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  for (final g in _groupesDroits) _groupeDroits(g),
+                ]),
+              ),
+              if (_erreur != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: Text(_erreur!, style: const TextStyle(fontSize: 12.5, color: Color(0xFFB91C1C))),
+                ),
+            ]),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: Colors.white,
+          child: Row(children: [
+            OutlinedButton(
+              onPressed: _saving ? null : widget.onFermer,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(110, 46)),
+              child: const Text('Annuler'),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _saving ? null : _soumettre,
+                icon: _saving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: Text(_saving ? 'Enregistrement…' : (_edition ? 'Enregistrer' : 'Créer le membre'),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  minimumSize: const Size(0, 46),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
 }

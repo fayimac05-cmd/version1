@@ -255,7 +255,7 @@ const getAllSessionsAdmin = async (req, res) => {
             SELECT sn.id, sn.filiere_id, sn.filiere_nom, sn.niveau, sn.module_id,
                    m.nom AS module_nom, m.coefficient,
                    sn.professeur_id, u.nom AS prof_nom, u.prenoms AS prof_prenoms,
-                   sn.date_session, sn.statut, sn.is_sent,
+                   sn.date_session, sn.statut, sn.is_sent, sn.archive, sn.semestre, sn.annee_academique,
                    f.domaine AS domaine,
                    COALESCE(
                      json_agg(

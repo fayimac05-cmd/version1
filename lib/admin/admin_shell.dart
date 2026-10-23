@@ -29,8 +29,10 @@
 //   par config d'établissement).
 // ============================================================
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
@@ -123,6 +125,29 @@ const _menuGroups = <Map<String, Object>>[
 // SECTION 2 — AdminMenuService (permissions par rôle) [ARCH-3]
 // ═══════════════════════════════════════════════════════════════
 
+/// Autorisation (interrupteur de « Membres & Rôles ») qui commande chaque
+/// entrée du menu. Une entrée absente de cette table (tableau de bord, Collège
+/// & Lycée, Primaire, Cantine) reste pilotée uniquement par le sous-rôle.
+const Map<int, String> kMenuPermission = {
+  1: 'annonces',      // Annonces
+  2: 'filieres',      // Filières & Modules
+  3: 'filieres',      // Emplois du Temps
+  4: 'notes',         // Notes & Moyennes
+  5: 'reclamations',  // Réclamations
+  6: 'etudiants',     // Étudiants
+  7: 'professeurs',   // Professeurs
+  8: 'parents',       // Parents
+  9: 'membres',       // Membres & Rôles
+  10: 'messages',     // Groupes & Messages
+  11: 'bde',          // BDE & Événements
+  12: 'stats',        // Statistiques
+  13: 'stats',        // Éval. Professeurs
+  16: 'stats',        // Élèves à risque
+  17: 'bulletins',    // Bulletins
+  18: 'etudiants',    // Délégués
+  20: 'bde',          // Bureau des Étudiants
+};
+
 class AdminMenuService {
   const AdminMenuService._();
 
@@ -156,6 +181,20 @@ class AdminMenuService {
 
   static bool canAccess(AdminRole role, int itemIndex) =>
       allowedItems(role).contains(itemIndex);
+
+  /// Accès réel d'un membre : le Super Admin voit tout ; sinon l'interrupteur
+  /// enregistré pour ce membre décide (il peut accorder OU retirer l'accès).
+  /// Sans interrupteur connu (ancien compte, entrée sans autorisation), on
+  /// retombe sur les accès par défaut du sous-rôle.
+  static bool canAccessWith(AdminRole role, int itemIndex, Map<String, bool>? droits) {
+    if (role == AdminRole.superAdmin) return true;
+    if (itemIndex == 0) return true;
+    final cle = kMenuPermission[itemIndex];
+    if (cle != null && droits != null && droits.containsKey(cle)) {
+      return droits[cle] == true;
+    }
+    return canAccess(role, itemIndex);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -233,6 +272,40 @@ class _AdminShellState extends State<AdminShell>
   // du contrôleur correspondant.
   final Map<int, int> _badges = {};
 
+  // Autorisations du membre connecté (interrupteurs de « Membres & Rôles »).
+  // null tant qu'elles ne sont pas chargées → accès par défaut du sous-rôle.
+  Map<String, bool>? _droits;
+
+  bool _peutVoir(int i) =>
+      AdminMenuService.canAccessWith(widget.activeRole, i, _droits);
+
+  Future<void> _chargerDroits() async {
+    if (widget.activeRole == AdminRole.superAdmin) return;
+    try {
+      final headers = await ApiService.getHeaders();
+      final r = await http.get(Uri.parse('${ApiService.baseUrl}/membres/moi'), headers: headers);
+      if (r.statusCode != 200) return;
+      final data = jsonDecode(utf8.decode(r.bodyBytes))['data'];
+      final d = <String, bool>{};
+      if (data is Map && data['droits'] is Map) {
+        (data['droits'] as Map).forEach((k, v) {
+          if (v is bool) d[k.toString()] = v;
+        });
+      }
+      if (!mounted) return;
+      setState(() {
+        _droits = d;
+        // Si la page affichée n'est plus autorisée, retour au tableau de bord.
+        if (!_peutVoir(_idx)) {
+          _idx = 0;
+          _prevIdx = 0;
+        }
+      });
+    } catch (_) {
+      // Hors ligne / erreur : on garde les accès par défaut du sous-rôle.
+    }
+  }
+
   Future<void> _chargerBadges() async {
     final results = await Future.wait([
       ApiService.getNombreSessionsEnAttente(),
@@ -253,6 +326,7 @@ class _AdminShellState extends State<AdminShell>
     EtablissementConfig.instance.addListener(_onConfigChanged);
     EtablissementConfig.instance.charger().then((_) => _chargerLogo());
     _chargerBadges();
+    _chargerDroits();
     _pages = [
       AdminDashboard(profile: widget.profile),
       const AdminAnnonces(),
@@ -362,6 +436,7 @@ class _AdminShellState extends State<AdminShell>
 
   void _navigate(int index) {
     if (index == _idx) return;
+    if (!_peutVoir(index)) return;
     final fromRight = index > _prevIdx;
     _resetPageAnimation(fromRight: fromRight);
     setState(() {
@@ -787,7 +862,7 @@ class _AdminShellState extends State<AdminShell>
               children: [
                 for (final g in _menuGroups)
                   if ((g['items'] as List<int>).any((i) =>
-                      AdminMenuService.canAccess(widget.activeRole, i) &&
+                      _peutVoir(i) &&
                       _visibleParConfig(i))) ...[
                   if (!c)
                     // [UX-4] Hiérarchie typographique renforcée
@@ -817,7 +892,7 @@ class _AdminShellState extends State<AdminShell>
                   for (final i in (g['items'] as List<int>))
                     // [ARCH-3] Masquer les items non autorisés
                     // + filtrage selon le type d'établissement
-                    if (AdminMenuService.canAccess(widget.activeRole, i) &&
+                    if (_peutVoir(i) &&
                         _visibleParConfig(i))
                       _MenuItemTile(
                         item: _items[i],

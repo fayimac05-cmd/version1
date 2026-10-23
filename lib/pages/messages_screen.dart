@@ -1048,7 +1048,7 @@ class _ConversationViewState extends State<_ConversationView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEBE5DD),
+      backgroundColor: const Color(0xFFF8FAFD),
       appBar: _appBar(),
       body: Column(
         children: [
@@ -1188,7 +1188,7 @@ class _ConversationViewState extends State<_ConversationView> {
   );
 
   Widget _zoneSaisie() => Container(
-    color: const Color(0xFFF0EBE3),
+    color: Colors.white,
     padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.end,

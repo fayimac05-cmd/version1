@@ -707,7 +707,7 @@ class _CanalDetailState extends State<_CanalDetail> {
   int _recordSeconds = 0;
   Timer? _recordTimer;
   final _voiceRecorder = VoiceRecorderController();
-  String _themeId = ChatThemes.classique.id;
+  String _themeId = ChatThemes.defaut.id;
   bool _modeSelection = false;
   final Set<String> _selectionnes = {};
 
@@ -1429,7 +1429,8 @@ Widget _zoneSaisie() {
     padding: const EdgeInsets.symmetric(vertical: 14),
     child: Center(child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.85), borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Text(date, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600)))));
 
   Widget _banniereEpingleCanal() {
@@ -1439,7 +1440,10 @@ Widget _zoneSaisie() {
     return GestureDetector(
       onTap: () {}, // pas d'ancre de défilement dans cette liste simple pour l'instant
       child: Container(
-        color: const Color(0xFFF0F2F5),
+        decoration: const BoxDecoration(
+          color: Color(0xFFEFF6FF),
+          border: Border(bottom: BorderSide(color: Color(0xFFDBEAFE))),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Row(children: [
           Icon(Icons.push_pin_rounded, color: widget.couleur, size: 15),
@@ -1453,7 +1457,7 @@ Widget _zoneSaisie() {
             ),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(dernier.expediteur, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: widget.couleur)),
+              Text('Message épinglé · ${dernier.expediteur}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: widget.couleur)),
               Text(dernier.texte, style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
             ]),
           ),

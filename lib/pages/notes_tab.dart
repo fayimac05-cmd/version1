@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
+import '../services/notes_admin_service.dart';
 import '../theme/app_palette.dart';
 
 // ── Modèle : un module avec tous ses devoirs réels ────────────────────────
@@ -91,7 +92,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
     _fetchNotesBackend();
   }
 
@@ -247,7 +248,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
             unselectedLabelColor: Colors.white54,
             labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             unselectedLabelStyle: const TextStyle(fontSize: 12),
-            tabs: const [Tab(text: 'Toutes les notes'), Tab(text: 'Par statut')],
+            tabs: const [Tab(text: 'Toutes les notes'), Tab(text: 'Par statut'), Tab(text: 'Moyennes provisoires')],
           ),
         ]),
         ]),
@@ -255,14 +256,11 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
 
       // ── Contenu ────────────────────────────────────────────────────
       Expanded(
-        child: _erreur
-            ? _etatErreur()
-            : _notes.isEmpty
-                ? _etatVide()
-                : TabBarView(controller: _tabCtrl, children: [
-                    _ListeNotes(notes: _notes, onReclamer: _ouvrirReclamation),
-                    _NotesParStatut(notes: _notes, onReclamer: _ouvrirReclamation),
-                  ]),
+        child: TabBarView(controller: _tabCtrl, children: [
+          _erreur ? _etatErreur() : _notes.isEmpty ? _etatVide() : _ListeNotes(notes: _notes, onReclamer: _ouvrirReclamation),
+          _erreur ? _etatErreur() : _notes.isEmpty ? _etatVide() : _NotesParStatut(notes: _notes, onReclamer: _ouvrirReclamation),
+          const _MoyennesProvisoires(),
+        ]),
       ),
     ]);
   }
@@ -315,6 +313,90 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
   ]));
 
   Widget _div() => Container(width: 1, height: 16, color: Colors.white24);
+}
+
+// ── Moyennes provisoires par module (publiées par l'administration) ────────
+// Aucune moyenne générale ici : uniquement la moyenne de chaque module, par
+// semestre. Le backend ne renvoie que les moyennes de l'étudiant connecté.
+class _MoyennesProvisoires extends StatefulWidget {
+  const _MoyennesProvisoires();
+  @override State<_MoyennesProvisoires> createState() => _MoyennesProvisoiresState();
+}
+
+class _MoyennesProvisoiresState extends State<_MoyennesProvisoires> {
+  bool _chargement = true;
+  String? _erreur;
+  Map<String, List<Map<String, dynamic>>> _parSemestre = {};
+
+  @override
+  void initState() { super.initState(); _charger(); }
+
+  Future<void> _charger() async {
+    setState(() { _chargement = true; _erreur = null; });
+    final r = await NotesAdminService.mesMoyennesProvisoires();
+    if (!mounted) return;
+    if (r['success'] != true) {
+      setState(() { _chargement = false; _erreur = r['error'] as String? ?? 'Erreur'; });
+      return;
+    }
+    final g = <String, List<Map<String, dynamic>>>{};
+    for (final row in (r['data'] as List<dynamic>)) {
+      final m = row as Map<String, dynamic>;
+      g.putIfAbsent('${m['semestre']}', () => []).add(m);
+    }
+    setState(() { _parSemestre = g; _chargement = false; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_chargement) return const Center(child: CircularProgressIndicator());
+    if (_erreur != null) {
+      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(_erreur!, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+        const SizedBox(height: 10),
+        ElevatedButton(onPressed: _charger, child: const Text('Réessayer')),
+      ]));
+    }
+    if (_parSemestre.isEmpty) {
+      return const Center(child: Padding(padding: EdgeInsets.all(32), child: Text(
+        'Aucune moyenne provisoire publiée pour l\'instant.\nElles apparaîtront ici dès que l\'administration les enverra.',
+        textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.5))));
+    }
+    final semestres = _parSemestre.keys.toList()..sort();
+    return RefreshIndicator(
+      onRefresh: _charger,
+      child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: semestres.map((sem) {
+        final rows = _parSemestre[sem]!;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Row(children: [
+              Text('Semestre ${sem.replaceFirst('S', '')}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const Spacer(),
+              const Text('Provisoire', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
+            ])),
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            ...rows.map((m) {
+              final moy = double.tryParse('${m['moyenne']}') ?? 0;
+              final ok = moy >= 10;
+              return Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${m['module_nom']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                  Text('${m['nb_devoirs']} devoir(s)', style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                ])),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: ok ? const Color(0xFFF0FDF4) : const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(10)),
+                  child: Text('${moy.toStringAsFixed(2)} / 20', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: ok ? const Color(0xFF15803D) : const Color(0xFFC62828))),
+                ),
+              ]));
+            }),
+          ]),
+        );
+      }).toList()),
+    );
+  }
 }
 
 // ── Liste toutes notes ──────────────────────────────────────────────────────

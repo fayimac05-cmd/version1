@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/professeurs.controller');
 const { authMiddleware, requireRole } = require('../middleware/auth.middleware');
+const { upload, uploadToCloudinary } = require('../middleware/upload.middleware');
 
 // ── Routes publiques ──────────────────────────────────────────────────────────
 // Lookup par nom + tel (pour la connexion)
@@ -44,5 +45,9 @@ router.get('/:id/modules', authMiddleware, ctrl.getModulesByProfesseur);
 // Affectation module précise (professeur_modules : module + niveau + semestre)
 router.post('/:id/modules',                     authMiddleware, requireRole('admin'), ctrl.assignerModule);
 router.delete('/:id/modules/:affectationId',    authMiddleware, requireRole('admin'), ctrl.retirerModule);
+
+// Photo d'identité d'un professeur (multipart, champ `file`) — admin
+router.post('/:id/photo', authMiddleware, requireRole('admin'),
+  upload.single('file'), uploadToCloudinary('scolarhub/photos-profil'), ctrl.uploaderPhotoProfesseur);
 
 module.exports = router;
