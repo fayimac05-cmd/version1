@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
+import '../services/api_extra.dart';
 import '../admin/admin_theme.dart';
 
 const List<String> kDomaines = ['Sciences & Technologies', 'Sciences de Gestion', 'Sciences Humaines', 'Droit'];
@@ -224,6 +225,29 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
   // ── Actions ───────────────────────────────────────────────────────────────
   void _ouvrirForm([Map<String, dynamic>? prof]) {
     setState(() { _profEdition = prof; _formOuvert = true; });
+  }
+
+  // Efface le mot de passe : le professeur en choisira un nouveau à sa prochaine connexion.
+  Future<void> _reinitialiserMdp(Map<String, dynamic> p) async {
+    final nom = '${_s(p['prenoms'])} ${_s(p['nom'])}'.trim();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Réinitialiser le mot de passe ?'),
+        content: Text('$nom pourra choisir un nouveau mot de passe à sa prochaine connexion '
+            '(avec son nom, son prénom et son téléphone). Son ancien mot de passe ne fonctionnera plus.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Réinitialiser')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final res = await ApiExtra.reinitialiserMotDePasseProfesseur(_s(p['id']));
+    _snack(
+      res['success'] == true ? 'Mot de passe réinitialisé.' : (res['error']?.toString() ?? 'Réinitialisation impossible.'),
+      success: res['success'] == true,
+    );
   }
 
   Future<void> _changerStatut(List<String> ids, String statut) async {
@@ -808,10 +832,12 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
         tooltip: 'Plus',
         onSelected: (v) {
           if (v == 'statut') _changerStatut([_s(p['id'])], actif ? 'inactif' : 'actif');
+          if (v == 'mdp') _reinitialiserMdp(p);
           if (v == 'suppr') _supprimer(p);
         },
         itemBuilder: (_) => [
           PopupMenuItem(value: 'statut', child: Text(actif ? 'Désactiver' : 'Réactiver')),
+          const PopupMenuItem(value: 'mdp', child: Text('Réinitialiser le mot de passe')),
           const PopupMenuItem(value: 'suppr', child: Text('Supprimer', style: TextStyle(color: Colors.red))),
         ],
         child: Container(
