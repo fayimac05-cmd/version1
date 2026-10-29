@@ -2,24 +2,59 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const { getOrCreateCanalProfDelegue } = require('../utils/canauxProfDelegue');
 
+// ── Multi-établissement ─────────────────────────────────────────────────────
+// req.etablissementId vient du jeton ; s'il est absent (anciens jetons), pas de filtre.
+const etabCol = (params, etabId, col) => {
+  if (!etabId) return '';
+  params.push(etabId);
+  return ` AND ${col} = $${params.length}`;
+};
+const profDeMonEtab = async (profId, etabId) => {
+  if (!etabId) return true;
+  const r = await db.query(
+    `SELECT 1 FROM users WHERE id = $1 AND role = 'professeur' AND etablissement_id = $2`, [profId, etabId]
+  );
+  return r.rows.length > 0;
+};
+const filiereDeMonEtab = async (filiereId, etabId) => {
+  if (!etabId) return true;
+  if (filiereId === undefined || filiereId === null || filiereId === '') return false;
+  const r = await db.query('SELECT 1 FROM filieres WHERE id = $1 AND etablissement_id = $2', [filiereId, etabId]);
+  return r.rows.length > 0;
+};
+
 // ── GET /api/professeurs ──────────────────────────────────────────────────────
 // Renvoie chaque professeur avec ses affectations (filière + niveau), agrégées.
 exports.getAllProfesseurs = async (req, res) => {
   try {
+    const pa = [];
+    const fa = etabCol(pa, req.etablissementId, 'u.etablissement_id');
     const result = await db.query(
-      `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine,
-              COALESCE(
-                json_agg(
-                  json_build_object('filiere_id', f.id, 'filiere_nom', f.nom, 'niveau', pf.niveau)
-                  ORDER BY f.nom, pf.niveau
-                ) FILTER (WHERE pf.id IS NOT NULL), '[]'
-              ) AS affectations
+      `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine, u.photo_url,
+              u.date_naissance, u.nationalite,
+              p.sexe, p.lieu_naissance, p.grade, p.matricule, p.expertise, p.diplome, p.note,
+              (SELECT COALESCE(json_agg(
+                        json_build_object('filiere_id', f.id, 'filiere_nom', f.nom,
+                                          'abreviation', f.abreviation, 'niveau', pf.niveau)
+                        ORDER BY f.nom, pf.niveau), '[]')
+                 FROM professeur_filieres pf
+                 JOIN filieres f ON f.id = pf.filiere_id
+                WHERE pf.professeur_id = u.id) AS affectations,
+              (SELECT COALESCE(json_agg(
+                        json_build_object('affectation_id', pm.id, 'module_id', m.id, 'module_nom', m.nom,
+                                          'filiere_id', pm.filiere_id, 'filiere_nom', f2.nom,
+                                          'abreviation', f2.abreviation, 'niveau', pm.niveau,
+                                          'semestre', pm.semestre)
+                        ORDER BY f2.nom, pm.niveau, pm.semestre, m.nom), '[]')
+                 FROM professeur_modules pm
+                 JOIN modules m ON m.id = pm.module_id
+                 LEFT JOIN filieres f2 ON f2.id = pm.filiere_id
+                WHERE pm.professeur_id = u.id) AS modules
        FROM users u
-       LEFT JOIN professeur_filieres pf ON pf.professeur_id = u.id
-       LEFT JOIN filieres f ON f.id = pf.filiere_id
-       WHERE u.role = 'professeur'
-       GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.statut, u.domaine
-       ORDER BY u.nom ASC`
+       LEFT JOIN LATERAL (SELECT * FROM professeurs WHERE user_id = u.id ORDER BY id DESC LIMIT 1) p ON true
+       WHERE u.role = 'professeur'${fa}
+       ORDER BY u.nom ASC`,
+      pa
     );
     res.json(result.rows);
   } catch (err) {
@@ -37,19 +72,21 @@ exports.lookupProfesseur = async (req, res) => {
     let user = null;
 
     if (matricule) {
+      const pl = [matricule.trim().toUpperCase()];
       const r = await db.query(
         `SELECT id, nom, prenoms, matricule, role, statut, domaine,
                 mot_de_passe IS NOT NULL AS a_mot_de_passe
-         FROM users WHERE matricule = $1 AND role = 'professeur'`,
-        [matricule.trim().toUpperCase()]
+         FROM users WHERE matricule = $1 AND role = 'professeur'${etabCol(pl, req.etablissementId, 'etablissement_id')}`,
+        pl
       );
       user = r.rows[0];
     } else if (nom && tel) {
+      const pl = [nom.trim(), tel.trim()];
       const r = await db.query(
         `SELECT id, nom, prenoms, matricule, role, statut, domaine,
                 mot_de_passe IS NOT NULL AS a_mot_de_passe
-         FROM users WHERE LOWER(nom) = LOWER($1) AND tel = $2 AND role = 'professeur'`,
-        [nom.trim(), tel.trim()]
+         FROM users WHERE LOWER(nom) = LOWER($1) AND tel = $2 AND role = 'professeur'${etabCol(pl, req.etablissementId, 'etablissement_id')}`,
+        pl
       );
       user = r.rows[0];
     } else {
@@ -76,18 +113,57 @@ exports.lookupProfesseur = async (req, res) => {
 };
 
 // ── Utilitaire : remplace les affectations (filière + niveau) d'un prof ──────
-const remplacerAffectations = async (client, professeurId, affectations) => {
+const remplacerAffectations = async (client, professeurId, affectations, etabId) => {
   await client.query('DELETE FROM professeur_filieres WHERE professeur_id = $1', [professeurId]);
   if (!Array.isArray(affectations) || affectations.length === 0) return;
   for (const a of affectations) {
     const filiereId = a.filiere_id ?? a.filiereId;
     const niveau = a.niveau;
     if (!filiereId || !niveau) continue;
+    if (!(await filiereDeMonEtab(filiereId, etabId))) continue; // filière d'un autre établissement
     await client.query(
       `INSERT INTO professeur_filieres (professeur_id, filiere_id, niveau)
        VALUES ($1, $2, $3) ON CONFLICT (professeur_id, filiere_id, niveau) DO NOTHING`,
       [professeurId, filiereId, niveau]
     );
+    // Groupe « Professeur ↔ délégués » créé automatiquement pour cette classe
+    // (ne bloque jamais l'enregistrement si la création échoue).
+    try {
+      await getOrCreateCanalProfDelegue(professeurId, filiereId, niveau);
+    } catch (e) {
+      console.error('[remplacerAffectations] sous-fil prof-délégué:', e.message);
+    }
+  }
+};
+
+// ── Utilitaire : enregistre les champs d'identité / complémentaires ───────────
+// (sexe, lieu de naissance, grade, matricule, spécialité, diplôme, note → professeurs ;
+//  date de naissance, nationalité → users). Ne touche que les champs envoyés.
+const enregistrerChampsProf = async (client, userId, b) => {
+  const v = (x) => (x === undefined ? undefined : (x === null || String(x).trim() === '' ? null : String(x).trim()));
+  const dn = v(b.date_naissance ?? b.dateNaissance);
+  const nat = v(b.nationalite);
+  const setsU = []; const pu = [];
+  if (dn !== undefined)  { pu.push(dn);  setsU.push(`date_naissance = $${pu.length}`); }
+  if (nat !== undefined) { pu.push(nat); setsU.push(`nationalite = $${pu.length}`); }
+  if (setsU.length) {
+    pu.push(userId);
+    await client.query(`UPDATE users SET ${setsU.join(', ')} WHERE id = $${pu.length}`, pu);
+  }
+  const map = {
+    sexe: v(b.sexe) ? String(v(b.sexe)).toUpperCase().slice(0, 1) : v(b.sexe),
+    lieu_naissance: v(b.lieu_naissance ?? b.lieuNaissance),
+    grade: v(b.grade), matricule: v(b.matricule), expertise: v(b.expertise),
+    diplome: v(b.diplome), note: v(b.note),
+  };
+  const setsP = []; const pp = [];
+  for (const [col, val] of Object.entries(map)) {
+    if (val === undefined) continue;
+    pp.push(val); setsP.push(`${col} = $${pp.length}`);
+  }
+  if (setsP.length) {
+    pp.push(userId);
+    await client.query(`UPDATE professeurs SET ${setsP.join(', ')} WHERE user_id = $${pp.length}`, pp);
   }
 };
 
@@ -105,29 +181,49 @@ exports.createProfesseur = async (req, res) => {
     const domaineStr = Array.isArray(domaines) ? domaines.join(',') : (domaines || null);
 
     // 1. Insérer dans users — sans matricule, sans mot de passe
-    await client.query(
-      `INSERT INTO users (nom, prenoms, email, tel, role, domaine, statut)
-       VALUES ($1, $2, $3, $4, 'professeur', $5, 'actif')`,
-      [nom.trim().toUpperCase(), prenoms.trim(), email?.trim() || null, tel.trim(), domaineStr]
-    );
+    const etabId = req.etablissementId || null;
+    if (etabId) {
+      await client.query(
+        `INSERT INTO users (nom, prenoms, email, tel, role, domaine, statut, etablissement_id)
+         VALUES ($1, $2, $3, $4, 'professeur', $5, 'actif', $6)`,
+        [nom.trim().toUpperCase(), prenoms.trim(), email?.trim() || null, tel.trim(), domaineStr, etabId]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO users (nom, prenoms, email, tel, role, domaine, statut)
+         VALUES ($1, $2, $3, $4, 'professeur', $5, 'actif')`,
+        [nom.trim().toUpperCase(), prenoms.trim(), email?.trim() || null, tel.trim(), domaineStr]
+      );
+    }
 
     // Récupérer l'utilisateur inséré (par tel, unique parmi les profs fraîchement créés)
+    const pr = [tel.trim()];
     const userRow = await client.query(
       `SELECT id, nom, prenoms, email, tel, role, domaine, statut FROM users
-       WHERE role = 'professeur' AND tel = $1 ORDER BY id DESC LIMIT 1`,
-      [tel.trim()]
+       WHERE role = 'professeur' AND tel = $1${etabCol(pr, etabId, 'etablissement_id')} ORDER BY id DESC LIMIT 1`,
+      pr
     );
     const user = userRow.rows[0];
     if (!user) throw new Error('Impossible de récupérer le professeur après insertion.');
 
     // 2. Table professeurs (fiche complémentaire)
-    await client.query(
-      `INSERT INTO professeurs (user_id, specialite) VALUES ($1, $2)`,
-      [user.id, domaineStr]
-    );
+    if (etabId) {
+      await client.query(
+        `INSERT INTO professeurs (user_id, specialite, etablissement_id) VALUES ($1, $2, $3)`,
+        [user.id, domaineStr, etabId]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO professeurs (user_id, specialite) VALUES ($1, $2)`,
+        [user.id, domaineStr]
+      );
+    }
 
     // 3. Affectations filière + niveau (plusieurs possibles)
-    await remplacerAffectations(client, user.id, affectations);
+    await remplacerAffectations(client, user.id, affectations, etabId);
+
+    // 4. Champs d'identité / complémentaires (p35)
+    await enregistrerChampsProf(client, user.id, req.body);
 
     res.status(201).json({
       message: 'Professeur créé avec succès. Il pourra se connecter avec son nom, prénom et numéro de téléphone.',
@@ -135,7 +231,7 @@ exports.createProfesseur = async (req, res) => {
     });
   } catch (err) {
     console.error('createProfesseur:', err.message);
-    if (err.code === '23505') return res.status(409).json({ error: 'Email déjà utilisé.' });
+    if (err.code === '23505') return res.status(409).json({ error: 'Email ou matricule déjà utilisé.' });
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -150,6 +246,10 @@ exports.updateProfesseur = async (req, res) => {
   try {
     const domaineStr = Array.isArray(domaines) ? domaines.join(',') : (domaines !== undefined ? domaines : null);
 
+    if (!(await profDeMonEtab(id, req.etablissementId))) {
+      return res.status(404).json({ error: 'Professeur non trouvé.' });
+    }
+
     await client.query(
       `UPDATE users SET nom=COALESCE($1,nom), prenoms=COALESCE($2,prenoms),
        email=COALESCE($3,email), tel=COALESCE($4,tel),
@@ -159,8 +259,11 @@ exports.updateProfesseur = async (req, res) => {
     );
 
     if (affectations !== undefined) {
-      await remplacerAffectations(client, id, affectations);
+      await remplacerAffectations(client, id, affectations, req.etablissementId || null);
     }
+
+    // Champs d'identité / complémentaires (p35)
+    await enregistrerChampsProf(client, id, req.body);
 
     const result = await client.query(
       `SELECT id, nom, prenoms, email, tel, role, domaine, statut FROM users WHERE id=$1 AND role='professeur'`,
@@ -173,9 +276,25 @@ exports.updateProfesseur = async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     console.error('updateProfesseur:', err.message);
+    if (err.code === '23505') return res.status(409).json({ error: 'Email ou matricule déjà utilisé.' });
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+};
+
+// ── POST /api/professeurs/:id/photo — photo d'identité (multipart `file`) ─────
+exports.uploaderPhotoProfesseur = async (req, res) => {
+  try {
+    if (!req.uploadedFileUrl) return res.status(400).json({ success: false, message: 'Aucun fichier uploadé.' });
+    if (!(await profDeMonEtab(req.params.id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Professeur introuvable.' });
+    }
+    await db.query('UPDATE users SET photo_url = $1 WHERE id = $2 AND role = \'professeur\'', [req.uploadedFileUrl, req.params.id]);
+    res.status(200).json({ success: true, url: req.uploadedFileUrl });
+  } catch (err) {
+    console.error('[uploaderPhotoProfesseur]', err);
+    res.status(500).json({ success: false, message: "Erreur lors de l'enregistrement de la photo." });
   }
 };
 
@@ -183,7 +302,8 @@ exports.updateProfesseur = async (req, res) => {
 exports.deleteProfesseur = async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query(`UPDATE users SET statut='renvoye' WHERE id=$1 AND role='professeur'`, [id]);
+    const pd = [id];
+    await db.query(`UPDATE users SET statut='renvoye' WHERE id=$1 AND role='professeur'${etabCol(pd, req.etablissementId, 'etablissement_id')}`, pd);
     res.json({ message: 'Professeur désactivé.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -193,6 +313,7 @@ exports.deleteProfesseur = async (req, res) => {
 // ── GET /api/professeurs/:id ──────────────────────────────────────────────────
 exports.getProfesseurById = async (req, res) => {
   try {
+    const pg = [req.params.id];
     const result = await db.query(
       `SELECT u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.domaine, u.statut,
               COALESCE(
@@ -204,9 +325,9 @@ exports.getProfesseurById = async (req, res) => {
        FROM users u
        LEFT JOIN professeur_filieres pf ON pf.professeur_id = u.id
        LEFT JOIN filieres f ON f.id = pf.filiere_id
-       WHERE u.id=$1 AND u.role='professeur'
+       WHERE u.id=$1 AND u.role='professeur'${etabCol(pg, req.etablissementId, 'u.etablissement_id')}
        GROUP BY u.id, u.nom, u.prenoms, u.email, u.tel, u.role, u.domaine, u.statut`,
-      [req.params.id]
+      pg
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Professeur non trouvé.' });
     res.json(result.rows[0]);
@@ -295,6 +416,9 @@ exports.getModules = async (req, res) => {
 // ✅ CORRIGÉ — même correctif que ci-dessus, vue admin sur un prof précis.
 exports.getModulesByProfesseur = async (req, res) => {
   try {
+    if (!(await profDeMonEtab(req.params.id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Professeur non trouvé.' });
+    }
     const result = await db.query(
       `SELECT pm.id AS affectation_id, m.id, m.nom, m.coefficient, m.volume_horaire,
               m.filiere_id, m.filiere_nom, pm.niveau, pm.semestre
@@ -315,10 +439,10 @@ exports.getStudentsByFiliere = async (req, res) => {
   try {
     const { niveau } = req.query;
     const params = [req.params.filiere_id];
-    let filtreNiveau = '';
+    let filtreNiveau = etabCol(params, req.etablissementId, 'e.etablissement_id');
     if (niveau) {
       params.push(niveau);
-      filtreNiveau = ` AND e.niveau = $${params.length}`;
+      filtreNiveau += ` AND e.niveau = $${params.length}`;
     }
     const result = await db.query(
       `SELECT u.id, u.nom, u.prenoms, u.matricule, u.email, u.tel, u.statut, u.photo_url,
@@ -341,10 +465,10 @@ exports.getStudentsByFilierePdf = async (req, res) => {
     const PDFDocument = require('pdfkit');
     const { niveau, filiere_nom } = req.query;
     const params = [req.params.filiere_id];
-    let filtreNiveau = '';
+    let filtreNiveau = etabCol(params, req.etablissementId, 'e.etablissement_id');
     if (niveau) {
       params.push(niveau);
-      filtreNiveau = ` AND e.niveau = $${params.length}`;
+      filtreNiveau += ` AND e.niveau = $${params.length}`;
     }
     const result = await db.query(
       `SELECT u.nom, u.prenoms, u.matricule
@@ -405,8 +529,10 @@ exports.getDisponibilites = async (req, res) => {
 
 exports.getAllDisponibilites = async (req, res) => {
   try {
+    const pdv = [];
     const r = await db.query(
-      `SELECT id, nom, prenoms, disponibilites FROM users WHERE role='professeur' AND disponibilites IS NOT NULL`
+      `SELECT id, nom, prenoms, disponibilites FROM users WHERE role='professeur' AND disponibilites IS NOT NULL${etabCol(pdv, req.etablissementId, 'etablissement_id')}`,
+      pdv
     );
     res.json({ success: true, data: r.rows });
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -429,6 +555,9 @@ exports.saveDisponibilites = async (req, res) => {
 exports.patchModuleAssignment = async (req, res) => {
   const { module_id, professeur_id, action } = req.body;
   try {
+    if (!(await profDeMonEtab(professeur_id, req.etablissementId))) {
+      return res.status(404).json({ error: 'Professeur non trouvé.' });
+    }
     if (action === 'assign') {
       await db.query('INSERT INTO module_professeur (module_id, professeur_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [module_id, professeur_id]);
     } else if (action === 'remove') {
@@ -452,6 +581,10 @@ exports.assignerModule = async (req, res) => {
   }
 
   try {
+    if (!(await profDeMonEtab(professeurId, req.etablissementId)) ||
+        !(await filiereDeMonEtab(filiere_id, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Professeur ou filière introuvable.' });
+    }
     const result = await db.query(
       `INSERT INTO professeur_modules (professeur_id, module_id, filiere_id, niveau, semestre)
        VALUES ($1, $2, $3, $4, $5)
@@ -518,6 +651,9 @@ exports.getMesCanauxCoordination = async (req, res) => {
 exports.retirerModule = async (req, res) => {
   const { id: professeurId, affectationId } = req.params;
   try {
+    if (!(await profDeMonEtab(professeurId, req.etablissementId))) {
+      return res.status(404).json({ success: false, message: 'Affectation non trouvée.' });
+    }
     const result = await db.query(
       `DELETE FROM professeur_modules WHERE id = $1 AND professeur_id = $2 RETURNING id`,
       [affectationId, professeurId]

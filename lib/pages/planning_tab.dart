@@ -1,9 +1,14 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/etablissement_config.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart';
+import 'edt_officiel_view.dart';
 
 class PlanningTab extends StatefulWidget {
   const PlanningTab({super.key, required this.profile});
@@ -33,6 +38,8 @@ class _PlanningTabState extends State<PlanningTab>
   bool _loadingProgramme = true;
   Map<String, dynamic>? _edtActif;
   List<Map<String, dynamic>> _creneaux = [];
+  // Filière réelle de l'étudiant (nom + département) renvoyée par le serveur.
+  Map<String, dynamic> _filiereInfo = {};
 
   // ── Historique (table edt : archivés OU dateFin dépassée) ─────────────────
   bool _loadingHistorique = true;
@@ -51,74 +58,47 @@ class _PlanningTabState extends State<PlanningTab>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _fetchProgrammeActif();
-    _fetchHistorique();
+    _fetchProgrammes();
     _fetchCalendrier();
   }
 
   String get _aujourdhuiIso => DateTime.now().toIso8601String().split('T').first;
 
-  // ── Récupère le programme de la semaine EN COURS (dateDebut <= aujourd'hui
-  // <= dateFin), pas simplement "le plus récent créé" — sinon un vieux
-  // programme jamais archivé peut passer devant celui qu'on vient de
-  // modifier (createdAt ne change pas lors d'une modification, seulement
-  // updatedAt). Repli sur l'ancien comportement pour les programmes créés
-  // avant l'ajout de dateDebut/dateFin (encore sans ces champs).
-  Future<void> _fetchProgrammeActif() async {
+  // ── Programme actif + historique, résolus CÔTÉ SERVEUR à partir de la
+  // vraie filière de l'étudiant (filiere_id) dans SON établissement. Évite de
+  // chercher par nom de filière : deux établissements peuvent avoir une
+  // filière et un niveau de même nom, et l'étudiant ne doit voir que le sien.
+  Future<void> _fetchProgrammes() async {
     try {
-      var row = await Supabase.instance.client
-          .from('edt')
-          .select()
-          .eq('filiere_nom', widget.profile.filiere)
-          .eq('niveau', widget.profile.niveau)
-          .eq('archive', false)
-          .lte('dateDebut', _aujourdhuiIso)
-          .gte('dateFin', _aujourdhuiIso)
-          .order('dateDebut', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      row ??= await Supabase.instance.client
-          .from('edt')
-          .select()
-          .eq('filiere_nom', widget.profile.filiere)
-          .eq('niveau', widget.profile.niveau)
-          .eq('archive', false)
-          .order('createdAt', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
+      final response = await http.get(
+        Uri.parse('${ApiService.baseUrl}/edt/mon-programme'),
+        headers: await ApiService.getHeaders(),
+      );
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      final data = (body['data'] as Map?) ?? {};
+      final actif = data['actif'] is Map ? Map<String, dynamic>.from(data['actif'] as Map) : null;
+      final histo = (data['historique'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
       if (!mounted) return;
       setState(() {
-        _edtActif = row;
-        _creneaux = row != null ? _parseCreneaux(row['creneaux']) : [];
+        _filiereInfo = data['filiere'] is Map ? Map<String, dynamic>.from(data['filiere'] as Map) : {};
+        _edtActif = actif;
+        _creneaux = actif != null ? _parseCreneaux(actif['creneaux']) : [];
+        _historique = histo;
         _loadingProgramme = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loadingProgramme = false);
-    }
-  }
-
-  // ── Historique : programmes explicitement archivés OU dont la semaine
-  // (dateFin) est déjà passée — transition automatique, sans dépendre d'un
-  // archivage manuel côté admin.
-  Future<void> _fetchHistorique() async {
-    try {
-      final rows = await Supabase.instance.client
-          .from('edt')
-          .select()
-          .eq('filiere_nom', widget.profile.filiere)
-          .eq('niveau', widget.profile.niveau)
-          .or('archive.eq.true,dateFin.lt.$_aujourdhuiIso')
-          .order('dateFin', ascending: false);
-
-      if (!mounted) return;
-      setState(() {
-        _historique = List<Map<String, dynamic>>.from(rows as List);
         _loadingHistorique = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loadingHistorique = false);
+      if (mounted) {
+        setState(() {
+          _loadingProgramme = false;
+          _loadingHistorique = false;
+        });
+      }
     }
   }
 
@@ -215,7 +195,7 @@ class _PlanningTabState extends State<PlanningTab>
                     pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('INSTITUT SUPÉRIEUR DE TECHNOLOGIES (IST)', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom.toUpperCase() : 'ÉTABLISSEMENT', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
                         pw.Text(widget.profile.filiere, style: const pw.TextStyle(fontSize: 9)),
                       ],
                     ),
@@ -381,204 +361,34 @@ class _PlanningTabState extends State<PlanningTab>
       _creneaux,
       dateDebut: _edtActif?['dateDebut']?.toString(),
       dateFin: _edtActif?['dateFin']?.toString(),
+      edt: _edtActif,
     );
   }
 
-  // ── Tableau semaine, même présentation que côté administration ───────────
+  // ── Tableau semaine : EXACTEMENT le même rendu que le programme officiel
+  // côté administration (en-tête avec logo/établissement, horaires, pause…).
 
-  Widget _buildGrilleSemaine(List<Map<String, dynamic>> creneaux, {String? dateDebut, String? dateFin}) {
+  DateTime? _dateDe(String? iso) => iso == null ? null : DateTime.tryParse(iso);
+
+  Widget _buildGrilleSemaine(List<Map<String, dynamic>> creneaux,
+      {String? dateDebut, String? dateFin, Map<String, dynamic>? edt}) {
+    final cfg = EtablissementConfig.instance;
+    final filNom = (_filiereInfo['nom'] ?? edt?['filiere_nom'] ?? widget.profile.filiere).toString();
+    final dept = (_filiereInfo['domaine'] ?? widget.profile.domaine).toString();
+    final niv = (edt?['niveau'] ?? widget.profile.niveau).toString();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (dateDebut != null && dateFin != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFBFDBFE)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.date_range_rounded, size: 16, color: _brandBlue),
-                const SizedBox(width: 8),
-                Text(
-                  'Semaine du ${_formatDateAffichage(dateDebut)} au ${_formatDateAffichage(dateFin)}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _brandBlue),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 14),
-          ],
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: _buildTableauJours(creneaux),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> _coursDuJour(List<Map<String, dynamic>> creneaux, String jour) {
-    final liste = creneaux.where((c) => c['jour'] == jour).toList();
-    liste.sort((a, b) => (a['heureDebut']?.toString() ?? '').compareTo(b['heureDebut']?.toString() ?? ''));
-    return liste;
-  }
-
-  TimeOfDay? _parseHeure(String? raw) {
-    if (raw == null || raw.isEmpty) return null;
-    final parts = raw.split(':');
-    if (parts.length < 2) return null;
-    final h = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    if (h == null || m == null) return null;
-    return TimeOfDay(hour: h, minute: m);
-  }
-
-  int _ecartMinutes(String? finA, String? debutB) {
-    final fa = _parseHeure(finA);
-    final db = _parseHeure(debutB);
-    if (fa == null || db == null) return 0;
-    final diff = (db.hour * 60 + db.minute) - (fa.hour * 60 + fa.minute);
-    return diff > 0 ? diff : 0;
-  }
-
-  Widget _spacerEcart(int minutes) {
-    if (minutes <= 0) {
-      return const Divider(height: 1, color: _border);
-    }
-    final hauteur = (minutes / 60 * 28).clamp(22.0, 64.0);
-    final heures = minutes / 60.0;
-    final label = heures == heures.roundToDouble()
-        ? '${heures.toStringAsFixed(0)}h'
-        : (minutes < 60 ? '${minutes}min' : '${heures.toStringAsFixed(1)}h');
-    return Container(
-      height: hauteur,
-      width: double.infinity,
-      alignment: Alignment.center,
-      color: const Color(0xFFF8FAFC),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(child: Container(height: 1, margin: const EdgeInsets.only(right: 6), color: _border)),
-          Text(label, style: const TextStyle(fontSize: 10, color: _textMuted, fontWeight: FontWeight.w600)),
-          Expanded(child: Container(height: 1, margin: const EdgeInsets.only(left: 6), color: _border)),
-        ],
-      ),
-    );
-  }
-
-  Widget _carteCoursTableau(Map<String, dynamic> c) {
-    final type = c['type']?.toString() ?? '';
-    final couleur = _getTypeColor(type);
-    final important = _estImportant(type);
-    final prof = c['prof']?.toString() ?? '';
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: important ? _jauneFond : couleur.withValues(alpha: 0.10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: couleur, borderRadius: BorderRadius.circular(4)),
-              child: Text(_typeLabel(type), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-            const SizedBox(width: 6),
-            if (important) const Padding(padding: EdgeInsets.only(right: 3), child: Icon(Icons.warning_amber_rounded, size: 11, color: _jaune)),
-            Expanded(
-              child: Text('${c['heureDebut'] ?? ''} - ${c['heureFin'] ?? ''}',
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _textMain),
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ]),
-          const SizedBox(height: 4),
-          Text(c['matiere']?.toString() ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _textMain), maxLines: 2, overflow: TextOverflow.ellipsis),
-          if (prof.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Row(children: [
-              const Icon(Icons.person_outline_rounded, size: 11, color: _textMuted),
-              const SizedBox(width: 2),
-              Expanded(child: Text(prof, style: const TextStyle(fontSize: 10.5, color: _textMuted), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            ]),
-          ],
-          const SizedBox(height: 2),
-          Row(children: [
-            const Icon(Icons.room_outlined, size: 11, color: _brandBlue),
-            const SizedBox(width: 2),
-            Expanded(child: Text(c['salle']?.toString() ?? '', style: const TextStyle(fontSize: 11, color: _brandBlue, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  Widget _corpsJourTableau(List<Map<String, dynamic>> creneaux, String jour) {
-    const double caseHeight = 100;
-    final cours = _coursDuJour(creneaux, jour);
-
-    if (cours.isEmpty) {
-      return const SizedBox(
-        height: caseHeight,
-        child: Center(
-          child: Text('Aucun cours', style: TextStyle(fontSize: 11, color: _textMuted, fontStyle: FontStyle.italic)),
-        ),
-      );
-    }
-
-    final children = <Widget>[];
-    for (var i = 0; i < cours.length; i++) {
-      children.add(SizedBox(height: caseHeight, child: _carteCoursTableau(cours[i])));
-      if (i < cours.length - 1) {
-        children.add(_spacerEcart(_ecartMinutes(cours[i]['heureFin']?.toString(), cours[i + 1]['heureDebut']?.toString())));
-      }
-    }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
-  }
-
-  /// Même présentation que la grille admin : une seule barre d'en-tête
-  /// continue (pas de coupure entre les jours), colonnes indépendantes
-  /// reliées par un simple filet, écarts entre cours proportionnels et
-  /// affichés en clair.
-  Widget _buildTableauJours(List<Map<String, dynamic>> creneaux) {
-    const double colWidth = 180;
-
-    return Container(
-      decoration: BoxDecoration(border: Border.all(color: _border), borderRadius: BorderRadius.circular(10)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: _joursSemaine.map((j) => Container(
-                  width: colWidth,
-                  height: 40,
-                  color: _brandBlue,
-                  alignment: Alignment.center,
-                  child: Text(j, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                )).toList(),
-          ),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (int i = 0; i < _joursSemaine.length; i++) ...[
-                  if (i > 0) const VerticalDivider(width: 1, thickness: 1, color: _border),
-                  SizedBox(width: colWidth, child: _corpsJourTableau(creneaux, _joursSemaine[i])),
-                ],
-              ],
-            ),
-          ),
-        ],
+      child: EdtOfficielView(
+        creneaux: creneaux,
+        etabNom: cfg.nom,
+        etabLogo: cfg.logoUrl,
+        departement: dept,
+        filiereNom: filNom,
+        niveau: niv,
+        annee: (edt?['anneeAcademique'] ?? '').toString(),
+        dateDebut: _dateDe(dateDebut),
+        dateFin: _dateDe(dateFin),
       ),
     );
   }
@@ -714,6 +524,7 @@ class _PlanningTabState extends State<PlanningTab>
                       creneaux,
                       dateDebut: edt['dateDebut']?.toString(),
                       dateFin: edt['dateFin']?.toString(),
+                      edt: edt,
                     ),
             ),
           ]),

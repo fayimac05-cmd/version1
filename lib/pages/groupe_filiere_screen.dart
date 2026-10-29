@@ -116,7 +116,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
   // ── Membres réels de la filière (chargés depuis le backend) ──────────
   List<_Membre> _membres = [];
   bool _chargementInitial = true;
-  String _themeId = ChatThemes.classique.id;
+  String _themeId = ChatThemes.defaut.id;
   bool _panneauOuvert = false;
   String? _hoveredMsgId;
   _MessageGroupe? _messageEnReponse;
@@ -573,7 +573,10 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     if (epingles.isEmpty) return const SizedBox.shrink();
     final dernier = epingles.last;
     return Container(
-      color: const Color(0xFFF0F2F5),
+      decoration: const BoxDecoration(
+        color: Color(0xFFEFF6FF),
+        border: Border(bottom: BorderSide(color: Color(0xFFDBEAFE))),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(children: [
         const Icon(Icons.push_pin_rounded, color: AppPalette.blue, size: 15),
@@ -587,7 +590,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
           ),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(dernier.auteur.nomComplet, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppPalette.blue)),
+            Text('Message épinglé · ${dernier.auteur.nomComplet}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppPalette.blue)),
             Text(dernier.contenu, style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
           ]),
         ),
@@ -1616,8 +1619,9 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFFE2E8F0),
+            color: Colors.white.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Text(
             label,

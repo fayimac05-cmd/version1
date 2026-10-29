@@ -25,12 +25,14 @@ const {
   getProfFilieres,
   ajouterReaction,
   masquerMessage,
+  epinglerMessage,
   supprimerMessage,
   supprimerMessageType,
   getAdminContact,
   getAdminContacts,
   getContacts,
   getUsersOnline,
+  getCanauxStandard,
 } = require('../controllers/messageController');
 
 // Toutes les routes messagerie nécessitent un JWT valide
@@ -38,6 +40,7 @@ router.use(auth);
 
 // ── Canaux ────────────────────────────────────────────────
 router.get('/canaux',            getCanaux);
+router.get('/canaux-standard',   getCanauxStandard);
 router.get('/canal/:id',         getMessagesCanal);
 router.post('/canal/:id',        envoyerMessageCanal);
 
@@ -67,6 +70,7 @@ router.get('/:type/:id/lecteurs',  getLecteursMessage);
 // ── Réactions, masquage ("supprimer pour moi") & suppression ─────────────
 router.post('/:id/reaction',      ajouterReaction);
 router.post('/:type/:id/masquer', masquerMessage);
+router.patch('/:type/:id/epingle', epinglerMessage);   // épingler / désépingler (canal, groupe, privé)
 router.delete('/:id',             supprimerMessage);       // ancienne route (canaux uniquement, conservée pour compatibilité)
 router.delete('/:type/:id',       supprimerMessageType);    // "supprimer pour tout le monde" — canal/groupe/prive
 

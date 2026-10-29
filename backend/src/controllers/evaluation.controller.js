@@ -3,6 +3,19 @@ const { envoyerNotificationAuto } = require('./notifications.controller');
 
 const CRITERES = ['pedagogie', 'ponctualite', 'disponibilite', 'clarte'];
 
+// ── Isolation par établissement ─────────────────────────────────────────────
+// Une période appartient à l'établissement de sa filière (filieres.etablissement_id).
+// req.etablissementId vient du jeton ; s'il est absent (anciens jetons), pas de filtre.
+async function periodeDeMonEtab(req, id) {
+  if (!req.etablissementId) return true;
+  const r = await pool.query(
+    `SELECT 1 FROM periodes_evaluation pe JOIN filieres f ON f.id = pe.filiere_id
+     WHERE pe.id = $1 AND f.etablissement_id = $2`,
+    [id, req.etablissementId]
+  );
+  return r.rows.length > 0;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // ADMIN — Gestion des périodes d'évaluation (une par filière)
 // ════════════════════════════════════════════════════════════════════════════
@@ -14,7 +27,10 @@ const creerPeriode = async (req, res) => {
     if (!filiere_id || !date_debut || !date_fin) {
       return res.status(400).json({ success: false, message: 'filiere_id, date_debut et date_fin sont requis.' });
     }
-    const filiereRes = await pool.query('SELECT nom FROM filieres WHERE id = $1', [filiere_id]);
+    const filiereRes = await pool.query(
+      `SELECT nom FROM filieres WHERE id = $1${req.etablissementId ? ' AND etablissement_id = $2' : ''}`,
+      req.etablissementId ? [filiere_id, req.etablissementId] : [filiere_id]
+    );
     if (filiereRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Filière introuvable.' });
     }
@@ -66,9 +82,10 @@ const getPeriodes = async (req, res) => {
       SELECT pe.*, COUNT(DISTINCT ep.id) AS nb_reponses
       FROM periodes_evaluation pe
       LEFT JOIN evaluations_professeurs ep ON ep.periode_id = pe.id
+      ${req.etablissementId ? 'WHERE pe.filiere_id IN (SELECT id FROM filieres WHERE etablissement_id = $1)' : ''}
       GROUP BY pe.id
       ORDER BY pe.created_at DESC
-    `);
+    `, req.etablissementId ? [req.etablissementId] : []);
     res.json({ success: true, data: result.rows });
   } catch (error) {
     console.error('[getPeriodes]', error);
@@ -80,6 +97,9 @@ const getPeriodes = async (req, res) => {
 const cloturerPeriode = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!(await periodeDeMonEtab(req, id))) {
+      return res.status(404).json({ success: false, message: 'Période introuvable.' });
+    }
     const result = await pool.query(
       `UPDATE periodes_evaluation SET ouverte = false WHERE id = $1 RETURNING id`,
       [id]
@@ -102,6 +122,9 @@ const cloturerPeriode = async (req, res) => {
 const getResultatsPeriode = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!(await periodeDeMonEtab(req, id))) {
+      return res.status(404).json({ success: false, message: 'Période introuvable.' });
+    }
     const result = await pool.query(`
       SELECT
         u.id AS professeur_id, u.nom, u.prenoms,
@@ -222,7 +245,7 @@ const soumettreEvaluation = async (req, res) => {
     }
 
     const periodeRes = await pool.query('SELECT ouverte FROM periodes_evaluation WHERE id = $1', [periode_id]);
-    if (periodeRes.rows.length === 0 || !periodeRes.rows[0].ouverte) {
+    if (periodeRes.rows.length === 0 || !periodeRes.rows[0].ouverte || !(await periodeDeMonEtab(req, periode_id))) {
       return res.status(400).json({ success: false, message: 'Cette période d\'évaluation est fermée.' });
     }
 

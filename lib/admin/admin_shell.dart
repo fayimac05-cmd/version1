@@ -29,10 +29,14 @@
 //   par config d'établissement).
 // ============================================================
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
+import '../services/api_extra.dart';
 import '../theme/app_palette.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_dashboard.dart';
@@ -122,6 +126,29 @@ const _menuGroups = <Map<String, Object>>[
 // SECTION 2 — AdminMenuService (permissions par rôle) [ARCH-3]
 // ═══════════════════════════════════════════════════════════════
 
+/// Autorisation (interrupteur de « Membres & Rôles ») qui commande chaque
+/// entrée du menu. Une entrée absente de cette table (tableau de bord, Collège
+/// & Lycée, Primaire, Cantine) reste pilotée uniquement par le sous-rôle.
+const Map<int, String> kMenuPermission = {
+  1: 'annonces',      // Annonces
+  2: 'filieres',      // Filières & Modules
+  3: 'filieres',      // Emplois du Temps
+  4: 'notes',         // Notes & Moyennes
+  5: 'reclamations',  // Réclamations
+  6: 'etudiants',     // Étudiants
+  7: 'professeurs',   // Professeurs
+  8: 'parents',       // Parents
+  9: 'membres',       // Membres & Rôles
+  10: 'messages',     // Groupes & Messages
+  11: 'bde',          // BDE & Événements
+  12: 'stats',        // Statistiques
+  13: 'stats',        // Éval. Professeurs
+  16: 'stats',        // Élèves à risque
+  17: 'bulletins',    // Bulletins
+  18: 'etudiants',    // Délégués
+  20: 'bde',          // Bureau des Étudiants
+};
+
 class AdminMenuService {
   const AdminMenuService._();
 
@@ -155,6 +182,20 @@ class AdminMenuService {
 
   static bool canAccess(AdminRole role, int itemIndex) =>
       allowedItems(role).contains(itemIndex);
+
+  /// Accès réel d'un membre : le Super Admin voit tout ; sinon l'interrupteur
+  /// enregistré pour ce membre décide (il peut accorder OU retirer l'accès).
+  /// Sans interrupteur connu (ancien compte, entrée sans autorisation), on
+  /// retombe sur les accès par défaut du sous-rôle.
+  static bool canAccessWith(AdminRole role, int itemIndex, Map<String, bool>? droits) {
+    if (role == AdminRole.superAdmin) return true;
+    if (itemIndex == 0) return true;
+    final cle = kMenuPermission[itemIndex];
+    if (cle != null && droits != null && droits.containsKey(cle)) {
+      return droits[cle] == true;
+    }
+    return canAccess(role, itemIndex);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -232,6 +273,47 @@ class _AdminShellState extends State<AdminShell>
   // du contrôleur correspondant.
   final Map<int, int> _badges = {};
 
+  // Autorisations du membre connecté (interrupteurs de « Membres & Rôles »).
+  // null tant qu'elles ne sont pas chargées → accès par défaut du sous-rôle.
+  Map<String, bool>? _droits;
+
+  /// Logo de l'établissement : le Super Admin, ou un membre à qui il a donné l'autorisation « logo ».
+  bool get _peutGererLogoOfficiel =>
+      widget.activeRole == AdminRole.superAdmin || _droits?['logo'] == true;
+  bool get _peutGererPhotoAccueil =>
+      widget.activeRole == AdminRole.superAdmin || _droits?['photo_accueil'] == true;
+  bool get _peutGererIdentite => _peutGererLogoOfficiel || _peutGererPhotoAccueil;
+
+  bool _peutVoir(int i) =>
+      AdminMenuService.canAccessWith(widget.activeRole, i, _droits);
+
+  Future<void> _chargerDroits() async {
+    if (widget.activeRole == AdminRole.superAdmin) return;
+    try {
+      final headers = await ApiService.getHeaders();
+      final r = await http.get(Uri.parse('${ApiService.baseUrl}/membres/moi'), headers: headers);
+      if (r.statusCode != 200) return;
+      final data = jsonDecode(utf8.decode(r.bodyBytes))['data'];
+      final d = <String, bool>{};
+      if (data is Map && data['droits'] is Map) {
+        (data['droits'] as Map).forEach((k, v) {
+          if (v is bool) d[k.toString()] = v;
+        });
+      }
+      if (!mounted) return;
+      setState(() {
+        _droits = d;
+        // Si la page affichée n'est plus autorisée, retour au tableau de bord.
+        if (!_peutVoir(_idx)) {
+          _idx = 0;
+          _prevIdx = 0;
+        }
+      });
+    } catch (_) {
+      // Hors ligne / erreur : on garde les accès par défaut du sous-rôle.
+    }
+  }
+
   Future<void> _chargerBadges() async {
     final results = await Future.wait([
       ApiService.getNombreSessionsEnAttente(),
@@ -250,8 +332,9 @@ class _AdminShellState extends State<AdminShell>
     // Config multi-établissement : recharge le type persisté puis
     // reconstruit l'interface à chaque changement de type.
     EtablissementConfig.instance.addListener(_onConfigChanged);
-    EtablissementConfig.instance.charger();
+    EtablissementConfig.instance.charger().then((_) => _chargerLogo());
     _chargerBadges();
+    _chargerDroits();
     _pages = [
       AdminDashboard(profile: widget.profile),
       const AdminAnnonces(),
@@ -289,6 +372,177 @@ class _AdminShellState extends State<AdminShell>
     EtablissementConfig.instance.removeListener(_onConfigChanged);
     _pageAnim.dispose();
     super.dispose();
+  }
+
+  /// Récupère le logo de l'établissement (défini par le Super Admin).
+  Future<void> _chargerLogo() async {
+    final url = await ApiService.getLogoEtablissement();
+    if (!mounted) return;
+    await EtablissementConfig.instance.appliquerIdentite(
+        nom: EtablissementConfig.instance.nom, logoUrl: url);
+  }
+
+  /// Menu « Identité visuelle » : logo officiel (documents) + photo d'accueil (page de bienvenue).
+  Future<void> _menuLogo() async {
+    final aLogo = EtablissementConfig.instance.logoUrl.isNotEmpty;
+    final peutLogo = _peutGererLogoOfficiel;
+    final peutPhoto = _peutGererPhotoAccueil;
+    final photo = peutPhoto ? await ApiExtra.getPhotoAccueil() : '';
+    if (!mounted) return;
+    final aPhoto = photo.isNotEmpty;
+    final choix = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: Text("Identité de l'établissement",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            if (peutLogo) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Text('Logo officiel',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 2, 20, 4),
+              child: Text("Apparaît sur les documents : bulletins, emplois du temps… Image PNG ou JPG.",
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+            ),
+            ListTile(
+              leading: const Icon(Icons.verified_outlined),
+              title: Text(aLogo ? 'Remplacer le logo' : 'Ajouter le logo'),
+              onTap: () => Navigator.pop(ctx, 'logo'),
+            ),
+            if (aLogo)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                title: const Text('Supprimer le logo', style: TextStyle(color: Colors.redAccent)),
+                onTap: () => Navigator.pop(ctx, 'logo_suppr'),
+              ),
+            ],
+            if (peutLogo && peutPhoto) const Divider(),
+            if (peutPhoto) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Text("Photo d'accueil",
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 2, 20, 4),
+              child: Text("Image de bienvenue montrée à tous quand ils saisissent le code de l'établissement (photo d'étudiants, affiche…). Elle n'apparaît jamais sur les documents.",
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+            ),
+            if (aPhoto)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(photo, height: 110, width: double.infinity, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                ),
+              ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(aPhoto ? "Remplacer la photo d'accueil" : "Ajouter une photo d'accueil"),
+              onTap: () => Navigator.pop(ctx, 'photo'),
+            ),
+            if (aPhoto)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                title: const Text("Supprimer la photo d'accueil", style: TextStyle(color: Colors.redAccent)),
+                onTap: () => Navigator.pop(ctx, 'photo_suppr'),
+              ),
+            ],
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
+    );
+    if (choix == 'logo') await _changerLogo();
+    if (choix == 'logo_suppr') await _supprimerLogo();
+    if (choix == 'photo') await _changerPhotoAccueil();
+    if (choix == 'photo_suppr') await _supprimerPhotoAccueil();
+  }
+
+  Future<void> _supprimerLogo() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer le logo ?'),
+        content: const Text("Les documents n'afficheront plus le logo de l'établissement."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Supprimer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final fait = await ApiService.supprimerLogoEtablissement();
+    if (!mounted) return;
+    if (fait) await EtablissementConfig.instance.effacerLogo();
+    _snackMsg(fait ? 'Logo supprimé.' : 'Suppression impossible (autorisation requise).');
+  }
+
+  void _snackMsg(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), behavior: SnackBarBehavior.floating));
+  }
+
+  Future<void> _changerPhotoAccueil() async {
+    final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom, allowedExtensions: ['jpg', 'jpeg', 'png'], withData: true);
+    if (res == null || res.files.isEmpty || res.files.first.bytes == null) return;
+    final f = res.files.first;
+    if (!mounted) return;
+    final rogne = await afficherRecadrage(context, f.bytes!, titre: "Recadrer la photo d'accueil");
+    if (rogne == null) return; // annulé : rien n'est envoyé
+    final r = await ApiExtra.uploadPhotoAccueil(rogne, 'photo-accueil.png');
+    _snackMsg(r['success'] == true ? "Photo d'accueil mise à jour." : (r['error']?.toString() ?? 'Erreur.'));
+  }
+
+  Future<void> _supprimerPhotoAccueil() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Supprimer la photo d'accueil ?"),
+        content: const Text("L'écran de bienvenue affichera les initiales de l'établissement à la place."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Supprimer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final fait = await ApiExtra.supprimerPhotoAccueil();
+    _snackMsg(fait ? "Photo d'accueil supprimée." : 'Suppression impossible (autorisation requise).');
+  }
+
+  /// Choisir / remplacer le logo de l'établissement (Super Admin ou membre autorisé).
+  Future<void> _changerLogo() async {
+    final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom, allowedExtensions: ['jpg', 'jpeg', 'png'], withData: true);
+    if (res == null || res.files.isEmpty || res.files.first.bytes == null) return;
+    final f = res.files.first;
+    if (!mounted) return;
+    final rogne = await afficherRecadrage(context, f.bytes!,
+        titre: 'Recadrer le logo',
+        formats: const [MapEntry('Libre', null), MapEntry('1:1', 1.0), MapEntry('4:3', 4 / 3)],
+        formatInitial: null);
+    if (rogne == null) return; // annulé : rien n'est envoyé
+    final r = await ApiService.uploadLogoEtablissement(rogne, 'logo.png');
+    if (!mounted) return;
+    if (r['success'] == true) {
+      await EtablissementConfig.instance.appliquerIdentite(
+          nom: EtablissementConfig.instance.nom, logoUrl: r['url']?.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logo de l'établissement mis à jour."), behavior: SnackBarBehavior.floating));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r['error']?.toString() ?? 'Erreur.'), behavior: SnackBarBehavior.floating));
+    }
   }
 
   void _onConfigChanged() {
@@ -335,6 +589,7 @@ class _AdminShellState extends State<AdminShell>
 
   void _navigate(int index) {
     if (index == _idx) return;
+    if (!_peutVoir(index)) return;
     final fromRight = index > _prevIdx;
     _resetPageAnimation(fromRight: fromRight);
     setState(() {
@@ -440,6 +695,7 @@ class _AdminShellState extends State<AdminShell>
       items: [
         _popItem('profile',  Icons.person_outline_rounded, 'Mon profil',  const Color(0xFF334155)),
         _popItem('settings', Icons.settings_outlined,      'Paramètres',  const Color(0xFF334155)),
+        _popItem('mdp',      Icons.lock_reset_rounded,     'Changer mon mot de passe', const Color(0xFF334155)),
         const PopupMenuDivider(),
         _popItem('logout',   Icons.logout_rounded,         'Déconnexion', Colors.redAccent,
             bold: true),
@@ -448,6 +704,14 @@ class _AdminShellState extends State<AdminShell>
       if (!mounted) return;
       if (val == 'logout') _showLogoutDialog();
       if (val == 'profile') _showAdminProfileSheet(context);
+      if (val == 'mdp') {
+        afficherChangementMotDePasse(context).then((ok) {
+          if (ok && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Mot de passe modifié.'), behavior: SnackBarBehavior.floating));
+          }
+        });
+      }
     });
   }
 
@@ -573,7 +837,7 @@ class _AdminShellState extends State<AdminShell>
       backgroundColor: const Color(0xFFF8FAFC),
       drawer: mobile
           ? Drawer(
-              backgroundColor: Colors.white,
+              backgroundColor: _navy,
               child: _sidebar(isMobile: true),
             )
           : null,
@@ -612,15 +876,19 @@ class _AdminShellState extends State<AdminShell>
   // SIDEBAR
   // ═══════════════════════════════════════════════════════════════
 
+  // ✅ Fond bleu marine plein (cohérent avec la sidebar côté professeur) —
+  // plus proche de la maquette admin. Toute la logique (permissions,
+  // config multi-établissement, badges) reste inchangée ; seul l'habillage
+  // visuel change ici.
+  static const Color _navy = Color(0xFF0B1E4D);
+  static const Color _navyMuted = Color(0xFF9DB4D5);
+  static const Color _navyFaint = Color(0xFF7895BD);
+
   Widget _sidebar({required bool isMobile}) {
     final c = _compact && !isMobile;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border:
-            Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
-      ),
+      color: _navy,
       child: Column(
         children: [
           // ── Logo ─────────────────────────────────────────────────────────
@@ -631,15 +899,28 @@ class _AdminShellState extends State<AdminShell>
               mainAxisAlignment:
                   c ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppPalette.blue.a10,
+                Tooltip(
+                  message: _peutGererIdentite ? "Identité de l'établissement" : '',
+                  child: InkWell(
+                    onTap: _peutGererIdentite ? _menuLogo : null,
                     borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                      ),
+                      child: EtablissementConfig.instance.logoUrl.isNotEmpty
+                          ? Image.network(EtablissementConfig.instance.logoUrl, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.admin_panel_settings_rounded,
+                                  color: AppPalette.yellow, size: 22))
+                          : const Icon(Icons.admin_panel_settings_rounded,
+                              color: AppPalette.yellow, size: 22),
+                    ),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded,
-                      color: AppPalette.blue, size: 22),
                 ),
                 if (!c) ...[
                   const SizedBox(width: 12),
@@ -647,18 +928,18 @@ class _AdminShellState extends State<AdminShell>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text('ScolarHub',
                             style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
+                                color: Colors.white,
                                 letterSpacing: -0.5)),
-                        Text('IST Ouaga 2000',
+                        Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom : 'IST Ouaga 2000',
                             style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF64748B))),
+                                color: _navyMuted)),
                       ],
                     ),
                   ),
@@ -674,20 +955,19 @@ class _AdminShellState extends State<AdminShell>
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: Colors.white.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: AppPalette.blue.a15,
+                    backgroundColor: Colors.white.withValues(alpha: 0.12),
                     child: Text(_initials,
                         style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.blue)),
+                            color: Colors.white)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -698,7 +978,7 @@ class _AdminShellState extends State<AdminShell>
                             style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A)),
+                                color: Colors.white),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 3),
@@ -707,8 +987,8 @@ class _AdminShellState extends State<AdminShell>
                               horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: widget.activeRole == AdminRole.superAdmin
-                                ? AppPalette.yellow.a15
-                                : AppPalette.blue.a10,
+                                ? AppPalette.yellow.withValues(alpha: 0.18)
+                                : Colors.white.withValues(alpha: 0.12),
                             // [UX-6] StadiumBorder premium
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -720,8 +1000,8 @@ class _AdminShellState extends State<AdminShell>
                                   fontSize: 8,
                                   fontWeight: FontWeight.w800,
                                   color: widget.activeRole == AdminRole.superAdmin
-                                      ? const Color(0xFFB7950B)
-                                      : AppPalette.blue,
+                                      ? AppPalette.yellow
+                                      : Colors.white,
                                   letterSpacing: 0.6)),
                         ),
                       ],
@@ -731,9 +1011,9 @@ class _AdminShellState extends State<AdminShell>
               ),
             ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Divider(color: Color(0xFFE2E8F0), height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(color: Colors.white.withValues(alpha: 0.08), height: 10),
           ),
 
           // ── Menu ─────────────────────────────────────────────────────────
@@ -744,7 +1024,7 @@ class _AdminShellState extends State<AdminShell>
               children: [
                 for (final g in _menuGroups)
                   if ((g['items'] as List<int>).any((i) =>
-                      AdminMenuService.canAccess(widget.activeRole, i) &&
+                      _peutVoir(i) &&
                       _visibleParConfig(i))) ...[
                   if (!c)
                     // [UX-4] Hiérarchie typographique renforcée
@@ -756,13 +1036,13 @@ class _AdminShellState extends State<AdminShell>
                               style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF94A3B8),
+                                  color: _navyFaint,
                                   letterSpacing: 1.0)),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Container(
                               height: 1,
-                              color: const Color(0xFFF1F5F9),
+                              color: Colors.white.withValues(alpha: 0.06),
                             ),
                           ),
                         ],
@@ -774,7 +1054,7 @@ class _AdminShellState extends State<AdminShell>
                   for (final i in (g['items'] as List<int>))
                     // [ARCH-3] Masquer les items non autorisés
                     // + filtrage selon le type d'établissement
-                    if (AdminMenuService.canAccess(widget.activeRole, i) &&
+                    if (_peutVoir(i) &&
                         _visibleParConfig(i))
                       _MenuItemTile(
                         item: _items[i],
@@ -789,9 +1069,9 @@ class _AdminShellState extends State<AdminShell>
             ),
           ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Divider(color: Color(0xFFE2E8F0)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(color: Colors.white.withValues(alpha: 0.08)),
           ),
 
           // ── Bas sidebar ──────────────────────────────────────────────────
@@ -804,13 +1084,14 @@ class _AdminShellState extends State<AdminShell>
                         icon: Icons.link_rounded,
                         tooltip: 'Connecter mon établissement',
                         onTap: _ouvrirChoixType,
-                        color: AppPalette.blue,
+                        color: AppPalette.yellow,
                       ),
                       const SizedBox(height: 8),
                       _SideBtn(
                         icon: Icons.dark_mode_outlined,
                         tooltip: 'Mode Sombre',
                         onTap: _toggleDarkMode,
+                        color: Colors.white,
                       ),
                       const SizedBox(height: 8),
                       _SideBtn(
@@ -832,6 +1113,7 @@ class _AdminShellState extends State<AdminShell>
                             icon: Icons.dark_mode_outlined,
                             tooltip: 'Mode Sombre',
                             onTap: _toggleDarkMode,
+                            color: Colors.white,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -1041,13 +1323,16 @@ class _MenuItemTileState extends State<_MenuItemTile> {
   Widget build(BuildContext context) {
     final active = widget.active;
     final compact = widget.compact;
-    final color = active ? AppPalette.blue : const Color(0xFF64748B);
+    // ✅ Palette adaptée à la sidebar bleu marine (cohérente avec la sidebar
+    // professeur) : actif = blanc + petit point jaune, inactif = bleu-gris clair.
+    const inactiveColor = Color(0xFF9DB4D5);
+    final color = active ? Colors.white : inactiveColor;
 
     Color bgColor = Colors.transparent;
     if (active) {
-      bgColor = AppPalette.blue.withValues(alpha: 0.08);
+      bgColor = Colors.white.withValues(alpha: 0.12);
     } else if (_hovered) {
-      bgColor = AppPalette.blue.withValues(alpha: 0.04);
+      bgColor = Colors.white.withValues(alpha: 0.06);
     }
 
     return Tooltip(
@@ -1067,12 +1352,8 @@ class _MenuItemTileState extends State<_MenuItemTile> {
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.circular(12),
-                // Indicateur gauche sur item actif
                 border: active
-                    ? Border(
-                        left: BorderSide(
-                            color: AppPalette.blue, width: 3),
-                      )
+                    ? Border.all(color: Colors.white.withValues(alpha: 0.08))
                     : null,
               ),
               child: Row(
@@ -1113,16 +1394,20 @@ class _MenuItemTileState extends State<_MenuItemTile> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: active
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: active
-                              ? AppPalette.blue
-                              : const Color(0xFF334155),
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: color,
                         ),
                       ),
                     ),
+                    if (active)
+                      Container(
+                        width: 5, height: 5,
+                        decoration: const BoxDecoration(
+                            color: AppPalette.yellow, shape: BoxShape.circle),
+                      )
                     // [UX-6] Badge StadiumBorder
-                    if (widget.badge != null)
+                    else if (widget.badge != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 2),
@@ -1159,7 +1444,7 @@ class _SideBtn extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.color = const Color(0xFF64748B),
+    this.color = Colors.white,
   });
 
   @override
@@ -1172,7 +1457,7 @@ class _SideBtn extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
+              color: Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 18),
@@ -1199,13 +1484,13 @@ class _ConnectEtablissementButton extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: AppPalette.blue.withValues(alpha: 0.06),
+          color: AppPalette.yellow.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppPalette.blue.withValues(alpha: 0.2)),
+          border: Border.all(color: AppPalette.yellow.withValues(alpha: 0.18)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.link_rounded, color: AppPalette.blue, size: 16),
+            const Icon(Icons.link_rounded, color: AppPalette.yellow, size: 16),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -1215,20 +1500,20 @@ class _ConnectEtablissementButton extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: AppPalette.blue),
+                          color: Colors.white),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 1),
                   Text(config.type.label,
                       style: const TextStyle(
-                          fontSize: 10, color: Color(0xFF64748B)),
+                          fontSize: 10, color: Color(0xFFB9CBE8)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
             const Icon(Icons.chevron_right_rounded,
-                color: AppPalette.blue, size: 16),
+                color: AppPalette.yellow, size: 16),
           ],
         ),
       ),
@@ -1249,7 +1534,7 @@ class _LogoutButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.06),
+            color: Colors.redAccent.withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Row(

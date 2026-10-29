@@ -31,6 +31,24 @@ class ChatThemeData {
 }
 
 class ChatThemes {
+  // ── Thème par défaut : look de la maquette « Groupes & Messagerie » ──
+  // Fond uni clair (aucun motif), bulles bleues pour moi, gris clair pour
+  // les autres.
+  static const maquette = ChatThemeData(
+    id: 'maquette',
+    nom: 'Maquette',
+    gradient: [Color(0xFFF8FAFD), Color(0xFFF8FAFD)],
+    motifColor: Color(0x00000000),
+    motifIcon: Icons.circle,
+    bulleMoi: Color(0xFF2F9BFF),
+    texteMoi: Colors.white,
+    bulleAutre: Color(0xFFF1F5F9),
+    texteAutre: Color(0xFF1E293B),
+  );
+
+  /// Thème utilisé quand rien n'a été choisi.
+  static const defaut = maquette;
+
   // ── Classiques ───────────────────────────────────────────────────────
   static const classique = ChatThemeData(
     id: 'classique',
@@ -160,13 +178,13 @@ class ChatThemes {
   );
 
   static const all = [
-    classique, nuit, pastel, nature,
+    maquette, classique, nuit, pastel, nature,
     code, circuit,
     marbre, floral, coucherDeSoleil, ocean,
   ];
 
   static ChatThemeData byId(String id) =>
-      all.firstWhere((t) => t.id == id, orElse: () => classique);
+      all.firstWhere((t) => t.id == id, orElse: () => defaut);
 }
 
 /// Sauvegarde locale (SharedPreferences) du thème choisi — un réglage
@@ -183,7 +201,7 @@ class ChatThemeService {
       final override = prefs.getString(_cleConversation(conversationId));
       if (override != null) return override;
     }
-    return prefs.getString(_cleGlobale) ?? ChatThemes.classique.id;
+    return prefs.getString(_cleGlobale) ?? ChatThemes.defaut.id;
   }
 
   static Future<void> setGlobalTheme(String themeId) async {
@@ -216,13 +234,15 @@ class ChatWallpaper extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _MotifPainter(icon: theme.motifIcon, color: theme.motifColor),
+          // Pas de motif pour les thèmes à fond uni (motif transparent).
+          if (theme.motifColor.a > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _MotifPainter(icon: theme.motifIcon, color: theme.motifColor),
+                ),
               ),
             ),
-          ),
           child,
         ],
       ),

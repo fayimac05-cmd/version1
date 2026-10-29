@@ -94,7 +94,7 @@ class _ChatThemePickerSheetState extends State<ChatThemePickerSheet> {
 
           _sectionTitre('Classiques'),
           const SizedBox(height: 10),
-          _ligneRonds(const [ChatThemes.classique, ChatThemes.nuit, ChatThemes.pastel, ChatThemes.nature]),
+          _ligneRonds(const [ChatThemes.maquette, ChatThemes.classique, ChatThemes.nuit, ChatThemes.pastel, ChatThemes.nature]),
           const SizedBox(height: 16),
           _sectionTitre('Informatique'),
           const SizedBox(height: 10),

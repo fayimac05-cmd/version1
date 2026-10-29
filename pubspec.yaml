@@ -27,6 +27,8 @@ dependencies:
   image_picker: ^1.0.7
   file_picker: ^8.0.0+1
   path_provider: ^2.1.1
+  crop_your_image: ^2.0.1
+  
 
   # Interface Graphique & Charts
   fl_chart: ^1.2.0
@@ -62,4 +64,5 @@ flutter:
     - assets/images/students_group.png
     - assets/images/etudiant_ist.png
     - assets/images/campus_banner.png
+    - assets/images/etablissement_banner.png
 

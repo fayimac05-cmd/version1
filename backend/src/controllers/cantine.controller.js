@@ -1,6 +1,14 @@
 const pool = require('../config/db');
 const { envoyerNotificationAuto } = require('./notifications.controller');
 
+// ── Multi-établissement ─────────────────────────────────────────────────────
+// req.etablissementId vient du jeton ; s'il est absent (anciens jetons), pas de filtre.
+const etabMenu = (params, etabId) => {
+  if (!etabId) return '';
+  params.push(etabId);
+  return ` AND etablissement_id = $${params.length}`;
+};
+
 const REPAS_VALIDES = ['petit_dejeuner', 'dejeuner', 'diner'];
 const LABELS_REPAS = {
   petit_dejeuner: 'Petit-déjeuner',
@@ -14,10 +22,11 @@ const LABELS_REPAS = {
 const getMenuJour = async (req, res) => {
   try {
     const date = req.query.date || new Date().toISOString().split('T')[0];
+    const params = [date];
     const result = await pool.query(
       `SELECT id, date, repas, plats, publie, date_publication
-       FROM cantine_menus WHERE date = $1`,
-      [date]
+       FROM cantine_menus WHERE date = $1${etabMenu(params, req.etablissementId)}`,
+      params
     );
     res.json({ success: true, date, data: result.rows });
   } catch (err) {
@@ -32,12 +41,13 @@ const getMenuJour = async (req, res) => {
 const getMenuAujourdhui = async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
+    const params = [today];
     const result = await pool.query(
       `SELECT repas, plats, date_publication
        FROM cantine_menus
-       WHERE date = $1 AND publie = true
+       WHERE date = $1 AND publie = true${etabMenu(params, req.etablissementId)}
        ORDER BY CASE repas WHEN 'petit_dejeuner' THEN 1 WHEN 'dejeuner' THEN 2 ELSE 3 END`,
-      [today]
+      params
     );
     res.json({ success: true, date: today, data: result.rows });
   } catch (err) {
@@ -69,23 +79,52 @@ const publierMenu = async (req, res) => {
       }
     }
 
-    const upsert = await pool.query(
-      `INSERT INTO cantine_menus (date, repas, plats, publie, publie_par, date_publication)
-       VALUES ($1, $2, $3::jsonb, true, $4, now())
-       ON CONFLICT (date, repas)
-       DO UPDATE SET plats = EXCLUDED.plats, publie = true, publie_par = EXCLUDED.publie_par, date_publication = now()
-       RETURNING id`,
-      [date, repas, JSON.stringify(plats), req.user.id]
+    // Upsert manuel (sans ON CONFLICT) : la clé unique (date, repas) est globale
+    // tant que la migration cantine n'est pas passée ; ainsi le code marche avant
+    // et après, et chaque établissement a son propre menu.
+    const etabId = req.etablissementId || null;
+    const pe = [date, repas];
+    const filtreEtab = etabMenu(pe, etabId);
+    const existant = await pool.query(
+      `SELECT id FROM cantine_menus WHERE date = $1 AND repas = $2${filtreEtab}`,
+      pe
     );
+    let menuId;
+    if (existant.rows.length > 0) {
+      const up = await pool.query(
+        `UPDATE cantine_menus SET plats = $1::jsonb, publie = true, publie_par = $2, date_publication = now()
+         WHERE id = $3 RETURNING id`,
+        [JSON.stringify(plats), req.user.id, existant.rows[0].id]
+      );
+      menuId = up.rows[0].id;
+    } else if (etabId) {
+      const ins = await pool.query(
+        `INSERT INTO cantine_menus (date, repas, plats, publie, publie_par, date_publication, etablissement_id)
+         VALUES ($1, $2, $3::jsonb, true, $4, now(), $5) RETURNING id`,
+        [date, repas, JSON.stringify(plats), req.user.id, etabId]
+      );
+      menuId = ins.rows[0].id;
+    } else {
+      const ins = await pool.query(
+        `INSERT INTO cantine_menus (date, repas, plats, publie, publie_par, date_publication)
+         VALUES ($1, $2, $3::jsonb, true, $4, now()) RETURNING id`,
+        [date, repas, JSON.stringify(plats), req.user.id]
+      );
+      menuId = ins.rows[0].id;
+    }
 
     // Notifier tous les étudiants actifs — non-bloquant. Le menu est unique
     // pour tout l'établissement, pas scopé par filière.
     (async () => {
       try {
+        const pu = [];
+        let fu = '';
+        if (etabId) { pu.push(etabId); fu = ` AND etablissement_id = $${pu.length}`; }
         const etusRes = await pool.query(
           `SELECT id FROM users
            WHERE (role ILIKE '%etudiant%' OR role ILIKE '%delegue%' OR role ILIKE '%bde%')
-             AND COALESCE(statut, 'actif') NOT IN ('suspendu', 'renvoye')`
+             AND COALESCE(statut, 'actif') NOT IN ('suspendu', 'renvoye', 'en_attente')${fu}`,
+          pu
         );
         const titre = `Menu ${LABELS_REPAS[repas]} publié`;
         const corps = `Le menu du ${LABELS_REPAS[repas].toLowerCase()} est disponible : ${plats.map(p => p.nom).join(', ')}.`;
@@ -97,7 +136,7 @@ const publierMenu = async (req, res) => {
       }
     })();
 
-    res.json({ success: true, message: `Menu ${LABELS_REPAS[repas]} publié.`, id: upsert.rows[0].id });
+    res.json({ success: true, message: `Menu ${LABELS_REPAS[repas]} publié.`, id: menuId });
   } catch (err) {
     console.error('[publierMenu]', err);
     res.status(500).json({ success: false, message: 'Erreur lors de la publication du menu.' });
