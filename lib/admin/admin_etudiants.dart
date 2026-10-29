@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/etudiant_model.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
+import '../services/api_extra.dart';
 import '../app/scolar_hub_app.dart';
 import '../config/etablissement_config.dart';
 import '../admin/admin_theme.dart';
@@ -1803,6 +1804,14 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
                   _changerStatut(e, 'actif');
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.lock_reset_rounded, color: AdminTheme.iconBg),
+              title: const Text('Réinitialiser le mot de passe'),
+              onTap: () {
+                Navigator.pop(context);
+                _reinitialiserMdp(e);
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -1823,6 +1832,31 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
     } else {
       _snack(result['error']?.toString() ?? 'Erreur lors du changement de statut.');
     }
+  }
+
+  // Efface le mot de passe : l'étudiant en choisira un nouveau à sa prochaine connexion
+  // (utile s'il n'a pas d'email, donc pas de « Mot de passe oublié » possible).
+  Future<void> _reinitialiserMdp(Etudiant e) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Réinitialiser le mot de passe ?'),
+        content: Text('${e.prenoms} ${e.nom} pourra choisir un nouveau mot de passe à sa prochaine '
+            'connexion, avec son matricule. Son ancien mot de passe ne fonctionnera plus.\n\n'
+            'Faites-le quand l\'étudiant est prêt à se connecter : tant qu\'il n\'a pas choisi son mot de passe, '
+            'le compte peut être activé par quiconque connaît son matricule.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Réinitialiser')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final res = await ApiExtra.reinitialiserMotDePasseEtudiant(e.id);
+    if (!mounted) return;
+    _snack(res['success'] == true
+        ? 'Mot de passe de ${e.prenoms} réinitialisé.'
+        : (res['error']?.toString() ?? 'Réinitialisation impossible.'));
   }
 
   void _snack(String msg) => showAppSnackBar(context, msg);

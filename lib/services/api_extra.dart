@@ -61,6 +61,29 @@ class ApiExtra {
     }
   }
 
+  /// Administration : efface le mot de passe d'un étudiant ([id] = id de la table etudiants).
+  static Future<Map<String, dynamic>> reinitialiserMotDePasseEtudiant(String id) =>
+      _reinitialiser('etudiants', id);
+
+  /// Administration : efface le mot de passe d'un professeur.
+  static Future<Map<String, dynamic>> reinitialiserMotDePasseProfesseur(String id) =>
+      _reinitialiser('professeurs', id);
+
+  static Future<Map<String, dynamic>> _reinitialiser(String ressource, String id) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final r = await http.post(
+        Uri.parse('${ApiService.baseUrl}/$ressource/$id/reinitialiser-mdp'),
+        headers: headers,
+      );
+      final body = r.body.isEmpty ? {} : jsonDecode(utf8.decode(r.bodyBytes));
+      if (r.statusCode == 200) return {'success': true, 'message': body['message']};
+      return {'success': false, 'error': (body is Map ? body['message'] : null) ?? 'Réinitialisation impossible.'};
+    } catch (_) {
+      return {'success': false, 'error': 'Serveur injoignable.'};
+    }
+  }
+
   /// Super Admin : efface le mot de passe d'un membre. Il en choisira un nouveau
   /// à sa prochaine connexion (comme à sa première connexion).
   static Future<Map<String, dynamic>> reinitialiserMotDePasseMembre(String id) async {
