@@ -15,6 +15,7 @@ import 'choisir_professeur_page.dart';
 import 'messages_screen.dart';
 import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
+import 'profil_public_page.dart';
 import 'voice_message.dart';
 import 'chat_theme.dart';
 import 'chat_theme_picker_sheet.dart';
@@ -707,7 +708,7 @@ class _CanalDetailState extends State<_CanalDetail> {
   int _recordSeconds = 0;
   Timer? _recordTimer;
   final _voiceRecorder = VoiceRecorderController();
-  String _themeId = ChatThemes.defaut.id;
+  String _themeId = ChatThemes.classique.id;
   bool _modeSelection = false;
   final Set<String> _selectionnes = {};
 
@@ -1279,10 +1280,15 @@ class _CanalDetailState extends State<_CanalDetail> {
                     itemCount: _msgs.length,
                     itemBuilder: (_, i) {
                       final showDate = i == 0 || _msgs[i - 1].date != _msgs[i].date;
+                      // Séries d'un même expéditeur (façon WhatsApp) : photo une seule fois, en haut.
+                      final memeQuePrec = i > 0 && !showDate && _msgs[i - 1].expediteurId == _msgs[i].expediteurId && _msgs[i].expediteurId != null;
+                      final memeQueSuiv = i < _msgs.length - 1 && _msgs[i + 1].date == _msgs[i].date && _msgs[i + 1].expediteurId == _msgs[i].expediteurId && _msgs[i].expediteurId != null;
                       return Column(children: [
                         if (showDate) _separateur(_msgs[i].date),
                         _BulleCanal(
                           key: ValueKey(_msgs[i].id),
+                          premierDeSerie: !memeQuePrec,
+                          suiviParMemeAuteur: memeQueSuiv,
                           message: _msgs[i],
                           couleur: widget.couleur,
                           theme: ChatThemes.byId(_themeId),
@@ -1429,8 +1435,7 @@ Widget _zoneSaisie() {
     padding: const EdgeInsets.symmetric(vertical: 14),
     child: Center(child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.85), borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(20)),
       child: Text(date, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600)))));
 
   Widget _banniereEpingleCanal() {
@@ -1440,10 +1445,7 @@ Widget _zoneSaisie() {
     return GestureDetector(
       onTap: () {}, // pas d'ancre de défilement dans cette liste simple pour l'instant
       child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFEFF6FF),
-          border: Border(bottom: BorderSide(color: Color(0xFFDBEAFE))),
-        ),
+        color: const Color(0xFFF0F2F5),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Row(children: [
           Icon(Icons.push_pin_rounded, color: widget.couleur, size: 15),
@@ -1457,7 +1459,7 @@ Widget _zoneSaisie() {
             ),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Message épinglé · ${dernier.expediteur}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: widget.couleur)),
+              Text(dernier.expediteur, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: widget.couleur)),
               Text(dernier.texte, style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
             ]),
           ),
@@ -1750,8 +1752,12 @@ class _BulleCanal extends StatefulWidget {
   final bool selectionne;
   final VoidCallback onToggleSelection;
   final VoidCallback onDemarrerSelection;
+  final bool premierDeSerie;
+  final bool suiviParMemeAuteur;
   const _BulleCanal({
     super.key,
+    this.premierDeSerie = true,
+    this.suiviParMemeAuteur = false,
     required this.message,
     required this.couleur,
     required this.theme,
@@ -1769,6 +1775,63 @@ class _BulleCanal extends StatefulWidget {
 
 class _BulleCanalState extends State<_BulleCanal> {
   bool _hovered = false;
+
+  // Pastille ronde de l'expéditeur (photo, sinon initiales sur sa couleur).
+  Widget _avatarRond(double taille) {
+    final m = widget.message;
+    final aPhoto = m.photoUrl != null && m.photoUrl!.isNotEmpty;
+    final pastille = Container(
+      width: taille,
+      height: taille,
+      decoration: BoxDecoration(color: m.color, shape: BoxShape.circle),
+      clipBehavior: Clip.antiAlias,
+      child: aPhoto
+          ? Image.network(
+              m.photoUrl!,
+              fit: BoxFit.cover,
+              width: taille,
+              height: taille,
+              errorBuilder: (_, __, ___) => Center(
+                  child: Text(m.initiales,
+                      style: TextStyle(fontSize: taille * 0.34, fontWeight: FontWeight.bold, color: Colors.white))),
+            )
+          : Center(
+              child: Text(m.initiales,
+                  style: TextStyle(fontSize: taille * 0.34, fontWeight: FontWeight.bold, color: Colors.white))),
+    );
+    // Toucher la photo d'un autre membre ouvre sa fiche (pas la mienne).
+    if (widget.estMoi || m.expediteurId == null) return pastille;
+    return GestureDetector(
+      onTap: () => ProfilPublicPage.ouvrir(
+        context,
+        userId: m.expediteurId!,
+        prenoms: m.expediteur,
+        photoUrl: m.photoUrl,
+        couleur: widget.couleur,
+      ),
+      child: pastille,
+    );
+  }
+
+  // Photo DANS la bulle vocale, avec le petit micro (comme WhatsApp).
+  Widget _avatarVocal() {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Stack(clipBehavior: Clip.none, children: [
+        Positioned.fill(child: _avatarRond(40)),
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            child: const Icon(Icons.mic_rounded, size: 11, color: Color(0xFF25A8F0)),
+          ),
+        ),
+      ]),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1788,7 +1851,7 @@ class _BulleCanalState extends State<_BulleCanal> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
+        padding: EdgeInsets.only(bottom: widget.suiviParMemeAuteur ? 3 : 16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1806,31 +1869,9 @@ class _BulleCanalState extends State<_BulleCanal> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: estMoi ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
+            // Photo ronde en HAUT à gauche, une seule fois par série ; jamais pour mes messages.
             if (!estMoi) ...[
-              Builder(builder: (_) {
-                debugPrint('[Avatar canal] ${message.expediteur} → photoUrl = ${message.photoUrl}');
-                return Container(width: 38, height: 38,
-                decoration: BoxDecoration(
-                  color: message.color,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: (message.photoUrl != null && message.photoUrl!.isNotEmpty)
-                    ? Image.network(
-                        message.photoUrl!,
-                        fit: BoxFit.cover,
-                        width: 38,
-                        height: 38,
-                        errorBuilder: (_, error, ___) {
-                          debugPrint('[Avatar canal] échec chargement photo pour ${message.expediteur} : $error (url: ${message.photoUrl})');
-                          return Center(child: Text(message.initiales, style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)));
-                        },
-                      )
-                    : Center(child: Text(message.initiales, style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white))),
-                );
-              }),
+              if (widget.premierDeSerie) _avatarRond(38) else const SizedBox(width: 38),
               const SizedBox(width: 12),
             ],
             Flexible(child: Column(
@@ -1996,6 +2037,8 @@ class _BulleCanalState extends State<_BulleCanal> {
           url: url, dureeLabel: nom,
           couleur: estMoi ? texteColor : message.color,
           texteColor: texteColor,
+          avatar: _avatarVocal(),
+          avatarAvant: estMoi, // moi : photo au début ; les autres : à la fin
         );
       }
       final icone = fType == 'video' ? Icons.videocam_rounded : fType == 'audio' ? Icons.audiotrack_rounded : Icons.insert_drive_file_rounded;

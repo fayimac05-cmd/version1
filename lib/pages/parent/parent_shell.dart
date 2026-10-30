@@ -6,7 +6,7 @@ import 'parent_styles.dart';
 import 'parent_home_tab.dart';
 import 'parent_grades_tab.dart';
 import 'parent_bulletins_tab.dart';
-import 'parent_schedule_tab.dart';
+import '../planning_tab.dart';
 import 'parent_profile_tab.dart';
 
 class ParentShell extends StatefulWidget {
@@ -144,17 +144,29 @@ class _ParentShellState extends State<ParentShell> {
                   else
                     const SizedBox.shrink(),
                   if (selected != null)
-                    ParentScheduleTab(
+                    PlanningTab(
                       key: ValueKey('planning-${selected.etudiantId}'),
+                      etudiantId: selected.etudiantId,
                       nomEnfant: selected.nomComplet,
-                      filiere: selected.filiere,
-                      niveau: selected.niveau,
+                      profile: StudentProfile(
+                        nom: selected.nom,
+                        prenoms: selected.prenoms,
+                        matricule: selected.matricule,
+                        email: '',
+                        telephone: '',
+                        filiere: selected.filiere,
+                        motDePasse: '',
+                        niveau: selected.niveau,
+                      ),
                     )
                   else
                     const SizedBox.shrink(),
                   ParentProfileTab(
                     enfants: _enfants,
                     onLogout: widget.onLogout,
+                    onBack: () => setState(() => _tabIndex = 0),
+                    profile: widget.profile,
+                    selectedEtudiantId: _selectedEtudiantId,
                   ),
                 ],
               ),

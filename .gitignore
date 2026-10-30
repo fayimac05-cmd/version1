@@ -63,3 +63,5 @@ analyze_output.txt
 
 # Orkestra AI — estado local (nunca versionar)
 .sta/
+
+backend/_ancien/

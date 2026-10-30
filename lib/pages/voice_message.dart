@@ -129,12 +129,18 @@ class VoiceMessagePlayer extends StatefulWidget {
   final String dureeLabel;
   final Color couleur;
   final Color texteColor;
+  /// Photo de l'expéditeur affichée DANS la bulle, façon WhatsApp (avec petit micro).
+  /// [avatarAvant] : true → au début (mes messages), false → à la fin (messages reçus).
+  final Widget? avatar;
+  final bool avatarAvant;
   const VoiceMessagePlayer({
     super.key,
     required this.url,
     required this.dureeLabel,
     required this.couleur,
     required this.texteColor,
+    this.avatar,
+    this.avatarAvant = false,
   });
 
   @override
@@ -207,6 +213,7 @@ class _VoiceMessagePlayerState extends State<VoiceMessagePlayer> {
     return SizedBox(
       width: 230,
       child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
+        if (widget.avatar != null && widget.avatarAvant) ...[widget.avatar!, const SizedBox(width: 8)],
         GestureDetector(
           onTap: _toggle,
           child: Container(
@@ -231,6 +238,7 @@ class _VoiceMessagePlayerState extends State<VoiceMessagePlayer> {
             ),
           ]),
         ),
+        if (widget.avatar != null && !widget.avatarAvant) ...[const SizedBox(width: 8), widget.avatar!],
       ]),
     );
   }

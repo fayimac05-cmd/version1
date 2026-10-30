@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../services/profile_media_service.dart';
+import '../services/api_service.dart';
 import 'image_viewer_dialog.dart';
+import 'photo_cropper_dialog.dart';
 
 /// Composant Premium unifié affichant la Bannière de Couverture et la Photo de Profil
 /// avec gestion interactive complète (Modification, Prise de vue, Galerie, Plein écran, Suppression).
@@ -114,9 +116,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
       alignment: Alignment.bottomRight,
       children: [
         GestureDetector(
-          onTap: widget.canEdit
-              ? _showProfileOptions
-              : (hasAvatar
+          onTap: (hasAvatar
                   ? () => ImageViewerDialog.show(
                         context,
                         imagePathOrUrl: _profilePhotoPath!,
@@ -256,7 +256,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                   onTap: () async {
                     Navigator.pop(ctx);
                     setState(() => _loading = true);
-                    final ok = await ProfileMediaService.instance.deleteCoverPhoto();
+                    final ok = (await ApiService.deletePhotoCouverture())['success'] == true;
                     if (mounted) {
                       setState(() {
                         _loading = false;
@@ -273,10 +273,47 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
     );
   }
 
+  /// Galerie/appareil photo → fenêtre de cadrage → envoi seulement après « Valider ».
+  /// Retourne l'URL enregistrée, ou null si l'utilisateur a annulé.
+  Future<String?> _choisirCadrerEnvoyer({
+    required ImageSource source,
+    required String titre,
+    required double ratio,
+    required bool rond,
+    required int largeur,
+    required String nom,
+    required Future<Map<String, dynamic>> Function(List<int>, String) envoyer,
+  }) async {
+    final fichier = await ImagePicker().pickImage(source: source, maxWidth: 2400, imageQuality: 92);
+    if (fichier == null) return null;
+    final Uint8List brut = await fichier.readAsBytes();
+    if (!mounted) return null;
+    final recadree = await PhotoCropperDialog.show(
+      context,
+      bytes: brut,
+      aspectRatio: ratio,
+      title: titre,
+      circle: rond,
+      outputWidth: largeur,
+    );
+    if (recadree == null) return null; // annulé : rien n'est envoyé
+    final r = await envoyer(recadree, '${nom}_${DateTime.now().millisecondsSinceEpoch}.png');
+    if (r['success'] == true) return r['url']?.toString();
+    throw Exception(r['error'] ?? 'Échec de l\'envoi.');
+  }
+
   Future<void> _pickCover(ImageSource source) async {
     setState(() => _loading = true);
     try {
-      final url = await ProfileMediaService.instance.pickAndSaveCoverPhoto(source: source);
+      final url = await _choisirCadrerEnvoyer(
+        source: source,
+        titre: 'Cadrer la photo de couverture',
+        ratio: 2.5,
+        rond: false,
+        largeur: 1200,
+        nom: 'couverture',
+        envoyer: ApiService.uploadPhotoCouverture,
+      );
       if (url != null && mounted) {
         setState(() => _coverPhotoPath = url);
         widget.onMediaChanged?.call(_profilePhotoPath, _coverPhotoPath);
@@ -372,7 +409,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                   onTap: () async {
                     Navigator.pop(ctx);
                     setState(() => _loading = true);
-                    final ok = await ProfileMediaService.instance.deleteProfilePhoto();
+                    final ok = (await ApiService.deletePhotoProfil())['success'] == true;
                     if (mounted) {
                       setState(() {
                         _loading = false;
@@ -392,7 +429,15 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
   Future<void> _pickProfile(ImageSource source) async {
     setState(() => _loading = true);
     try {
-      final url = await ProfileMediaService.instance.pickAndSaveProfilePhoto(source: source);
+      final url = await _choisirCadrerEnvoyer(
+        source: source,
+        titre: 'Cadrer la photo de profil',
+        ratio: 1,
+        rond: true,
+        largeur: 600,
+        nom: 'profil',
+        envoyer: ApiService.uploadPhotoProfil,
+      );
       if (url != null && mounted) {
         setState(() => _profilePhotoPath = url);
         widget.onMediaChanged?.call(_profilePhotoPath, _coverPhotoPath);
@@ -454,11 +499,12 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                // Bannière
-                GestureDetector(
-                onTap: widget.canEdit
-                    ? _showCoverOptions
-                    : (hasCover
+                // Bannière (marge basse = zone où l'avatar déborde, pour que son
+                // icône caméra reste DANS les limites du Stack et reçoive les clics)
+                Padding(
+                padding: const EdgeInsets.only(bottom: avatarRadius),
+                child: GestureDetector(
+                onTap: (hasCover
                         ? () => ImageViewerDialog.show(
                               context,
                               imagePathOrUrl: _coverPhotoPath!,
@@ -512,6 +558,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                   ),
                 ),
               ),
+              ),
 
               // Indicateur de chargement sur la bannière
               if (_loading)
@@ -564,7 +611,7 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
 
               // ── AVATAR CENTRAL SUPERPOSÉ ──────────────────────────────────
               Positioned(
-                bottom: -avatarRadius,
+                bottom: 0,
                 left: 0,
                 right: 0,
                 child: Center(child: _buildAvatarCircle(avatarRadius)),
@@ -572,8 +619,8 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
               ],
             ),
 
-            // Espace pour compenser le débordement de l'avatar
-            const SizedBox(height: avatarRadius + 14),
+            // L'avatar est maintenant à l'intérieur du Stack : il ne reste qu'un petit espace
+            const SizedBox(height: 14),
           ] else ...[
             // Pas de couverture uploadable, mais un fond décoratif fixe
             // (dégradé bleu + forme jaune), purement visuel — rien ici
