@@ -1921,11 +1921,14 @@ class _AuthPageState extends State<AuthPage> {
           );
         },
       ),
-    ).then((_) {
-      idCtrl.dispose();
-      codeCtrl.dispose();
-      pass1Ctrl.dispose();
-      pass2Ctrl.dispose();
+        ).then((_) {
+      // On attend la fin de l'animation de fermeture : jusque-là, les champs utilisent encore ces contrôleurs.
+      Future.delayed(const Duration(milliseconds: 600), () {
+        idCtrl.dispose();
+        codeCtrl.dispose();
+        pass1Ctrl.dispose();
+        pass2Ctrl.dispose();
+      });
     });
   }
 }

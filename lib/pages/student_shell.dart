@@ -45,7 +45,12 @@ class _StudentShellState extends State<StudentShell> {
       ),
       CanalScreen(profile: _profile),
       ChatIAScreen(profile: _profile, showBack: false),
-      ProfileTab(profile: _profile, onLogout: widget.onLogout, onPhotoChanged: _onPhotoChanged),
+      ProfileTab(
+        profile: _profile,
+        onLogout: widget.onLogout,
+        onPhotoChanged: _onPhotoChanged,
+        onBack: () => setState(() => _currentTab = 0), // retour à l'accueil
+      ),
     ];
 
     return Scaffold(
@@ -117,6 +122,7 @@ class _StudentShellState extends State<StudentShell> {
                 label: 'Profil',
                 index: 3,
                 activeColor: const Color(0xFF42A5F5),
+                photoUrl: _profile.photoUrl, // la photo de l'étudiant remplace l'icône
               ),
             ],
           ),
@@ -132,6 +138,7 @@ class _StudentShellState extends State<StudentShell> {
     required int index,
     required Color activeColor,
     int? badge,
+    String? photoUrl,
   }) {
     final isActive = _currentTab == index;
     final bgColor = isActive
@@ -158,11 +165,34 @@ class _StudentShellState extends State<StudentShell> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
-                    child: Icon(
-                      isActive ? activeIcon : icon,
-                      size: 22,
-                      color: isActive ? activeColor : const Color(0xFF9CA3AF),
-                    ),
+                    child: (photoUrl != null && photoUrl.isNotEmpty)
+                        ? Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isActive ? activeColor : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                            child: ClipOval(
+                              child: Image.network(
+                                photoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  isActive ? activeIcon : icon,
+                                  size: 22,
+                                  color: isActive ? activeColor : const Color(0xFF9CA3AF),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Icon(
+                            isActive ? activeIcon : icon,
+                            size: 22,
+                            color: isActive ? activeColor : const Color(0xFF9CA3AF),
+                          ),
                   ),
                 ),
                 if (badge != null)

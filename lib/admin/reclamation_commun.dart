@@ -14,6 +14,10 @@ const List<String> kCategoriesReclamation = [
   'Notes & Moyennes', 'Accès & Connexion', 'Documents', 'Inscription', 'Paiement', 'Autre',
 ];
 
+/// Seules ces catégories peuvent être transmises à un professeur.
+/// Inscription, Paiement et Accès & Connexion relèvent de l'administration.
+const List<String> kCategoriesTransmissibles = ['Notes & Moyennes', 'Documents', 'Autre'];
+
 String fmtDateRecl(dynamic iso, {bool heure = false}) {
   if (iso == null) return '';
   final dt = DateTime.tryParse(iso.toString())?.toLocal();
@@ -325,6 +329,13 @@ class _ReclamationsListeState extends State<ReclamationsListe> {
     });
   }
 
+  // Filtre « Catégorie » : le professeur ne voit que les catégories qu'il a réellement reçues.
+  List<String> get _categoriesFiltre {
+    if (widget.role != 'professeur') return kCategoriesReclamation;
+    final presentes = _items.map((r) => r.categorie).toSet();
+    return kCategoriesReclamation.where(presentes.contains).toList();
+  }
+
   List<Recl> get _filtrees => _items.where((r) {
         if (_fCat != 'Toutes' && r.categorie != _fCat) return false;
         if (_fStatut != 'Tous' && r.statutLabel != _fStatut) return false;
@@ -405,7 +416,7 @@ class _ReclamationsListeState extends State<ReclamationsListe> {
                   ),
                 ),
               ),
-              _menu('Catégorie', _fCat, ['Toutes', ...kCategoriesReclamation], (v) => setState(() => _fCat = v)),
+              _menu('Catégorie', _fCat, ['Toutes', ..._categoriesFiltre], (v) => setState(() => _fCat = v)),
               _menu('Statut', _fStatut, const ['Tous', 'En attente', 'En cours', 'Résolue', 'Rejetée'], (v) => setState(() => _fStatut = v)),
             ]),
           ]),
@@ -958,7 +969,9 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
                 label: const Text('Rejeter'),
                 style: OutlinedButton.styleFrom(foregroundColor: AdminTheme.danger),
               ),
-              OutlinedButton.icon(
+              // Transmission possible seulement pour les catégories d'ordre académique.
+              if (kCategoriesTransmissibles.contains(r.categorie) || r.categorie.isEmpty)
+                OutlinedButton.icon(
                   onPressed: _busy ? null : _transmettre,
                   icon: const Icon(Icons.forward_rounded, size: 16),
                   label: Text(r.etape == 'admin' ? 'Renvoyer au professeur' : 'Renvoyer à un professeur'),

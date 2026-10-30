@@ -1,4 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../../models/student_profile.dart';
+import '../../services/api_service.dart';
+import '../discussion_privee_page.dart';
 import 'parent_styles.dart';
 import '../../models/enfant_apercu.dart';
 import '../../services/parent_service.dart';
@@ -7,11 +12,17 @@ import '../../widgets/profile_header_cover.dart';
 class ParentProfileTab extends StatefulWidget {
   final List<EnfantApercu> enfants;
   final VoidCallback onLogout;
+  final VoidCallback onBack;
+  final StudentProfile? profile; // repli : coordonnées reçues à la connexion
+  final String? selectedEtudiantId;
 
   const ParentProfileTab({
     super.key,
     required this.enfants,
     required this.onLogout,
+    required this.onBack,
+    this.profile,
+    this.selectedEtudiantId,
   });
 
   @override
@@ -44,18 +55,43 @@ class _ParentProfileTabState extends State<ParentProfileTab> {
                   : <String, dynamic>{};
               final nom = profil['nom'] ?? '';
               final prenoms = profil['prenoms'] ?? '';
-              final email = profil['email'] ?? '';
-              final tel = profil['tel'] ?? '';
+              String lire(dynamic v) {
+                final t = (v ?? '').toString().trim();
+                return (t == 'null') ? '' : t;
+              }
+              // Coordonnées saisies par l'admin ; repli sur celles reçues à la connexion.
+              final email = lire(profil['email']).isNotEmpty ? lire(profil['email']) : lire(widget.profile?.email);
+              final tel = lire(profil['tel']).isNotEmpty ? lire(profil['tel']) : lire(widget.profile?.telephone);
               final nomComplet = '$prenoms $nom'.trim();
               final initiales = (prenoms.isNotEmpty ? prenoms[0] : '') + (nom.isNotEmpty ? nom[0] : '');
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const ParentSectionHeader(
-                    title: 'Profil & Paramètres',
-                    subtitle: "Gérer vos coordonnées et les accès de l'établissement",
-                    icon: Icons.person_rounded,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8, top: 2),
+                        child: IconButton(
+                          onPressed: widget.onBack,
+                          tooltip: 'Retour',
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: ParentStyles.textDark),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: ParentStyles.borderLight),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const Expanded(
+                        child: ParentSectionHeader(
+                          title: 'Profil & Paramètres',
+                          subtitle: "Gérer vos coordonnées et les accès de l'établissement",
+                          icon: Icons.person_rounded,
+                        ),
+                      ),
+                    ],
                   ),
                   Expanded(
                     child: SingleChildScrollView(
@@ -99,8 +135,10 @@ class _ParentProfileTabState extends State<ParentProfileTab> {
                                   ],
                                 ),
                                 const Divider(height: 20),
-                                _ligneInfo('Adresse email', email.isNotEmpty ? email : '—'),
-                                const SizedBox(height: 10),
+                                if (email.isNotEmpty) ...[
+                                  _ligneInfo('Adresse email', email),
+                                  const SizedBox(height: 10),
+                                ],
                                 _ligneInfo('Téléphone', tel.isNotEmpty ? tel : '—'),
                               ],
                             ),
@@ -128,10 +166,10 @@ class _ParentProfileTabState extends State<ParentProfileTab> {
                           const SizedBox(height: 10),
                           _tuileParametre(
                             icon: Icons.support_agent_rounded,
-                            titre: 'Contacter le secrétariat',
-                            sousTitre: 'Service de scolarité pédagogique',
+                            titre: "Contacter l'administration",
+                            sousTitre: 'Le responsable pédagogique de la filière de votre enfant',
                             couleur: Colors.green,
-                            onTap: () => _dialogueSimule('Contact Secrétariat'),
+                            onTap: _contacterAdministration,
                           ),
                           const SizedBox(height: 10),
                           _tuileParametre(
@@ -255,6 +293,52 @@ class _ParentProfileTabState extends State<ParentProfileTab> {
           ),
         ),
       );
+
+  bool _contactEnCours = false;
+
+  /// Ouvre une discussion privée avec le Responsable Pédagogique du domaine
+  /// (Sciences & Technologies / Sciences de Gestion) de la filière de l'enfant.
+  Future<void> _contacterAdministration() async {
+    if (_contactEnCours || widget.enfants.isEmpty) return;
+    final enfant = widget.enfants.where((e) => e.etudiantId == widget.selectedEtudiantId).firstOrNull ??
+        widget.enfants.first;
+    setState(() => _contactEnCours = true);
+    String? erreur;
+    Map<String, dynamic>? resp;
+    try {
+      final r = await http.get(
+        Uri.parse('${ApiService.baseUrl}/parents/enfant/${enfant.etudiantId}/contact-administration'),
+        headers: await ApiService.getHeaders(),
+      );
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      if (r.statusCode == 200 && body['success'] == true && body['data'] is Map) {
+        resp = Map<String, dynamic>.from(body['data'] as Map);
+      } else {
+        erreur = body['message']?.toString() ?? "Impossible de joindre l'administration.";
+      }
+    } catch (_) {
+      erreur = 'Serveur injoignable. Vérifiez votre connexion.';
+    }
+    if (!mounted) return;
+    setState(() => _contactEnCours = false);
+    if (resp == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erreur ?? 'Erreur.')));
+      return;
+    }
+    final nom = '${resp['prenoms'] ?? ''} ${resp['nom'] ?? ''}'.trim();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DiscussionPriveePage(
+          destinataireId: resp!['id'].toString(),
+          destinataireNom: nom.isEmpty ? 'Administration' : nom,
+          destinataireRole: 'admin',
+          destinataireSousTitre: resp['titre']?.toString(),
+          destinatairePhotoUrl: resp['photo_url']?.toString(),
+        ),
+      ),
+    );
+  }
 
   void _dialogueSimule(String action) {
     showDialog(

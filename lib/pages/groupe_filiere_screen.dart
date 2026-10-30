@@ -16,6 +16,7 @@ import 'chat_theme.dart';
 import 'chat_theme_picker_sheet.dart';
 import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
+import 'profil_public_page.dart';
 import 'voice_message.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -116,7 +117,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
   // ── Membres réels de la filière (chargés depuis le backend) ──────────
   List<_Membre> _membres = [];
   bool _chargementInitial = true;
-  String _themeId = ChatThemes.defaut.id;
+  String _themeId = ChatThemes.classique.id;
   bool _panneauOuvert = false;
   String? _hoveredMsgId;
   _MessageGroupe? _messageEnReponse;
@@ -573,10 +574,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     if (epingles.isEmpty) return const SizedBox.shrink();
     final dernier = epingles.last;
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFEFF6FF),
-        border: Border(bottom: BorderSide(color: Color(0xFFDBEAFE))),
-      ),
+      color: const Color(0xFFF0F2F5),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(children: [
         const Icon(Icons.push_pin_rounded, color: AppPalette.blue, size: 15),
@@ -590,7 +588,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
           ),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Message épinglé · ${dernier.auteur.nomComplet}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppPalette.blue)),
+            Text(dernier.auteur.nomComplet, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppPalette.blue)),
             Text(dernier.contenu, style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
           ]),
         ),
@@ -1404,10 +1402,18 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                 final msg = _messages[i];
                 final showDate =
                     i == 0 || !_memeJour(_messages[i - 1].heure, msg.heure);
+                // Séries de messages d'un même expéditeur (façon WhatsApp) :
+                // la photo n'apparaît qu'une fois, sur le premier de la série.
+                final prec = i > 0 ? _messages[i - 1] : null;
+                final suiv = i < _messages.length - 1 ? _messages[i + 1] : null;
+                final memeQuePrec = prec != null && !showDate &&
+                    prec.estMoi == msg.estMoi && prec.auteur.matricule == msg.auteur.matricule;
+                final memeQueSuiv = suiv != null && _memeJour(msg.heure, suiv.heure) &&
+                    suiv.estMoi == msg.estMoi && suiv.auteur.matricule == msg.auteur.matricule;
                 return Column(
                   children: [
                     if (showDate) _separateurDate(msg.heure),
-                    _bulleMessage(msg),
+                    _bulleMessage(msg, premierDeSerie: !memeQuePrec, suiviParMemeAuteur: memeQueSuiv),
                   ],
                 );
               },
@@ -1619,9 +1625,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.85),
+            color: const Color(0xFFE2E8F0),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Text(
             label,
@@ -1636,7 +1641,55 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     );
   }
 
-  Widget _bulleMessage(_MessageGroupe msg) {
+  // Pastille ronde de l'expéditeur (photo, sinon initiales).
+  Widget _avatarMembre(_Membre a, double rayon) {
+    final aPhoto = a.photoUrl != null && a.photoUrl!.isNotEmpty;
+    final pastille = CircleAvatar(
+      radius: rayon,
+      backgroundColor: AppPalette.blue.withValues(alpha: 0.15),
+      backgroundImage: aPhoto ? NetworkImage(a.photoUrl!) : null,
+      child: aPhoto
+          ? null
+          : Text(a.initiales,
+              style: TextStyle(fontSize: rayon * 0.7, fontWeight: FontWeight.bold, color: AppPalette.blue)),
+    );
+    // Toucher la photo d'un autre membre ouvre sa fiche (pas la mienne).
+    final estAutre = a.matricule != widget.profile.matricule && ProfilPublicPage.estIdentifiantValide(a.matricule);
+    if (!estAutre) return pastille;
+    return GestureDetector(
+      onTap: () => ProfilPublicPage.ouvrir(
+        context,
+        userId: a.matricule, // pour les messages reçus, ce champ contient l'identifiant de l'auteur
+        nom: a.nom,
+        prenoms: a.prenoms,
+        photoUrl: a.photoUrl,
+        couleur: AppPalette.blue,
+      ),
+      child: pastille,
+    );
+  }
+
+  // Photo placée DANS une bulle vocale, avec le petit micro (comme WhatsApp).
+  Widget _avatarVocal(_Membre a) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Stack(clipBehavior: Clip.none, children: [
+        Positioned.fill(child: _avatarMembre(a, 20)),
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            child: const Icon(Icons.mic_rounded, size: 11, color: Color(0xFF25A8F0)),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _bulleMessage(_MessageGroupe msg, {bool premierDeSerie = true, bool suiviParMemeAuteur = false}) {
     final estMoi = msg.estMoi;
     final theme = ChatThemes.byId(_themeId);
     final hovered = _hoveredMsgId == msg.id;
@@ -1648,7 +1701,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
       onTap: _modeSelection ? () => _basculerSelection(msg.id) : null,
       onLongPress: _modeSelection ? null : () => _demarrerSelection(msg.id),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 14),
+        padding: EdgeInsets.only(bottom: suiviParMemeAuteur ? 3 : 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -1663,29 +1716,15 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               ),
             ],
             Expanded(child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: estMoi
               ? MainAxisAlignment.end
               : MainAxisAlignment.start,
           children: [
+            // Photo de l'expéditeur : en HAUT à gauche, une seule fois par série.
+            // Jamais pour mes propres messages (comme WhatsApp).
             if (!estMoi) ...[
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppPalette.blue.withValues(alpha:0.15),
-                backgroundImage: (msg.auteur.photoUrl != null && msg.auteur.photoUrl!.isNotEmpty)
-                    ? NetworkImage(msg.auteur.photoUrl!)
-                    : null,
-                child: (msg.auteur.photoUrl == null || msg.auteur.photoUrl!.isEmpty)
-                    ? Text(
-                        msg.auteur.initiales,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppPalette.blue,
-                        ),
-                      )
-                    : null,
-              ),
+              if (premierDeSerie) _avatarMembre(msg.auteur, 16) else const SizedBox(width: 32),
               const SizedBox(width: 8),
             ],
 
@@ -1720,10 +1759,10 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                     decoration: BoxDecoration(
                       color: estMoi ? theme.bulleMoi : theme.bulleAutre,
                       borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(18),
-                        topRight: const Radius.circular(18),
-                        bottomLeft: Radius.circular(estMoi ? 18 : 4),
-                        bottomRight: Radius.circular(estMoi ? 4 : 18),
+                        topLeft: Radius.circular(!estMoi && premierDeSerie ? 4 : 18),
+                        topRight: Radius.circular(estMoi && premierDeSerie ? 4 : 18),
+                        bottomLeft: const Radius.circular(18),
+                        bottomRight: const Radius.circular(18),
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -1816,26 +1855,6 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               ),
             ),
 
-            if (estMoi) ...[
-              const SizedBox(width: 8),
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppPalette.yellow,
-                backgroundImage: (msg.auteur.photoUrl != null && msg.auteur.photoUrl!.isNotEmpty)
-                    ? NetworkImage(msg.auteur.photoUrl!)
-                    : null,
-                child: (msg.auteur.photoUrl == null || msg.auteur.photoUrl!.isEmpty)
-                    ? Text(
-                        msg.auteur.initiales,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppPalette.blue,
-                        ),
-                      )
-                    : null,
-              ),
-            ],
           ],
         )),
           ],
@@ -2057,6 +2076,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               url: url, dureeLabel: nom,
               couleur: estMoi ? Colors.white : AppPalette.blue,
               texteColor: textColor,
+              avatar: _avatarVocal(msg.auteur),
+              avatarAvant: estMoi, // moi : photo au début ; les autres : à la fin
             );
           }
           final icone = fType == 'video' ? Icons.videocam_rounded : fType == 'audio' ? Icons.audiotrack_rounded : Icons.insert_drive_file_rounded;

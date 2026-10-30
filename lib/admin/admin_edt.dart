@@ -5,6 +5,7 @@ import '../admin/admin_annonces.dart' show istNiveaux;
 import '../admin/admin_filieres.dart' show Filiere, Module;
 import '../services/api_service.dart';
 import '../config/etablissement_config.dart';
+import 'calendrier_academique_admin.dart';
 
 const Color _navy = Color(0xFF0B1E4D);
 const Color _blue = Color(0xFF1565E0);
@@ -184,6 +185,7 @@ class _AdminEDTState extends State<AdminEDT> {
   String? _filtreAnnee;
   int _onglet = 0; // 0 tous · 1 actifs · 2 archivés
   bool _vueCartes = true;
+  int _section = 0; // 0 emplois du temps · 1 calendrier académique
   int _page = 1;
   final _searchCtrl = TextEditingController();
 
@@ -308,21 +310,27 @@ class _AdminEDTState extends State<AdminEDT> {
                     padding: EdgeInsets.all(pad),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       _header(isDesktop),
-                      const SizedBox(height: 18),
-                      _kpiRow(isDesktop),
+                      const SizedBox(height: 14),
+                      _selecteurSection(),
                       const SizedBox(height: 16),
-                      _barreFiltres(isDesktop),
-                      const SizedBox(height: 14),
-                      _onglets(),
-                      const SizedBox(height: 14),
-                      if (_filtered.isEmpty)
-                        _vide()
-                      else if (_vueCartes)
-                        _grille()
-                      else
-                        _tableau(),
-                      const SizedBox(height: 14),
-                      _pied(),
+                      if (_section == 1)
+                        const CalendrierAcademiqueAdmin()
+                      else ...[
+                        _kpiRow(isDesktop),
+                        const SizedBox(height: 16),
+                        _barreFiltres(isDesktop),
+                        const SizedBox(height: 14),
+                        _onglets(),
+                        const SizedBox(height: 14),
+                        if (_filtered.isEmpty)
+                          _vide()
+                        else if (_vueCartes)
+                          _grille()
+                        else
+                          _tableau(),
+                        const SizedBox(height: 14),
+                        _pied(),
+                      ],
                     ]),
                   ),
                 ),
@@ -504,6 +512,36 @@ class _AdminEDTState extends State<AdminEDT> {
       const SizedBox(width: 6),
       btn('Tableau', Icons.view_list_rounded, !_vueCartes, () => setState(() => _vueCartes = false)),
     ]);
+  }
+
+  // ── Sélecteur de section : Emplois du temps | Calendrier académique ────────
+  Widget _selecteurSection() {
+    Widget bouton(String label, IconData ic, int i) {
+      final actif = _section == i;
+      return GestureDetector(
+        onTap: () => setState(() => _section = i),
+        child: Container(
+          margin: const EdgeInsets.only(right: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          decoration: BoxDecoration(
+            color: actif ? _navy : Colors.white, borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: actif ? _navy : const Color(0xFFE2E8F0)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(ic, size: 16, color: actif ? Colors.white : const Color(0xFF475569)),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: actif ? Colors.white : const Color(0xFF475569))),
+          ]),
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        bouton('Emplois du temps', Icons.calendar_month_rounded, 0),
+        bouton('Calendrier académique', Icons.event_note_rounded, 1),
+      ]),
+    );
   }
 
   Widget _onglets() {
