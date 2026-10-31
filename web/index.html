@@ -33,8 +33,53 @@
   <title>ScolarHub</title>
   <meta name="theme-color" content="#0D55B0">
   <link rel="manifest" href="manifest.json">
+
+  <!-- Écran de chargement : logo ScolarHub affiché pendant le démarrage de l'application -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #F8FAFE; }
+    #sh-loader {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #F8FAFE; transition: opacity .5s ease;
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    #sh-loader.sh-fin { opacity: 0; pointer-events: none; }
+    #sh-loader img {
+      width: 150px; height: 150px; border-radius: 34px;
+      box-shadow: 0 16px 40px rgba(13, 85, 176, .22);
+      animation: sh-pop .9s ease-out both;
+    }
+    #sh-loader .sh-nom { margin-top: 22px; font-size: 30px; font-weight: 800; color: #083B87; letter-spacing: -.3px; }
+    #sh-loader .sh-nom b { color: #1769E0; }
+    #sh-loader .sh-barre { margin-top: 22px; width: 120px; height: 4px; border-radius: 4px; background: #DCEAFF; overflow: hidden; }
+    #sh-loader .sh-barre i { display: block; width: 40%; height: 100%; border-radius: 4px; background: #F8C400; animation: sh-glisse 1.2s ease-in-out infinite; }
+    @keyframes sh-pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+    @keyframes sh-glisse { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  </style>
 </head>
 <body>
+  <div id="sh-loader">
+    <img src="icons/Icon-192.png" alt="ScolarHub">
+    <div class="sh-nom">Scolar<b>Hub</b></div>
+    <div class="sh-barre"><i></i></div>
+  </div>
+  <script>
+    // Retire l'écran de chargement dès que la première image de l'application est affichée
+    // (avec un filet de sécurité au bout de 15 s).
+    (function () {
+      var retire = false;
+      function retirer() {
+        if (retire) return;
+        retire = true;
+        var l = document.getElementById('sh-loader');
+        if (!l) return;
+        l.classList.add('sh-fin');
+        setTimeout(function () { if (l.parentNode) l.parentNode.removeChild(l); }, 600);
+      }
+      window.addEventListener('flutter-first-frame', retirer);
+      setTimeout(retirer, 15000);
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

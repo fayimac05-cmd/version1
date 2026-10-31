@@ -27,6 +27,16 @@ class _SplashScreenState extends State<SplashScreen>
   ];
 
   // ============================================================
+  // INTRO LOGO
+  // ============================================================
+  // Écran de logo affiché quelques secondes au lancement, avant la page
+  // « Commencer ». Une seule fois par lancement de l'application : si on
+  // revient sur cette page (bouton retour de la connexion), pas de rejeu.
+  static bool _introDejaVue = false;
+  bool _intro = !_introDejaVue;
+  static const Duration _dureeIntro = Duration(milliseconds: 2400);
+
+  // ============================================================
   // ANIMATIONS
   // ============================================================
 
@@ -124,6 +134,18 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
+    _lancer();
+  }
+
+  Future<void> _lancer() async {
+    if (_intro) {
+      await Future.delayed(_dureeIntro);
+      if (!mounted) return;
+      _introDejaVue = true;
+      setState(() => _intro = false);
+      await Future.delayed(const Duration(milliseconds: 250));
+      if (!mounted) return;
+    }
     _startAnimations();
   }
 
@@ -207,7 +229,79 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFE),
-      body: FadeTransition(
+      body: Stack(children: [
+        Positioned.fill(child: _buildPage()),
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 500),
+            child: _intro ? _buildIntro() : const SizedBox.shrink(key: ValueKey('intro-fin')),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // Écran de logo plein écran (affiché au lancement).
+  Widget _buildIntro() {
+    return Container(
+      key: const ValueKey('intro'),
+      color: const Color(0xFFF8FAFE),
+      alignment: Alignment.center,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 1000),
+        curve: Curves.easeOutBack,
+        builder: (_, v, child) => Opacity(
+          opacity: v.clamp(0.0, 1.0),
+          child: Transform.scale(scale: 0.8 + 0.2 * v, child: child),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(40),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppPalette.blue.withValues(alpha: 0.22),
+                    blurRadius: 40,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(40),
+                child: const ScolarHubLogo(size: 450),
+              ),
+            ),
+            const SizedBox(height: 26),
+            RichText(
+              text: const TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Scolar',
+                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Color(0xFF083B87)),
+                  ),
+                  TextSpan(
+                    text: 'Hub',
+                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Color(0xFF1769E0)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'La plateforme académique tout-en-un',
+              style: TextStyle(fontSize: 14, color: Color(0xFF7185A5), fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPage() {
+    return FadeTransition(
         opacity: _pageFade,
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -241,7 +335,6 @@ class _SplashScreenState extends State<SplashScreen>
             );
           },
         ),
-      ),
     );
   }
 

@@ -65,4 +65,7 @@ flutter:
     - assets/images/etudiant_ist.png
     - assets/images/campus_banner.png
     - assets/images/etablissement_banner.png
+    - assets/images/logo_scolarhub.png
+    - assets/images/logo_scolarhub_sombre.png
+    - assets/images/app_icon.png
 
