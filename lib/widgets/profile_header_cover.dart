@@ -657,26 +657,6 @@ class _ProfileHeaderCoverState extends State<ProfileHeaderCover> {
                       ]),
                     ),
                   ]),
-                  if (widget.canEdit)
-                    Positioned(
-                      top: 0, right: 0,
-                      child: GestureDetector(
-                        onTap: _showProfileOptions,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white38),
-                          ),
-                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.camera_alt_outlined, color: Colors.white, size: 14),
-                            SizedBox(width: 6),
-                            Text('Modifier la photo', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600)),
-                          ]),
-                        ),
-                      ),
-                    ),
                 ]),
               ),
             ),

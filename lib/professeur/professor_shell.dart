@@ -36,6 +36,37 @@ class _ProfessorShellState extends State<ProfessorShell> {
   // 4 = Notes, 5 = Messages, 6 = Profil, 7 = Réclamations.
   int _currentTab = 0;
 
+  // Profil courant : copie locale du profil de connexion, mise à jour quand la
+  // photo change (profil) ou est relue côté serveur (rafraîchissement du site).
+  // Tous les onglets reçoivent CETTE copie, pas celle figée à la connexion.
+  late StudentProfile _profil = widget.profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _rafraichirPhoto();
+  }
+
+  Future<void> _rafraichirPhoto() async {
+    try {
+      final r = await http.get(
+        Uri.parse('${ApiService.baseUrl}/auth/me'),
+        headers: await ApiService.getHeaders(),
+      );
+      if (r.statusCode != 200) return;
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      final url = body is Map ? body['photo_url']?.toString() : null;
+      if (!mounted || url == null || url.isEmpty || url == _profil.photoUrl) return;
+      setState(() => _profil = _profil.copyWith(photoUrl: url));
+    } catch (_) {}
+  }
+
+  void _photoChangee(String? url) {
+    final nouvelle = url ?? '';
+    if (!mounted || nouvelle == (_profil.photoUrl ?? '')) return;
+    setState(() => _profil = _profil.copyWith(photoUrl: nouvelle));
+  }
+
   // Classe présélectionnée depuis "Mes Classes" pour l'appel ou les notes.
   Map<String, dynamic>? _classePreselectionnee;
 
@@ -50,7 +81,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
     switch (_currentTab) {
       case 0:
         return ProfessorDashboard(
-          profile: widget.profile,
+          profile: _profil,
           onClasses: () => _goTo(1),
           onCours: () => _goTo(2),
           onAppel: () => _goTo(3),
@@ -60,20 +91,20 @@ class _ProfessorShellState extends State<ProfessorShell> {
         );
       case 1:
         return _ClassesTab(
-          profile: widget.profile,
+          profile: _profil,
           onFaireAppel: (c) => _ouvrirDepuisClasse(3, c),
           onSaisirNotes: (c) => _ouvrirDepuisClasse(4, c),
         );
       case 2:
-        return _CoursTab(profile: widget.profile);
+        return _CoursTab(profile: _profil);
       case 3:
-        return AppelTab(profile: widget.profile, initialClasse: _classePreselectionnee);
+        return AppelTab(profile: _profil, initialClasse: _classePreselectionnee);
       case 4:
-        return NotesTab(profile: widget.profile, initialClasse: _classePreselectionnee);
+        return NotesTab(profile: _profil, initialClasse: _classePreselectionnee);
       case 5:
         return const AdminMessages(role: 'professeur');
       case 6:
-        return _ProfilTab(profile: widget.profile, onLogout: widget.onLogout);
+        return _ProfilTab(profile: _profil, onLogout: widget.onLogout, onPhotoChanged: _photoChangee, onBack: () => _goTo(0));
       case 7:
         return const ProfesseurReclamations();
       default:
@@ -121,10 +152,10 @@ class _ProfessorShellState extends State<ProfessorShell> {
   }
 
   Widget _buildDesktopSidebar() {
-    final photoUrl = widget.profile.photoUrl?.trim();
-    final nom = widget.profile.prenoms.trim().isNotEmpty
-        ? widget.profile.prenoms.trim()
-        : widget.profile.nom.trim();
+    final photoUrl = _profil.photoUrl?.trim();
+    final nom = _profil.prenoms.trim().isNotEmpty
+        ? _profil.prenoms.trim()
+        : _profil.nom.trim();
 
     return Container(
       width: 252,
@@ -252,8 +283,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
   }
 
   String _sidebarInitiale() {
-    final prenoms = widget.profile.prenoms.trim();
-    final nom = widget.profile.nom.trim();
+    final prenoms = _profil.prenoms.trim();
+    final nom = _profil.nom.trim();
     if (prenoms.isNotEmpty) return prenoms[0].toUpperCase();
     if (nom.isNotEmpty) return nom[0].toUpperCase();
     return 'P';
@@ -1785,7 +1816,9 @@ class _ErrorState extends StatelessWidget {
 // ── Onglet Profil ──────────────────────────────────────────────────────────
 
 class _ProfilTab extends StatefulWidget {
-  const _ProfilTab({required this.profile, required this.onLogout});
+  const _ProfilTab({required this.profile, required this.onLogout, this.onPhotoChanged, this.onBack});
+  final VoidCallback? onBack;
+  final ValueChanged<String?>? onPhotoChanged;
   final StudentProfile profile;
   final VoidCallback onLogout;
 
@@ -1811,7 +1844,6 @@ class _ProfilTabState extends State<_ProfilTab> {
   // serveur via PATCH /api/auth/profil et POST /api/upload/attestation-service.
   late String? _adresse = profile.adresse;
   late String? _photoUrl = profile.photoUrl;
-  bool _changingPhoto = false;
   late String? _attestationUrl = profile.attestationUrl;
   late String _langue = profile.langue;
   late bool _notificationsActives = profile.notificationsActives;
@@ -1925,38 +1957,6 @@ class _ProfilTabState extends State<_ProfilTab> {
     if (ok && mounted) setState(() => _notificationsActives = valeur);
   }
 
-  // ── Carte "Ma photo de profil" — widget séparé de la grande bannière,
-  // même route d'upload (/api/upload/photo-profil). ⚠️ Limite connue : la
-  // bannière en haut gère sa propre photo indépendamment en interne ; un
-  // changement fait ici ne s'y reflète qu'après un rechargement de l'onglet.
-  Future<void> _changerPhotoProfil() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    if (result == null || result.files.isEmpty || result.files.first.bytes == null) return;
-    final fichier = result.files.first;
-    setState(() => _changingPhoto = true);
-    try {
-      final headers = await ApiService.getHeaders();
-      final req = http.MultipartRequest('POST', Uri.parse('${ApiService.baseUrl}/upload/photo-profil'));
-      req.headers.addAll(headers);
-      req.files.add(http.MultipartFile.fromBytes('file', fichier.bytes!, filename: fichier.name));
-      final streamed = await req.send();
-      final res = await http.Response.fromStream(streamed);
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      if (!mounted) return;
-      setState(() => _changingPhoto = false);
-      if (res.statusCode == 200 && body['success'] == true) {
-        setState(() => _photoUrl = body['url']?.toString());
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(body['message']?.toString() ?? 'Échec de l\'envoi.'), backgroundColor: Colors.red));
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _changingPhoto = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Serveur injoignable.'), backgroundColor: Colors.red));
-      }
-    }
-  }
-
   Future<void> _uploadAttestation() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], withData: true);
     if (result == null || result.files.isEmpty || result.files.first.bytes == null) return;
@@ -2021,6 +2021,20 @@ class _ProfilTabState extends State<_ProfilTab> {
                   _buildTopRow(),
                   const SizedBox(height: 18),
                   Row(children: [
+                    // Retour à l'accueil (sur téléphone : pas de menu latéral).
+                    if (widget.onBack != null && MediaQuery.of(context).size.width < 900) ...[
+                      IconButton(
+                        onPressed: widget.onBack,
+                        tooltip: 'Retour',
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: _navyText),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: _border),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     const Text('Mon profil', style: TextStyle(color: _navyText, fontSize: 20, fontWeight: FontWeight.w900)),
                   ]),
                   const SizedBox(height: 16),
@@ -2042,7 +2056,10 @@ class _ProfilTabState extends State<_ProfilTab> {
                     // la photo (son propre bouton), on répercute vers la
                     // petite carte tout de suite, sans attendre un revisit.
                     onMediaChanged: (photoUrl, coverUrl) {
-                      if (photoUrl != _photoUrl) setState(() => _photoUrl = photoUrl);
+                      if (photoUrl != _photoUrl) {
+                        setState(() => _photoUrl = photoUrl);
+                        widget.onPhotoChanged?.call(photoUrl);
+                      }
                     },
                   ),
                   const SizedBox(height: 20),
@@ -2057,8 +2074,6 @@ class _ProfilTabState extends State<_ProfilTab> {
                     ]);
                     final droite = Column(children: [
                       _statsCard(),
-                      const SizedBox(height: 14),
-                      _maPhotoCard(),
                       const SizedBox(height: 14),
                       _contactsCard(),
                       const SizedBox(height: 14),
@@ -2087,7 +2102,7 @@ class _ProfilTabState extends State<_ProfilTab> {
   }
 
   Widget _buildTopRow() {
-    final photoUrl = profile.photoUrl?.trim();
+    final photoUrl = _photoUrl?.trim();
     final nomComplet = '${profile.prenoms} ${profile.nom}'.trim();
     return Row(children: [
       Expanded(
@@ -2103,12 +2118,6 @@ class _ProfilTabState extends State<_ProfilTab> {
         ),
       ),
       const SizedBox(width: 16),
-      Container(
-        width: 44, height: 44,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
-        child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
-      ),
-      const SizedBox(width: 12),
       Row(children: [
         CircleAvatar(
           radius: 21,
@@ -2234,45 +2243,6 @@ class _ProfilTabState extends State<_ProfilTab> {
         const SizedBox(height: 6),
         Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w900)),
         Text(label, style: const TextStyle(color: _muted, fontSize: 10, fontWeight: FontWeight.w600)),
-      ]),
-    );
-  }
-
-  Widget _maPhotoCard() {
-    final nomComplet = '${profile.prenoms} ${profile.nom}'.trim();
-    return _card(
-      child: Column(children: [
-        _cardTitre(Icons.image_outlined, 'Ma photo de profil'),
-        const SizedBox(height: 14),
-        Center(
-          child: Stack(alignment: Alignment.bottomRight, children: [
-            CircleAvatar(
-              radius: 44,
-              backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
-              backgroundImage: (_photoUrl != null && _photoUrl!.isNotEmpty) ? NetworkImage(_photoUrl!) : null,
-              child: (_photoUrl == null || _photoUrl!.isEmpty)
-                  ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900, fontSize: 22))
-                  : null,
-            ),
-            Container(
-              width: 28, height: 28,
-              decoration: BoxDecoration(color: AppPalette.blue, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 13),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _changingPhoto ? null : _changerPhotoProfil,
-            icon: _changingPhoto
-                ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.photo_camera_outlined, size: 16),
-            label: Text(_changingPhoto ? 'Envoi...' : 'Changer la photo', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-            style: OutlinedButton.styleFrom(foregroundColor: AppPalette.blue, side: const BorderSide(color: AppPalette.blue), padding: const EdgeInsets.symmetric(vertical: 11)),
-          ),
-        ),
       ]),
     );
   }
