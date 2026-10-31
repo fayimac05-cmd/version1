@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
+import '../widgets/scolarhub_logo.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -501,25 +502,19 @@ class _SplashScreenState extends State<SplashScreen>
     return Row(
       children: [
         Container(
-          width: 72,
-          height: 72,
           decoration: BoxDecoration(
-            color: AppPalette.blue,
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: AppPalette.blue.withValues(
-                  alpha: 0.20,
-                ),
+                color: AppPalette.blue.withValues(alpha: 0.20),
                 blurRadius: 25,
                 offset: const Offset(0, 12),
               ),
             ],
           ),
-          child: const Icon(
-            Icons.school_rounded,
-            color: AppPalette.yellow,
-            size: 39,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: const ScolarHubLogo(size: 78),
           ),
         ),
 
@@ -534,7 +529,7 @@ class _SplashScreenState extends State<SplashScreen>
               text: const TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Scholar',
+                    text: 'Scolar',
                     style: TextStyle(
                       fontSize: 31,
                       fontWeight: FontWeight.w800,
@@ -1229,25 +1224,19 @@ class _SplashScreenState extends State<SplashScreen>
     return Row(
       children: [
         Container(
-          width: 58,
-          height: 58,
           decoration: BoxDecoration(
-            color: AppPalette.blue,
             borderRadius: BorderRadius.circular(17),
             boxShadow: [
               BoxShadow(
-                color: AppPalette.blue.withValues(
-                  alpha: 0.20,
-                ),
+                color: AppPalette.blue.withValues(alpha: 0.20),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: const Icon(
-            Icons.school_rounded,
-            color: AppPalette.yellow,
-            size: 31,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(17),
+            child: const ScolarHubLogo(size: 62),
           ),
         ),
 
@@ -1262,7 +1251,7 @@ class _SplashScreenState extends State<SplashScreen>
               text: const TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Scholar',
+                    text: 'Scolar',
                     style: TextStyle(
                       fontSize: 25,
                       fontWeight: FontWeight.w800,

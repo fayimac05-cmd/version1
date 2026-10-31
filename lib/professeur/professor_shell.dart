@@ -10,6 +10,7 @@ import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/profile_header_cover.dart';
 import '../widgets/mobile_nav.dart';
+import '../widgets/scolarhub_logo.dart';
 import 'appel_tab.dart';
 import 'notes_tab.dart';
 import 'programme_screen.dart';
@@ -170,20 +171,11 @@ class _ProfessorShellState extends State<ProfessorShell> {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(13),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                    ),
-                    child: const Icon(Icons.school_rounded, color: AppPalette.yellow, size: 25),
-                  ),
+                  const ScolarHubLogo(size: 42, surFondSombre: true),
                   const SizedBox(width: 11),
                   const Expanded(
                     child: Text(
-                      'ScholarHub',
+                      'ScolarHub',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
