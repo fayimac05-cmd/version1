@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/etablissement_config.dart';
 import '../services/api_service.dart';
 import '../widgets/app_bubble_bg.dart';
 
@@ -220,11 +221,7 @@ class _BulletinScreenState extends State<BulletinScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: brandBlue.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
-                  child: Icon(Icons.school_rounded, color: brandBlue, size: 28),
-                ),
+                _logoEtablissement(brandBlue),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -349,6 +346,21 @@ class _BulletinScreenState extends State<BulletinScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Logo de l'établissement ; icône de repli s'il n'y en a pas ou s'il ne charge pas.
+  Widget _logoEtablissement(Color brandBlue) {
+    final url = EtablissementConfig.instance.logoUrl;
+    final repli = Container(
+      width: 52, height: 52,
+      decoration: BoxDecoration(color: brandBlue.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
+      child: Icon(Icons.school_rounded, color: brandBlue, size: 28),
+    );
+    if (!url.startsWith('http')) return repli;
+    return SizedBox(
+      width: 52, height: 52,
+      child: Image.network(url, fit: BoxFit.contain, errorBuilder: (_, __, ___) => repli),
     );
   }
 

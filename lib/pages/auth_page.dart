@@ -7,6 +7,7 @@ import '../pages/splash_screen.dart';
 import '../professeur/professor_shell.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
+import '../widgets/scolarhub_logo.dart';
 import 'bureau_des_etudiants.dart';
 import 'parent/parent_shell.dart';
 import '../admin/admin_shell.dart';
@@ -712,18 +713,9 @@ class _AuthPageState extends State<AuthPage> {
               Stack(
                 alignment: Alignment.bottomRight,
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppPalette.blue,
-                    ),
-                    child: const Icon(
-                      Icons.school_rounded,
-                      color: Colors.white,
-                      size: 44,
-                    ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: const ScolarHubLogo(size: 84),
                   ),
                   Container(
                     width: 28,

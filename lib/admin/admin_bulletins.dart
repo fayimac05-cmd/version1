@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_annonces.dart' show istNiveaux;
 import '../admin/admin_notes.dart' show semestresPourNiveau;
+import '../config/etablissement_config.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/bulletins_admin_service.dart';
@@ -696,6 +697,14 @@ class _AdminBulletinsState extends State<AdminBulletins> {
 
   Future<void> _exporterPdf() async {
     final doc = pw.Document();
+    // Logo de l'établissement (le PDF reste généré sans logo s'il ne charge pas).
+    final cfg = EtablissementConfig.instance;
+    pw.ImageProvider? logoEcole;
+    if (cfg.logoUrl.startsWith('http')) {
+      try {
+        logoEcole = await networkImage(cfg.logoUrl);
+      } catch (_) {}
+    }
     final entetes = <String>[
       'Etudiant', 'Matricule',
       ..._colonnes().map((c) => c.module != null ? '${c.module!['nom']} (Coef. ${c.module!['coefficient']})' : 'UE ${c.titre}'),
@@ -728,6 +737,18 @@ class _AdminBulletinsState extends State<AdminBulletins> {
       pageFormat: PdfPageFormat.a4.landscape,
       margin: const pw.EdgeInsets.all(24),
       build: (_) => [
+        if (logoEcole != null || cfg.nom.isNotEmpty) ...[
+          pw.Row(children: [
+            if (logoEcole != null) ...[
+              pw.Image(logoEcole, height: 48, fit: pw.BoxFit.contain),
+              pw.SizedBox(width: 12),
+            ],
+            if (cfg.nom.isNotEmpty)
+              pw.Text(cfg.nom.toUpperCase(), style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          ]),
+          pw.Divider(thickness: 1),
+          pw.SizedBox(height: 6),
+        ],
         pw.Text('Resultats du $_cSemestre - $_cAnnee', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 4),
         pw.Text('$_cNiveau - ${_nomFiliere(_cFiliere)}', style: const pw.TextStyle(fontSize: 11)),

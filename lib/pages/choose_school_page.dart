@@ -5,6 +5,7 @@ import '../config/etablissement_config.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
 import 'auth_page.dart';
+import '../widgets/scolarhub_logo.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 class Etablissement {
@@ -374,11 +375,9 @@ class _ChooseSchoolPageState extends State<ChooseSchoolPage> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const SizedBox(height: 8),
                 Row(children: [
-                  Container(width: 50, height: 50,
-                      decoration: const BoxDecoration(
-                          shape: BoxShape.circle, color: AppPalette.blue),
-                      child: const Icon(Icons.school_rounded,
-                          color: Colors.white, size: 28)),
+                  ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: const ScolarHubLogo(size: 56)),
                   const SizedBox(width: 14),
                   const Text('ScolarHub', style: TextStyle(fontSize: 26,
                       fontWeight: FontWeight.bold, color: AppPalette.blue,

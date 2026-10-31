@@ -224,6 +224,15 @@ class _PlanningTabState extends State<PlanningTab>
     if (creneaux.isEmpty) return;
     final pdf = pw.Document();
 
+    // Logo de l'établissement (si disponible) ; en cas d'échec le PDF reste généré sans logo.
+    pw.ImageProvider? logoEcole;
+    final urlLogo = EtablissementConfig.instance.logoUrl;
+    if (urlLogo.startsWith('http')) {
+      try {
+        logoEcole = await networkImage(urlLogo);
+      } catch (_) {}
+    }
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4.landscape,
@@ -236,11 +245,19 @@ class _PlanningTabState extends State<PlanningTab>
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    pw.Row(
                       children: [
-                        pw.Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom.toUpperCase() : 'ÉTABLISSEMENT', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                        pw.Text(widget.profile.filiere, style: const pw.TextStyle(fontSize: 9)),
+                        if (logoEcole != null) ...[
+                          pw.Image(logoEcole, height: 48, fit: pw.BoxFit.contain),
+                          pw.SizedBox(width: 12),
+                        ],
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom.toUpperCase() : 'ÉTABLISSEMENT', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                            pw.Text(widget.profile.filiere, style: const pw.TextStyle(fontSize: 9)),
+                          ],
+                        ),
                       ],
                     ),
                     pw.Text('Emploi du Temps — ${widget.profile.niveau}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),

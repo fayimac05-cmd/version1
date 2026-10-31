@@ -65,6 +65,7 @@ import '../admin/admin_delegues.dart';
 import '../admin/admin_bde_membres.dart';
 import '../admin/admin_cantine.dart';
 import '../widgets/mobile_nav.dart';
+import '../widgets/scolarhub_logo.dart';
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
 // import 'package:shared_preferences/shared_preferences.dart';
@@ -948,6 +949,11 @@ class _AdminShellState extends State<AdminShell>
               mainAxisAlignment:
                   c ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
+                // Logo de l'application (le logo de l'établissement reste à côté).
+                if (!c) ...[
+                  const ScolarHubLogo(size: 38, surFondSombre: true),
+                  const SizedBox(width: 8),
+                ],
                 Tooltip(
                   message: _peutGererIdentite ? "Identité de l'établissement" : '',
                   child: InkWell(
