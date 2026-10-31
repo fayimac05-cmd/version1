@@ -64,6 +64,7 @@ import '../widgets/profile_header_cover.dart';
 import '../admin/admin_delegues.dart';
 import '../admin/admin_bde_membres.dart';
 import '../admin/admin_cantine.dart';
+import '../widgets/mobile_nav.dart';
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
 // import 'package:shared_preferences/shared_preferences.dart';
@@ -828,6 +829,53 @@ class _AdminShellState extends State<AdminShell>
   // BUILD
   // ═══════════════════════════════════════════════════════════════
 
+  // ── Navigation téléphone : 4 favoris + « Plus » ─────────────────────────
+  // Ordre de priorité des onglets mis en avant dans la barre du bas ; seuls
+  // ceux auxquels le membre a droit sont retenus (un sous-rôle limité n'en
+  // verra que quelques-uns, et pas de bouton « Plus » s'il n'y en a pas plus de 5).
+  static const List<int> _prioriteMobile = [0, 10, 6, 1, 5, 4, 2, 3, 7, 8, 17, 12, 19, 14, 15, 9, 11, 13, 16, 18, 20];
+
+  NavEntry _entree(int i) => NavEntry(
+        index: i,
+        label: _items[i].label,
+        icon: _items[i].icon,
+        iconActive: _items[i].iconActive,
+        group: _items[i].group,
+        badge: _badges[i] ?? 0,
+      );
+
+  /// Tous les onglets accessibles, rangés dans l'ordre des groupes du menu.
+  List<NavEntry> _entreesMobile() {
+    final out = <NavEntry>[];
+    for (final g in _menuGroups) {
+      for (final i in (g['items'] as List<int>)) {
+        if (_peutVoir(i)) out.add(_entree(i));
+      }
+    }
+    return out;
+  }
+
+  Widget _bottomNavMobile() {
+    final dispo = [for (final i in _prioriteMobile) if (_peutVoir(i)) i];
+    final favorisIdx = dispo.length <= 5 ? dispo : dispo.take(4).toList();
+    final autresIdx = dispo.length <= 5 ? <int>[] : dispo.skip(4).toList();
+    return MobileBottomNav(
+      favoris: [for (final i in favorisIdx) _entree(i)],
+      autres: [for (final i in autresIdx) _entree(i)],
+      currentIndex: _idx,
+      onSelect: _navigate,
+      onPlus: () => showMenuPlusSheet(
+        context,
+        entries: _entreesMobile(),
+        currentIndex: _idx,
+        onSelect: _navigate,
+        titre: 'Tous les onglets',
+        accent: _navy,
+      ),
+      accent: _navy,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mobile = AdminTheme.isMobile(context);
@@ -835,6 +883,7 @@ class _AdminShellState extends State<AdminShell>
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8FAFC),
+      bottomNavigationBar: mobile ? _bottomNavMobile() : null,
       drawer: mobile
           ? Drawer(
               backgroundColor: _navy,

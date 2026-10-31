@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/profile_header_cover.dart';
+import '../widgets/mobile_nav.dart';
 import 'appel_tab.dart';
 import 'notes_tab.dart';
 import 'programme_screen.dart';
@@ -286,57 +287,34 @@ class _ProfessorShellState extends State<ProfessorShell> {
     );
   }
 
-  Widget _buildNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 16, offset: const Offset(0, -4))],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-          child: Row(
-            children: [
-              Expanded(child: _navItem(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Accueil', 0, AppPalette.blue)),
-              Expanded(child: _navItem(Icons.groups_outlined, Icons.groups_rounded, 'Classes', 1, AppPalette.blue)),
-              Expanded(child: _navItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'Cours', 2, const Color(0xFFD97706))),
-              Expanded(child: _navItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 3, const Color(0xFF0EA5E9))),
-              Expanded(child: _navItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 4, const Color(0xFF10B981))),
-              Expanded(child: _navItem(Icons.forum_outlined, Icons.forum_rounded, 'Messages', 5, const Color(0xFF0891B2))),
-              Expanded(child: _navItem(Icons.report_gmailerrorred_outlined, Icons.report_gmailerrorred_rounded, 'Réclam.', 7, const Color(0xFFEF4444))),
-              Expanded(child: _navItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 6, const Color(0xFF42A5F5))),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // Tous les onglets (téléphone) : 4 favoris dans la barre du bas, le reste dans « Plus ».
+  static const List<NavEntry> _toutesEntrees = [
+    NavEntry(index: 0, label: 'Accueil', icon: Icons.dashboard_outlined, iconActive: Icons.dashboard_rounded, group: 'ENSEIGNEMENT'),
+    NavEntry(index: 3, label: 'Appel', icon: Icons.how_to_reg_outlined, iconActive: Icons.how_to_reg_rounded, group: 'ENSEIGNEMENT'),
+    NavEntry(index: 4, label: 'Notes', icon: Icons.fact_check_outlined, iconActive: Icons.fact_check_rounded, group: 'ENSEIGNEMENT'),
+    NavEntry(index: 5, label: 'Messages', icon: Icons.forum_outlined, iconActive: Icons.forum_rounded, group: 'COMMUNICATION'),
+    NavEntry(index: 1, label: 'Classes', icon: Icons.groups_outlined, iconActive: Icons.groups_rounded, group: 'ENSEIGNEMENT'),
+    NavEntry(index: 2, label: 'Cours', icon: Icons.menu_book_outlined, iconActive: Icons.menu_book_rounded, group: 'ENSEIGNEMENT'),
+    NavEntry(index: 7, label: 'Réclamations', icon: Icons.report_gmailerrorred_outlined, iconActive: Icons.report_gmailerrorred_rounded, group: 'COMMUNICATION'),
+    NavEntry(index: 6, label: 'Profil', icon: Icons.person_outline_rounded, iconActive: Icons.person_rounded, group: 'MON COMPTE'),
+  ];
 
-  Widget _navItem(IconData icon, IconData activeIcon, String label, int index, Color color) {
-    final isActive = _currentTab == index;
-    return GestureDetector(
-      onTap: () => _goTo(index),
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 42,
-            height: 34,
-            decoration: BoxDecoration(color: isActive ? color.withValues(alpha: 0.13) : const Color(0xFFF4F5F7), borderRadius: BorderRadius.circular(10)),
-            child: Icon(isActive ? activeIcon : icon, size: 20, color: isActive ? color : const Color(0xFF9CA3AF)),
-          ),
-          const SizedBox(height: 3),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            style: TextStyle(fontSize: 9, fontWeight: isActive ? FontWeight.w700 : FontWeight.w500, color: isActive ? color : const Color(0xFF9CA3AF)),
-            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-        ],
+  Widget _buildNav() {
+    const navy = Color(0xFF0B1E4D);
+    return MobileBottomNav(
+      favoris: _toutesEntrees.take(4).toList(),
+      autres: _toutesEntrees.skip(4).toList(),
+      currentIndex: _currentTab,
+      onSelect: _goTo,
+      onPlus: () => showMenuPlusSheet(
+        context,
+        entries: _toutesEntrees,
+        currentIndex: _currentTab,
+        onSelect: _goTo,
+        titre: 'Tous les onglets',
+        accent: navy,
       ),
+      accent: navy,
     );
   }
 }
