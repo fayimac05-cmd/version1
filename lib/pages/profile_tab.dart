@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
 import '../widgets/profile_header_cover.dart';
 
 import '../models/student_profile.dart';
@@ -27,12 +28,16 @@ class AppNotification {
 }
 
 class ProfileTab extends StatefulWidget {
-  const ProfileTab({super.key, required this.profile, required this.onLogout, this.onPhotoChanged});
+  const ProfileTab({super.key, required this.profile, required this.onLogout, this.onPhotoChanged, this.onBack});
   final StudentProfile profile;
   final VoidCallback onLogout;
   /// Remonte la nouvelle photo/couverture au shell qui héberge cet écran,
   /// pour qu'elle survive à un changement d'onglet (voir StudentShell).
   final void Function(String? photoUrl, String? coverUrl)? onPhotoChanged;
+
+  /// Action du bouton retour. Par défaut : ferme l'écran s'il a été ouvert par-dessus un autre.
+  /// Si le profil est un onglet du shell, passer ici le retour vers l'onglet d'accueil.
+  final VoidCallback? onBack;
 
   @override
   State<ProfileTab> createState() => _ProfileTabState();
@@ -48,7 +53,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
   String _email = '';
   String _telephone = '';
-  String _ville = 'Ouagadougou, Burkina Faso';
+  String _adresse = '';
   String _dateNaiss = '';
   String _interets = '';
   String _bio = '';
@@ -59,114 +64,87 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   bool _emailVisible = true;
   bool _telVisible = true;
 
-  OverlayEntry? _overlayEntry;
-  bool _panelOuvert = false;
-  final GlobalKey _clochKey = GlobalKey();
-
-  final List<AppNotification> _notifs = [
-    AppNotification(id: '1', type: NotifType.examen, titre: 'Examen de mi-parcours', corps: 'Algorithmes & Structures de données – dans 48h', temps: 'Il y a 12 min'),
-    AppNotification(id: '2', type: NotifType.note, titre: 'Note publiée', corps: 'Analyse numérique : 16.5/20', temps: 'Il y a 2h'),
-    AppNotification(id: '3', type: NotifType.cours, titre: 'Nouveau cours disponible', corps: 'Pr. Koanda a posté un nouveau cours – Réseaux informatiques', temps: 'Il y a 5h'),
-    AppNotification(id: '4', type: NotifType.inscription, titre: 'Inscription validée', corps: 'Votre inscription en Master 2 Génie Logiciel a été validée', temps: 'Hier, 14:30', lu: true),
-  ];
-
-  int get _nonLus => _notifs.where((n) => !n.lu).length;
-
   @override
   void initState() {
     super.initState();
-    _email = widget.profile.email.isNotEmpty ? widget.profile.email : '${widget.profile.prenoms.toLowerCase()}.${widget.profile.nom.toLowerCase()}@ist.bf';
+    _email = widget.profile.email;
     _telephone = widget.profile.telephone;
-    _fetchNotifications();
-  }
-
-  Future<void> _fetchNotifications() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final matricule = prefs.getString('matricule') ?? '';
-      if (matricule.isEmpty) return;
-      final data = await Supabase.instance.client
-          .from('notifications')
-          .select()
-          .eq('matricule', matricule)
-          .order('created_at', ascending: false)
-          .limit(20);
-      final list = data as List;
-      if (list.isNotEmpty && mounted) {
-        setState(() {
-          _notifs.clear();
-          _notifs.addAll(list.map((e) {
-            final typeStr = e['type'] as String? ?? 'message';
-            NotifType t = NotifType.message;
-            if (typeStr == 'examen') t = NotifType.examen;
-            if (typeStr == 'note') t = NotifType.note;
-            if (typeStr == 'cours') t = NotifType.cours;
-            if (typeStr == 'inscription') t = NotifType.inscription;
-            return AppNotification(
-              id: e['id']?.toString() ?? '',
-              type: t,
-              titre: e['titre'] ?? '',
-              corps: e['corps'] ?? '',
-              temps: e['created_at']?.toString().substring(0, 16) ?? '',
-              lu: e['lu'] ?? false,
-            );
-          }));
-        });
-      }
-    } catch (_) {} // fallback sur données statiques
-  }
-
-  @override
-  void dispose() {
-    _fermerPanel(isDisposing: true);
-    super.dispose();
+    _adresse = widget.profile.adresse ?? '';
+    _chargerProfil();
   }
 
   String get _initiales => '${widget.profile.prenoms.isNotEmpty ? widget.profile.prenoms[0] : ''}${widget.profile.nom.isNotEmpty ? widget.profile.nom[0] : ''}'.toUpperCase();
 
-  void _togglePanel() => _panelOuvert ? _fermerPanel() : _ouvrirPanel();
-
-  void _ouvrirPanel() {
-    final RenderBox? renderBox = _clochKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-    final Offset position = renderBox.localToGlobal(Offset.zero);
-    final Size size = renderBox.size;
-    setState(() => _panelOuvert = true);
-    _overlayEntry = OverlayEntry(
-      builder: (context) => _NotifPanel(
-        top: position.dy + size.height + 8,
-        right: MediaQuery.of(context).size.width - position.dx - size.width,
-        notifs: _notifs,
-        onLu: (id) {
-          setState(() => _notifs.firstWhere((n) => n.id == id).lu = true);
-          _overlayEntry?.markNeedsBuild();
-        },
-        onToutLu: () {
-          setState(() {
-            for (final n in _notifs) {
-              n.lu = true;
-            }
-          });
-          _overlayEntry?.markNeedsBuild();
-        },
-        onFermer: _fermerPanel,
-      ),
-    );
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  void _fermerPanel({bool isDisposing = false}) {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    if (isDisposing) {
-      _panelOuvert = false;
-    } else {
-      if (mounted) setState(() => _panelOuvert = false);
+  // ── Lecture : tout vient de la base (GET /api/auth/me) ───────────────
+  Future<void> _chargerProfil() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.get(Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
+      debugPrint('[profil] /auth/me -> ${res.statusCode} ${res.body}');
+      if (res.statusCode != 200) return;
+      final d = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      String t(String k) => (d[k] ?? '').toString();
+      if (!mounted) return;
+      setState(() {
+        if (t('email').isNotEmpty) _email = t('email');
+        if (t('tel').isNotEmpty) _telephone = t('tel');
+        _adresse = t('adresse');
+        _dateNaiss = _formaterNaissance(t('date_naissance'));
+        _bio = t('biographie');
+        _interets = t('centres_interet');
+        _facebook = t('facebook');
+        _whatsapp = t('whatsapp');
+        _linkedin = t('linkedin');
+        _emailVisible = d['masquer_email'] != true;
+        _telVisible = d['masquer_tel'] != true;
+      });
+    } catch (e) {
+      debugPrint('[profil] erreur: $e'); // hors-ligne : on garde le profil de connexion
     }
   }
 
+  /// "2003-05-14…" ou "14/05/2003" → "14/05/2003 (22 ans)"
+  String _formaterNaissance(String brut) {
+    if (brut.trim().isEmpty) return '';
+    DateTime? d;
+    final iso = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(brut);
+    final fr = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(brut);
+    if (iso != null) {
+      d = DateTime(int.parse(iso.group(1)!), int.parse(iso.group(2)!), int.parse(iso.group(3)!));
+    } else if (fr != null) {
+      d = DateTime(int.parse(fr.group(3)!), int.parse(fr.group(2)!), int.parse(fr.group(1)!));
+    }
+    if (d == null) return brut;
+    final now = DateTime.now();
+    int age = now.year - d.year;
+    if (now.month < d.month || (now.month == d.month && now.day < d.day)) age--;
+    final jj = d.day.toString().padLeft(2, '0'), mm = d.month.toString().padLeft(2, '0');
+    return '$jj/$mm/${d.year}${age >= 0 && age < 120 ? ' ($age ans)' : ''}';
+  }
 
+  // ── Écriture : PATCH /api/auth/profil, puis mise à jour de l'écran ───
+  Future<void> _enregistrer(Map<String, dynamic> champs, VoidCallback appliquer) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.patch(
+        Uri.parse('${ApiService.baseUrl}/auth/profil'),
+        headers: headers,
+        body: jsonEncode(champs),
+      );
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      if (!mounted) return;
+      if (res.statusCode == 200 && body['success'] == true) {
+        setState(appliquer);
+        return;
+      }
+      _snack(body['message']?.toString() ?? 'Échec de l\'enregistrement.');
+    } catch (_) {
+      if (mounted) _snack('Serveur injoignable. Réessayez.');
+    }
+  }
 
+  void _snack(String msg) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
 
   void _editer({
     required String titre, required String valeur, required String hint,
@@ -241,25 +219,11 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
         scrolledUnderElevation: 0,
         title: const Text('Profil Étudiant', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textMain)),
         centerTitle: true,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: GestureDetector(
-              key: _clochKey, onTap: _togglePanel,
-              child: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white, borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _panelOuvert ? _brandBlue.withValues(alpha:0.3) : _border),
-                ),
-                child: Stack(alignment: Alignment.center, children: [
-                  Icon(_panelOuvert ? Icons.notifications_rounded : Icons.notifications_none_rounded, color: _panelOuvert ? _brandBlue : _textMain, size: 20),
-                  if (_nonLus > 0) Positioned(top: 10, right: 11, child: _BadgePulse(count: _nonLus)),
-                ]),
-              ),
-            ),
-          ),
-        ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: _textMain),
+          tooltip: 'Retour',
+          onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+        ),
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -288,7 +252,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
           _bentoCard(
             titre: 'Biographie', icon: Icons.text_snippet_outlined, color: Colors.indigo,
             child: GestureDetector(
-              onTap: () => _editer(titre: 'Ma Biographie', valeur: _bio, hint: 'Décrivez vos ambitions ou projets...', maxLength: 300, maxLines: 4, onSave: (v) => setState(() => _bio = v)),
+              onTap: () => _editer(titre: 'Ma Biographie', valeur: _bio, hint: 'Décrivez vos ambitions ou projets...', maxLength: 300, maxLines: 4, onSave: (v) => _enregistrer({'biographie': v}, () => _bio = v)),
               child: Container(
                 width: double.infinity, padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(color: _bgGlobal, borderRadius: BorderRadius.circular(16)),
@@ -306,16 +270,18 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 _bentoCard(
   titre: 'Informations de Contact', icon: Icons.alternate_email_rounded, color: Colors.blue,
   child: Column(children: [
-    _interactiveRow(Icons.mail_outline_rounded, 'Adresse Email', _emailVisible ? _email : '••••••@•••.••', () => _editer(titre: 'Email', valeur: _email, hint: 'ex: etudiant@ist.bf', onSave: (v) => setState(() => _email = v))),
+    _interactiveRow(Icons.mail_outline_rounded, 'Adresse Email', _emailVisible ? _email : '••••••@•••.••', () => _editer(titre: 'Email', valeur: _email, hint: 'ex: nom@gmail.com', onSave: (v) {
+      if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v)) { _snack('Adresse email invalide.'); return; }
+      _enregistrer({'email': v}, () => _email = v);
+    })),
     _customDivider(),
-    _interactiveRow(Icons.phone_iphone_rounded, 'Numéro de Mobile', _telVisible ? _telephone : '••••••••', () => _editer(titre: 'Téléphone', valeur: _telephone, hint: '+226 XX XX XX XX', onSave: (v) => setState(() => _telephone = v))),
+    _immutableRow(Icons.phone_iphone_rounded, 'Numéro de Mobile', _telephone.isEmpty ? 'Non renseigné' : (_telVisible ? _telephone : '••••••••')),
     _customDivider(),
-    // LIGNE CORRIGÉE ICI : Icons.location_on_outlined au lieu de Icons.map_outlines
-    _interactiveRow(Icons.location_on_outlined, 'Ville / Résidence', _ville, () => _editer(titre: 'Ville actuelle', valeur: _ville, hint: 'Ex: Ouagadougou', onSave: (v) => setState(() => _ville = v))),
+    _immutableRow(Icons.location_on_outlined, 'Ville / Résidence', _adresse.isEmpty ? 'Non renseignée' : _adresse),
     _customDivider(),
-    _interactiveRow(Icons.cake_outlined, 'Date de naissance', _dateNaiss.isEmpty ? 'Non renseignée' : _dateNaiss, () => _editer(titre: 'Date de naissance', valeur: _dateNaiss, hint: 'JJ/MM/AAAA', onSave: (v) => setState(() => _dateNaiss = v))),
+    _immutableRow(Icons.cake_outlined, 'Date de naissance', _dateNaiss.isEmpty ? 'Non renseignée' : _dateNaiss),
     _customDivider(),
-    _interactiveRow(Icons.local_activity_outlined, "Centres d'intérêt", _interets.isEmpty ? 'Ajouter des tags' : _interets, () => _editer(titre: "Centres d'intérêt", valeur: _interets, hint: 'Ex: Réseaux, Cyber, Foot', onSave: (v) => setState(() => _interets = v))),
+    _interactiveRow(Icons.local_activity_outlined, "Centres d'intérêt", _interets.isEmpty ? 'Ajouter des tags' : _interets, () => _editer(titre: "Centres d'intérêt", valeur: _interets, hint: 'Ex: Réseaux, Cyber, Foot', onSave: (v) => _enregistrer({'centres_interet': v}, () => _interets = v))),
   ]),
 ),
 
@@ -328,9 +294,9 @@ _bentoCard(
             child: Column(children: [
               _immutableRow(Icons.fingerprint_rounded, 'Numéro Matricule', widget.profile.matricule),
               _customDivider(),
-              _immutableRow(Icons.account_balance_outlined, 'Établissement', 'Institut Supérieur de Technologies (IST)'),
+              _immutableRow(Icons.school_outlined, 'Filière', widget.profile.filiere.isEmpty ? 'Non renseignée' : widget.profile.filiere),
               _customDivider(),
-              _immutableRow(Icons.layers_outlined, 'Statut d\'inscription', 'Inscrit en Année Académique'),
+              _immutableRow(Icons.layers_outlined, 'Niveau', widget.profile.niveau.isEmpty ? 'Non renseigné' : widget.profile.niveau),
             ]),
           ),
 
@@ -340,11 +306,11 @@ _bentoCard(
           _bentoCard(
             titre: 'Écosystème Numérique', icon: Icons.hub_outlined, color: Colors.teal,
             child: Column(children: [
-              _interactiveRow(Icons.facebook, 'Lien Facebook', _facebook.isEmpty ? 'Non associé' : _facebook, () => _editer(titre: 'Facebook', valeur: _facebook, hint: 'facebook.com/username', onSave: (v) => setState(() => _facebook = v))),
+              _interactiveRow(Icons.facebook, 'Lien Facebook', _facebook.isEmpty ? 'Non associé' : _facebook, () => _editer(titre: 'Facebook', valeur: _facebook, hint: 'facebook.com/username', onSave: (v) => _enregistrer({'facebook': v}, () => _facebook = v))),
               _customDivider(),
-              _interactiveRow(Icons.chat_bubble_outline_rounded, 'WhatsApp Direct', _whatsapp.isEmpty ? 'Non associé' : _whatsapp, () => _editer(titre: 'WhatsApp', valeur: _whatsapp, hint: 'Lien ou numéro', onSave: (v) => setState(() => _whatsapp = v))),
+              _interactiveRow(Icons.chat_bubble_outline_rounded, 'WhatsApp Direct', _whatsapp.isEmpty ? 'Non associé' : _whatsapp, () => _editer(titre: 'WhatsApp', valeur: _whatsapp, hint: 'Lien ou numéro', onSave: (v) => _enregistrer({'whatsapp': v}, () => _whatsapp = v))),
               _customDivider(),
-              _interactiveRow(Icons.work_outline_rounded, 'Profil LinkedIn', _linkedin.isEmpty ? 'Non associé' : _linkedin, () => _editer(titre: 'LinkedIn', valeur: _linkedin, hint: 'linkedin.com/in/username', onSave: (v) => setState(() => _linkedin = v))),
+              _interactiveRow(Icons.work_outline_rounded, 'Profil LinkedIn', _linkedin.isEmpty ? 'Non associé' : _linkedin, () => _editer(titre: 'LinkedIn', valeur: _linkedin, hint: 'linkedin.com/in/username', onSave: (v) => _enregistrer({'linkedin': v}, () => _linkedin = v))),
             ]),
           ),
 
@@ -357,8 +323,8 @@ _bentoCard(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(color: _bgGlobal, borderRadius: BorderRadius.circular(16)),
               child: Column(children: [
-                _switchRow('Masquer mon adresse email', !_emailVisible, (v) => setState(() => _emailVisible = !v)),
-                _switchRow('Masquer mon numéro de téléphone', !_telVisible, (v) => setState(() => _telVisible = !v)),
+                _switchRow('Masquer mon adresse email', !_emailVisible, (v) => _enregistrer({'masquer_email': v}, () => _emailVisible = !v)),
+                _switchRow('Masquer mon numéro de téléphone', !_telVisible, (v) => _enregistrer({'masquer_tel': v}, () => _telVisible = !v)),
               ]),
             ),
           ),
@@ -472,120 +438,6 @@ _bentoCard(
             child: const Text('Déconnexion', style: TextStyle(fontWeight: FontWeight.w600)),
           )
         ],
-      ),
-    );
-  }
-}
-
-class _BadgePulse extends StatefulWidget {
-  const _BadgePulse({required this.count});
-  final int count;
-  @override
-  State<_BadgePulse> createState() => _BadgePulseState();
-}
-
-class _BadgePulseState extends State<_BadgePulse> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat(reverse: true);
-    _scale = Tween<double>(begin: 1.0, end: 1.4).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(scale: _scale, child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)));
-  }
-}
-
-class _NotifPanel extends StatelessWidget {
-  const _NotifPanel({required this.top, required this.right, required this.notifs, required this.onLu, required this.onToutLu, required this.onFermer});
-  final double top, right;
-  final List<AppNotification> notifs;
-  final void Function(String id) onLu;
-  final VoidCallback onToutLu, onFermer;
-
-  @override
-  Widget build(BuildContext context) {
-    final nonLus = notifs.where((n) => !n.lu).length;
-    return Stack(children: [
-      Positioned.fill(child: GestureDetector(onTap: onFermer, behavior: HitTestBehavior.opaque, child: const ColoredBox(color: Colors.transparent))),
-      Positioned(top: top, right: right, child: Material(
-        elevation: 16, borderRadius: BorderRadius.circular(20), shadowColor: Colors.black.withValues(alpha:0.08),
-        child: Container(
-          width: 320, constraints: const BoxConstraints(maxHeight: 400),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE2E8F0))),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Padding(padding: const EdgeInsets.all(16), child: Row(children: [
-              const Expanded(child: Text('Alertes & Mises à jour', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)))),
-              if (nonLus > 0) TextButton(onPressed: onToutLu, style: TextButton.styleFrom(minimumSize: Size.zero, padding: EdgeInsets.zero), child: const Text('Tout marquer lu', style: TextStyle(fontSize: 12, color: Color(0xFF1E40AF), fontWeight: FontWeight.w600))),
-            ])),
-            const Divider(height: 1, color: Color(0xFFE2E8F0)),
-            Flexible(child: ListView.separated(
-              padding: EdgeInsets.zero, shrinkWrap: true, itemCount: notifs.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
-              itemBuilder: (_, i) => _NotifItem(notif: notifs[i], onTap: () => onLu(notifs[i].id)),
-            )),
-          ]),
-        ),
-      )),
-    ]);
-  }
-}
-
-class _NotifItem extends StatelessWidget {
-  const _NotifItem({required this.notif, required this.onTap});
-  final AppNotification notif;
-  final VoidCallback onTap;
-
-  IconData get _icone {
-    switch (notif.type) {
-      case NotifType.examen: return Icons.crisis_alert_rounded;
-      case NotifType.note: return Icons.assignment_turned_in_outlined;
-      case NotifType.cours: return Icons.import_contacts_rounded;
-      case NotifType.inscription: return Icons.verified_rounded;
-      case NotifType.message: return Icons.forum_outlined;
-    }
-  }
-
-  Color get _color {
-    switch (notif.type) {
-      case NotifType.examen: return const Color(0xFFEF4444);
-      case NotifType.note: return const Color(0xFFF59E0B);
-      case NotifType.cours: return const Color(0xFF3B82F6);
-      case NotifType.inscription: return const Color(0xFF10B981);
-      case NotifType.message: return const Color(0xFF6366F1);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: notif.lu ? null : onTap,
-      child: Container(
-        color: notif.lu ? Colors.transparent : const Color(0xFFF8FAFC),
-        padding: const EdgeInsets.all(14),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: _color.withValues(alpha:0.08), shape: BoxShape.circle),
-            child: Icon(_icone, color: _color, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(notif.titre, style: TextStyle(fontSize: 13, fontWeight: notif.lu ? FontWeight.w500 : FontWeight.w700, color: const Color(0xFF0F172A))),
-            const SizedBox(height: 2),
-            Text(notif.corps, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Text(notif.temps, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
-          ])),
-        ]),
       ),
     );
   }

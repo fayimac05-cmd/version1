@@ -201,9 +201,12 @@ Future<bool> afficherChangementMotDePasse(
       }),
     ),
   );
-  ancienCtrl.dispose();
-  nouveauCtrl.dispose();
-  confirmCtrl.dispose();
+    // Le dialogue joue encore son animation de fermeture : on libère les contrôleurs ensuite.
+  Future.delayed(const Duration(milliseconds: 600), () {
+    ancienCtrl.dispose();
+    nouveauCtrl.dispose();
+    confirmCtrl.dispose();
+  });
   return ok == true;
 }
 

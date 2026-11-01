@@ -1,11 +1,11 @@
 {
-    "name": "scolarhub",
-    "short_name": "scolarhub",
+    "name": "ScolarHub",
+    "short_name": "ScolarHub",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F8FAFE",
+    "theme_color": "#0D55B0",
+    "description": "ScolarHub - La plateforme académique tout-en-un",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

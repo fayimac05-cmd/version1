@@ -459,6 +459,75 @@ class ApiService {
     }
   }
 
+  // ── Identification AVANT connexion (sans code d'établissement) ──
+  // Étudiants : l'établissement est déduit du matricule.
+  // `etape` : mot_de_passe | activation | attente | desactive | inscription
+  //           | introuvable | inconnu
+  static Future<Map<String, dynamic>> identifierMatricule(String matricule) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/auth/identifier?matricule=${Uri.encodeQueryComponent(matricule)}'),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 45));
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'etape': (data['etape'] ?? 'inconnu').toString(),
+          'matricule': (data['matricule'] ?? matricule).toString(),
+          'etablissement': data['etablissement'] is Map
+              ? Map<String, dynamic>.from(data['etablissement'] as Map)
+              : null,
+          'message': (data['message'] ?? '').toString(),
+        };
+      }
+      return {'success': false, 'error': data['message'] ?? 'Matricule non reconnu.'};
+    } catch (e) {
+      return {
+        'success': false,
+        'offline': true,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
+    }
+  }
+
+  // Administration / professeurs / parents : liste des espaces (établissement +
+  // rôle) correspondant à nom, prénom et téléphone. Plusieurs → « Choisir mon espace ».
+  static Future<Map<String, dynamic>> espacesParPersonne({
+    required String nom,
+    required String prenom,
+    required String tel,
+  }) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+              '$baseUrl/auth/espaces?nom=${Uri.encodeQueryComponent(nom)}&prenom=${Uri.encodeQueryComponent(prenom)}&tel=${Uri.encodeQueryComponent(tel)}',
+            ),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 45));
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 && data['found'] == true) {
+        return {
+          'success': true,
+          'espaces': (data['espaces'] as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList(),
+        };
+      }
+      return {'success': false, 'error': data['message'] ?? 'Utilisateur non reconnu.'};
+    } catch (e) {
+      return {
+        'success': false,
+        'offline': true,
+        'error': 'Serveur injoignable. Vérifiez votre connexion.',
+      };
+    }
+  }
+
   // ── Finaliser la première connexion d'un parent ───────────
   // Contrairement à finaliserInscription (étudiants), aucun `userId` n'existe
   // encore : on identifie le compte par parentId (renvoyé par lookupDetails
@@ -621,6 +690,7 @@ class ApiService {
     String? matricule,
     String? nomPersonne,
     String? telPersonne,
+    Map<String, dynamic> extra = const {},
   }) async {
     try {
       final codeEtab = await _codeEtablissement();
@@ -640,6 +710,7 @@ class ApiService {
               if (matricule != null && matricule.isNotEmpty) 'matricule': matricule,
               if (nomPersonne != null && nomPersonne.isNotEmpty) 'nomPersonne': nomPersonne,
               if (telPersonne != null && telPersonne.isNotEmpty) 'telPersonne': telPersonne,
+              ...extra,
             }),
           )
           .timeout(const Duration(seconds: 45));
