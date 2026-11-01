@@ -21,6 +21,10 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   static const _niveaux = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2'];
+  static const _nationalites = [
+    'Burkinabè', 'Ivoirienne', 'Malienne', 'Nigérienne', 'Togolaise', 'Béninoise',
+    'Ghanéenne', 'Sénégalaise', 'Guinéenne', 'Camerounaise', 'Autre',
+  ];
 
   final _codeCtrl = TextEditingController();
   final _nomCtrl = TextEditingController();
@@ -28,8 +32,22 @@ class _RegisterPageState extends State<RegisterPage> {
   final _matriculeCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _telephoneCtrl = TextEditingController();
-  final _nomPersonneCtrl = TextEditingController();
-  final _telPersonneCtrl = TextEditingController();
+  final _lieuCtrl = TextEditingController();
+  final _adresseCtrl = TextEditingController();
+  final _autreNatCtrl = TextEditingController();
+  // Personne à prévenir (obligatoire) — n'a AUCUN accès parent.
+  final _urgNomCtrl = TextEditingController();
+  final _urgTelCtrl = TextEditingController();
+  final _urgLienCtrl = TextEditingController();
+  // Tuteur / parent (facultatif) — sert à lier un compte parent.
+  final _tutNomCtrl = TextEditingController();
+  final _tutPrenomCtrl = TextEditingController();
+  final _tutTelCtrl = TextEditingController();
+  final _tutEmailCtrl = TextEditingController();
+  DateTime? _dateNaissance;
+  String _nationalite = 'Burkinabè';
+  String? _sexe; // 'Masculin' | 'Féminin'
+  String _regime = 'Jour';
   final _passCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
 
@@ -119,11 +137,42 @@ class _RegisterPageState extends State<RegisterPage> {
     _matriculeCtrl.dispose();
     _emailCtrl.dispose();
     _telephoneCtrl.dispose();
-    _nomPersonneCtrl.dispose();
-    _telPersonneCtrl.dispose();
+    _lieuCtrl.dispose();
+    _adresseCtrl.dispose();
+    _autreNatCtrl.dispose();
+    _urgNomCtrl.dispose();
+    _urgTelCtrl.dispose();
+    _urgLienCtrl.dispose();
+    _tutNomCtrl.dispose();
+    _tutPrenomCtrl.dispose();
+    _tutTelCtrl.dispose();
+    _tutEmailCtrl.dispose();
     _passCtrl.dispose();
     _confirmPassCtrl.dispose();
     super.dispose();
+  }
+
+  int _chiffres(String v) => v.replaceAll(RegExp(r'\D'), '').length;
+
+  String get _nationaliteFinale =>
+      _nationalite == 'Autre' ? _autreNatCtrl.text.trim() : _nationalite;
+
+  String _dateIso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _dateFr(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<void> _choisirDate() async {
+    final now = DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _dateNaissance ?? DateTime(now.year - 20, 1, 1),
+      firstDate: DateTime(1950),
+      lastDate: now,
+      helpText: 'Date de naissance',
+    );
+    if (d != null && mounted) setState(() => _dateNaissance = d);
   }
 
   // ── Étape 0 → 1 : contrôle des informations ──────────────────────────────
@@ -145,6 +194,43 @@ class _RegisterPageState extends State<RegisterPage> {
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       setState(() => _error = "L'adresse e-mail n'est pas valide.");
       return;
+    }
+    if (_chiffres(_telephoneCtrl.text) < 8) {
+      setState(() => _error = 'Votre numéro de téléphone doit contenir au moins 8 chiffres.');
+      return;
+    }
+    if (_dateNaissance == null ||
+        _sexe == null ||
+        _lieuCtrl.text.trim().isEmpty ||
+        _adresseCtrl.text.trim().isEmpty ||
+        (_nationalite == 'Autre' && _autreNatCtrl.text.trim().isEmpty)) {
+      setState(() => _error = 'Renseignez votre date et lieu de naissance, votre nationalité, votre sexe et votre adresse.');
+      return;
+    }
+    if (_urgNomCtrl.text.trim().isEmpty ||
+        _urgTelCtrl.text.trim().isEmpty ||
+        _urgLienCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'La personne à prévenir (nom, téléphone et lien) est obligatoire.');
+      return;
+    }
+    if (_chiffres(_urgTelCtrl.text) < 8) {
+      setState(() => _error = 'Le téléphone de la personne à prévenir doit contenir au moins 8 chiffres.');
+      return;
+    }
+    final tutRempli = _tutNomCtrl.text.trim().isNotEmpty ||
+        _tutPrenomCtrl.text.trim().isNotEmpty ||
+        _tutTelCtrl.text.trim().isNotEmpty ||
+        _tutEmailCtrl.text.trim().isNotEmpty;
+    if (tutRempli) {
+      if (_tutNomCtrl.text.trim().isEmpty || _chiffres(_tutTelCtrl.text) < 8) {
+        setState(() => _error = 'Tuteur / parent : indiquez son nom et un téléphone valide, ou videz cette partie.');
+        return;
+      }
+      final te = _tutEmailCtrl.text.trim();
+      if (te.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(te)) {
+        setState(() => _error = "L'e-mail du tuteur / parent n'est pas valide.");
+        return;
+      }
     }
     setState(() { _error = null; _etape = 1; });
   }
@@ -181,8 +267,23 @@ class _RegisterPageState extends State<RegisterPage> {
       matricule: matricule,
       filiere: _filiereSelectionnee!,
       niveau: _niveauSelectionne,
-      nomPersonne: _nomPersonneCtrl.text.trim(),
-      telPersonne: _telPersonneCtrl.text.trim(),
+      extra: {
+        'dateNaissance': _dateIso(_dateNaissance!),
+        'lieuNaissance': _lieuCtrl.text.trim(),
+        'nationalite': _nationaliteFinale,
+        'sexe': _sexe == 'Féminin' ? 'F' : 'M',
+        'regime': _regime == 'Soir' ? 'soir' : 'jour',
+        'adresse': _adresseCtrl.text.trim(),
+        'urgenceNom': _urgNomCtrl.text.trim(),
+        'urgenceTel': _urgTelCtrl.text.trim(),
+        'urgenceLien': _urgLienCtrl.text.trim(),
+        if (_tutTelCtrl.text.trim().isNotEmpty) ...{
+          'nomParent': _tutNomCtrl.text.trim(),
+          'prenomParent': _tutPrenomCtrl.text.trim(),
+          'telParent': _tutTelCtrl.text.trim(),
+          'emailParent': _tutEmailCtrl.text.trim(),
+        },
+      },
     );
     if (!mounted) return;
 
@@ -305,7 +406,7 @@ class _RegisterPageState extends State<RegisterPage> {
       const Text("S'inscrire",
           style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppPalette.black)),
       const SizedBox(height: 8),
-      const Text('Réservé aux étudiants déjà inscrits les années précédentes',
+      const Text('Remplissez soigneusement votre fiche : elle sera vérifiée par l\'administration',
           style: TextStyle(fontSize: 14, color: AppPalette.grey)),
       const SizedBox(height: 28),
 
@@ -355,6 +456,50 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
       const SizedBox(height: 18),
 
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _buildLabel('Date de naissance *'),
+          const SizedBox(height: 8),
+          _buildDateField(),
+        ])),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _buildLabel('Lieu de naissance *'),
+          const SizedBox(height: 8),
+          _buildTextField(controller: _lieuCtrl, hint: 'Ouagadougou', icon: Icons.place_outlined),
+        ])),
+      ]),
+      const SizedBox(height: 18),
+
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _buildLabel('Nationalité *'),
+          const SizedBox(height: 8),
+          _buildMenuField(
+            value: _nationalite,
+            items: _nationalites,
+            icon: Icons.flag_outlined,
+            onChanged: (v) => setState(() => _nationalite = v ?? _nationalite),
+          ),
+        ])),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _buildLabel('Sexe *'),
+          const SizedBox(height: 8),
+          _buildMenuField(
+            value: _sexe,
+            items: const ['Masculin', 'Féminin'],
+            icon: Icons.wc_outlined,
+            onChanged: (v) => setState(() => _sexe = v),
+          ),
+        ])),
+      ]),
+      if (_nationalite == 'Autre') ...[
+        const SizedBox(height: 10),
+        _buildTextField(controller: _autreNatCtrl, hint: 'Précisez votre nationalité', icon: Icons.flag_outlined),
+      ],
+      const SizedBox(height: 18),
+
       if (_etabConnu) ...[
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -388,6 +533,15 @@ class _RegisterPageState extends State<RegisterPage> {
           ])),
         ]),
         const SizedBox(height: 18),
+        _buildLabel('Régime *'),
+        const SizedBox(height: 8),
+        _buildMenuField(
+          value: _regime,
+          items: const ['Jour', 'Soir'],
+          icon: Icons.wb_sunny_outlined,
+          onChanged: (v) => setState(() => _regime = v ?? _regime),
+        ),
+        const SizedBox(height: 18),
       ],
 
       _buildLabel('Email *'),
@@ -406,13 +560,57 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
       const SizedBox(height: 22),
 
-      _buildLabel('Personne à prévenir en cas de besoin (facultatif)'),
+      _buildLabel('Adresse *'),
       const SizedBox(height: 8),
-      _buildTextField(controller: _nomPersonneCtrl, hint: 'Nom et prénom', icon: Icons.person_add_alt_outlined),
+      _buildTextField(controller: _adresseCtrl, hint: 'Quartier, secteur, ville', icon: Icons.home_outlined),
+      const SizedBox(height: 26),
+
+      _titreSection('Personne à prévenir en cas de besoin *', Icons.contact_phone_outlined),
+      const SizedBox(height: 8),
+      _noteInfo(
+          "Indiquez la personne à joindre en cas d'urgence (père, mère, oncle, tuteur…). "
+          "Attention : cette personne n'aura PAS automatiquement un compte parent. "
+          "Pour lier un compte parent, remplissez plutôt la section « Tuteur / Parent » ci-dessous."),
+      const SizedBox(height: 12),
+      _buildTextField(controller: _urgNomCtrl, hint: 'Nom et prénom *', icon: Icons.person_add_alt_outlined),
       const SizedBox(height: 10),
       _buildTextField(
-        controller: _telPersonneCtrl, hint: 'Téléphone de cette personne',
+        controller: _urgTelCtrl, hint: 'Téléphone de cette personne *',
         icon: Icons.phone_in_talk_outlined, keyboardType: TextInputType.phone,
+      ),
+      const SizedBox(height: 10),
+      _buildTextField(controller: _urgLienCtrl, hint: 'Lien avec vous * (ex. Père, Mère, Oncle)', icon: Icons.link),
+      const SizedBox(height: 26),
+
+      Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 6),
+          title: const Text('Tuteur / Parent (optionnel)',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppPalette.black)),
+          subtitle: Text('Pour que votre parent ait son propre compte de suivi',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          children: [
+            _noteInfo(
+                "Si vous renseignez ce parent, un compte parent lui sera créé (ou lié) quand l'administration "
+                "validera votre inscription. Laissez vide si vous ne souhaitez pas lier de compte parent."),
+            const SizedBox(height: 10),
+            _buildTextField(controller: _tutNomCtrl, hint: 'Nom du tuteur / parent', icon: Icons.family_restroom_outlined),
+            const SizedBox(height: 10),
+            _buildTextField(controller: _tutPrenomCtrl, hint: 'Prénom(s)', icon: Icons.person_outline),
+            const SizedBox(height: 10),
+            _buildTextField(
+              controller: _tutTelCtrl, hint: 'Téléphone du tuteur / parent',
+              icon: Icons.phone_outlined, keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 10),
+            _buildTextField(
+              controller: _tutEmailCtrl, hint: 'E-mail (facultatif)',
+              icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
       ),
 
       ..._blocErreur(),
@@ -456,14 +654,24 @@ class _RegisterPageState extends State<RegisterPage> {
           ligne('Matricule', _matriculeCtrl.text.trim().toUpperCase()),
           ligne('Nom', _nomCtrl.text.trim().toUpperCase()),
           ligne('Prénom(s)', _prenomsCtrl.text.trim()),
+          ligne('Naissance', '${_dateNaissance == null ? '' : _dateFr(_dateNaissance!)} à ${_lieuCtrl.text.trim()}'),
+          ligne('Nationalité', _nationaliteFinale),
+          ligne('Sexe', _sexe ?? ''),
+          ligne('Adresse', _adresseCtrl.text.trim()),
+          const Divider(),
           ligne('Filière', _filiereSelectionnee ?? ''),
           ligne('Niveau', _niveauSelectionne),
+          ligne('Régime', _regime),
           ligne('Email', _emailCtrl.text.trim()),
           ligne('Téléphone', _telephoneCtrl.text.trim()),
-          if (_nomPersonneCtrl.text.trim().isNotEmpty || _telPersonneCtrl.text.trim().isNotEmpty) ...[
+          const Divider(),
+          ligne('À prévenir', '${_urgNomCtrl.text.trim()} (${_urgLienCtrl.text.trim()})'),
+          ligne('Tél. à prévenir', _urgTelCtrl.text.trim()),
+          if (_tutTelCtrl.text.trim().isNotEmpty) ...[
             const Divider(),
-            ligne('À prévenir', _nomPersonneCtrl.text.trim()),
-            ligne('Tél. à prévenir', _telPersonneCtrl.text.trim()),
+            ligne('Tuteur / Parent', '${_tutNomCtrl.text.trim()} ${_tutPrenomCtrl.text.trim()}'.trim()),
+            ligne('Tél. tuteur', _tutTelCtrl.text.trim()),
+            if (_tutEmailCtrl.text.trim().isNotEmpty) ligne('E-mail tuteur', _tutEmailCtrl.text.trim()),
           ],
         ]),
       ),
@@ -611,6 +819,55 @@ class _RegisterPageState extends State<RegisterPage> {
                 style: TextStyle(color: AppPalette.blue, fontSize: 14, fontWeight: FontWeight.w600)),
           ),
         ]),
+      );
+
+  Widget _titreSection(String t, IconData icon) => Row(children: [
+        Icon(icon, color: AppPalette.blue, size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(t,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppPalette.black)),
+        ),
+      ]);
+
+  Widget _noteInfo(String texte) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7E6),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFF5D58A)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.info_outline, size: 18, color: Color(0xFFB7791F)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(texte, style: const TextStyle(fontSize: 12.5, height: 1.4, color: Color(0xFF7A5A12))),
+          ),
+        ]),
+      );
+
+  Widget _buildDateField() => GestureDetector(
+        onTap: _choisirDate,
+        child: Container(
+          height: 54,
+          decoration: BoxDecoration(
+            color: AppPalette.lightGrey,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppPalette.borderGrey),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(children: [
+            const Icon(Icons.cake_outlined, color: AppPalette.blue, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(_dateNaissance == null ? 'jj/mm/aaaa' : _dateFr(_dateNaissance!),
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: _dateNaissance == null ? AppPalette.grey : AppPalette.black)),
+            ),
+          ]),
+        ),
       );
 
   Widget _buildLabel(String text) => Text(
