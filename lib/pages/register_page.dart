@@ -3,7 +3,6 @@ import '../config/etablissement_config.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
 import '../models/student_profile.dart';
-import 'login_page.dart';
 import 'student_shell.dart';
 import 'splash_screen.dart';
 
@@ -12,7 +11,9 @@ import 'splash_screen.dart';
 /// Elle sera fermée par l'établissement (Super Admin) une fois tous les
 /// anciens inscrits ; ensuite seule l'administration crée les étudiants.
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  /// Matricule déjà saisi sur l'écran de connexion : pré-rempli et verrouillé.
+  final String? matriculePrefill;
+  const RegisterPage({super.key, this.matriculePrefill});
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -52,6 +53,8 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   void initState() {
     super.initState();
+    final pre = widget.matriculePrefill?.trim() ?? '';
+    if (pre.isNotEmpty) _matriculeCtrl.text = pre.toUpperCase();
     _etab.charger().then((_) {
       if (!mounted) return;
       setState(() {});
@@ -348,6 +351,7 @@ class _RegisterPageState extends State<RegisterPage> {
         hint: modele.isNotEmpty ? 'Modèle : $modele' : 'Votre matricule',
         icon: Icons.badge_outlined,
         caps: true,
+        readOnly: (widget.matriculePrefill ?? '').trim().isNotEmpty,
       ),
       const SizedBox(height: 18),
 
@@ -525,7 +529,7 @@ class _RegisterPageState extends State<RegisterPage> {
             style: TextStyle(fontSize: 14.5, color: Colors.grey[700], height: 1.5)),
         const SizedBox(height: 32),
         _boutonPrincipal('Retour à la connexion', () {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
+          Navigator.of(context).pop();
         }),
       ];
 
@@ -602,8 +606,7 @@ class _RegisterPageState extends State<RegisterPage> {
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Text('Déjà inscrit ? ', style: TextStyle(color: AppPalette.grey, fontSize: 14)),
           GestureDetector(
-            onTap: () => Navigator.of(context)
-                .pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage())),
+            onTap: () => Navigator.of(context).pop(),
             child: const Text('Se connecter',
                 style: TextStyle(color: AppPalette.blue, fontSize: 14, fontWeight: FontWeight.w600)),
           ),
@@ -621,6 +624,7 @@ class _RegisterPageState extends State<RegisterPage> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     bool caps = false,
+    bool readOnly = false,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -630,6 +634,7 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
       child: TextField(
         controller: controller,
+        readOnly: readOnly,
         keyboardType: keyboardType,
         textCapitalization: caps ? TextCapitalization.characters : TextCapitalization.none,
         style: const TextStyle(fontSize: 15),

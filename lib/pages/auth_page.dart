@@ -7,6 +7,7 @@ import '../pages/splash_screen.dart';
 import '../professeur/professor_shell.dart';
 import '../theme/app_palette.dart';
 import 'choose_school_page.dart';
+import 'accueil_etablissement.dart';
 import '../widgets/scolarhub_logo.dart';
 import 'bureau_des_etudiants.dart';
 import 'parent/parent_shell.dart';
@@ -26,11 +27,12 @@ enum _Etape { saisie, motDePasse, premiereFois }
 // ─── Widget principal ─────────────────────────────────────────────────────────
 
 class AuthPage extends StatefulWidget {
-  final Etablissement etablissement;
+  /// Facultatif : l'établissement est maintenant déduit du matricule (ou de l'espace choisi).
+  final Etablissement? etablissement;
   /// Matricule pré-rempli (ex. ouverture du lien reçu par SMS/email :
   /// http://.../?matricule=XXX). Déclenche une recherche automatique.
   final String? matriculePrefill;
-  const AuthPage({super.key, required this.etablissement, this.matriculePrefill});
+  const AuthPage({super.key, this.etablissement, this.matriculePrefill});
   @override
   State<AuthPage> createState() => _AuthPageState();
 }
@@ -39,7 +41,17 @@ class _AuthPageState extends State<AuthPage> {
   static const Map<String, Map<String, dynamic>> _dbEtudiants = {};
   int _tab = 0;
   _Etape _etape = _Etape.saisie;
-  bool _inscOuverte = EtablissementConfig.instance.inscriptionOuverte;
+  // Établissement reconnu (par le matricule, ou l'espace choisi). Null tant que
+  // l'utilisateur ne s'est pas identifié.
+  Etablissement? _etab;
+  // Matricule inconnu mais de la bonne forme, inscription ouverte : on propose
+  // « M'inscrire moi-même ».
+  bool _propInscription = false;
+  // Entre la page « Bienvenue » et l'étape suivante : on masque l'écran de saisie
+  // pour ne pas le montrer de nouveau pendant la recherche du compte.
+  bool _transition = false;
+  String _accueilVu = ''; // code de l'école dont la page « Bienvenue » a déjà été vue
+  String _matInscription = ''; // matricule normalisé à pré-remplir dans le formulaire
 
   final _matriculeCtrl = TextEditingController();
   final _nomCtrl = TextEditingController();
@@ -66,42 +78,183 @@ class _AuthPageState extends State<AuthPage> {
   // à la place de _userId qui reste null tant que le compte n'existe pas.
   String? _parentId;
 
-  // Relit l'état de l'inscription auprès du serveur (le Super Admin peut l'avoir fermée).
-  Future<void> _rafraichirInscription() async {
-    final code = EtablissementConfig.instance.code;
-    if (code.isEmpty) return;
+  // Applique l'établissement reconnu : charge sa fiche complète (type, logo,
+  // modèle de matricule…) et mémorise son code pour toutes les requêtes suivantes.
+  Future<bool> _adopterEtablissement(String code) async {
     final res = await ApiService.getEtablissementParCode(code);
-    if (!mounted || res['success'] != true) return;
+    if (res['success'] != true) return false;
     final e = Map<String, dynamic>.from(res['etablissement'] as Map);
-    final ouverte = e['inscription_ouverte'] == true;
-    final cfg = EtablissementConfig.instance;
-    await cfg.appliquerEtablissement(
-      id: cfg.id,
-      nom: cfg.nom,
-      sigle: cfg.sigle,
-      ville: cfg.ville,
-      campus: cfg.campus,
-      code: cfg.code,
-      modeleMatricule: (e['modele_matricule'] ?? cfg.modeleMatricule).toString(),
-      inscriptionOuverte: ouverte,
-      logoUrl: cfg.logoUrl,
+    final t = (e['type'] ?? '').toString().toLowerCase().replaceAll('_', '').replaceAll('-', '');
+    var type = TypeEtablissement.superieur;
+    for (final x in TypeEtablissement.values) {
+      if (x.name.toLowerCase() == t) type = x;
+    }
+    final etab = Etablissement(
+      id: e['id'] is int ? e['id'] as int : int.tryParse('${e['id']}'),
+      code: code.toUpperCase(),
+      modeleMatricule: (e['modele_matricule'] ?? '').toString(),
+      nom: (e['nom'] ?? '').toString(),
+      abreviation: (e['sigle'] ?? '').toString().isNotEmpty
+          ? e['sigle'].toString()
+          : (e['nom'] ?? '').toString(),
+      ville: (e['ville'] ?? '').toString(),
+      campus: (e['campus'] ?? '').toString(),
+      logoUrl: (e['logo_url'] ?? '').toString(),
+      photoAccueilUrl: (e['photo_accueil_url'] ?? '').toString(),
+      type: type,
     );
-    if (mounted) setState(() => _inscOuverte = ouverte);
+    await EtablissementConfig.instance.appliquerEtablissement(
+      id: etab.id,
+      nom: etab.nom,
+      sigle: etab.abreviation,
+      ville: etab.ville,
+      campus: etab.campus,
+      code: etab.code,
+      modeleMatricule: etab.modeleMatricule,
+      inscriptionOuverte: e['inscription_ouverte'] == true,
+      logoUrl: etab.logoUrl,
+      type: etab.type,
+    );
+    if (!mounted) return false;
+    setState(() => _etab = etab);
+    return true;
+  }
+
+  // Page « Bienvenue à <école> » (logo/photo, nom), puis « Continuer ».
+  // Renvoie false si l'utilisateur répond « Ce n'est pas mon établissement ».
+  Future<bool> _afficherAccueil() async {
+    final etab = _etab;
+    if (etab == null || _accueilVu == etab.code.toUpperCase()) return true;
+    setState(() => _loading = false);
+    final ok = await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
+        pageBuilder: (_, __, ___) => AccueilEtablissement(etablissement: etab),
+        transitionDuration: const Duration(milliseconds: 400),
+        transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
+      ),
+    );
+    if (!mounted) return false;
+    if (ok == true) {
+      _accueilVu = etab.code.toUpperCase();
+      setState(() {
+        _loading = true;
+        _transition = true;
+      });
+      return true;
+    }
+    return false;
+  }
+
+  String _libelleRole(String role, String? sousRole) {
+    switch (role) {
+      case 'professeur':
+        return 'Professeur';
+      case 'parent':
+      case 'tuteur':
+        return "Parent d'élève";
+      case 'admin':
+        return (sousRole != null && sousRole.isNotEmpty) ? 'Administration · $sousRole' : 'Administration';
+      case 'etudiant':
+        return 'Étudiant';
+      case 'bde':
+        return 'Bureau des étudiants';
+      default:
+        return role.isEmpty ? 'Compte' : role[0].toUpperCase() + role.substring(1);
+    }
+  }
+
+  // Plusieurs comptes correspondent (ex. professeur ici, parent ailleurs) :
+  // l'utilisateur choisit son espace avant de saisir son mot de passe.
+  Future<Map<String, dynamic>?> _choisirEspace(List<Map<String, dynamic>> espaces) {
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Choisir mon espace',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const SizedBox(height: 4),
+              const Text('Plusieurs comptes correspondent à ces informations.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+              const SizedBox(height: 14),
+              for (final esp in espaces)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => Navigator.of(ctx).pop(esp),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppPalette.lightBlue,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppPalette.blue.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 44,
+                              height: 44,
+                              child: ((esp['etablissement']?['logo_url'] ?? '') as String).isNotEmpty
+                                  ? Image.network(
+                                      esp['etablissement']['logo_url'] as String,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(Icons.school_rounded, color: AppPalette.blue),
+                                    )
+                                  : const Icon(Icons.school_rounded, color: AppPalette.blue),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _libelleRole((esp['role'] ?? '').toString(), esp['sous_role']?.toString()),
+                                  style: const TextStyle(
+                                      fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                ),
+                                Text(
+                                  (esp['etablissement']?['nom'] ?? '').toString(),
+                                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: AppPalette.blue),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   void initState() {
     super.initState();
-        if (EtablissementConfig.instance.code.isEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const ChooseSchoolPage()),
-        );
-      });
-      return;
-    }
-    _rafraichirInscription();
+    _etab = widget.etablissement;
+    // Arrivé par le code d'établissement : la page « Bienvenue » a déjà été montrée.
+    _accueilVu = (widget.etablissement?.code ?? '').toUpperCase();
+    // Si l'étudiant modifie le matricule, la proposition d'inscription disparaît.
+    _matriculeCtrl.addListener(() {
+      if (_propInscription && mounted) setState(() => _propInscription = false);
+    });
     final pre = widget.matriculePrefill?.trim();
     if (pre != null && pre.isNotEmpty) {
       _tab = 0;
@@ -192,10 +345,12 @@ class _AuthPageState extends State<AuthPage> {
   Future<void> _verifier() async {
     setState(() {
       _loading = true;
+      _transition = false;
       _error = null;
     });
 
     if (_tab == 0) {
+      _propInscription = false;
       // Connexion par matricule (Étudiant, Admin, BDE)
       final mat = _matriculeCtrl.text.trim().toUpperCase();
       if (mat.isEmpty) {
@@ -203,8 +358,49 @@ class _AuthPageState extends State<AuthPage> {
         return;
       }
 
-      // Recherche réelle dans le backend (compte créé par l'administration).
-      final result = await ApiService.lookupMatricule(mat);
+      // 1) Identification : l'établissement est déduit du matricule.
+      final ident = await ApiService.identifierMatricule(mat);
+      if (!mounted) return;
+      var matNorm = mat;
+      if (ident['success'] == true) {
+        final etape = ident['etape'].toString();
+        final infoEtab = ident['etablissement'] as Map<String, dynamic>?;
+        if (etape == 'inconnu' || infoEtab == null) {
+          _setError(ident['message'].toString().isNotEmpty
+              ? ident['message'].toString()
+              : 'Matricule non reconnu.');
+          return;
+        }
+        matNorm = ident['matricule'].toString();
+        final ok = await _adopterEtablissement(infoEtab['code'].toString());
+        if (!mounted) return;
+        if (!ok) {
+          _setError("Établissement injoignable. Vérifiez votre connexion et réessayez.");
+          return;
+        }
+        if (etape == 'inscription' || etape == 'mot_de_passe' || etape == 'activation') {
+          if (!await _afficherAccueil()) return;
+        }
+        if (etape == 'inscription') {
+          setState(() {
+            _propInscription = true;
+            _matInscription = matNorm;
+            _loading = false;
+          });
+          return;
+        }
+        if (etape == 'introuvable' || etape == 'attente' || etape == 'desactive') {
+          _setError(ident['message'].toString());
+          return;
+        }
+        // mot_de_passe / activation : suite normale ci-dessous.
+      } else if (ident['offline'] != true) {
+        _setError(ident['error']?.toString() ?? 'Matricule non reconnu.');
+        return;
+      }
+
+      // 2) Recherche du compte dans l'établissement reconnu.
+      final result = await ApiService.lookupMatricule(matNorm);
 
       if (result['success'] == true) {
         final u = Map<String, dynamic>.from(result['user'] as Map);
@@ -273,6 +469,34 @@ class _AuthPageState extends State<AuthPage> {
       // valides. Utilise maintenant ApiService.lookupDetails(), qui passe
       // par le backend (clé de service, contourne RLS) — même mécanisme
       // que la recherche par matricule ci-dessus.
+      // 1) Espaces correspondants (tous établissements). Un seul : on y va ;
+      //    plusieurs : « Choisir mon espace ».
+      final esp = await ApiService.espacesParPersonne(nom: nom, prenom: prenom, tel: tel);
+      if (!mounted) return;
+      if (esp['success'] == true) {
+        final espaces = List<Map<String, dynamic>>.from(esp['espaces'] as List);
+        Map<String, dynamic>? choix = espaces.length == 1 ? espaces.first : null;
+        if (choix == null) {
+          setState(() => _loading = false);
+          choix = await _choisirEspace(espaces);
+          if (!mounted || choix == null) return;
+          setState(() => _loading = true);
+        }
+        final ok = await _adopterEtablissement(choix['code_etablissement'].toString());
+        if (!mounted) return;
+        if (!ok) {
+          _setError("Établissement injoignable. Vérifiez votre connexion et réessayez.");
+          return;
+        }
+        if (!await _afficherAccueil()) return;
+      } else if (esp['offline'] == true || EtablissementConfig.instance.code.isEmpty) {
+        _setError(esp['error']?.toString() ?? 'Identifiants non reconnus.\nVérifiez vos informations.');
+        return;
+      }
+      // (Aucun espace trouvé mais un établissement est déjà mémorisé : on tente
+      //  la recherche habituelle dans celui-ci.)
+
+      // 2) Recherche du compte dans l'établissement retenu.
       final result = await ApiService.lookupDetails(nom: nom, prenom: prenom, tel: tel);
 
       if (result['success'] == true) {
@@ -634,7 +858,36 @@ class _AuthPageState extends State<AuthPage> {
         ),
       );
 
+  Widget _buildTransition() {
+    return SizedBox(
+      key: const ValueKey('transition'),
+      height: 420,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: const ScolarHubLogo(size: 72),
+            ),
+            const SizedBox(height: 24),
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 3, color: AppPalette.blue),
+            ),
+            const SizedBox(height: 16),
+            const Text('Chargement de votre espace…',
+                style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEtape() {
+    // Affiché seulement tant que la recherche du compte est en cours.
+    if (_transition && _loading) return _buildTransition();
     switch (_etape) {
       case _Etape.saisie:
         return _buildSaisie();
@@ -648,7 +901,7 @@ class _AuthPageState extends State<AuthPage> {
   // ─── Écran 1 : Saisie identifiants ─────────────────────────────────────────
 
   Widget _buildSaisie() {
-    final e = widget.etablissement;
+    final e = _etab;
     return Column(
       key: const ValueKey('saisie'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -694,7 +947,9 @@ class _AuthPageState extends State<AuthPage> {
                     ),
                   ),
                   Text(
-                    e.campus.isNotEmpty ? '${e.nom} · ${e.campus}' : e.nom,
+                    e == null
+                        ? 'Votre espace scolaire'
+                        : (e.campus.isNotEmpty ? '${e.nom} · ${e.campus}' : e.nom),
                     style: const TextStyle(
                       fontSize: 11,
                       color: Color(0xFF64748B),
@@ -727,7 +982,7 @@ class _AuthPageState extends State<AuthPage> {
                     ),
                     child: Center(
                       child: Text(
-                        e.abreviation.substring(0, 1),
+                        (e != null && e.abreviation.isNotEmpty) ? e.abreviation.substring(0, 1) : 'S',
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -761,9 +1016,11 @@ class _AuthPageState extends State<AuthPage> {
                       Border.all(color: AppPalette.blue.withValues(alpha: 0.2)),
                 ),
                 child: Text(
-                  e.campus.isNotEmpty
-                      ? '${e.abreviation} · ${e.campus}'
-                      : e.nom,
+                  e == null
+                      ? 'Établissement détecté automatiquement'
+                      : (e.campus.isNotEmpty
+                          ? '${e.abreviation} · ${e.campus}'
+                          : e.nom),
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppPalette.blue,
@@ -797,10 +1054,10 @@ class _AuthPageState extends State<AuthPage> {
         ),
         const SizedBox(height: 20),
         if (_tab == 0) ...[
-          _lbl('Matricule ${e.abreviation}'),
+          _lbl(e == null ? 'Matricule' : 'Matricule ${e.abreviation}'),
           _champ(
             _matriculeCtrl,
-            e.modeleMatricule.isNotEmpty ? 'Ex: ${_exempleMatricule(e.modeleMatricule)}' : 'Votre matricule',
+            (e != null && e.modeleMatricule.isNotEmpty) ? 'Ex: ${_exempleMatricule(e.modeleMatricule)}' : 'Votre matricule',
             Icons.badge_outlined,
             TextInputType.text,
           ),
@@ -864,28 +1121,59 @@ class _AuthPageState extends State<AuthPage> {
                   ),
           ),
         ),
-        if (_inscOuverte) ...[
+        if (_propInscription) ...[
           const SizedBox(height: 18),
-          Center(
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppPalette.lightBlue,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppPalette.blue.withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Ancien étudiant sans compte ? ',
-                    style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600)),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const RegisterPage())),
-                  child: const Text('Créer mon compte',
-                      style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppPalette.blue)),
+                Text(
+                  "Ce matricule n'est pas encore enregistré${e != null ? ' à ${e.nom}' : ''}. "
+                  "Ancien étudiant ? Vous pouvez demander la création de votre compte : "
+                  "l'administration devra la valider.",
+                  style: const TextStyle(fontSize: 13.5, color: Color(0xFF334155), height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      // Le code de l'établissement est déjà mémorisé : le formulaire s'y rattache.
+                      MaterialPageRoute(builder: (_) => RegisterPage(matriculePrefill: _matInscription)),
+                    ),
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                    label: const Text("M'inscrire moi-même",
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppPalette.blue,
+                      side: const BorderSide(color: AppPalette.blue),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         ],
+        const SizedBox(height: 14),
+        Center(
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ChooseSchoolPage()),
+            ),
+            child: const Text(
+              "J'ai un code d'établissement",
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppPalette.blue),
+            ),
+          ),
+        ),
         const SizedBox(height: 28),
         Row(
           children: [
@@ -903,7 +1191,7 @@ class _AuthPageState extends State<AuthPage> {
         ),
         const SizedBox(height: 20),
         // Comptes démo : uniquement en développement (jamais en production).
-        if (kDebugMode && e.abreviation == 'IST') ...[
+        if (kDebugMode && e != null && e.abreviation == 'IST') ...[
           _demoBtn(
             '⚡',
             'Accès Démo — Ibrahim KOURAOGO',
@@ -946,7 +1234,7 @@ class _AuthPageState extends State<AuthPage> {
           const SizedBox(height: 24),
         ] else
           const SizedBox(height: 8),
-        if (_tab == 0) _infoMatricule(e),
+        if (_tab == 0 && e != null) _infoMatricule(e),
       ],
     );
   }
