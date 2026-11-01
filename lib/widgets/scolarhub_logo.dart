@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 ///
 /// Deux fichiers dans assets/images/ :
 ///  - logo_scolarhub.png         : pour les fonds clairs
-///  - logo_scolarhub_sombre.png  : pour les fonds foncés (affiché en rond)
-/// Pour changer de logo (version à fond transparent), il suffit de remplacer
-/// ces deux fichiers : aucun autre changement de code n'est nécessaire.
+///  - logo_scolarhub_sombre.png  : pour les fonds foncés
+/// Les deux sont des PNG à fond transparent : le logo s'affiche seul, sans
+/// carré ni pastille. Pour le changer, il suffit de remplacer ces fichiers.
 class ScolarHubLogo extends StatelessWidget {
   const ScolarHubLogo({
     super.key,
@@ -30,10 +30,51 @@ class ScolarHubLogo extends StatelessWidget {
       filterQuality: FilterQuality.high,
       errorBuilder: (_, __, ___) => Icon(Icons.school_rounded, size: size * 0.7, color: const Color(0xFFF8C400)),
     );
-    return SizedBox(
-      width: size,
-      height: size,
-      child: surFondSombre ? ClipOval(child: image) : image,
+    return SizedBox(width: size, height: size, child: image);
+  }
+}
+
+/// Logo « vivant » : il respire doucement (zoom léger qui monte puis revient),
+/// en boucle. Utilisé sur les écrans de démarrage.
+class ScolarHubLogoVivant extends StatefulWidget {
+  const ScolarHubLogoVivant({
+    super.key,
+    this.size = 150,
+    this.surFondSombre = false,
+    this.amplitude = 0.08,
+  });
+
+  final double size;
+  final bool surFondSombre;
+
+  /// Zoom maximal en plus de la taille normale (0.08 = +8 %).
+  final double amplitude;
+
+  @override
+  State<ScolarHubLogoVivant> createState() => _ScolarHubLogoVivantState();
+}
+
+class _ScolarHubLogoVivantState extends State<ScolarHubLogoVivant>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _zoom = Tween<double>(begin: 1.0, end: 1.0 + widget.amplitude)
+      .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _zoom,
+      child: ScolarHubLogo(size: widget.size, surFondSombre: widget.surFondSombre),
     );
   }
 }

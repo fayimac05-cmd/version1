@@ -295,17 +295,16 @@ class _SplashScreenState extends State<SplashScreen>
                     opacity: v.clamp(0.0, 1.0),
                     child: Transform.scale(scale: 0.8 + 0.2 * v, child: child),
                   ),
+                  // Logo transparent posé directement sur la vidéo, avec un
+                  // léger halo sombre rond pour rester lisible.
                   child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
+                      shape: BoxShape.circle,
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 28, offset: const Offset(0, 10)),
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.30), blurRadius: 30, spreadRadius: -6),
                       ],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: const ScolarHubLogo(size: 104),
-                    ),
+                    child: const ScolarHubLogoVivant(size: 160),
                   ),
                 ),
                 const Spacer(),
@@ -355,22 +354,7 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppPalette.blue.withValues(alpha: 0.22),
-                              blurRadius: 32,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(32),
-                          child: const ScolarHubLogo(size: 120),
-                        ),
-                      ),
+                      const ScolarHubLogoVivant(size: 170),
                       const SizedBox(height: 14),
                       RichText(
                         text: const TextSpan(
@@ -698,22 +682,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget _buildLogo() {
     return Row(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: AppPalette.blue.withValues(alpha: 0.20),
-                blurRadius: 25,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: const ScolarHubLogo(size: 78),
-          ),
-        ),
+        const ScolarHubLogo(size: 84),
 
         const SizedBox(
           width: 22,
@@ -1420,22 +1389,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget _buildMobileLogo() {
     return Row(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(17),
-            boxShadow: [
-              BoxShadow(
-                color: AppPalette.blue.withValues(alpha: 0.20),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(17),
-            child: const ScolarHubLogo(size: 62),
-          ),
-        ),
+        const ScolarHubLogo(size: 66),
 
         const SizedBox(
           width: 14,
