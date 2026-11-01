@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
-import 'choose_school_page.dart';
+import 'auth_page.dart';
 import '../widgets/scolarhub_logo.dart';
+import '../widgets/celebration_diplomes.dart';
+import '../widgets/intro_video.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -34,7 +37,21 @@ class _SplashScreenState extends State<SplashScreen>
   // revient sur cette page (bouton retour de la connexion), pas de rejeu.
   static bool _introDejaVue = false;
   bool _intro = !_introDejaVue;
-  static const Duration _dureeIntro = Duration(milliseconds: 2400);
+  static const Duration _dureeIntro = Duration(milliseconds: 3800); // durée du repli (dessin)
+  static const Duration _dureeMax = Duration(seconds: 9); // filet de sécurité
+  final Completer<void> _introFinie = Completer<void>();
+  bool _videoEchec = false;
+
+  void _terminerIntro() {
+    if (!_introFinie.isCompleted) _introFinie.complete();
+  }
+
+  void _videoEnErreur() {
+    if (!mounted || _videoEchec) return;
+    setState(() => _videoEchec = true);
+    // Repli : le dessin animé reste affiché pendant _dureeIntro.
+    Future.delayed(_dureeIntro, _terminerIntro);
+  }
 
   // ============================================================
   // ANIMATIONS
@@ -139,7 +156,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _lancer() async {
     if (_intro) {
-      await Future.delayed(_dureeIntro);
+      await Future.any([_introFinie.future, Future.delayed(_dureeMax)]);
       if (!mounted) return;
       _introDejaVue = true;
       setState(() => _intro = false);
@@ -188,10 +205,12 @@ class _SplashScreenState extends State<SplashScreen>
   // NAVIGATION
   // ============================================================
 
-  void _goChooseSchool() {
+  // « Commencer » mène directement à la connexion : l'établissement est
+  // détecté à partir du matricule (le code reste accessible par un lien).
+  void _goConnexion() {
     Navigator.of(context).push(
       _slideRoute(
-        const ChooseSchoolPage(),
+        const AuthPage(),
       ),
     );
   }
@@ -241,61 +260,146 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  // Écran de logo plein écran (affiché au lancement).
+  // Écran d'intro : vidéo de remise de diplômes + logo ; repli : dessin animé.
   Widget _buildIntro() {
+    if (_videoEchec) return _buildIntroDessin();
     return Container(
       key: const ValueKey('intro'),
-      color: const Color(0xFFF8FAFE),
-      alignment: Alignment.center,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 1000),
-        curve: Curves.easeOutBack,
-        builder: (_, v, child) => Opacity(
-          opacity: v.clamp(0.0, 1.0),
-          child: Transform.scale(scale: 0.8 + 0.2 * v, child: child),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
+      color: const Color(0xFF0B1E4D),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          IntroVideo(onTermine: _terminerIntro, onErreur: _videoEnErreur),
+          // Voile sombre en haut et en bas pour la lisibilité du logo et du texte.
+          const IgnorePointer(
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(40),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppPalette.blue.withValues(alpha: 0.22),
-                    blurRadius: 40,
-                    offset: const Offset(0, 16),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(40),
-                child: const ScolarHubLogo(size: 450),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.0, 0.32, 0.62, 1.0],
+                  colors: [Color(0xCC0B1E4D), Color(0x000B1E4D), Color(0x000B1E4D), Color(0xDD0B1E4D)],
+                ),
               ),
             ),
-            const SizedBox(height: 26),
-            RichText(
-              text: const TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Scolar',
-                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Color(0xFF083B87)),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 28),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutBack,
+                  builder: (_, v, child) => Opacity(
+                    opacity: v.clamp(0.0, 1.0),
+                    child: Transform.scale(scale: 0.8 + 0.2 * v, child: child),
                   ),
-                  TextSpan(
-                    text: 'Hub',
-                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Color(0xFF1769E0)),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 28, offset: const Offset(0, 10)),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: const ScolarHubLogo(size: 104),
+                    ),
                   ),
-                ],
+                ),
+                const Spacer(),
+                RichText(
+                  text: const TextSpan(
+                    children: [
+                      TextSpan(text: 'Scolar', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white)),
+                      TextSpan(text: 'Hub', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Color(0xFFF8C400))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Ton parcours, notre priorité',
+                  style: TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 36),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Repli sans vidéo : logo, diplômés dessinés, confettis et ballons.
+  Widget _buildIntroDessin() {
+    return Container(
+      key: const ValueKey('intro-dessin'),
+      color: const Color(0xFFF8FAFE),
+      child: Stack(
+        children: [
+          const Positioned.fill(child: ConfettiOverlay()),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 1000),
+                  curve: Curves.easeOutBack,
+                  builder: (_, v, child) => Opacity(
+                    opacity: v.clamp(0.0, 1.0),
+                    child: Transform.scale(scale: 0.8 + 0.2 * v, child: child),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppPalette.blue.withValues(alpha: 0.22),
+                              blurRadius: 32,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(32),
+                          child: const ScolarHubLogo(size: 120),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      RichText(
+                        text: const TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Scolar',
+                              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Color(0xFF083B87)),
+                            ),
+                            TextSpan(
+                              text: 'Hub',
+                              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Color(0xFF1769E0)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Ton parcours, notre priorité',
+                        style: TextStyle(fontSize: 14, color: Color(0xFF7185A5), fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 14),
+                      const CelebrationDiplomes(height: 170),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'La plateforme académique tout-en-un',
-              style: TextStyle(fontSize: 14, color: Color(0xFF7185A5), fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -891,7 +995,7 @@ class _SplashScreenState extends State<SplashScreen>
           width: isTablet ? 390 : 450,
           height: 70,
           child: ElevatedButton(
-            onPressed: _goChooseSchool,
+            onPressed: _goConnexion,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0D55B0),
               foregroundColor: Colors.white,
@@ -1495,7 +1599,7 @@ class _SplashScreenState extends State<SplashScreen>
           width: double.infinity,
           height: 60,
           child: ElevatedButton(
-            onPressed: _goChooseSchool,
+            onPressed: _goConnexion,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0D55B0),
               foregroundColor: Colors.white,
