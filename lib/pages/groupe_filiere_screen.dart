@@ -1366,7 +1366,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Messages visibles uniquement par les étudiants de cette filière',
+                    'Messages visibles uniquement par les étudiants de votre filière et de votre niveau',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppPalette.blue,

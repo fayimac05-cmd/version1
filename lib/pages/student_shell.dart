@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'home_tab.dart';
@@ -29,6 +33,33 @@ class _StudentShellState extends State<StudentShell> {
   // couverture (voir _onPhotoChanged) — propage la nouvelle photo à TOUTE
   // l'app (accueil, canaux, drawer...), pas seulement à l'écran Profil.
   late StudentProfile _profile = widget.profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _rafraichirPhotos();
+  }
+
+  /// Relit la photo et la couverture depuis le serveur (GET /auth/me) et les
+  /// propage à toute l'app. Indispensable quand le profil gardé en mémoire
+  /// (connexion, session restaurée) n'a pas les photos : sans ça, l'étudiant
+  /// ne voit pas ses propres photos alors que les autres les voient.
+  Future<void> _rafraichirPhotos() async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final res = await http.get(Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
+      if (res.statusCode != 200 || !mounted) return;
+      final d = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final photo = (d['photo_url'] ?? '').toString();
+      final cover = (d['cover_url'] ?? '').toString();
+      final photoNew = photo.isEmpty ? null : photo;
+      final coverNew = cover.isEmpty ? null : cover;
+      if (photoNew == _profile.photoUrl && coverNew == _profile.coverUrl) return;
+      _onPhotoChanged(photoNew, coverNew);
+    } catch (e) {
+      debugPrint('[StudentShell] photos /auth/me: $e'); // hors-ligne : on garde l'existant
+    }
+  }
 
   void _onPhotoChanged(String? photoUrl, String? coverUrl) {
     setState(() {
