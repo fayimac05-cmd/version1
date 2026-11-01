@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -219,70 +222,98 @@ class _PlanningTabState extends State<PlanningTab>
     }
   }
 
-  Future<void> _genererEtTelechargerPDF(
-      BuildContext context, List<Map<String, dynamic>> creneaux) async {
-    if (creneaux.isEmpty) return;
-    final pdf = pw.Document();
+  // Nom de fichier propre (ASCII, sans espaces) : « Planning_Licence_3_RIT_12-10-2026.pdf »
+  String _nomFichierPlanning(Map<String, dynamic>? edt) {
+    String net(String t) {
+      const de = 'àâäáãçéèêëíìîïñóòôöõúùûüýÿÀÂÄÁÃÇÉÈÊËÍÌÎÏÑÓÒÔÖÕÚÙÛÜÝ';
+      const vers = 'aaaaaceeeeiiiinooooouuuuyyAAAAACEEEEIIIINOOOOOUUUUY';
+      var r = t;
+      for (var k = 0; k < de.length; k++) { r = r.replaceAll(de[k], vers[k]); }
+      return r.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+    }
+    final niv = net((edt?['niveau'] ?? widget.profile.niveau).toString());
+    final fil = net(widget.profile.filiere.toString());
+    final d = DateTime.tryParse((edt?['dateDebut'] ?? '').toString());
+    final date = d == null
+        ? ''
+        : '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}';
+    final morceaux = ['Planning', if (niv.isNotEmpty) niv, if (fil.isNotEmpty && fil.length <= 30) fil, if (date.isNotEmpty) date];
+    return '${morceaux.join('_')}.pdf';
+  }
 
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4.landscape,
-        build: (pw.Context context) {
-          return pw.Padding(
-            padding: const pw.EdgeInsets.all(20),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom.toUpperCase() : 'ÉTABLISSEMENT', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                        pw.Text(widget.profile.filiere, style: const pw.TextStyle(fontSize: 9)),
-                      ],
-                    ),
-                    pw.Text('Emploi du Temps — ${widget.profile.niveau}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  ],
-                ),
-                pw.SizedBox(height: 8),
-                pw.Divider(thickness: 1),
-                pw.SizedBox(height: 16),
-                pw.Center(
-                  child: pw.Text('PLANNING HEBDOMADAIRE DES ENSEIGNEMENTS', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF1E40AF))),
-                ),
-                pw.SizedBox(height: 16),
-                pw.TableHelper.fromTextArray(
-                  headers: ['Jour', 'Horaire', 'Intitulé du Cours / Module', 'Professeur', 'Type', 'Salle'],
-                  data: creneaux.map((c) => [
-                    c['jour']?.toString() ?? '',
-                    '${c['heureDebut'] ?? ''} - ${c['heureFin'] ?? ''}',
-                    c['matiere']?.toString() ?? '',
-                    c['prof']?.toString() ?? '',
-                    _typeLabel(c['type']?.toString() ?? ''),
-                    c['salle']?.toString() ?? '',
-                  ]).toList(),
-                  border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E40AF)),
-                  cellAlignment: pw.Alignment.centerLeft,
-                  cellPadding: const pw.EdgeInsets.all(6),
-                  cellStyle: const pw.TextStyle(fontSize: 9),
-                ),
-                pw.Spacer(),
-                pw.Align(
-                  alignment: pw.Alignment.centerRight,
-                  child: pw.Text('Document numérique certifié scolarité — Génération ScolarHub', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
-                )
-              ],
-            ),
-          );
-        },
+  // Dessine le programme (le MÊME widget que celui affiché à l'écran) hors de l'écran,
+  // puis le renvoie en image PNG : le PDF est donc identique à ce que voit l'étudiant.
+  Future<Uint8List> _capturerEnImage(BuildContext context, Widget contenu, {String logo = ''}) async {
+    if (logo.startsWith('http')) {
+      try { await precacheImage(NetworkImage(logo), context); } catch (_) {}
+    }
+    final cle = GlobalKey();
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final entree = OverlayEntry(
+      builder: (_) => Positioned(
+        left: -6000,
+        top: 0,
+        child: Material(
+          color: Colors.white,
+          child: SizedBox(
+            width: 1000,
+            child: RepaintBoundary(key: cle, child: ColoredBox(color: Colors.white, child: contenu)),
+          ),
+        ),
       ),
     );
+    overlay.insert(entree);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      await Future.delayed(const Duration(milliseconds: 500));
+      final boundary = cle.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) throw Exception('Programme introuvable à l\'écran.');
+      final img = await boundary.toImage(pixelRatio: 3);
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) throw Exception('Image vide.');
+      return data.buffer.asUint8List();
+    } finally {
+      entree.remove();
+    }
+  }
 
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save(), name: 'Emploi_du_Temps.pdf');
+  Future<void> _genererEtTelechargerPDF(
+      BuildContext context, List<Map<String, dynamic>> creneaux,
+      {Map<String, dynamic>? edt}) async {
+    if (creneaux.isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(const SnackBar(
+        content: Text('Préparation du PDF…'), duration: Duration(seconds: 3)));
+    try {
+      final cfg = EtablissementConfig.instance;
+      final vue = EdtOfficielView(
+        creneaux: creneaux,
+        etabNom: cfg.nom,
+        etabLogo: cfg.logoUrl,
+        departement: (_filiereInfo['domaine'] ?? widget.profile.domaine).toString(),
+        filiereNom: (_filiereInfo['nom'] ?? edt?['filiere_nom'] ?? widget.profile.filiere).toString(),
+        niveau: (edt?['niveau'] ?? widget.profile.niveau).toString(),
+        annee: (edt?['anneeAcademique'] ?? '').toString(),
+        dateDebut: _dateDe(edt?['dateDebut']?.toString()),
+        dateFin: _dateDe(edt?['dateFin']?.toString()),
+      );
+      final png = await _capturerEnImage(context, vue, logo: cfg.logoUrl);
+
+      final pdf = pw.Document(title: 'Planning');
+      final image = pw.MemoryImage(png);
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(18),
+          build: (pw.Context _) => pw.Center(child: pw.Image(image, fit: pw.BoxFit.contain)),
+        ),
+      );
+      // Télécharge (web) ou partage / enregistre (mobile) avec un vrai nom de fichier.
+      await Printing.sharePdf(bytes: await pdf.save(), filename: _nomFichierPlanning(edt));
+    } catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text('Impossible de générer le PDF : $e')));
+    }
   }
 
   @override
@@ -340,7 +371,7 @@ class _PlanningTabState extends State<PlanningTab>
                 )),
                 if (_creneaux.isNotEmpty)
                   IconButton(
-                    onPressed: () => _genererEtTelechargerPDF(context, _creneaux),
+                    onPressed: () => _genererEtTelechargerPDF(context, _creneaux, edt: _edtActif),
                     icon: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFEF4444)),
                     style: IconButton.styleFrom(
                       backgroundColor: const Color(0xFFFEF2F2),
@@ -851,7 +882,7 @@ class _PlanningTabState extends State<PlanningTab>
                 ),
                 if (creneaux.isNotEmpty)
                   IconButton(
-                    onPressed: () => _genererEtTelechargerPDF(context, creneaux),
+                    onPressed: () => _genererEtTelechargerPDF(context, creneaux, edt: edt),
                     icon: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFEF4444)),
                   ),
               ]),

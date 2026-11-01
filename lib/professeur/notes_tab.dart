@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
+import '../services/api_service.dart' show libelleSemestre;
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 
@@ -70,7 +71,35 @@ class _NotesTabState extends State<NotesTab> {
   String? _niveau;
   String? _moduleId;
 
+  // Le semestre est celui du module (défini par l'administration). _semestre
+  // ne sert que de secours pour un ancien module sans semestre.
   String? _semestre;
+
+  int? _semModule(dynamic m) {
+    final v = m == null ? null : m['semestre'];
+    if (v == null) return null;
+    return int.tryParse(v.toString().replaceAll(RegExp(r'\D'), ''));
+  }
+
+  dynamic get _moduleChoisi {
+    if (_moduleId == null) return null;
+    for (final m in _modulesDeLaClasse) {
+      if (m['id'].toString() == _moduleId) return m;
+    }
+    return null;
+  }
+
+  int? get _semestreModule => _semModule(_moduleChoisi);
+
+  // Modules du professeur pour la classe (filière + niveau) choisie.
+  List<dynamic> get _modulesDeLaClasse {
+    if (_classeId == null) return [];
+    final exacts = _modules.where((m) =>
+        (m['niveau'] == null || m['niveau'].toString() == _niveau) &&
+        (m['filiere_id'] == null || m['filiere_id'].toString() == _classeId)).toList();
+    return exacts.isNotEmpty ? exacts : _modules;
+  }
+
   final _anneeCtrl = TextEditingController(text: '${DateTime.now().year}-${DateTime.now().year + 1}');
 
   // matricule -> texte brut saisi (permet une note vide ou partielle sans
@@ -152,9 +181,15 @@ class _NotesTabState extends State<NotesTab> {
           const SnackBar(content: Text('Veuillez sélectionner une classe et un module.')));
       return;
     }
-    if (_semestre == null || _anneeCtrl.text.trim().isEmpty) {
+    final semMod = _semestreModule;
+    if (semMod == null && _semestre == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Veuillez indiquer le semestre et l\'année académique.')));
+          const SnackBar(content: Text('Ce module n\'a pas encore de semestre. Demandez à l\'administration de le définir.')));
+      return;
+    }
+    if (_anneeCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Veuillez indiquer l\'année académique.')));
       return;
     }
     setState(() => _saving = true);
@@ -169,7 +204,8 @@ class _NotesTabState extends State<NotesTab> {
       'niveau': _niveau,
       'module_id': int.parse(_moduleId!),
       'notes': notesData,
-      'semestre': _semestre,
+      // Le serveur impose de toute façon le semestre du module.
+      'semestre': semMod != null ? 'S$semMod' : _semestre,
       'annee_academique': _anneeCtrl.text.trim(),
     });
 
@@ -418,9 +454,8 @@ class _NotesTabState extends State<NotesTab> {
               _classeId = parts[0];
               _niveau = parts.length > 1 ? parts[1] : null;
               _classeNom = c['nom'];
-              if (_semestre != null && !semestresPourNiveau(_niveau).contains(_semestre)) {
-                _semestre = null;
-              }
+              _moduleId = null;
+              _semestre = null;
             });
             _chargerEtudiants();
           },
@@ -428,32 +463,49 @@ class _NotesTabState extends State<NotesTab> {
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           initialValue: _moduleId,
-          hint: const Text('Sélectionner un module'),
+          hint: Text(_classeId == null ? 'Choisir d\'abord une classe' : 'Sélectionner un module'),
           decoration: InputDecoration(
             labelText: 'Module',
             prefixIcon: const Icon(Icons.menu_book_outlined, color: AppPalette.blue),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
-          items: _modules.map<DropdownMenuItem<String>>((m) => DropdownMenuItem(
+          items: _modulesDeLaClasse.map<DropdownMenuItem<String>>((m) => DropdownMenuItem(
               value: m['id'].toString(), child: Text('${m['nom']}', overflow: TextOverflow.ellipsis))).toList(),
-          onChanged: (v) => setState(() => _moduleId = v),
+          onChanged: _classeId == null ? null : (v) => setState(() { _moduleId = v; _semestre = null; }),
         ),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: _semestre,
-              hint: Text(_niveau == null ? 'Choisir d\'abord une classe' : 'Semestre'),
-              decoration: InputDecoration(
-                labelText: 'Semestre',
-                prefixIcon: const Icon(Icons.calendar_view_week_outlined, color: AppPalette.blue),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              items: semestresPourNiveau(_niveau).map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-              onChanged: _niveau == null ? null : (v) => setState(() => _semestre = v),
-            ),
+            child: _moduleId != null && _semestreModule == null
+                // Ancien module sans semestre : choix limité au niveau (secours).
+                ? DropdownButtonFormField<String>(
+                    initialValue: _semestre,
+                    hint: const Text('Semestre'),
+                    decoration: InputDecoration(
+                      labelText: 'Semestre (à défaut)',
+                      prefixIcon: const Icon(Icons.calendar_view_week_outlined, color: Color(0xFFF59E0B)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: semestresPourNiveau(_niveau).map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (v) => setState(() => _semestre = v),
+                  )
+                // Semestre imposé par le module : lecture seule.
+                : InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Semestre (défini par le module)',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppPalette.blue),
+                      filled: true,
+                      fillColor: const Color(0xFFF1F5F9),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                    child: Text(
+                      _moduleId == null ? 'Choisir d\'abord un module' : libelleSemestre(_semestreModule),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _moduleId == null ? _faint : _navyText),
+                    ),
+                  ),
           ),
           const SizedBox(width: 10),
           Expanded(

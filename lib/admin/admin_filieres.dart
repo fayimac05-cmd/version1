@@ -24,9 +24,10 @@ class Module {
   final String id, nom, code;
   final int coefficient, volumeHoraire;
   String professeur;
+  int? semestre; // défini par l'administration ; le niveau s'en déduit
   Module({required this.id, required this.nom, required this.code,
       required this.coefficient, required this.volumeHoraire,
-      required this.professeur});
+      required this.professeur, this.semestre});
 
   factory Module.fromApi(Map<String, dynamic> json) => Module(
         id: json['id'].toString(),
@@ -35,8 +36,27 @@ class Module {
         coefficient: ((json['coefficient'] as num?) ?? 1).round(),
         volumeHoraire: (json['volume_horaire'] as num?)?.round() ?? 0,
         professeur: (json['professeur'] as String?)?.trim() ?? '',
+        semestre: int.tryParse((json['semestre'] ?? '').toString()),
       );
 }
+
+/// Liste déroulante « Semestre » (S1…S10, avec le niveau correspondant).
+Widget _dropSemestre({required int? valeur, required ValueChanged<int?> onChanged}) =>
+    DropdownButtonFormField<int>(
+      initialValue: valeur,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Semestre du module *',
+        prefixIcon: const Icon(Icons.event_note_rounded, size: 20),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      ),
+      items: [
+        for (var n = 1; n <= 10; n++)
+          DropdownMenuItem<int>(value: n, child: Text(libelleSemestre(n), overflow: TextOverflow.ellipsis)),
+      ],
+      onChanged: onChanged,
+    );
 
 /// Filière — construite à partir de GET /api/filieres (données réelles :
 /// effectifs, niveaux et nombre de modules calculés côté serveur).
@@ -1051,6 +1071,29 @@ class _DetailFiliereState extends State<_DetailFiliere>
             const SizedBox(height: 3),
             Text('${m.volumeHoraire}h · Coefficient ${m.coefficient}',
                 style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+            const SizedBox(height: 6),
+            // Semestre du module (touchez pour le définir / le modifier)
+            GestureDetector(
+              onTap: () => _modifierSemestre(f, m),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: m.semestre == null ? const Color(0xFFFFF4E5) : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(m.semestre == null ? Icons.warning_amber_rounded : Icons.event_note_rounded,
+                      size: 12, color: m.semestre == null ? const Color(0xFFB45309) : const Color(0xFF1D4ED8)),
+                  const SizedBox(width: 4),
+                  Text(libelleSemestre(m.semestre),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                          color: m.semestre == null ? const Color(0xFFB45309) : const Color(0xFF1D4ED8))),
+                  const SizedBox(width: 4),
+                  Icon(Icons.edit_rounded, size: 11,
+                      color: m.semestre == null ? const Color(0xFFB45309) : const Color(0xFF1D4ED8)),
+                ]),
+              ),
+            ),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1363,6 +1406,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
     // Liste des professeurs pour l'attribution du module
     final profsFuture = ApiService.getProfesseurs();
     String? profUserId;
+    int? semestre; // obligatoire : défini par l'administration
 
     showDialog(context: context, builder: (dialogCtx) => StatefulBuilder(
       builder: (dialogCtx, setDialogState) => AlertDialog(
@@ -1379,6 +1423,9 @@ class _DetailFiliereState extends State<_DetailFiliere>
             Expanded(child: _field(vhCtrl, 'Volume horaire (h)', Icons.schedule_rounded,
                 type: TextInputType.number)),
           ]),
+          const SizedBox(height: 10),
+          // Semestre : défini ici une fois pour toutes ; le professeur ne le choisit jamais.
+          _dropSemestre(valeur: semestre, onChanged: (v) => setDialogState(() => semestre = v)),
           const SizedBox(height: 10),
           // Attribution du module à un professeur (optionnelle)
           FutureBuilder<Map<String, dynamic>>(
@@ -1419,8 +1466,18 @@ class _DetailFiliereState extends State<_DetailFiliere>
           ElevatedButton(
             onPressed: envoi ? null : () async {
               if (nomCtrl.text.trim().isEmpty) return;
-              setDialogState(() => envoi = true);
               final messenger = ScaffoldMessenger.of(context);
+              if (semestre == null) {
+                messenger.showSnackBar(SnackBar(
+                  content: const Text('Choisissez le semestre du module.'),
+                  backgroundColor: AdminTheme.danger,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: const Duration(seconds: 2),
+                ));
+                return;
+              }
+              setDialogState(() => envoi = true);
 
               if (f.backendId != null) {
                 final result = await ApiService.createModule(
@@ -1430,6 +1487,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
                   filiereId: int.tryParse(f.backendId!),
                   filiereNom: f.nom,
                   professeurUserId: profUserId,
+                  semestre: semestre,
                 );
                 if (!dialogCtx.mounted) return;
                 if (result['success'] == true) {
@@ -1454,6 +1512,7 @@ class _DetailFiliereState extends State<_DetailFiliere>
                     coefficient: int.tryParse(coefCtrl.text) ?? 2,
                     volumeHoraire: int.tryParse(vhCtrl.text) ?? 30,
                     professeur: '',
+                    semestre: semestre,
                   ));
                 });
                 Navigator.pop(dialogCtx);
@@ -1469,6 +1528,50 @@ class _DetailFiliereState extends State<_DetailFiliere>
         ],
       ),
     ));
+  }
+
+  /// Définit / modifie le semestre d'un module (les professeurs déjà affectés suivent automatiquement).
+  Future<void> _modifierSemestre(Filiere f, Module m) async {
+    int? choix = m.semestre;
+    final ok = await showDialog<bool>(context: context, builder: (dctx) => StatefulBuilder(
+      builder: (dctx, setD) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Semestre — ${m.nom}',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _dropSemestre(valeur: choix, onChanged: (v) => setD(() => choix = v)),
+          const SizedBox(height: 10),
+          const Text(
+            'Le professeur de ce module ne pourra plus choisir le semestre : il sera celui-ci. '
+            'Les professeurs déjà affectés à ce module sont mis à jour automatiquement.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.4),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false),
+              child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280)))),
+          ElevatedButton(
+            onPressed: choix == null ? null : () => Navigator.pop(dctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary,
+                foregroundColor: Colors.white, elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    ));
+    if (ok != true || choix == null || !mounted) return;
+    if (f.backendId != null) {
+      final res = await ApiService.updateModule(m.id, {'semestre': choix});
+      if (!mounted) return;
+      if (res['success'] != true) {
+        showAppSnackBar(context, res['error'] as String? ?? 'Erreur lors de la modification du semestre.',
+            backgroundColor: AdminTheme.danger);
+        return;
+      }
+    }
+    setState(() => m.semestre = choix);
+    showAppSnackBar(context, 'Semestre enregistré : ${libelleSemestre(choix)}.');
   }
 
   Future<void> _supprimerModule(Filiere f, Module m) async {
@@ -1703,7 +1806,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(m['nom'] as String, style: const TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-              Text('Coef ${m['coef']} · ${m['vh']}h · ${m['prof']}',
+              Text('${libelleSemestre(m['sem'] as int?)} · Coef ${m['coef']} · ${m['vh']}h · ${m['prof']}',
                   style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
             ])),
             GestureDetector(
@@ -1767,8 +1870,9 @@ class _CreationFiliereState extends State<_CreationFiliere> {
     final coefCtrl = TextEditingController(text: '2');
     final vhCtrl   = TextEditingController(text: '30');
     final profCtrl = TextEditingController();
+    int? semestre;
 
-    showDialog(context: context, builder: (_) => AlertDialog(
+    showDialog(context: context, builder: (_) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Text('Ajouter un module',
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
@@ -1783,6 +1887,8 @@ class _CreationFiliereState extends State<_CreationFiliere> {
               type: TextInputType.number)),
         ]),
         const SizedBox(height: 10),
+        _dropSemestre(valeur: semestre, onChanged: (v) => setD(() => semestre = v)),
+        const SizedBox(height: 10),
         _inputSimple(profCtrl, 'Professeur'),
       ]),
       actions: [
@@ -1792,9 +1898,15 @@ class _CreationFiliereState extends State<_CreationFiliere> {
         ElevatedButton(
           onPressed: () {
             if (nomCtrl.text.isEmpty) return;
+            if (semestre == null) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Choisissez le semestre du module.'),
+                backgroundColor: AdminTheme.danger, behavior: SnackBarBehavior.floating));
+              return;
+            }
             setState(() => _modules.add({
               'nom': nomCtrl.text, 'coef': coefCtrl.text, 'vh': vhCtrl.text,
-              'prof': profCtrl.text,
+              'prof': profCtrl.text, 'sem': semestre,
             }));
             Navigator.pop(context);
           },
@@ -1804,7 +1916,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
           child: const Text('Ajouter'),
         ),
       ],
-    ));
+    )));
   }
 
  
@@ -1826,6 +1938,7 @@ Future<void> _creer() async {
       coefficient: int.tryParse(m['coef'] as String) ?? 2,
       volumeHoraire: int.tryParse(m['vh'] as String) ?? 30,
       professeur: m['prof'] as String,
+      semestre: m['sem'] as int?,
     )).toList(),
   );
   final result = await ApiService.createFiliere(
@@ -1858,6 +1971,7 @@ Future<void> _creer() async {
       volumeHoraire: int.tryParse(m['vh'].toString()) ?? 30,
       filiereId: int.tryParse(filierePersisted.backendId!),
       filiereNom: filierePersisted.nom,
+      semestre: m['sem'] as int?,
     );
   }
   await widget.onCreated(filierePersisted);

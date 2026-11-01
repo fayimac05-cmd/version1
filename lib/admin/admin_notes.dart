@@ -101,7 +101,7 @@ const List<String> mentionsModule = [
   'Très Bien', 'Bien', 'Assez Bien', 'Passable', 'Insuffisant',
 ];
 
-const List<String> semestresDisponibles = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
+const List<String> semestresDisponibles = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'];
 
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE NOTES & MOYENNES
@@ -917,7 +917,11 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
       _isLoadingModules = false;
       if (result['success'] == true) {
         _modules = (result['data'] as List<dynamic>).cast<Map<String, dynamic>>();
-        if (_modules.isNotEmpty) _moduleId = _modules.first['id'].toString();
+        if (_modules.isNotEmpty) {
+          _moduleId = _modules.first['id'].toString();
+          final s = _semDe(_modules.first);
+          if (s != null) _niveau = niveauDuSemestre(s);
+        }
       }
     });
   }
@@ -933,6 +937,30 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
         final matchNiveau = _niveau == null || e['niveau'] == _niveau;
         final matchStatut = (e['statut'] ?? 'actif') == 'actif';
         return matchFiliere && matchNiveau && matchStatut;
+      }).toList();
+
+  // ── Semestre = celui du module (défini à la création du module) ─────────
+  int? _semDe(Map<String, dynamic>? m) {
+    final v = m?['semestre'];
+    if (v == null) return null;
+    return int.tryParse(v.toString().replaceAll(RegExp(r'\D'), ''));
+  }
+
+  Map<String, dynamic>? get _moduleChoisi {
+    for (final m in _modules) {
+      if (m['id'].toString() == _moduleId) return m;
+    }
+    return null;
+  }
+
+  int? get _semestreModule => _semDe(_moduleChoisi);
+
+  // Si un niveau est choisi, on ne propose que les modules de ce niveau
+  // (module sans semestre = ancien module, toujours proposé).
+  List<Map<String, dynamic>> get _modulesVisibles => _modules.where((m) {
+        final s = _semDe(m);
+        if (_niveau == null || s == null) return true;
+        return niveauDuSemestre(s) == _niveau;
       }).toList();
 
   TextEditingController _controllerPour(String matricule) {
@@ -956,15 +984,45 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
               if (v != null) _chargerModules(v);
             })),
             const SizedBox(width: 12),
-            Expanded(child: _dropField('Niveau', _niveau, istNiveaux, istNiveaux, (v) => setState(() => _niveau = v))),
+            Expanded(child: _dropField('Niveau', _niveau, istNiveaux, istNiveaux, (v) => setState(() {
+              _niveau = v;
+              _semestre = null;
+              final vis = _modulesVisibles;
+              if (!vis.any((m) => m['id'].toString() == _moduleId)) {
+                _moduleId = vis.isEmpty ? null : vis.first['id'].toString();
+              }
+            }))),
           ]),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: _isLoadingModules
                 ? const SizedBox(height: 44, child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))))
-                : _dropField('Module', _moduleId, _modules.map((m) => m['id'].toString()).toList(), _modules.map((m) => m['nom'] as String).toList(), (v) => setState(() => _moduleId = v))),
+                : _dropField('Module', _moduleId, _modulesVisibles.map((m) => m['id'].toString()).toList(),
+                    _modulesVisibles.map((m) {
+                      final s = _semDe(m);
+                      return s == null ? m['nom'] as String : '${m['nom']} · S$s';
+                    }).toList(), (v) => setState(() {
+                      _moduleId = v;
+                      _semestre = null;
+                      final s = _semestreModule;
+                      if (s != null) _niveau = niveauDuSemestre(s);
+                    }))),
             const SizedBox(width: 12),
-            Expanded(child: _dropField('Semestre', _semestre, semestresDisponibles, semestresDisponibles, (v) => setState(() => _semestre = v))),
+            Expanded(child: _moduleId != null && _semestreModule == null
+                // Ancien module sans semestre : choix de secours.
+                ? _dropField('Semestre (à défaut)', _semestre, semestresPourNiveau(_niveau), semestresPourNiveau(_niveau), (v) => setState(() => _semestre = v))
+                : Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(color: AdminTheme.surfaceAlt, borderRadius: BorderRadius.circular(AdminTheme.radiusButton), border: Border.all(color: AdminTheme.border)),
+                    child: Row(children: [
+                      const Icon(Icons.lock_outline_rounded, size: 15, color: AdminTheme.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(_moduleId == null ? 'Semestre : selon le module' : libelleSemestre(_semestreModule),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+                    ]),
+                  )),
           ]),
           const SizedBox(height: 12),
           Row(children: [
@@ -1065,8 +1123,12 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
       _snack('Sélectionnez une filière et un module.', isError: true);
       return;
     }
-    if (_semestre == null || _anneeCtrl.text.trim().isEmpty) {
-      _snack('Le semestre et l\'année académique sont requis.', isError: true);
+    if (_semestreModule == null && _semestre == null) {
+      _snack('Ce module n\'a pas encore de semestre : définissez-le dans Filières, ou choisissez-le ici.', isError: true);
+      return;
+    }
+    if (_anneeCtrl.text.trim().isEmpty) {
+      _snack('L\'année académique est requise.', isError: true);
       return;
     }
 
@@ -1098,7 +1160,7 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
       'module_id': _moduleId,
       'notes': notesSaisies,
       'statut': 'validee',
-      'semestre': _semestre,
+      'semestre': _semestreModule != null ? 'S$_semestreModule' : _semestre,
       'annee_academique': _anneeCtrl.text.trim(),
       if (_mention != null) 'mention': _mention,
     });
