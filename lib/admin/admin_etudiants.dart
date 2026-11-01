@@ -2567,9 +2567,24 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
       if (_sexe == null) 'sexe',
       if (_filiere == null) 'filière',
       if (_niveau == null) 'niveau',
+      if (_telCtrl.text.trim().isEmpty) 'téléphone',
+      if (_emailCtrl.text.trim().isEmpty) 'email',
+      if (_adresseCtrl.text.trim().isEmpty) 'adresse',
+      if (_urgNomCtrl.text.trim().isEmpty) 'personne à prévenir (nom)',
+      if (_urgTelCtrl.text.trim().isEmpty) 'personne à prévenir (téléphone)',
+      if (_urgLienCtrl.text.trim().isEmpty) 'personne à prévenir (lien)',
     ];
     if (manque.isNotEmpty) {
       setState(() => _erreur = 'Champs obligatoires manquants : ${manque.join(', ')}.');
+      return;
+    }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(_emailCtrl.text.trim())) {
+      setState(() => _erreur = "L'adresse e-mail n'est pas valide.");
+      return;
+    }
+    if (_telCtrl.text.replaceAll(RegExp(r'\D'), '').length < 8 ||
+        _urgTelCtrl.text.replaceAll(RegExp(r'\D'), '').length < 8) {
+      setState(() => _erreur = 'Les numéros de téléphone doivent contenir au moins 8 chiffres.');
       return;
     }
     setState(() { _envoi = true; _erreur = null; });
@@ -2602,12 +2617,12 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
       'dateNaissance': _dateNaissance,
       'lieuNaissance': t(_lieuCtrl),
       'anneeEntree': _anneeEntree,
-      if (t(_emailCtrl).isNotEmpty) 'email': t(_emailCtrl),
-      if (t(_telCtrl).isNotEmpty) 'telephone': t(_telCtrl),
-      if (t(_adresseCtrl).isNotEmpty) 'adresse': t(_adresseCtrl),
-      if (t(_urgNomCtrl).isNotEmpty) 'urgenceNom': t(_urgNomCtrl),
-      if (t(_urgTelCtrl).isNotEmpty) 'urgenceTel': t(_urgTelCtrl),
-      if (t(_urgLienCtrl).isNotEmpty) 'urgenceLien': t(_urgLienCtrl),
+      'email': t(_emailCtrl),
+      'telephone': t(_telCtrl),
+      'adresse': t(_adresseCtrl),
+      'urgenceNom': t(_urgNomCtrl),
+      'urgenceTel': t(_urgTelCtrl),
+      'urgenceLien': t(_urgLienCtrl),
       if (t(_nomParentCtrl).isNotEmpty) 'nomParent': t(_nomParentCtrl),
       if (t(_prenomParentCtrl).isNotEmpty) 'prenomParent': t(_prenomParentCtrl),
       if (t(_telParentCtrl).isNotEmpty) 'telParent': t(_telParentCtrl),
@@ -3202,16 +3217,16 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
 
           _section(Icons.info_outline, 'Informations complémentaires'),
           _cols([
-            _champ('Téléphone', _telCtrl, icon: Icons.phone_outlined, hint: 'Ex. 70 12 34 56', type: TextInputType.phone),
-            _champ('Email', _emailCtrl, icon: Icons.mail_outline, hint: 'Ex. issa.kabore@email.com', type: TextInputType.emailAddress),
-            _champ('Adresse', _adresseCtrl, icon: Icons.location_on_outlined, hint: 'Ex. Quartier, ville'),
+            _champ('Téléphone', _telCtrl, icon: Icons.phone_outlined, hint: 'Ex. 70 12 34 56', type: TextInputType.phone, req: true),
+            _champ('Email', _emailCtrl, icon: Icons.mail_outline, hint: 'Ex. issa.kabore@email.com', type: TextInputType.emailAddress, req: true),
+            _champ('Adresse', _adresseCtrl, icon: Icons.location_on_outlined, hint: 'Ex. Quartier, ville', req: true),
           ]),
 
           _section(Icons.emergency_outlined, 'Personne à prévenir en cas de besoin'),
           _cols([
-            _champ('Nom et prénom', _urgNomCtrl, icon: Icons.person_outline),
-            _champ('Téléphone', _urgTelCtrl, icon: Icons.phone_outlined, type: TextInputType.phone),
-            _champ('Lien (ex : Père, Oncle)', _urgLienCtrl, icon: Icons.family_restroom_outlined),
+            _champ('Nom et prénom', _urgNomCtrl, icon: Icons.person_outline, req: true),
+            _champ('Téléphone', _urgTelCtrl, icon: Icons.phone_outlined, type: TextInputType.phone, req: true),
+            _champ('Lien (ex : Père, Oncle)', _urgLienCtrl, icon: Icons.family_restroom_outlined, req: true),
           ]),
           const Padding(
             padding: EdgeInsets.only(top: 6),

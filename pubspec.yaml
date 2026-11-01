@@ -41,6 +41,7 @@ dependencies:
   supabase_flutter: ^2.5.1
   flutter_dotenv: ^5.0.2
   qr_flutter: ^4.1.0
+  video_player: ^2.11.1
 
 dev_dependencies:
   flutter_test:
@@ -68,4 +69,5 @@ flutter:
     - assets/images/logo_scolarhub.png
     - assets/images/logo_scolarhub_sombre.png
     - assets/images/app_icon.png
-
+    - assets/images/diplomes.png
+    - assets/videos/diplomes.mp4

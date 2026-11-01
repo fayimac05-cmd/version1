@@ -690,6 +690,7 @@ class ApiService {
     String? matricule,
     String? nomPersonne,
     String? telPersonne,
+    Map<String, dynamic> extra = const {},
   }) async {
     try {
       final codeEtab = await _codeEtablissement();
@@ -709,6 +710,7 @@ class ApiService {
               if (matricule != null && matricule.isNotEmpty) 'matricule': matricule,
               if (nomPersonne != null && nomPersonne.isNotEmpty) 'nomPersonne': nomPersonne,
               if (telPersonne != null && telPersonne.isNotEmpty) 'telPersonne': telPersonne,
+              ...extra,
             }),
           )
           .timeout(const Duration(seconds: 45));

@@ -54,7 +54,7 @@ class _PlanningTabState extends State<PlanningTab>
   List<Map<String, dynamic>> _eventsCalendrier = [];
 
   // Affichage de la semaine sur petit écran : false = « par jour », true = tableau officiel.
-  final ValueNotifier<bool> _vueTableau = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _vueTableau = ValueNotifier<bool>(true); // tableau complet par défaut (zoomable)
 
   @override
   void initState() {
@@ -224,15 +224,6 @@ class _PlanningTabState extends State<PlanningTab>
     if (creneaux.isEmpty) return;
     final pdf = pw.Document();
 
-    // Logo de l'établissement (si disponible) ; en cas d'échec le PDF reste généré sans logo.
-    pw.ImageProvider? logoEcole;
-    final urlLogo = EtablissementConfig.instance.logoUrl;
-    if (urlLogo.startsWith('http')) {
-      try {
-        logoEcole = await networkImage(urlLogo);
-      } catch (_) {}
-    }
-
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4.landscape,
@@ -245,19 +236,11 @@ class _PlanningTabState extends State<PlanningTab>
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Row(
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        if (logoEcole != null) ...[
-                          pw.Image(logoEcole, height: 48, fit: pw.BoxFit.contain),
-                          pw.SizedBox(width: 12),
-                        ],
-                        pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom.toUpperCase() : 'ÉTABLISSEMENT', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                            pw.Text(widget.profile.filiere, style: const pw.TextStyle(fontSize: 9)),
-                          ],
-                        ),
+                        pw.Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom.toUpperCase() : 'ÉTABLISSEMENT', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(widget.profile.filiere, style: const pw.TextStyle(fontSize: 9)),
                       ],
                     ),
                     pw.Text('Emploi du Temps — ${widget.profile.niveau}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
@@ -454,9 +437,26 @@ class _PlanningTabState extends State<PlanningTab>
     final filNom = (_filiereInfo['nom'] ?? edt?['filiere_nom'] ?? widget.profile.filiere).toString();
     final dept = (_filiereInfo['domaine'] ?? widget.profile.domaine).toString();
     final niv = (edt?['niveau'] ?? widget.profile.niveau).toString();
+    final vue = EdtOfficielView(
+      creneaux: creneaux,
+      etabNom: cfg.nom,
+      etabLogo: cfg.logoUrl,
+      departement: dept,
+      filiereNom: filNom,
+      niveau: niv,
+      annee: (edt?['anneeAcademique'] ?? '').toString(),
+      dateDebut: _dateDe(dateDebut),
+      dateFin: _dateDe(dateFin),
+    );
     final tableau = SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       physics: const BouncingScrollPhysics(),
+      child: vue,
+    );
+    // Téléphone : tout le programme (6 jours, tout le contenu) tient dans la largeur
+    // de l'écran ; l'étudiant pince pour zoomer (ou touche deux fois) et fait glisser.
+    final tableauZoom = _TableauZoomable(
+      conception: 1000,
       child: EdtOfficielView(
         creneaux: creneaux,
         etabNom: cfg.nom,
@@ -480,7 +480,7 @@ class _PlanningTabState extends State<PlanningTab>
           _selecteurVue(enTableau),
           Expanded(
             child: enTableau
-                ? tableau
+                ? tableauZoom
                 : _buildSemaineParJour(creneaux, dateDebut: dateDebut, dateFin: dateFin),
           ),
         ]),
@@ -871,4 +871,170 @@ class _PlanningTabState extends State<PlanningTab>
       ),
     );
   }
+}
+
+
+
+/// Affiche un grand tableau en entier dans la largeur disponible, avec zoom
+
+/// (pincement, molette, double-touche) et déplacement.
+
+class _TableauZoomable extends StatefulWidget {
+
+  const _TableauZoomable({required this.child, this.conception = 1000});
+
+  final Widget child;
+
+
+
+  /// Largeur (px) sur laquelle le tableau est dessiné avant d'être réduit à l'écran.
+
+  final double conception;
+
+
+
+  @override
+
+  State<_TableauZoomable> createState() => _TableauZoomableState();
+
+}
+
+
+
+class _TableauZoomableState extends State<_TableauZoomable> {
+
+  final TransformationController _ctrl = TransformationController();
+
+  Offset _dernierTouche = Offset.zero;
+
+
+
+  @override
+
+  void dispose() {
+
+    _ctrl.dispose();
+
+    super.dispose();
+
+  }
+
+
+
+  void _doubleTouche() {
+
+    final dejaZoome = _ctrl.value.getMaxScaleOnAxis() > 1.05;
+
+    if (dejaZoome) {
+
+      _ctrl.value = Matrix4.identity();
+
+    } else {
+
+      const s = 2.5;
+
+      final p = _dernierTouche;
+
+      _ctrl.value = Matrix4.identity()
+
+        ..translate(-p.dx * (s - 1), -p.dy * (s - 1))
+
+        ..scale(s);
+
+    }
+
+  }
+
+
+
+  @override
+
+  Widget build(BuildContext context) {
+
+    return LayoutBuilder(builder: (ctx, box) {
+
+      final w = box.maxWidth - 16;
+
+      return Column(children: [
+
+        Padding(
+
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+
+          child: Row(children: const [
+
+            Icon(Icons.zoom_in_rounded, size: 15, color: Color(0xFF64748B)),
+
+            SizedBox(width: 6),
+
+            Expanded(
+
+              child: Text('Pincez ou touchez deux fois pour zoomer',
+
+                  style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+
+            ),
+
+          ]),
+
+        ),
+
+        Expanded(
+
+          child: ClipRect(
+
+            child: GestureDetector(
+
+              onDoubleTapDown: (d) => _dernierTouche = d.localPosition,
+
+              onDoubleTap: _doubleTouche,
+
+              child: InteractiveViewer(
+
+                transformationController: _ctrl,
+
+                constrained: false,
+
+                minScale: 1,
+
+                maxScale: 6,
+
+                boundaryMargin: const EdgeInsets.all(8),
+
+                child: SizedBox(
+
+                  width: w + 16,
+
+                  child: Padding(
+
+                    padding: const EdgeInsets.all(8),
+
+                    child: FittedBox(
+
+                      fit: BoxFit.fitWidth,
+
+                      alignment: Alignment.topLeft,
+
+                      child: SizedBox(width: widget.conception, child: widget.child),
+
+                    ),
+
+                  ),
+
+                ),
+
+              ),
+
+            ),
+
+          ),
+
+        ),
+
+      ]);
+
+    });
+
+  }
+
 }
