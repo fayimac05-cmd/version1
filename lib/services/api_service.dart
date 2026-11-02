@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -63,12 +63,34 @@ class ApiService {
     return prefs.getString('user_id');
   }
 
+  // Persister le profil complet (auto-login)
+  /// Sauvegarde le profil de l'utilisateur connecte pour permettre la
+  /// reconnexion automatique au prochain lancement de l'application.
+  static Future<void> saveProfile(Map<String, dynamic> profile) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_profile', jsonEncode(profile));
+  }
+
+  /// Recharge le profil sauvegarde. Renvoie null si aucun profil n'est
+  /// memorise (premiere connexion ou apres deconnexion).
+  static Future<Map<String, dynamic>?> loadProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('saved_profile');
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Supprimer le token (logout) ──────────────────────────
   static Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('user_id');
     await prefs.remove('matricule');
+    await prefs.remove('saved_profile'); // efface aussi le profil sauvegarde (auto-login)
     // ✅ CORRIGÉ — fuite de données entre comptes : clearToken() n'effaçait
     // que 'token', jamais les caches hors-ligne (cache_me, cache_filieres,
     // etc.). Après une déconnexion, ces caches gardaient les données du

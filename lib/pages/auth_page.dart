@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+﻿import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import '../app/scolar_hub_app.dart';
 import '../models/student_profile.dart';
@@ -296,6 +296,27 @@ class _AuthPageState extends State<AuthPage> {
     // commun à tous les chemins de connexion (comptes réels et démo).
     SharedPreferences.getInstance().then((prefs) {
       prefs.setString('matricule', profile.matricule);
+    });
+
+    // Auto-login : on sauvegarde le profil complet pour ne plus avoir a
+    // ressaisir matricule + mot de passe aux prochains lancements de l'app.
+    ApiService.saveProfile({
+      'nom': profile.nom,
+      'prenoms': profile.prenoms,
+      'matricule': profile.matricule,
+      'email': profile.email,
+      'telephone': profile.telephone,
+      'filiere': profile.filiere,
+      'niveau': profile.niveau,
+      'domaine': profile.domaine,
+      'role': profile.role,
+      'adminSubRole': profile.adminSubRole,
+      'domaineAdmin': profile.domaineAdmin,
+      'filiereRole': profile.filiereRole,
+      'photoUrl': profile.photoUrl,
+      'coverUrl': profile.coverUrl,
+      'enfantNom': profile.enfantNom,
+      'matriculeEnfant': profile.matriculeEnfant,
     });
 
     // Utilise le navigateur global : le context de cette page n'existe plus
