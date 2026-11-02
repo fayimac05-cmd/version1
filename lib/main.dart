@@ -17,9 +17,20 @@ Future<void> main() async {
     debugPrint('⚠️  Impossible de charger .env : $e');
   }
 
+  // Lecture protégée : si le .env n'a pas pu être chargé (ex. hébergement web
+  // qui ne publie pas les fichiers commençant par un point), dotenv.env
+  // déclenche une erreur. On retombe alors sur les valeurs par défaut.
+  String? lireEnv(String cle) {
+    try {
+      return dotenv.env[cle];
+    } catch (_) {
+      return null;
+    }
+  }
+
   final supabaseUrl =
-      dotenv.env['SUPABASE_URL'] ?? 'https://rsrmztmgyjoqjozhfgho.supabase.co';
-  final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ??
+      lireEnv('SUPABASE_URL') ?? 'https://rsrmztmgyjoqjozhfgho.supabase.co';
+  final supabaseKey = lireEnv('SUPABASE_ANON_KEY') ??
       'sb_publishable_KD3tFiM13fv0wsNyIe3erA_K9OB54YO';
 
   // 2. Initialiser Supabase (sécurisé)
