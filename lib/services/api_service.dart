@@ -3,6 +3,30 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// ── Semestres : le semestre appartient au MODULE, le niveau s'en déduit ──────
+const Map<String, List<int>> kSemestresDuNiveau = {
+  'Licence 1': [1, 2],
+  'Licence 2': [3, 4],
+  'Licence 3': [5, 6],
+  'Master 1': [7, 8],
+  'Master 2': [9, 10],
+};
+
+/// Niveau correspondant à un semestre (S3 → « Licence 2 »), ou null.
+String? niveauDuSemestre(int s) {
+  for (final e in kSemestresDuNiveau.entries) {
+    if (e.value.contains(s)) return e.key;
+  }
+  return null;
+}
+
+/// « S3 · Licence 2 » (ou « Semestre à définir » si le module n'a pas encore de semestre).
+String libelleSemestre(int? s) {
+  if (s == null) return 'Semestre à définir';
+  final n = niveauDuSemestre(s);
+  return n == null ? 'S$s' : 'S$s · $n';
+}
+
 class ApiService {
   // Adresse du backend — toute l'app (y compris le Socket.IO) en dépend.
   //
@@ -1542,7 +1566,7 @@ class ApiService {
   required String filiereId,
   required String niveau,
   required String moduleId,
-  required String semestre,
+  String? semestre, // facultatif : le serveur prend celui du module
   required String anneeAcademique,
 }) async {
   try {
@@ -1551,7 +1575,7 @@ class ApiService {
       'filiere_id': filiereId,
       'niveau': niveau,
       'module_id': moduleId,
-      'semestre': semestre,
+      if (semestre != null) 'semestre': semestre,
       'annee_academique': anneeAcademique,
     });
     final response = await http.get(uri, headers: headers);
@@ -1909,7 +1933,7 @@ static Future<Map<String, dynamic>> getCantineAujourdhui() async {
     required int moduleId,
     required int filiereId,
     required String niveau,
-    required int semestre,
+    int? semestre, // facultatif : le serveur utilise le semestre du module
   }) async {
     try {
       final headers = await getHeaders();
@@ -1920,7 +1944,7 @@ static Future<Map<String, dynamic>> getCantineAujourdhui() async {
           'module_id': moduleId,
           'filiere_id': filiereId,
           'niveau': niveau,
-          'semestre': semestre,
+          if (semestre != null) 'semestre': semestre,
         }),
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));
@@ -2245,6 +2269,7 @@ static Future<Map<String, dynamic>> getCantineAujourdhui() async {
     int? filiereId,
     String? filiereNom,
     String? professeurUserId,
+    int? semestre,
   }) async {
     try {
       final headers = await getHeaders();
@@ -2258,6 +2283,7 @@ static Future<Map<String, dynamic>> getCantineAujourdhui() async {
           'filiere_id': filiereId,
           'filiere_nom': filiereNom,
           if (professeurUserId != null) 'professeur_user_id': professeurUserId,
+          if (semestre != null) 'semestre': semestre,
         }),
       );
       final body = jsonDecode(utf8.decode(response.bodyBytes));

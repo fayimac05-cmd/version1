@@ -1040,7 +1040,6 @@ class _FicheProfDialog extends StatelessWidget {
 class _Aff {
   String? fid;
   String? niveau;
-  int semestre = 1;
   final Set<int> modules = {};
 }
 
@@ -1146,13 +1145,11 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
       for (final m in _existants) {
         final fid = _s(m['filiere_id']);
         final niv = _s(m['niveau']);
-        final sem = int.tryParse(_s(m['semestre'])) ?? 1;
         final mid = int.tryParse(_s(m['module_id']));
         if (fid.isEmpty || niv.isEmpty || mid == null) continue;
-        final a = groupes.putIfAbsent('$fid|$niv|$sem', () => _Aff()
+        final a = groupes.putIfAbsent('$fid|$niv', () => _Aff()
           ..fid = fid
-          ..niveau = niv
-          ..semestre = sem);
+          ..niveau = niv);
         a.modules.add(mid);
       }
       _lignes.addAll(groupes.values);
@@ -1212,6 +1209,16 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
   String _nomFiliere(String? fid) {
     final f = widget.allFilieres.firstWhere((x) => _s(x['id']) == fid, orElse: () => <String, dynamic>{});
     return f.isEmpty ? '—' : _s(f['nom']);
+  }
+
+  // Le semestre appartient au module (défini dans Filières) ; le niveau s'en déduit.
+  int? _semModule(Map<String, dynamic> m) => int.tryParse(_s(m['semestre']));
+
+  bool _moduleDansNiveau(Map<String, dynamic> m, String? niveau) {
+    final s = _semModule(m);
+    if (s == null) return false;
+    final ok = kSemestresDuNiveau[niveau];
+    return ok == null || ok.contains(s);
   }
 
   int get _nbModulesTotal => _lignes.fold<int>(0, (n, a) => n + a.modules.length);
@@ -1276,7 +1283,7 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
         final mods = _modulesParFiliere[a.fid] ?? [];
         for (final m in mods) {
           final id = int.tryParse(_s(m['id']));
-          if (id != null) a.modules.add(id);
+          if (id != null && _moduleDansNiveau(m, a.niveau)) a.modules.add(id);
         }
       }
     });
@@ -1368,7 +1375,7 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
       return;
     }
     if (!_edition && _lignes.isEmpty) {
-      setState(() => _erreur = 'Ajoutez au moins une affectation (filière, niveau, semestre).');
+      setState(() => _erreur = 'Ajoutez au moins une affectation (filière et niveau).');
       return;
     }
 
@@ -1406,27 +1413,37 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
     }
 
     // ── Synchronisation des modules (professeur_modules) ───────────────────
-    final voulus = <String, List<int>>{}; // 'moduleId|niveau' -> [fid, semestre]
+    final voulus = <String, List<int?>>{}; // 'moduleId|niveau' -> [fid, semestre du module]
     for (final a in _lignes) {
       if (a.fid == null || a.niveau == null) continue;
       final fidInt = int.tryParse(a.fid!);
       if (fidInt == null) continue;
       for (final mid in a.modules) {
-        voulus['$mid|${a.niveau}'] = [fidInt, a.semestre];
+        final mod = (_modulesParFiliere[a.fid] ?? const <Map<String, dynamic>>[])
+            .where((m) => _s(m['id']) == '$mid');
+        voulus['$mid|${a.niveau}'] = [fidInt, mod.isEmpty ? null : _semModule(mod.first)];
       }
     }
     int echecs = 0;
+    String? messageEchec;
     try {
       for (final e in voulus.entries) {
         final parts = e.key.split('|');
+        // Ancien module sans semestre déjà affecté : on ne touche à rien (rien n'a changé).
+        final dejaAffecte = _existants.any((x) => '${_s(x['module_id'])}|${_s(x['niveau'])}' == e.key);
+        if (e.value[1] == null && dejaAffecte) continue;
         final res = await ApiService.assignerModuleProfesseur(
           professeurId: profId,
           moduleId: int.parse(parts[0]),
-          filiereId: e.value[0],
+          filiereId: e.value[0]!,
           niveau: parts[1],
-          semestre: e.value[1],
+          semestre: e.value[1], // le serveur utilise de toute façon le semestre du module
         );
-        if (res['success'] != true) echecs++;
+        if (res['success'] != true) {
+          echecs++;
+          final msg = _s(res['error']);
+          if (msg.isNotEmpty) messageEchec ??= msg;
+        }
       }
       for (final ancien in _existants) {
         final cle = '${_s(ancien['module_id'])}|${_s(ancien['niveau'])}';
@@ -1438,7 +1455,9 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
     } catch (e) {
       echecs++;
     }
-    if (echecs > 0) widget.onErreur('$echecs affectation(s) de module n\'ont pas pu être enregistrées.');
+    if (echecs > 0) {
+      widget.onErreur(messageEchec ?? '$echecs affectation(s) de module n\'ont pas pu être enregistrées.');
+    }
 
     if (_photoBytes != null) {
       final ok = await _envoyerPhoto(profId);
@@ -1734,8 +1753,15 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
                 setState(() { a.fid = v; a.modules.clear(); });
                 if (v != null) _chargerModules(v);
               }, w: 230),
-              _mini<String>('Niveau', a.niveau, niveauxDispo, (x) => x, (v) => setState(() => a.niveau = v), w: 130),
-              _mini<int>('Semestre', a.semestre, kSemestres, (x) => 'S$x', (v) => setState(() => a.semestre = v ?? 1), w: 100),
+              _mini<String>('Niveau', a.niveau, niveauxDispo, (x) => x, (v) => setState(() {
+                a.niveau = v;
+                // Les modules d'un autre niveau (autre semestre) sont retirés de la sélection.
+                final mods = _modulesParFiliere[a.fid] ?? const <Map<String, dynamic>>[];
+                a.modules.removeWhere((id) {
+                  final m = mods.where((x) => _s(x['id']) == '$id');
+                  return m.isNotEmpty && !_moduleDansNiveau(m.first, v);
+                });
+              }), w: 130),
             ]),
           ),
           IconButton(
@@ -1754,24 +1780,63 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
         else if (modules.isEmpty)
           const Text('Aucun module dans cette filière.', style: TextStyle(fontSize: 12, color: _texteGris))
         else
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final m in modules)
-              if (int.tryParse(_s(m['id'])) != null)
-                FilterChip(
-                  label: Text(_s(m['nom']), style: TextStyle(fontSize: 12, color: a.modules.contains(int.parse(_s(m['id']))) ? AdminTheme.primary : _texteFonce)),
-                  selected: a.modules.contains(int.parse(_s(m['id']))),
-                  showCheckmark: false,
-                  selectedColor: AdminTheme.primaryLight,
-                  backgroundColor: Colors.white,
-                  side: BorderSide(color: a.modules.contains(int.parse(_s(m['id']))) ? AdminTheme.primary : _bordureGris),
-                  onSelected: (v) => setState(() {
-                    final id = int.parse(_s(m['id']));
-                    v ? a.modules.add(id) : a.modules.remove(id);
-                  }),
-                ),
-          ]),
+          ..._sectionsModules(a, modules),
       ]),
     );
+  }
+
+  // Modules de la filière regroupés par semestre, limités au niveau de la ligne.
+  List<Widget> _sectionsModules(_Aff a, List<Map<String, dynamic>> modules) {
+    final parSem = <int, List<Map<String, dynamic>>>{}; // 0 = semestre non défini (anciens modules)
+    final sansSemestre = <String>[];
+    for (final m in modules) {
+      final id = int.tryParse(_s(m['id']));
+      if (id == null) continue;
+      final sem = _semModule(m);
+      final choisi = a.modules.contains(id);
+      if (sem == null) {
+        if (choisi) parSem.putIfAbsent(0, () => []).add(m); else sansSemestre.add(_s(m['nom']));
+        continue;
+      }
+      if (_moduleDansNiveau(m, a.niveau) || choisi) parSem.putIfAbsent(sem, () => []).add(m);
+    }
+    final cles = parSem.keys.toList()..sort();
+    final out = <Widget>[];
+    for (final k in cles) {
+      out.add(Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 6),
+        child: Text(k == 0 ? 'Semestre à définir' : 'Semestre S$k',
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: k == 0 ? const Color(0xFFB45309) : AdminTheme.primary)),
+      ));
+      out.add(Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final m in parSem[k]!)
+          FilterChip(
+            label: Text(_s(m['nom']), style: TextStyle(fontSize: 12, color: a.modules.contains(int.parse(_s(m['id']))) ? AdminTheme.primary : _texteFonce)),
+            selected: a.modules.contains(int.parse(_s(m['id']))),
+            showCheckmark: false,
+            selectedColor: AdminTheme.primaryLight,
+            backgroundColor: Colors.white,
+            side: BorderSide(color: a.modules.contains(int.parse(_s(m['id']))) ? AdminTheme.primary : _bordureGris),
+            onSelected: (v) => setState(() {
+              final id = int.parse(_s(m['id']));
+              v ? a.modules.add(id) : a.modules.remove(id);
+            }),
+          ),
+      ]));
+    }
+    if (cles.isEmpty) {
+      out.add(Text(
+        a.niveau == null ? 'Choisissez un niveau.' : 'Aucun module au niveau ${a.niveau} (semestres ${(kSemestresDuNiveau[a.niveau] ?? []).map((s) => 'S$s').join(', ')}).',
+        style: const TextStyle(fontSize: 12, color: _texteGris)));
+    }
+    if (sansSemestre.isNotEmpty) {
+      out.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text('⚠️ Sans semestre (à définir dans Filières, non affectables) : ${sansSemestre.join(', ')}',
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFFB45309))),
+      ));
+    }
+    return out;
   }
 
   Widget _colAffectations() {
@@ -1861,7 +1926,7 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
         if (_lignes.isEmpty)
           const Padding(
             padding: EdgeInsets.only(bottom: 10),
-            child: Text('Cochez des filières et des niveaux, puis ajoutez une affectation pour choisir le semestre et les modules.',
+            child: Text('Cochez des filières et des niveaux, puis ajoutez une affectation pour choisir les modules (le semestre est celui du module).',
                 style: TextStyle(fontSize: 12.5, color: _texteGris)),
           ),
         for (int i = 0; i < _lignes.length; i++) _ligneAffectation(i),

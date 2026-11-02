@@ -5,7 +5,6 @@ import 'package:printing/printing.dart';
 import '../services/api_service.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
-import 'notes_tab.dart' show semestresPourNiveau;
 
 /// Liste des étudiants d'une classe (filière+niveau). S'affiche
 /// immédiatement (nom, prénoms, matricule) — le choix module/semestre/année
@@ -30,7 +29,6 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
   List<dynamic> _modules = [];
   bool _loadingModules = true;
   String? _moduleId;
-  String? _semestre;
   final _anneeCtrl = TextEditingController(text: DateTime.now().year.toString());
   final _dureeSeanceCtrl = TextEditingController(text: '2');
   bool _loadingNotes = false;
@@ -82,9 +80,9 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
   }
 
   Future<void> _chargerNotes() async {
-    if (_moduleId == null || _semestre == null || _anneeCtrl.text.trim().isEmpty) {
+    if (_moduleId == null || _anneeCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Choisissez module, semestre et année académique.'), backgroundColor: Colors.redAccent),
+        const SnackBar(content: Text('⚠️ Choisissez le module et l\'année académique.'), backgroundColor: Colors.redAccent),
       );
       return;
     }
@@ -93,7 +91,6 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
       filiereId: widget.classe['id'].toString(),
       niveau: _niveau ?? '',
       moduleId: _moduleId!,
-      semestre: _semestre!,
       anneeAcademique: _anneeCtrl.text.trim(),
     );
     if (!mounted) return;
@@ -105,6 +102,18 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
       }
       _loadingNotes = false;
     });
+  }
+
+  // Semestre du module chargé (défini par l'administration).
+  String _semestreAffiche() {
+    final s = _notesData?['semestre']?.toString();
+    if (s != null && s.isNotEmpty) return s.startsWith('S') ? s : 'S$s';
+    for (final m in _modules) {
+      if (m['id'].toString() == _moduleId && m['semestre'] != null) {
+        return 'S${m['semestre'].toString().replaceAll(RegExp(r'\D'), '')}';
+      }
+    }
+    return '';
   }
 
   double get _dureeSeance => double.tryParse(_dureeSeanceCtrl.text.trim().replaceAll(',', '.')) ?? 2.0;
@@ -167,7 +176,7 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
         build: (context) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
           pw.Text('LISTE DES ÉTUDIANTS', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF1E40AF))),
           pw.SizedBox(height: 4),
-          pw.Text('${widget.classe['nom']} — $_niveau · $moduleNom · $_semestre (${_anneeCtrl.text})', style: const pw.TextStyle(fontSize: 10)),
+          pw.Text('${widget.classe['nom']} — $_niveau · $moduleNom · ${_semestreAffiche()} (${_anneeCtrl.text})', style: const pw.TextStyle(fontSize: 10)),
           pw.SizedBox(height: 14),
           pw.TableHelper.fromTextArray(
             headers: headers, data: data,
@@ -322,7 +331,7 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
                                           isExpanded: true,
                                           hint: const Text('Choisir un module'),
                                           items: _modules.map<DropdownMenuItem<String>>((m) => DropdownMenuItem(value: m['id'].toString(), child: Text('${m['nom']}'))).toList(),
-                                          onChanged: (v) => setState(() => _moduleId = v),
+                                          onChanged: (v) => setState(() { _moduleId = v; _notesData = null; }),
                                         ),
                                       ),
                                     ),
@@ -330,17 +339,16 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
                                     Row(children: [
                                       Expanded(
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
-                                          child: DropdownButtonHideUnderline(
-                                            child: DropdownButton<String>(
-                                              value: _semestre,
-                                              isExpanded: true,
-                                              hint: const Text('Semestre'),
-                                              items: semestresPourNiveau(_niveau).map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                                              onChanged: (v) => setState(() => _semestre = v),
-                                            ),
-                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+                                          child: Row(children: [
+                                            const Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(
+                                              _moduleId == null ? 'Semestre : selon le module' : 'Semestre : ${_semestreAffiche().isEmpty ? "à définir" : _semestreAffiche()}',
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                            )),
+                                          ]),
                                         ),
                                       ),
                                       const SizedBox(width: 10),
