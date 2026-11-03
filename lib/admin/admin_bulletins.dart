@@ -9,6 +9,7 @@ import '../config/etablissement_config.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/bulletins_admin_service.dart';
+import '../services/rattrapage_service.dart';
 import '../utils/snackbar_helper.dart';
 
 const List<String> _appreciations = ['Très bien', 'Bien', 'Assez bien', 'Passable', 'Insuffisant'];
@@ -45,6 +46,8 @@ class AdminBulletins extends StatefulWidget {
 class _AdminBulletinsState extends State<AdminBulletins> {
   List<Map<String, dynamic>> _filieres = [];
   String? _domaine, _filiereId, _niveau, _semestre, _annee;
+  // Session : 'normale' ou 'rattrapage' (bulletin recalculé après les notes de rattrapage).
+  String _session = 'normale', _cSession = 'normale';
   bool _chargementBase = true, _chargement = false, _charge = false, _envoi = false;
   String? _erreur;
 
@@ -60,7 +63,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
   Map<String, dynamic> _regle = {'mode': 'general', 'seuil_validation': 10};
   List<String> _horsUe = [];
 
-  late final List<String> _annees;
+  late List<String> _annees;
 
   @override
   void initState() {
@@ -75,8 +78,15 @@ class _AdminBulletinsState extends State<AdminBulletins> {
 
   Future<void> _chargerBase() async {
     final r = await ApiService.getFilieres();
+    final an = await RattrapageService.anneeCourante();
     if (!mounted) return;
     setState(() {
+      // L'année proposée est celle en cours dans l'établissement (plus de calcul par date).
+      final lib = (an['success'] == true && an['data'] != null) ? '${(an['data'] as Map)['libelle']}' : '';
+      if (lib.isNotEmpty) {
+        if (!_annees.contains(lib)) _annees.insert(0, lib);
+        _annee = lib;
+      }
       _chargementBase = false;
       if (r['success'] == true) {
         _filieres = (r['data'] as List<dynamic>).cast<Map<String, dynamic>>();
@@ -112,7 +122,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
     }
     setState(() { _chargement = true; _erreur = null; });
     final r = await BulletinsAdminService.preparation(
-        filiereId: _filiereId!, niveau: _niveau!, semestre: _semestre!, anneeAcademique: _annee!);
+        filiereId: _filiereId!, niveau: _niveau!, semestre: _semestre!, anneeAcademique: _annee!, session: _session);
     if (!mounted) return;
     if (r['success'] != true) {
       setState(() { _chargement = false; _erreur = r['error'] as String?; });
@@ -126,7 +136,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
       _modules = (r['modules'] as List<dynamic>).cast<Map<String, dynamic>>();
       _regle = (r['regle'] as Map<String, dynamic>?) ?? {'mode': 'general', 'seuil_validation': 10};
       _horsUe = (r['modules_hors_ue'] as List<dynamic>? ?? []).map((x) => x.toString()).toList();
-      _cFiliere = _filiereId; _cNiveau = _niveau; _cSemestre = _semestre; _cAnnee = _annee;
+      _cFiliere = _filiereId; _cNiveau = _niveau; _cSemestre = _semestre; _cAnnee = _annee; _cSession = _session;
       _sel.clear(); _statut.clear(); _apprec.clear(); _moyCorr.clear();
       for (final e in etus) {
         final id = _id(e);
@@ -227,6 +237,8 @@ class _AdminBulletinsState extends State<AdminBulletins> {
         _champ('Semestre', 140, _liste(_semestre, sems, sems, _niveau == null ? 'Niveau d\'abord' : 'Semestre',
             _niveau == null ? null : (v) => setState(() { _semestre = v; _charge = false; }))),
         _champ('Année académique', 180, _liste(_annee, _annees, _annees, 'Année', (v) => setState(() { _annee = v; _charge = false; }))),
+        _champ('Session', 200, _liste(_session, const ['normale', 'rattrapage'], const ['Normale', 'Après rattrapage'], 'Session',
+            (v) => setState(() { _session = v ?? 'normale'; _charge = false; }))),
         SizedBox(height: 44, child: ElevatedButton.icon(
           onPressed: _chargement ? null : _charger,
           icon: _chargement
@@ -294,7 +306,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
       decoration: BoxDecoration(color: AdminTheme.surface, borderRadius: BorderRadius.circular(AdminTheme.radiusCard), border: Border.all(color: AdminTheme.border), boxShadow: AdminTheme.cardShadow),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('Bulletins des étudiants', style: AdminTheme.headingMedium),
+          Text(_cSession == 'rattrapage' ? 'Bulletins après rattrapage' : 'Bulletins des étudiants', style: AdminTheme.headingMedium),
           const Spacer(),
           const Icon(Icons.circle, size: 9, color: AdminTheme.success), const SizedBox(width: 5),
           Text('Semestre validé', style: AdminTheme.caption), const SizedBox(width: 14),
@@ -322,7 +334,9 @@ class _AdminBulletinsState extends State<AdminBulletins> {
                 style: TextStyle(fontSize: 13, color: AdminTheme.warning, fontWeight: FontWeight.w600)),
           )
         else if (_etus.isEmpty)
-          const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('Aucun étudiant dans cette filière / ce niveau.')))
+          Padding(padding: const EdgeInsets.all(24), child: Center(child: Text(_cSession == 'rattrapage'
+              ? 'Aucun étudiant en rattrapage pour ce semestre (bulletin normal publié requis).'
+              : 'Aucun étudiant dans cette filière / ce niveau.')))
         else
           _tableau(),
         const SizedBox(height: 14),
@@ -683,7 +697,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
     setState(() => _envoi = true);
     final r = await BulletinsAdminService.publier(
       filiereId: _cFiliere!, niveau: _cNiveau!, semestre: _cSemestre!, anneeAcademique: _cAnnee!,
-      resultats: resultats, publier: publier,
+      resultats: resultats, publier: publier, sessionType: _cSession,
     );
     if (!mounted) return;
     setState(() => _envoi = false);

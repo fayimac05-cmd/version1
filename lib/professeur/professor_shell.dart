@@ -13,6 +13,7 @@ import '../widgets/mobile_nav.dart';
 import '../widgets/scolarhub_logo.dart';
 import 'appel_tab.dart';
 import 'notes_tab.dart';
+import 'rattrapage_tab.dart';
 import 'programme_screen.dart';
 import 'upload_course_screen.dart';
 import 'professeur_liste_etudiants.dart';
@@ -106,6 +107,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
         return const AdminMessages(role: 'professeur');
       case 6:
         return _ProfilTab(profile: _profil, onLogout: widget.onLogout, onPhotoChanged: _photoChangee, onBack: () => _goTo(0));
+      case 8:
+        return RattrapageTab(profile: _profil, initialClasse: _classePreselectionnee);
       case 7:
         return const ProfesseurReclamations();
       default:
@@ -146,7 +149,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
   void _goTo(int index) {
     setState(() {
       _currentTab = index;
-      if (index != 3 && index != 4) {
+      if (index != 3 && index != 4 && index != 8) {
         _classePreselectionnee = null;
       }
     });
@@ -236,6 +239,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
                       _sideItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'Cours', 2),
                       _sideItem(Icons.how_to_reg_outlined, Icons.how_to_reg_rounded, 'Appel', 3),
                       _sideItem(Icons.fact_check_outlined, Icons.fact_check_rounded, 'Notes', 4),
+                      _sideItem(Icons.replay_circle_filled_outlined, Icons.replay_circle_filled_rounded, 'Rattrapage', 8),
                       _sideItem(Icons.forum_outlined, Icons.forum_rounded, 'Messages', 5),
                       _sideItem(Icons.report_gmailerrorred_outlined, Icons.report_gmailerrorred_rounded, 'Réclamations', 7),
                       _sideItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 6),
@@ -319,6 +323,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
     NavEntry(index: 1, label: 'Classes', icon: Icons.groups_outlined, iconActive: Icons.groups_rounded, group: 'ENSEIGNEMENT'),
     NavEntry(index: 2, label: 'Cours', icon: Icons.menu_book_outlined, iconActive: Icons.menu_book_rounded, group: 'ENSEIGNEMENT'),
     NavEntry(index: 7, label: 'Réclamations', icon: Icons.report_gmailerrorred_outlined, iconActive: Icons.report_gmailerrorred_rounded, group: 'COMMUNICATION'),
+    NavEntry(index: 8, label: 'Rattrapage', icon: Icons.replay_circle_filled_outlined, iconActive: Icons.replay_circle_filled_rounded, group: 'ENSEIGNEMENT'),
     NavEntry(index: 6, label: 'Profil', icon: Icons.person_outline_rounded, iconActive: Icons.person_rounded, group: 'MON COMPTE'),
   ];
 

@@ -124,6 +124,8 @@ class _ParentBulletinsTabState extends State<ParentBulletinsTab> {
                     ? DateTime.tryParse(b['date_publication'].toString())?.toLocal().toString().substring(0, 10)
                     : null;
 
+                final apresRattrapage = b['session_type'] == 'rattrapage';
+
                 return Container(
                   padding: const EdgeInsets.all(16),
                   decoration: ParentStyles.cardDecoration(),
@@ -145,7 +147,7 @@ class _ParentBulletinsTabState extends State<ParentBulletinsTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${b['semestre'] ?? ''} · ${b['annee_academique'] ?? ''}',
+                              '${b['semestre'] ?? ''} · ${b['annee_academique'] ?? ''}${apresRattrapage ? ' · Après rattrapage' : ''}',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: ParentStyles.textDark),
                             ),
                             if (datePub != null)

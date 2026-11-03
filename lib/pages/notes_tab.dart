@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../services/notes_admin_service.dart';
 import '../theme/app_palette.dart';
+import 'rattrapage_etudiant.dart';
 
 // ── Modèle : un module avec tous ses devoirs réels ────────────────────────
 // Remplace l'ancien modèle TD/Exam inventé : chaque module regroupe le
@@ -92,7 +93,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     _fetchNotesBackend();
   }
 
@@ -242,13 +243,15 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
           const SizedBox(height: 2),
 
           TabBar(controller: _tabCtrl,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             indicatorColor: AppPalette.yellow,
             indicatorWeight: 2,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white54,
             labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             unselectedLabelStyle: const TextStyle(fontSize: 12),
-            tabs: const [Tab(text: 'Toutes les notes'), Tab(text: 'Par statut'), Tab(text: 'Moyennes provisoires')],
+            tabs: const [Tab(text: 'Toutes les notes'), Tab(text: 'Par statut'), Tab(text: 'Moyennes provisoires'), Tab(text: 'Rattrapage')],
           ),
         ]),
         ]),
@@ -260,6 +263,7 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
           _erreur ? _etatErreur() : _notes.isEmpty ? _etatVide() : _ListeNotes(notes: _notes, onReclamer: _ouvrirReclamation),
           _erreur ? _etatErreur() : _notes.isEmpty ? _etatVide() : _NotesParStatut(notes: _notes, onReclamer: _ouvrirReclamation),
           const _MoyennesProvisoires(),
+          const RattrapageEtudiant(),
         ]),
       ),
     ]);
