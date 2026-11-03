@@ -19,6 +19,7 @@ class _BulletinData {
   final String statut; // 'valide' | 'ajourne' | 'invalide'
   final String? datePublication;
   final List<_MatiereResultat> matieres;
+  final String sessionType; // 'normale' | 'rattrapage'
 
   const _BulletinData({
     required this.semestre,
@@ -27,6 +28,7 @@ class _BulletinData {
     required this.statut,
     required this.datePublication,
     required this.matieres,
+    this.sessionType = 'normale',
   });
 
   String get statutLabel {
@@ -114,11 +116,12 @@ class _BulletinScreenState extends State<BulletinScreen> {
           statut: b['statut'] as String? ?? '',
           datePublication: (b['date_publication'] as String?)?.split('T').first,
           matieres: matieres,
+          sessionType: b['session_type'] as String? ?? 'normale',
         );
       }).toList();
 
       // Le plus récent en premier.
-      bulletins.sort((a, b) => '${b.anneeAcademique}${b.semestre}'.compareTo('${a.anneeAcademique}${a.semestre}'));
+      bulletins.sort((a, b) => '${b.anneeAcademique}${b.semestre}${b.sessionType}'.compareTo('${a.anneeAcademique}${a.semestre}${a.sessionType}'));
 
       if (!mounted) return;
       setState(() {
@@ -249,7 +252,7 @@ class _BulletinScreenState extends State<BulletinScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(color: brandBlue, borderRadius: BorderRadius.circular(30)),
-                child: Text(b.semestre.toUpperCase(),
+                child: Text(b.sessionType == 'rattrapage' ? '${b.semestre.toUpperCase()} · APRÈS RATTRAPAGE' : b.semestre.toUpperCase(),
                     style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
               ),
             ),

@@ -3,6 +3,7 @@ import '../admin/admin_theme.dart';
 import '../admin/admin_annonces.dart' show istNiveaux;
 import '../services/api_service.dart';
 import '../services/notes_admin_service.dart';
+import '../services/rattrapage_service.dart' show RattrapageService;
 import '../utils/snackbar_helper.dart';
 import '../models/student_profile.dart';
 
@@ -869,7 +870,8 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
   String? _niveau;
   String? _semestre;
   String? _mention;
-  final _anneeCtrl = TextEditingController(text: '${DateTime.now().year}-${DateTime.now().year + 1}');
+  // Remplie avec l'année académique en cours du serveur (voir _chargerAnneeCourante).
+  final _anneeCtrl = TextEditingController();
   bool _isLoadingBase = true;
   bool _isLoadingModules = false;
   bool _isSaving = false;
@@ -878,7 +880,16 @@ class _SaisieDirecteState extends State<_SaisieDirecte> {
   @override
   void initState() {
     super.initState();
+    _chargerAnneeCourante();
     _chargerBase();
+  }
+
+  Future<void> _chargerAnneeCourante() async {
+    final r = await RattrapageService.anneeCourante();
+    if (!mounted) return;
+    final data = r['success'] == true ? r['data'] : null;
+    final libelle = data is Map ? '${data['libelle'] ?? ''}' : '';
+    if (libelle.isNotEmpty && _anneeCtrl.text.trim().isEmpty) setState(() => _anneeCtrl.text = libelle);
   }
 
   @override

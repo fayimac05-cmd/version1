@@ -10,6 +10,7 @@ class BulletinsAdminService {
     required String niveau,
     required String semestre,
     required String anneeAcademique,
+    String session = 'normale',
   }) async {
     try {
       final headers = await ApiService.getHeaders();
@@ -18,6 +19,7 @@ class BulletinsAdminService {
         'niveau': niveau,
         'semestre': semestre,
         'annee_academique': anneeAcademique,
+        'session': session,
       });
       final r = await http.get(uri, headers: headers);
       final body = jsonDecode(utf8.decode(r.bodyBytes));
@@ -44,6 +46,7 @@ class BulletinsAdminService {
     required String anneeAcademique,
     required List<Map<String, dynamic>> resultats,
     bool publier = true,
+    String sessionType = 'normale',
   }) async {
     try {
       final headers = await ApiService.getHeaders();
@@ -57,6 +60,7 @@ class BulletinsAdminService {
           'annee_academique': anneeAcademique,
           'resultats': resultats,
           'publier': publier,
+          'session_type': sessionType,
         }),
       );
       final body = jsonDecode(utf8.decode(r.bodyBytes));

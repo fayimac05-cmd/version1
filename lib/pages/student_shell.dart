@@ -10,6 +10,8 @@ import 'profile_tab.dart';
 import 'canal_screen.dart';
 import 'chat_ia_screen.dart';
 import 'app_drawer.dart';
+import '../services/annuel_service.dart';
+import 'reinscription_page.dart';
 
 class StudentShell extends StatefulWidget {
   const StudentShell({
@@ -34,10 +36,24 @@ class _StudentShellState extends State<StudentShell> {
   // l'app (accueil, canaux, drawer...), pas seulement à l'écran Profil.
   late StudentProfile _profile = widget.profile;
 
+  // Rempli quand l'étudiant doit se réinscrire (ou est diplômé) : l'app est alors remplacée
+  // par l'écran de réinscription, avec accès aux archives en lecture seule.
+  Map<String, dynamic>? _blocage;
+
   @override
   void initState() {
     super.initState();
     _rafraichirPhotos();
+    _verifierReinscription();
+  }
+
+  Future<void> _verifierReinscription() async {
+    final r = await AnnuelService.monStatut();
+    if (!mounted || r['success'] != true) return; // hors-ligne ou erreur : on ne bloque jamais
+    final d = Map<String, dynamic>.from((r['data'] as Map?) ?? {});
+    final parcours = '${d['parcours']}';
+    final bloque = parcours == 'diplome' || parcours == 'abandon' || d['a_jour'] == false;
+    setState(() => _blocage = bloque ? d : null);
   }
 
   /// Relit la photo et la couverture depuis le serveur (GET /auth/me) et les
@@ -69,6 +85,13 @@ class _StudentShellState extends State<StudentShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (_blocage != null) {
+      return ReinscriptionPage(
+        statut: _blocage!,
+        onLogout: widget.onLogout,
+        onActualiser: _verifierReinscription,
+      );
+    }
     final pages = [
       HomeTab(
         profile: _profile,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart' show libelleSemestre;
 import '../services/professor_service.dart';
+import '../services/rattrapage_service.dart' show RattrapageService;
 import '../theme/app_palette.dart';
 
 // Mêmes constantes que côté admin (admin_notes.dart) — cohérence des
@@ -100,7 +101,8 @@ class _NotesTabState extends State<NotesTab> {
     return exacts.isNotEmpty ? exacts : _modules;
   }
 
-  final _anneeCtrl = TextEditingController(text: '${DateTime.now().year}-${DateTime.now().year + 1}');
+  // Remplie avec l'année académique en cours du serveur (voir _chargerAnneeCourante).
+  final _anneeCtrl = TextEditingController();
 
   // matricule -> texte brut saisi (permet une note vide ou partielle sans
   // planter le parseur — le calcul se fait via _noteValeur()).
@@ -111,7 +113,16 @@ class _NotesTabState extends State<NotesTab> {
   @override
   void initState() {
     super.initState();
+    _chargerAnneeCourante();
     _chargerDonnees();
+  }
+
+  Future<void> _chargerAnneeCourante() async {
+    final r = await RattrapageService.anneeCourante();
+    if (!mounted) return;
+    final data = r['success'] == true ? r['data'] : null;
+    final libelle = data is Map ? '${data['libelle'] ?? ''}' : '';
+    if (libelle.isNotEmpty && _anneeCtrl.text.trim().isEmpty) setState(() => _anneeCtrl.text = libelle);
   }
 
   @override

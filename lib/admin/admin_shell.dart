@@ -45,6 +45,9 @@ import '../admin/admin_edt.dart';
 import '../admin/admin_filieres.dart';
 import '../admin/admin_notes.dart';
 import '../admin/admin_bulletins.dart';
+import '../admin/admin_rattrapage.dart';
+import '../admin/admin_annuel.dart';
+import '../admin/admin_reinscriptions.dart';
 import '../admin/admin_reclamations.dart';
 import '../admin/admin_etudiants.dart';
 import '../admin/admin_professeurs.dart';
@@ -110,12 +113,15 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.groups_2_outlined, iconActive: Icons.groups_2_rounded, label: 'Délégués', group: 'PERSONNES'),
   _MenuItem(icon: Icons.restaurant_menu_outlined, iconActive: Icons.restaurant_menu_rounded, label: 'Cantine', group: 'SERVICES'),
   _MenuItem(icon: Icons.diversity_3_outlined, iconActive: Icons.diversity_3_rounded, label: 'Bureau des Étudiants', group: 'PERSONNES'),
+  _MenuItem(icon: Icons.replay_circle_filled_outlined, iconActive: Icons.replay_circle_filled_rounded, label: 'Rattrapage', group: 'ACADÉMIQUE'),
+  _MenuItem(icon: Icons.event_available_outlined, iconActive: Icons.event_available_rounded, label: 'Fin d\'année', group: 'ACADÉMIQUE'),
+  _MenuItem(icon: Icons.how_to_reg_outlined, iconActive: Icons.how_to_reg_rounded, label: 'Réinscriptions', group: 'ACADÉMIQUE'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
   {'key': 'GÉNÉRAL',    'items': [0, 1]},
   {'key': 'SECTIONS',   'items': [14, 15]},
-  {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5, 17]},
+  {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5, 17, 21, 22, 23]},
   {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18, 20]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
@@ -149,6 +155,9 @@ const Map<int, String> kMenuPermission = {
   17: 'bulletins',    // Bulletins
   18: 'etudiants',    // Délégués
   20: 'bde',          // Bureau des Étudiants
+  21: 'notes',        // Rattrapage
+  22: 'bulletins',    // Fin d'année
+  23: 'etudiants',    // Réinscriptions
 };
 
 class AdminMenuService {
@@ -160,13 +169,13 @@ class AdminMenuService {
     switch (role) {
       case AdminRole.superAdmin:
         // Accès total (0..20)
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
       case AdminRole.scolarite:
         // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
-        return {0, 2, 3, 6, 7, 12};
+        return {0, 2, 3, 6, 7, 12, 23};
       case AdminRole.examens:
         // Tableau de bord, Notes & Moyennes, Bulletins, Réclamations, Statistiques, Éval. Professeurs, Élèves à risque
-        return {0, 4, 17, 5, 12, 13, 16};
+        return {0, 4, 17, 5, 12, 13, 16, 21, 22};
       case AdminRole.secretariat:
         // Tableau de bord, Annonces, Réclamations, Étudiants, Parents
         return {0, 1, 5, 6, 8, 18};
@@ -359,6 +368,9 @@ class _AdminShellState extends State<AdminShell>
       const AdminDelegues(),
       const AdminCantine(),
       const AdminBdeMembres(),
+      const AdminRattrapage(),
+      const AdminAnnuel(),
+      const AdminReinscriptions(),
     ];
 
     _pageAnim = AnimationController(
@@ -834,7 +846,7 @@ class _AdminShellState extends State<AdminShell>
   // Ordre de priorité des onglets mis en avant dans la barre du bas ; seuls
   // ceux auxquels le membre a droit sont retenus (un sous-rôle limité n'en
   // verra que quelques-uns, et pas de bouton « Plus » s'il n'y en a pas plus de 5).
-  static const List<int> _prioriteMobile = [0, 10, 6, 1, 5, 4, 2, 3, 7, 8, 17, 12, 19, 14, 15, 9, 11, 13, 16, 18, 20];
+  static const List<int> _prioriteMobile = [0, 10, 6, 1, 5, 4, 2, 3, 7, 8, 17, 12, 19, 14, 15, 9, 11, 13, 16, 18, 20, 21, 22, 23];
 
   NavEntry _entree(int i) => NavEntry(
         index: i,
