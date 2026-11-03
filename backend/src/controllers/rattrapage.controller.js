@@ -193,6 +193,14 @@ const creerSession = async (req, res) => {
 
         const mod = await pool.query('SELECT nom, semestre FROM modules WHERE id = $1', [module_id]);
         if (!mod.rows[0]) return res.status(404).json({ success: false, message: 'Module introuvable.' });
+           if (req.user.role === 'professeur') {
+            const aff = await pool.query(
+                'SELECT 1 FROM professeur_modules WHERE professeur_id = $1 AND module_id = $2 AND niveau = $3 LIMIT 1',
+                [req.user.id, module_id, niveau]);
+            if (!aff.rows.length) {
+                return res.status(403).json({ success: false, message: "Vous n'enseignez pas ce module à ce niveau." });
+            }
+        }
         const sem = parseSemestre(mod.rows[0].semestre);
         if (sem === null) {
             return res.status(400).json({ success: false, message: "Ce module n'a pas de semestre défini." });
