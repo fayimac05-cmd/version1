@@ -246,6 +246,9 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    // Marges latérales qui s'adaptent à la largeur de l'écran.
+    final largeur = MediaQuery.of(context).size.width;
+    final marge = largeur < 360 ? 12.0 : (largeur < 600 ? 16.0 : 20.0);
     return Container(
       color: const Color(0xFFF4F7FB),
       child: SafeArea(
@@ -260,7 +263,7 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
             child: SingleChildScrollView(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
+              padding: EdgeInsets.fromLTRB(marge, 16, marge, 30),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1380),
@@ -300,72 +303,103 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
   // version qui empilait deux blocs bleus l'un sur l'autre).
   Widget _buildTopRow() {
     final photoUrl = widget.profile.photoUrl?.trim();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Bonjour, $_prenom 👋',
-                  style: const TextStyle(color: _navyText, fontSize: 24, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 4),
-              const Text('Voici un aperçu de votre activité académique aujourd\'hui.',
-                  style: TextStyle(color: _muted, fontSize: 13, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Material(
-          color: Colors.white,
-          shape: const CircleBorder(),
-          elevation: 0,
-          child: InkWell(
-            onTap: widget.onMessages,
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: _border),
-              ),
-              child: Stack(clipBehavior: Clip.none, children: [
-                const Center(child: Icon(Icons.notifications_none_rounded, color: _navyText, size: 22)),
-              ]),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        InkWell(
-          onTap: widget.onProfil,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: Row(children: [
-              CircleAvatar(
-                radius: 21,
-                backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
-                backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                child: photoUrl == null || photoUrl.isEmpty
-                    ? Text(_initiale, style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900, fontSize: 15))
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Column(
+    final matricule = widget.profile.matricule.trim();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        // Téléphone : on ne garde que la photo (le nom complet est dans
+        // l'onglet Profil) pour laisser toute la place au message d'accueil.
+        final compact = w < 560;
+        final titleSize = w < 340 ? 19.0 : (w < 600 ? 21.0 : 24.0);
+        final bellSize = compact ? 40.0 : 44.0;
+
+        final avatar = CircleAvatar(
+          radius: compact ? 19 : 21,
+          backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          child: photoUrl == null || photoUrl.isEmpty
+              ? Text(_initiale, style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900, fontSize: 15))
+              : null,
+        );
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_nomComplet, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
-                  Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}',
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+                  Text('Bonjour, $_prenom 👋',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: _navyText, fontSize: titleSize, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text('Voici un aperçu de votre activité académique aujourd\'hui.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: _muted, fontSize: compact ? 12 : 13, fontWeight: FontWeight.w500)),
                 ],
               ),
-            ]),
-          ),
-        ),
-      ],
+            ),
+            SizedBox(width: compact ? 10 : 16),
+            Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              elevation: 0,
+              child: InkWell(
+                onTap: widget.onMessages,
+                customBorder: const CircleBorder(),
+                child: Container(
+                  width: bellSize,
+                  height: bellSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _border),
+                  ),
+                  child: const Center(child: Icon(Icons.notifications_none_rounded, color: _navyText, size: 22)),
+                ),
+              ),
+            ),
+            SizedBox(width: compact ? 8 : 12),
+            if (compact)
+              InkWell(
+                onTap: widget.onProfil,
+                customBorder: const CircleBorder(),
+                child: avatar,
+              )
+            else
+              ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: (w * 0.34).clamp(150.0, 280.0)),
+                  child: InkWell(
+                    onTap: widget.onProfil,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(children: [
+                        avatar,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_nomComplet,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                              Text('Professeur${matricule.isNotEmpty ? " • $matricule" : ""}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ]),
+                    ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -373,9 +407,9 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final columns = width >= 900 ? 4 : width >= 560 ? 2 : 1;
-        final gap = 14.0;
-        final cardWidth = (width - gap * (columns - 1)) / columns;
+        final columns = width >= 720 ? 4 : (width >= 260 ? 2 : 1);
+        final gap = width < 400 ? 10.0 : 14.0;
+        final cardWidth = ((width - gap * (columns - 1)) / columns).floorToDouble();
         final stats = [
           _DashboardStat('${_classes.length}', 'Classes', 'Enseignées', Icons.groups_rounded, AppPalette.blue, widget.onClasses),
           _DashboardStat('${_cours.length}', 'Cours', 'Publiés', Icons.menu_book_rounded, _amber, widget.onCours),
@@ -399,7 +433,7 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
         onTap: stat.onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: _border),
@@ -427,8 +461,8 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
               const SizedBox(height: 14),
               Text(stat.value, style: const TextStyle(color: _navyText, fontSize: 26, fontWeight: FontWeight.w900)),
               const SizedBox(height: 2),
-              Text(stat.label, style: const TextStyle(color: _navyText, fontSize: 13, fontWeight: FontWeight.w700)),
-              Text(stat.sublabel, style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w500)),
+              Text(stat.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _navyText, fontSize: 13, fontWeight: FontWeight.w700)),
+              Text(stat.sublabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -452,7 +486,7 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
   Widget _buildQuickActions() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 700 ? 3 : 1;
+        final columns = constraints.maxWidth >= 760 ? 3 : 1;
         final gap = 14.0;
         final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
         final actions = [
@@ -522,9 +556,9 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
               const SizedBox(width: 13),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: TextStyle(color: fg, fontSize: 14.5, fontWeight: FontWeight.w900)),
+                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: fg, fontSize: 14.5, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 2),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: sub, fontSize: 11, fontWeight: FontWeight.w600)),
                 ]),
               ),
@@ -765,10 +799,12 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Text(debut.isEmpty ? '--:--' : debut, style: const TextStyle(color: _muted, fontSize: 11, fontWeight: FontWeight.w700)),
-                if (fin.isNotEmpty) Text(' - $fin', style: const TextStyle(color: _muted, fontSize: 11, fontWeight: FontWeight.w700)),
-              ]),
+              Text(
+                '${debut.isEmpty ? '--:--' : debut}${fin.isNotEmpty ? ' - $fin' : ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _muted, fontSize: 11, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 2),
               Text(matiere, maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w900)),
@@ -779,7 +815,10 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
                 if (salle.isNotEmpty) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.location_on_rounded, size: 11, color: _faint),
-                  Text(salle, style: const TextStyle(color: _faint, fontSize: 10.5, fontWeight: FontWeight.w600)),
+                  Flexible(
+                    child: Text(salle, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _faint, fontSize: 10.5, fontWeight: FontWeight.w600)),
+                  ),
                 ],
               ]),
             ],
@@ -1100,7 +1139,7 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
 
   Widget _whiteCard({required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(17),
+      padding: EdgeInsets.all(MediaQuery.of(context).size.width < 400 ? 13 : 17),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
