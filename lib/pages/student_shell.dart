@@ -29,6 +29,7 @@ class StudentShell extends StatefulWidget {
 
 class _StudentShellState extends State<StudentShell> {
   int _currentTab = 0;
+  int _canauxUnread = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Copie mutable du profil, tenue à jour après un changement de photo/
@@ -97,7 +98,12 @@ class _StudentShellState extends State<StudentShell> {
         profile: _profile,
         onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
       ),
-      CanalScreen(profile: _profile),
+      CanalScreen(
+        profile: _profile,
+        onUnreadChanged: (count) {
+          if (_canauxUnread != count) setState(() => _canauxUnread = count);
+        },
+      ),
       ChatIAScreen(profile: _profile, showBack: false),
       ProfileTab(
         profile: _profile,
@@ -162,6 +168,7 @@ class _StudentShellState extends State<StudentShell> {
                 label: 'Canaux',
                 index: 1,
                 activeColor: AppPalette.yellow,
+                showDot: _canauxUnread > 0,
               ),
               _navItem(
                 icon: Icons.smart_toy_outlined,
@@ -192,6 +199,7 @@ class _StudentShellState extends State<StudentShell> {
     required int index,
     required Color activeColor,
     int? badge,
+    bool showDot = false,
     String? photoUrl,
   }) {
     final isActive = _currentTab == index;
@@ -249,7 +257,21 @@ class _StudentShellState extends State<StudentShell> {
                           ),
                   ),
                 ),
-                if (badge != null)
+                if (showDot)
+                  Positioned(
+                    top: 1,
+                    right: 1,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                    ),
+                  )
+                else if (badge != null)
                   Positioned(
                     top: -4,
                     right: -4,

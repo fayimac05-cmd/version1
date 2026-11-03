@@ -1,5 +1,15 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
+import '../app/scolar_hub_app.dart';
+import '../config/etablissement_config.dart';
+import '../models/student_profile.dart';
+import '../pages/student_shell.dart';
+import '../pages/parent/parent_shell.dart';
+import '../admin/admin_shell.dart';
+import '../professeur/professor_shell.dart';
+import '../pages/bureau_des_etudiants.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import 'auth_page.dart';
 import '../widgets/scolarhub_logo.dart';
@@ -163,7 +173,76 @@ class _SplashScreenState extends State<SplashScreen>
       await Future.delayed(const Duration(milliseconds: 250));
       if (!mounted) return;
     }
+
+    // Auto-login : si un token ET un profil sont sauvegardés,
+    // on reconnecte l'utilisateur directement sans repasser par la page de connexion.
+    final token = await ApiService.getToken();
+    final savedProfile = await ApiService.loadProfile();
+    if (!mounted) return;
+    if (token != null && token.isNotEmpty && savedProfile != null) {
+      await _autoLogin(savedProfile);
+      return;
+    }
+
     _startAnimations();
+  }
+
+  // Reconstruit le profil depuis les données persistées et navigue vers le dashboard.
+  Future<void> _autoLogin(Map<String, dynamic> data) async {
+    // Recharger la config établissement (persistée dans SharedPreferences)
+    await EtablissementConfig.instance.charger();
+
+    final profile = StudentProfile(
+      nom: (data['nom'] as String?) ?? '',
+      prenoms: (data['prenoms'] as String?) ?? '',
+      matricule: (data['matricule'] as String?) ?? '',
+      email: (data['email'] as String?) ?? '',
+      telephone: (data['telephone'] as String?) ?? '',
+      filiere: (data['filiere'] as String?) ?? '',
+      niveau: (data['niveau'] as String?) ?? '',
+      domaine: (data['domaine'] as String?) ?? '',
+      role: (data['role'] as String?) ?? 'etudiant',
+      adminSubRole: data['adminSubRole'] as String?,
+      domaineAdmin: (data['domaineAdmin'] as String?) ?? 'Tous',
+      filiereRole: data['filiereRole'] as String?,
+      photoUrl: data['photoUrl'] as String?,
+      coverUrl: data['coverUrl'] as String?,
+      enfantNom: data['enfantNom'] as String?,
+      matriculeEnfant: data['matriculeEnfant'] as String?,
+      motDePasse: '',
+    );
+
+    if (!mounted) return;
+
+    SocketService().connect(profile.matricule);
+
+    void logout() {
+      ApiService.clearToken().then((_) {
+        ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
+          (_) => false,
+        );
+      });
+    }
+
+    final String r = profile.role.toLowerCase().trim();
+    final Widget destination;
+    if (r == 'admin' || r == 'admi' || r == 'administrator') {
+      destination = AdminShell(profile: profile, onLogout: logout);
+    } else if (r == 'prof' || r == 'professeur' || r == 'enseignant' || r == 'teacher') {
+      destination = ProfessorShell(profile: profile, onLogout: logout);
+    } else if (r == 'parent' || r == 'tuteur') {
+      destination = ParentShell(profile: profile, onLogout: logout);
+    } else if (r == 'bde') {
+      destination = const BureauDesEtudiantsScreen();
+    } else {
+      destination = StudentShell(profile: profile, onLogout: logout);
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => destination),
+      (_) => false,
+    );
   }
 
   Future<void> _startAnimations() async {

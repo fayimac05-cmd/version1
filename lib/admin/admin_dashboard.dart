@@ -18,7 +18,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _nbSciencesTech = 0;
   int _nbSciencesGestion = 0;
   int _nbSuspendus = 0;
-
   bool _loadingRecl = true;
   List<dynamic> _reclamations = [];
 
@@ -177,7 +176,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       body: SingleChildScrollView(
         padding: EdgeInsets.all(isDesktop ? 28 : 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
           // ── Salutation ──────────────────────────────────────────────
           _greeting(),
           const SizedBox(height: 20),
@@ -221,7 +219,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           // ── Publications BDE en attente ──────────────────────────────
           _bdeWidget(),
           const SizedBox(height: 28),
-
           // ── Majors de promo ──────────────────────────────────────────
           _majorsWidget(),
           const SizedBox(height: 32),

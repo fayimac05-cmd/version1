@@ -114,7 +114,8 @@ Map<String, int> _reactionsDepuisJson(dynamic raw) {
 // ════════════════════════════════════════════════════════════════════════════
 class CanalScreen extends StatefulWidget {
   final StudentProfile profile;
-  const CanalScreen({super.key, required this.profile});
+  final ValueChanged<int>? onUnreadChanged;
+  const CanalScreen({super.key, required this.profile, this.onUnreadChanged});
   @override
   State<CanalScreen> createState() => _CanalScreenState();
 }
@@ -138,6 +139,10 @@ class _CanalScreenState extends State<CanalScreen> {
   // ✅ NOUVEAU — nombre réel de messages non lus par canal (au lieu des
   // badges fixes '3'/'1' précédents), indexé par canalId.
   final Map<String, int> _nonLus = {};
+
+  // Badge temps réel : userId en cache + callback socket
+  String? _myUserId;
+  void Function(dynamic)? _socketCanalCallback;
 
   // ✅ Multi-établissement — ids RÉELS des canaux standard de MON école
   // (administration, bde, professeurs, admin_profs…), fournis par le serveur.
@@ -185,6 +190,7 @@ class _CanalScreenState extends State<CanalScreen> {
   @override
   void initState() {
     super.initState();
+    _initSocketBadges();
     final role = widget.profile.role.toLowerCase().trim();
     if (['professeur', 'prof', 'enseignant', 'teacher'].contains(role)) {
       _chargerCanauxStandard();
@@ -214,6 +220,7 @@ class _CanalScreenState extends State<CanalScreen> {
       final n = await _compterNonLus(canalIdAdminFiliere, myId);
       if (mounted) setState(() => _nonLus[canalIdAdminFiliere] = n);
     }
+    _notifierParent();
   }
 
   Future<int> _compterNonLus(String canalId, String? myId) async {
@@ -273,6 +280,7 @@ class _CanalScreenState extends State<CanalScreen> {
       final myId = await ApiService.getUserId();
       final n = await _compterNonLus(canalId, myId);
       if (mounted) setState(() => _nonLus[canalId] = n);
+      _notifierParent();
     }
   }
 
@@ -321,6 +329,41 @@ class _CanalScreenState extends State<CanalScreen> {
     } finally {
       if (mounted) setState(() => _chargementCanauxProfesseur = false);
     }
+  }
+
+  @override
+  void dispose() {
+    if (_socketCanalCallback != null) {
+      SocketService().off('message:canal', _socketCanalCallback!);
+    }
+    super.dispose();
+  }
+
+  /// Initialise l'écoute Socket.IO pour mettre à jour les badges non-lus
+  /// en temps réel quand un message arrive dans un canal.
+  Future<void> _initSocketBadges() async {
+    _myUserId = await ApiService.getUserId();
+    _socketCanalCallback = _onSocketCanalMessage;
+    SocketService().onCanalMessage(_socketCanalCallback!);
+  }
+
+  /// Quand un message canal arrive par socket, on incrémente le compteur
+  /// non-lu du canal concerné (sauf si c'est notre propre message).
+  void _onSocketCanalMessage(dynamic data) {
+    if (!mounted) return;
+    final auteurId = (data['auteur_id'] ?? data['expediteur_id'])?.toString();
+    if (auteurId == _myUserId) return;
+    final canalId = (data['canal_id'] ?? data['canalId'])?.toString();
+    if (canalId == null || canalId.isEmpty) return;
+    setState(() => _nonLus[canalId] = (_nonLus[canalId] ?? 0) + 1);
+    _notifierParent();
+  }
+
+  /// Somme tous les non-lus et remonte le total au parent (StudentShell)
+  /// pour afficher un badge sur l'onglet « Canaux ».
+  void _notifierParent() {
+    final total = _nonLus.values.fold<int>(0, (s, n) => s + n);
+    widget.onUnreadChanged?.call(total);
   }
 
   @override
@@ -567,11 +610,34 @@ class _CanalScreenState extends State<CanalScreen> {
           border: Border.all(color: _border),
         ),
         child: Row(children: [
-          Container(width: 46, height: 46,
-            decoration: BoxDecoration(
-              color: couleur.withValues(alpha:0.08),
-              borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: couleur, size: 22)),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: couleur.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: couleur, size: 22),
+              ),
+              if (badge != null)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
@@ -598,7 +664,7 @@ class _CanalScreenState extends State<CanalScreen> {
           else if (badge != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: couleur, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(10)),
               child: Text(badge, style: const TextStyle(
                   fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)))
           else
@@ -669,6 +735,12 @@ class _CanalScreenState extends State<CanalScreen> {
             couleur: _brandBlue, tag: 'Lecture seule',
             canalId: canalId, canWrite: false);
     }
+    if (canalId.isNotEmpty && _nonLus.containsKey(canalId)) {
+      setState(() {
+        _nonLus[canalId] = 0;
+      });
+      _notifierParent();
+    }
     Navigator.push(context, MaterialPageRoute(builder: (_) => page))
         .then((_) => _chargerNonLus());
   }
@@ -695,6 +767,7 @@ class _CanalDetail extends StatefulWidget {
 
 class _CanalDetailState extends State<_CanalDetail> {
   static final String _baseUrl = ApiService.baseUrl;
+  void Function(dynamic)? _detailSocketCallback;
   final List<_MessageCanal> _msgs = [];
   final _inputCtrl = TextEditingController();
   final _scroll = ScrollController();
@@ -745,7 +818,9 @@ class _CanalDetailState extends State<_CanalDetail> {
 
   @override
   void dispose() {
-    SocketService().off('message:canal');
+    if (_detailSocketCallback != null) {
+      SocketService().off('message:canal', _detailSocketCallback!);
+    }
     _recordTimer?.cancel();
     _voiceRecorder.dispose();
     _inputCtrl.dispose();
@@ -789,19 +864,21 @@ class _CanalDetailState extends State<_CanalDetail> {
   Future<void> _connecterSocket() async {
     await SocketService().connect();
     SocketService().joinRoom('canal:${widget.canalId}');
-    SocketService().onCanalMessage((data) {
+    _detailSocketCallback = (data) {
       if (!mounted) return;
       final json = data is Map<String, dynamic>
           ? data
           : jsonDecode(data.toString()) as Map<String, dynamic>;
-      // Ne concerne pas ce canal, ou message déjà affiché (envoyé par moi)
       final cid = json['canal_id']?.toString() ?? json['canalId']?.toString();
       if (cid != widget.canalId) return;
       if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
       final msg = _MessageCanal.fromJson(json, widget.couleur);
       setState(() => _msgs.add(msg));
       _scrollBas();
-    });
+      // Marque immédiatement comme lu puisque l'utilisateur regarde le canal
+      ApiService.marquerMessageLu('canal', msg.id);
+    };
+    SocketService().onCanalMessage(_detailSocketCallback!);
   }
 
   Future<void> _envoyerMessage() async {
