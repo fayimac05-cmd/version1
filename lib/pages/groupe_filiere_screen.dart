@@ -138,32 +138,37 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     _init();
   }
 
+  // Mémorise la filière par utilisateur : évite un aller-retour /auth/me
+  // à chaque ouverture de la discussion.
+  static final Map<String, int> _filiereCache = {};
+
   Future<void> _init() async {
     _myUserId = await ApiService.getUserId();
     try {
-      final headers = await ApiService.getHeaders();
-      final me = await http.get(
-          Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
-      if (me.statusCode != 200) {
-        setState(() => _chargementInitial = false);
-        return;
+      final cle = _myUserId ?? '';
+      var filiere = _filiereCache[cle];
+      if (filiere == null) {
+        final headers = await ApiService.getHeaders();
+        final me = await http.get(
+            Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
+        if (me.statusCode == 200) {
+          final raw = jsonDecode(me.body)['filiere_id'];
+          filiere = raw is int ? raw : int.tryParse('$raw');
+          if (filiere != null) _filiereCache[cle] = filiere;
+        }
       }
-      final filiereId = jsonDecode(me.body)['filiere_id'];
-      if (filiereId == null) {
-        setState(() => _chargementInitial = false);
-        return;
-      }
-      _filiereId = filiereId is int ? filiereId : int.tryParse('$filiereId');
-      if (_filiereId == null) {
-        setState(() => _chargementInitial = false);
-        return;
-      }
-      _chargerTheme();
+      _filiereId = filiere;
+      if (_filiereId == null) return;
 
-      await Future.wait([_chargerMessages(), _chargerMembres()]);
-      // Ouvrir l'écran vaut lecture : réinitialise le compteur non-lu.
+      _chargerTheme();
+      // Membres en arrière-plan : ne bloquent plus l'affichage des messages.
+      _chargerMembres().catchError((_) {});
+      await _chargerMessages();
+      // Les messages sont là : on affiche tout de suite.
+      if (mounted) setState(() => _chargementInitial = false);
       ApiService.marquerGroupeLu(_filiereId.toString());
-      await _connecterSocket();
+      // Socket en arrière-plan (la connexion peut prendre plusieurs secondes).
+      _connecterSocket().catchError((_) {});
     } catch (_) {
       // Serveur injoignable.
     } finally {
@@ -204,7 +209,9 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBasInitial());
     // Marque comme lus tous les messages reçus (pas les miens) — ouvrir la
     // discussion vaut consultation, comme WhatsApp.
-    for (final m in _messages) {
+    // Seulement les 20 derniers : un appel serveur par message saturait le
+    // serveur à l'ouverture et ralentissait tout le reste.
+    for (final m in _messages.reversed.take(20)) {
       if (!m.estMoi) ApiService.marquerMessageLu('groupe', m.id);
     }
   }

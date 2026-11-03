@@ -382,7 +382,7 @@ class _ProfHeader extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
             child: Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+                Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
                 const SizedBox(height: 2),
                 Text(subtitle, style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.75))),
               ])),
@@ -671,14 +671,15 @@ class _ClassesTabState extends State<_ClassesTab> {
           ]),
         ),
       ),
-      const SizedBox(width: 16),
+      const SizedBox(width: 10),
       Container(
         width: 44, height: 44,
         decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
         child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
       ),
-      const SizedBox(width: 12),
-      Row(children: [
+      const SizedBox(width: 10),
+      // Téléphone : photo seule ; écran large : photo + nom (tronqué si besoin).
+      if (MediaQuery.of(context).size.width < 560)
         CircleAvatar(
           radius: 21,
           backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
@@ -686,13 +687,28 @@ class _ClassesTabState extends State<_ClassesTab> {
           child: photoUrl == null || photoUrl.isEmpty
               ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
               : null,
+        )
+      else
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 230),
+          child: Row(children: [
+            CircleAvatar(
+          radius: 21,
+          backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          child: photoUrl == null || photoUrl.isEmpty
+              ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
+              : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ]),
         ),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
-          Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}', style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
-        ]),
-      ]),
     ]);
   }
 
@@ -1404,14 +1420,15 @@ class _CoursTabState extends State<_CoursTab> {
           ]),
         ),
       ),
-      const SizedBox(width: 16),
+      const SizedBox(width: 10),
       Container(
         width: 44, height: 44,
         decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
         child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
       ),
-      const SizedBox(width: 12),
-      Row(children: [
+      const SizedBox(width: 10),
+      // Téléphone : photo seule ; écran large : photo + nom (tronqué si besoin).
+      if (MediaQuery.of(context).size.width < 560)
         CircleAvatar(
           radius: 21,
           backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
@@ -1419,13 +1436,28 @@ class _CoursTabState extends State<_CoursTab> {
           child: photoUrl == null || photoUrl.isEmpty
               ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
               : null,
+        )
+      else
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 230),
+          child: Row(children: [
+            CircleAvatar(
+          radius: 21,
+          backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          child: photoUrl == null || photoUrl.isEmpty
+              ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
+              : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ]),
         ),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
-          Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}', style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
-        ]),
-      ]),
     ]);
   }
 
@@ -2114,8 +2146,8 @@ class _ProfilTabState extends State<_ProfilTab> {
           ]),
         ),
       ),
-      const SizedBox(width: 16),
-      Row(children: [
+      const SizedBox(width: 10),
+      if (MediaQuery.of(context).size.width < 560)
         CircleAvatar(
           radius: 21,
           backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
@@ -2123,13 +2155,28 @@ class _ProfilTabState extends State<_ProfilTab> {
           child: photoUrl == null || photoUrl.isEmpty
               ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
               : null,
+        )
+      else
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 230),
+          child: Row(children: [
+            CircleAvatar(
+          radius: 21,
+          backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          child: photoUrl == null || photoUrl.isEmpty
+              ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
+              : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                const Text('Professeur', style: TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ]),
         ),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
-          const Text('Professeur', style: TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
-        ]),
-      ]),
     ]);
   }
 
