@@ -146,6 +146,23 @@ class ProfessorService {
     }
   }
 
+  // ── Module terminé / rouvert (par le professeur) ───
+  static Future<Map<String, dynamic>> terminerModule(int affectationId, bool termine) async {
+    try {
+      final headers = await ApiService.getHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/professeurs/modules/$affectationId/termine'),
+        headers: headers,
+        body: jsonEncode({'termine': termine}),
+      );
+      if (response.statusCode == 200) return {'success': true};
+      final body = jsonDecode(response.body);
+      return {'success': false, 'error': body['message'] ?? 'Erreur lors de la mise à jour.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
+    }
+  }
+
   // ── Disponibilités (heures libres transmises à l'admin) ───
   static Future<Map<String, dynamic>> getDisponibilites() async {
     try {
@@ -156,7 +173,16 @@ class ProfessorService {
       );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body['success'] == true) return {'success': true, 'data': body['data']};
+        if (body['success'] == true) {
+          return {
+            'success': true,
+            'data': body['data'],
+            // Date de dernière transmission + « a encore un module en cours »
+            'maj': body['maj'],
+            'actif': body['actif'] == true,
+            'demande': body['demande'],
+          };
+        }
       }
       return {'success': false, 'error': 'Erreur lors du chargement des disponibilités.'};
     } catch (e) {

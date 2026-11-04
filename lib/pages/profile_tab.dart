@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
 import '../widgets/profile_header_cover.dart';
+import '../widgets/change_password_sheet.dart';
 
 import '../models/student_profile.dart';
 import 'splash_screen.dart';
@@ -329,7 +330,22 @@ _bentoCard(
             ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+
+          SizedBox(
+            width: double.infinity, height: 54,
+            child: TextButton.icon(
+              onPressed: () => showChangePasswordSheet(context),
+              icon: Icon(Icons.lock_reset_rounded, color: _brandBlue, size: 20),
+              label: Text('Changer mon mot de passe', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _brandBlue)),
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFFEFF6FF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFDBEAFE))),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 14),
 
           // ── EXCLUSION / DISCONNECT (ACTION ULTRA CLEAN FLUIDE) ─────────────
           SizedBox(

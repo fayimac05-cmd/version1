@@ -19,6 +19,7 @@ import '../config/etablissement_config.dart';
 import '../services/socket_service.dart';
 import '../services/supabase_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/session_service.dart';
 
 // ─── Enum étapes ─────────────────────────────────────────────────────────────
 
@@ -288,6 +289,8 @@ class _AuthPageState extends State<AuthPage> {
 
   void _goToDashboard(StudentProfile profile) {
     SocketService().connect(profile.matricule);
+    // Mémorise la session (reprise automatique selon la politique choisie).
+    SessionService.memoriser(profile);
 
     // ✅ CORRIGÉ — cause racine du bug "Matricule non disponible" dans
     // notes_tab.dart et bulletin_screen.dart : rien n'enregistrait jamais
@@ -331,6 +334,7 @@ class _AuthPageState extends State<AuthPage> {
     // chaînant via .then() pour préserver l'ordre.
     void logout() {
       ApiService.clearToken().then((_) {
+        SessionService.oublier();
         ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const SplashScreen()),
           (_) => false,

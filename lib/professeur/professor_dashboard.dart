@@ -1,8 +1,13 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/student_profile.dart';
 import '../services/professor_service.dart';
+import '../services/api_service.dart';
+import 'mon_programme_semaine.dart';
 import '../theme/app_palette.dart';
 
 class ProfessorDashboard extends StatefulWidget {
@@ -111,47 +116,115 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
     }
   }
 
+  // Tous les créneaux du professeur (GET /edt/professeur/planning) : trouvés
+  // par son nom dans les emplois du temps actifs de l'établissement.
+  List<Map<String, dynamic>> _programmeSemaine = [];
+  String _titreJour = "Aujourd'hui";
+  String _sousTitreJour = 'Vos prochains cours';
+  Timer? _defilTimer;
+  final PageController _progCtrl = PageController(viewportFraction: 0.94);
+  int _progPage = 0;
+
+  // null = inconnu (pas de bandeau), 0 = rien transmis, >0 = créneaux transmis.
+  bool _dispoCharge = false;
+  bool _dispoActif = false; // a au moins un module « en cours »
+  DateTime? _dispoDemande; // demande ponctuelle de l'administration
+  DateTime? _dispoMaj; // dernière transmission
+
+  Future<void> _chargerDispos() async {
+    final r = await ProfessorService.getDisponibilites();
+    if (!mounted || r['success'] != true) return;
+    final m = r['maj'];
+    setState(() {
+      _dispoCharge = true;
+      _dispoActif = r['actif'] == true;
+      final dm = r['demande'];
+      _dispoDemande = dm == null ? null : DateTime.tryParse(dm.toString())?.toLocal();
+      _dispoMaj = m == null ? null : DateTime.tryParse(m.toString())?.toLocal();
+    });
+  }
+
+  // Rappel des heures libres :
+  //  • demande ponctuelle de l'administration, tant qu'il n'a pas retransmis ; ou
+  //  • à partir du jeudi, s'il a au moins un module « en cours » et n'a pas
+  //    transmis depuis ce jeudi (pour préparer la semaine suivante).
+  // Un professeur dont les modules sont « à venir » ou « terminés » n'a pas
+  // de rappel du jeudi.
+  bool get _rappelDispos {
+    if (!_dispoCharge) return false;
+    if (_dispoDemande != null && (_dispoMaj == null || _dispoMaj!.isBefore(_dispoDemande!))) return true;
+    if (!_dispoActif) return false;
+    final now = DateTime.now();
+    if (now.weekday < DateTime.thursday) return false;
+    final jeudi = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - DateTime.thursday));
+    return _dispoMaj == null || _dispoMaj!.isBefore(jeudi);
+  }
+
   Future<void> _chargerProgrammeDuJour() async {
+    _chargerDispos();
     try {
-      final filiere = widget.profile.filiere.trim();
-      final niveau = widget.profile.niveau.trim();
-
-      if (filiere.isEmpty || niveau.isEmpty) {
-        if (mounted) setState(() => _coursDuJour = []);
-        return;
-      }
-
-      final row = await Supabase.instance.client
-          .from('edt')
-          .select('creneaux')
-          .ilike('filiere_nom', filiere)
-          .ilike('niveau', niveau)
-          .eq('archive', false)
-          .order('createdAt', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
+      final res = await http
+          .get(Uri.parse('${ApiService.baseUrl}/edt/professeur/planning'), headers: await ApiService.getHeaders())
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
-
-      final raw = row?['creneaux'];
-      final today = _joursFr[DateTime.now().weekday - 1];
-      final list = raw is List
-          ? raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .where((e) => e['jour']?.toString().trim() == today)
-              .toList()
+      if (res.statusCode != 200) { setState(() => _coursDuJour = []); return; }
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      final data = body is Map ? body['data'] : null;
+      _programmeSemaine = data is List
+          ? data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
           : <Map<String, dynamic>>[];
-
-      list.sort(
-        (a, b) => (a['heureDebut']?.toString() ?? '')
-            .compareTo(b['heureDebut']?.toString() ?? ''),
-      );
-
-      setState(() => _coursDuJour = list);
+      _choisirJourAffiche();
     } catch (_) {
       if (mounted) setState(() => _coursDuJour = []);
     }
+  }
+
+  int _minutes(String? v) {
+    final p = (v ?? '').split(':');
+    if (p.length < 2) return -1;
+    return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
+  }
+
+  // Aujourd'hui s'il reste des cours, sinon le prochain jour qui en a.
+  void _choisirJourAffiche() {
+    final now = DateTime.now();
+    final nowM = now.hour * 60 + now.minute;
+    List<Map<String, dynamic>> duJour(String jour) => _programmeSemaine
+        .where((c) => c['jour']?.toString().trim() == jour)
+        .toList()
+      ..sort((a, b) => (a['heureDebut']?.toString() ?? '').compareTo(b['heureDebut']?.toString() ?? ''));
+
+    var liste = <Map<String, dynamic>>[];
+    var titre = "Aujourd'hui";
+    var sous = 'Vos prochains cours';
+    for (var d = 0; d < 7; d++) {
+      final jour = _joursFr[(now.weekday - 1 + d) % 7];
+      var l = duJour(jour);
+      if (d == 0) l = l.where((c) => _minutes(c['heureFin']?.toString()) > nowM).toList();
+      if (l.isNotEmpty) {
+        liste = l;
+        titre = d == 0 ? "Aujourd'hui" : (d == 1 ? 'Demain' : jour);
+        sous = d == 0 ? 'Vos prochains cours' : (d == 1 ? 'Votre programme de demain · $jour' : 'Prochains cours');
+        break;
+      }
+    }
+    setState(() {
+      _coursDuJour = liste;
+      _titreJour = titre;
+      _sousTitreJour = sous;
+      _progPage = 0;
+    });
+    _demarrerDefilement();
+  }
+
+  void _demarrerDefilement() {
+    _defilTimer?.cancel();
+    if (_coursDuJour.length < 2) return;
+    _defilTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_progCtrl.hasClients || _coursDuJour.length < 2) return;
+      final next = (_progPage + 1) % _coursDuJour.length;
+      _progCtrl.animateToPage(next, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
+    });
   }
 
   List<dynamic> _extractList(dynamic response) {
@@ -240,6 +313,8 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
 
   @override
   void dispose() {
+    _defilTimer?.cancel();
+    _progCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -685,8 +760,42 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
   }
 
   Widget _buildProgramme() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_rappelDispos) _bandeauDispos(),
+        _buildProgrammeCard(),
+      ],
+    );
+  }
+
+  // Rappel tant que le professeur n'a transmis aucune heure libre.
+  Widget _bandeauDispos() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7E0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF5D88A)),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.event_available_rounded, color: Color(0xFFB7791F), size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "Pensez à transmettre vos heures libres de la semaine prochaine pour l'emploi du temps : Profil → Mon programme / heures libres.",
+              style: TextStyle(color: Color(0xFF7A5200), fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgrammeCard() {
     final visible = _coursDuJour.take(3).toList();
-    final hasMore = _coursDuJour.length > 3;
 
     return _whiteCard(
       child: Column(
@@ -705,18 +814,20 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Aujourd\'hui', style: TextStyle(color: _navyText, fontSize: 18, fontWeight: FontWeight.w900)),
+                    Text(_titreJour, style: const TextStyle(color: _navyText, fontSize: 18, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 2),
-                    const Text('Vos prochains cours', style: TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+                    Text(_sousTitreJour, style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
-              if (hasMore)
-                TextButton(
-                  onPressed: _showAllCourses,
-                  style: TextButton.styleFrom(foregroundColor: AppPalette.blue, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5)),
-                  child: const Text('Voir tout', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                ),
+              TextButton(
+                onPressed: () async {
+                  await Navigator.push(context, MaterialPageRoute(builder: (_) => MonProgrammeSemaine(creneaux: _programmeSemaine)));
+                  _chargerDispos();
+                },
+                style: TextButton.styleFrom(foregroundColor: AppPalette.blue, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5)),
+                child: const Text('Ma semaine', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -726,11 +837,41 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
               child: Column(children: [
                 const Icon(Icons.event_available_rounded, size: 34, color: Color(0xFFCBD5E1)),
                 const SizedBox(height: 8),
-                const Text('Aucun cours prévu aujourd\'hui.', style: TextStyle(color: _muted, fontSize: 12)),
+                const Text('Aucun cours prévu cette semaine.', style: TextStyle(color: _muted, fontSize: 12)),
               ]),
             )
-          else
-            for (var i = 0; i < visible.length; i++) _programmeRow(visible[i], i),
+          else ...[
+            // Les cours défilent (un par page) ; les points indiquent la position.
+            SizedBox(
+              height: 100,
+              child: PageView.builder(
+                controller: _progCtrl,
+                itemCount: _coursDuJour.length,
+                onPageChanged: (i) => setState(() => _progPage = i),
+                itemBuilder: (_, i) => _programmeRow(_coursDuJour[i], i),
+              ),
+            ),
+            if (_coursDuJour.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < _coursDuJour.length; i++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: _progPage == i ? 16 : 6,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: _progPage == i ? AppPalette.blue : AppPalette.blue.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -776,7 +917,9 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
       item['classe'], item['classe_nom'], item['filiere_nom'], item['niveau'],
     ], fallback: 'Classe');
     final salle = item['salle']?.toString().trim() ?? '';
-    final statut = _statutCreneau(debut, fin);
+    final statut = _titreJour == "Aujourd'hui"
+        ? _statutCreneau(debut, fin)
+        : (label: 'À venir', bg: const Color(0xFFDCEAFE), fg: AppPalette.blue);
     final icone = _icones[index % _icones.length];
 
     return Container(

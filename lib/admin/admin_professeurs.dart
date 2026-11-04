@@ -891,10 +891,99 @@ class _AdminProfesseursState extends State<AdminProfesseurs> {
 // ═════════════════════════════════════════════════════════════════════════════
 //  FICHE (œil)
 // ═════════════════════════════════════════════════════════════════════════════
-class _FicheProfDialog extends StatelessWidget {
+class _FicheProfDialog extends StatefulWidget {
   final Map<String, dynamic> prof;
   final VoidCallback onModifier;
   const _FicheProfDialog({required this.prof, required this.onModifier});
+
+  @override
+  State<_FicheProfDialog> createState() => _FicheProfDialogState();
+}
+
+class _FicheProfDialogState extends State<_FicheProfDialog> {
+  Map<String, dynamic> get prof => widget.prof;
+  VoidCallback get onModifier => widget.onModifier;
+
+  // affectation_id -> statut local ('a_venir' | 'en_cours' | 'termine')
+  final Map<String, String> _statuts = {};
+  String _statut(Map<String, dynamic> m) =>
+      _statuts[_s(m['affectation_id'])] ??
+      (m['termine'] == true ? 'termine' : (m['demarre'] == true ? 'en_cours' : 'a_venir'));
+  bool _fini(Map<String, dynamic> m) => _statut(m) == 'termine';
+
+  static const _libelles = {'a_venir': 'À venir', 'en_cours': 'En cours', 'termine': 'Terminé'};
+
+  /// Change le statut d'un module (à venir / en cours / terminé).
+  Future<void> _changerStatut(Map<String, dynamic> m) async {
+    final aid = _s(m['affectation_id']);
+    if (aid.isEmpty) return;
+    final choisi = await showDialog<String>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: Text(_s(m['module_nom']), style: const TextStyle(fontSize: 15)),
+        children: [
+          for (final e in _libelles.entries)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, e.key),
+              child: Row(children: [
+                Icon(_statut(m) == e.key ? Icons.radio_button_checked : Icons.radio_button_off, size: 18),
+                const SizedBox(width: 10),
+                Text(e.value),
+              ]),
+            ),
+        ],
+      ),
+    );
+    if (choisi == null || choisi == _statut(m) || !mounted) return;
+    try {
+      final res = await http.patch(
+        Uri.parse('${ApiService.baseUrl}/professeurs/${_s(prof['id'])}/modules/$aid/termine'),
+        headers: await ApiService.getHeaders(),
+        body: jsonEncode({'statut': choisi}),
+      );
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        setState(() => _statuts[aid] = choisi);
+        final src = prof['modules'];
+        if (src is List) {
+          for (final e in src) {
+            if (e is Map && _s(e['affectation_id']) == aid) {
+              e['termine'] = choisi == 'termine';
+              e['demarre'] = choisi != 'a_venir';
+            }
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Mise à jour impossible.'), backgroundColor: Color(0xFFDC2626)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Serveur injoignable.'), backgroundColor: Color(0xFFDC2626)));
+      }
+    }
+  }
+
+  /// Demande ponctuelle des heures libres (le professeur voit un bandeau).
+  Future<void> _demanderHeures() async {
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiService.baseUrl}/professeurs/${_s(prof['id'])}/demander-disponibilites'),
+        headers: await ApiService.getHeaders(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(res.statusCode == 200 ? 'Demande envoyée au professeur.' : 'Envoi impossible.'),
+        backgroundColor: res.statusCode == 200 ? const Color(0xFF059669) : const Color(0xFFDC2626),
+      ));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Serveur injoignable.'), backgroundColor: Color(0xFFDC2626)));
+      }
+    }
+  }
 
   Widget _ligne(String l, String v) => v.trim().isEmpty
       ? const SizedBox.shrink()
@@ -971,6 +1060,8 @@ class _FicheProfDialog extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text('Affectations et modules (${mods.length})',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _texteFonce)),
+                const Text('Touchez un module pour changer son statut : à venir, en cours ou terminé. Le rappel des heures libres ne concerne que les modules en cours.',
+                    style: TextStyle(fontSize: 11, color: _texteGris)),
                 const SizedBox(height: 8),
                 if (groupes.isEmpty && sansModules.isEmpty)
                   const Text('Aucune affectation.', style: TextStyle(color: _texteGris, fontSize: 13)),
@@ -991,11 +1082,38 @@ class _FicheProfDialog extends StatelessWidget {
                       const SizedBox(height: 6),
                       Wrap(spacing: 6, runSpacing: 6, children: [
                         for (final m in e.value)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(color: AdminTheme.primaryLight, borderRadius: BorderRadius.circular(14)),
-                            child: Text(_s(m['module_nom']),
-                                style: const TextStyle(fontSize: 11.5, color: AdminTheme.primary, fontWeight: FontWeight.w600)),
+                          Tooltip(
+                            message: 'Statut : ${_libelles[_statut(m)]} — toucher pour changer',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () => _changerStatut(m),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _statut(m) == 'termine'
+                                      ? const Color(0xFFD1FAE5)
+                                      : (_statut(m) == 'en_cours' ? AdminTheme.primaryLight : const Color(0xFFF1F5F9)),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                  if (_statut(m) == 'termine') ...[
+                                    const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF059669)),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  Text(_s(m['module_nom']),
+                                      style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: _statut(m) == 'termine'
+                                              ? const Color(0xFF047857)
+                                              : (_statut(m) == 'en_cours' ? AdminTheme.primary : const Color(0xFF64748B)),
+                                          fontWeight: FontWeight.w600,
+                                          decoration: _statut(m) == 'termine' ? TextDecoration.lineThrough : null)),
+                                  const SizedBox(width: 6),
+                                  Text(_statut(m) == 'a_venir' ? 'à venir' : (_statut(m) == 'en_cours' ? 'en cours' : ''),
+                                      style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                                ]),
+                              ),
+                            ),
                           ),
                       ]),
                     ]),
@@ -1012,9 +1130,13 @@ class _FicheProfDialog extends StatelessWidget {
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            child: Wrap(alignment: WrapAlignment.end, crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, runSpacing: 4, children: [
+              TextButton.icon(
+                onPressed: _demanderHeures,
+                icon: const Icon(Icons.event_available_outlined, size: 17),
+                label: const Text('Demander les heures libres'),
+              ),
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer')),
-              const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: onModifier,
                 icon: const Icon(Icons.edit_outlined, size: 18),

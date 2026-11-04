@@ -7,6 +7,8 @@ import 'package:file_picker/file_picker.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/professor_service.dart';
+import '../services/non_lus_service.dart';
+import '../widgets/change_password_sheet.dart';
 import '../theme/app_palette.dart';
 import '../widgets/profile_header_cover.dart';
 import '../widgets/mobile_nav.dart';
@@ -15,6 +17,9 @@ import 'appel_tab.dart';
 import 'notes_tab.dart';
 import 'rattrapage_tab.dart';
 import 'programme_screen.dart';
+import 'mes_modules_screen.dart';
+import '../widgets/guide_utilisation.dart';
+import '../widgets/session_settings_sheet.dart';
 import 'upload_course_screen.dart';
 import 'professeur_liste_etudiants.dart';
 import '../admin/admin_messages.dart';
@@ -33,10 +38,11 @@ class ProfessorShell extends StatefulWidget {
   State<ProfessorShell> createState() => _ProfessorShellState();
 }
 
-class _ProfessorShellState extends State<ProfessorShell> {
+class _ProfessorShellState extends State<ProfessorShell> with WidgetsBindingObserver {
   // 0 = Accueil, 1 = Classes, 2 = Cours, 3 = Appel,
   // 4 = Notes, 5 = Messages, 6 = Profil, 7 = Réclamations.
   int _currentTab = 0;
+  int? _msgNonLus; // total remonté par la page Messages quand elle est ouverte
 
   // Profil courant : copie locale du profil de connexion, mise à jour quand la
   // photo change (profil) ou est relue côté serveur (rafraîchissement du site).
@@ -46,7 +52,33 @@ class _ProfessorShellState extends State<ProfessorShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _rafraichirPhoto();
+    // Marqueurs : messages (canaux + privés) et réclamations à traiter.
+    NonLusService.instance.demarrer();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    NonLusService.instance.arreter();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) NonLusService.instance.rafraichir();
+  }
+
+  // Nombre à afficher en rouge à côté d'un onglet (0 = rien).
+  int _badgeOnglet(int index) {
+    if (index == 5) {
+      // Page Messages ouverte : on utilise ses propres chiffres (exacts).
+      if (_currentTab == 5 && _msgNonLus != null) return _msgNonLus!;
+      return NonLusService.instance.totalMessages; // Messages
+    }
+    if (index == 7) return NonLusService.instance.reclamations;  // Réclamations
+    return 0;
   }
 
   Future<void> _rafraichirPhoto() async {
@@ -104,7 +136,13 @@ class _ProfessorShellState extends State<ProfessorShell> {
       case 4:
         return NotesTab(profile: _profil, initialClasse: _classePreselectionnee);
       case 5:
-        return const AdminMessages(role: 'professeur');
+        return AdminMessages(
+          role: 'professeur',
+          onNonLus: (n) {
+            if (!mounted || _msgNonLus == n) return;
+            setState(() => _msgNonLus = n);
+          },
+        );
       case 6:
         return _ProfilTab(profile: _profil, onLogout: widget.onLogout, onPhotoChanged: _photoChangee, onBack: () => _goTo(0));
       case 8:
@@ -119,7 +157,9 @@ class _ProfessorShellState extends State<ProfessorShell> {
   @override
   Widget build(BuildContext context) {
     final page = _buildCurrentPage();
-    return LayoutBuilder(
+    return AnimatedBuilder(
+      animation: NonLusService.instance,
+      builder: (context, _) => LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 900;
 
@@ -143,6 +183,7 @@ class _ProfessorShellState extends State<ProfessorShell> {
           bottomNavigationBar: _buildNav(),
         );
       },
+      ),
     );
   }
 
@@ -243,6 +284,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
                       _sideItem(Icons.forum_outlined, Icons.forum_rounded, 'Messages', 5),
                       _sideItem(Icons.report_gmailerrorred_outlined, Icons.report_gmailerrorred_rounded, 'Réclamations', 7),
                       _sideItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profil', 6),
+                      _sideAction(Icons.lock_reset_rounded, 'Changer mon mot de passe', () => showChangePasswordSheet(context)),
+                      _sideAction(Icons.logout_rounded, 'Se déconnecter', _confirmerDeconnexion, couleur: const Color(0xFFFF8A80)),
                     ],
                   ),
                 ),
@@ -286,6 +329,44 @@ class _ProfessorShellState extends State<ProfessorShell> {
     return 'P';
   }
 
+  // Déconnexion depuis la barre latérale / le menu « Plus » (avec confirmation).
+  Future<void> _confirmerDeconnexion() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Se déconnecter ?'),
+        content: const Text('Vous allez fermer votre session.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Rester connecté')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Se déconnecter', style: TextStyle(color: Color(0xFFDC2626))),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) widget.onLogout();
+  }
+
+  // Entrée de la barre latérale qui ouvre une action (pas un onglet).
+  Widget _sideAction(IconData icon, String label, VoidCallback onTap, {Color couleur = const Color(0xFF9DB4D5)}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 11),
+          child: Row(children: [
+            Icon(icon, size: 19, color: couleur),
+            const SizedBox(width: 11),
+            Expanded(child: Text(label, style: TextStyle(color: couleur, fontSize: 12.5, fontWeight: FontWeight.w600))),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _sideItem(IconData icon, IconData activeIcon, String label, int index) {
     final active = _currentTab == index;
     return Padding(
@@ -306,7 +387,18 @@ class _ProfessorShellState extends State<ProfessorShell> {
               Icon(active ? activeIcon : icon, size: 19, color: active ? Colors.white : const Color(0xFF9DB4D5)),
               const SizedBox(width: 11),
               Expanded(child: Text(label, style: TextStyle(color: active ? Colors.white : const Color(0xFF9DB4D5), fontSize: 12.5, fontWeight: active ? FontWeight.w800 : FontWeight.w600))),
-              if (active) Container(width: 5, height: 5, decoration: const BoxDecoration(color: AppPalette.yellow, shape: BoxShape.circle)),
+              if (_badgeOnglet(index) > 0)
+                Container(
+                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  decoration: BoxDecoration(color: const Color(0xFFE53935), borderRadius: BorderRadius.circular(10)),
+                  child: Center(
+                    child: Text(_badgeOnglet(index) > 99 ? '99+' : '${_badgeOnglet(index)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                  ),
+                )
+              else if (active)
+                Container(width: 5, height: 5, decoration: const BoxDecoration(color: AppPalette.yellow, shape: BoxShape.circle)),
             ],
           ),
         ),
@@ -315,14 +407,14 @@ class _ProfessorShellState extends State<ProfessorShell> {
   }
 
   // Tous les onglets (téléphone) : 4 favoris dans la barre du bas, le reste dans « Plus ».
-  static const List<NavEntry> _toutesEntrees = [
+  List<NavEntry> get _toutesEntrees => [
     NavEntry(index: 0, label: 'Accueil', icon: Icons.dashboard_outlined, iconActive: Icons.dashboard_rounded, group: 'ENSEIGNEMENT'),
     NavEntry(index: 3, label: 'Appel', icon: Icons.how_to_reg_outlined, iconActive: Icons.how_to_reg_rounded, group: 'ENSEIGNEMENT'),
     NavEntry(index: 4, label: 'Notes', icon: Icons.fact_check_outlined, iconActive: Icons.fact_check_rounded, group: 'ENSEIGNEMENT'),
-    NavEntry(index: 5, label: 'Messages', icon: Icons.forum_outlined, iconActive: Icons.forum_rounded, group: 'COMMUNICATION'),
+    NavEntry(index: 5, label: 'Messages', icon: Icons.forum_outlined, iconActive: Icons.forum_rounded, group: 'COMMUNICATION', badge: _badgeOnglet(5)),
     NavEntry(index: 1, label: 'Classes', icon: Icons.groups_outlined, iconActive: Icons.groups_rounded, group: 'ENSEIGNEMENT'),
     NavEntry(index: 2, label: 'Cours', icon: Icons.menu_book_outlined, iconActive: Icons.menu_book_rounded, group: 'ENSEIGNEMENT'),
-    NavEntry(index: 7, label: 'Réclamations', icon: Icons.report_gmailerrorred_outlined, iconActive: Icons.report_gmailerrorred_rounded, group: 'COMMUNICATION'),
+    NavEntry(index: 7, label: 'Réclamations', icon: Icons.report_gmailerrorred_outlined, iconActive: Icons.report_gmailerrorred_rounded, group: 'COMMUNICATION', badge: _badgeOnglet(7)),
     NavEntry(index: 8, label: 'Rattrapage', icon: Icons.replay_circle_filled_outlined, iconActive: Icons.replay_circle_filled_rounded, group: 'ENSEIGNEMENT'),
     NavEntry(index: 6, label: 'Profil', icon: Icons.person_outline_rounded, iconActive: Icons.person_rounded, group: 'MON COMPTE'),
   ];
@@ -341,6 +433,8 @@ class _ProfessorShellState extends State<ProfessorShell> {
         onSelect: _goTo,
         titre: 'Tous les onglets',
         accent: navy,
+        onMotDePasse: () => showChangePasswordSheet(context),
+        onDeconnexion: _confirmerDeconnexion,
       ),
       accent: navy,
     );
@@ -1883,6 +1977,30 @@ class _ProfilTabState extends State<_ProfilTab> {
   void initState() {
     super.initState();
     _chargerStats();
+    _chargerDispos();
+  }
+
+  // Statut des heures libres (ligne sous le bouton « Mon programme »)
+  int? _nbDispos;
+  DateTime? _dispoMaj;
+
+  Future<void> _chargerDispos() async {
+    final r = await ProfessorService.getDisponibilites();
+    if (!mounted || r['success'] != true) return;
+    final d = r['data'];
+    final m = r['maj'];
+    setState(() {
+      _nbDispos = d is List ? d.length : 0;
+      _dispoMaj = m == null ? null : DateTime.tryParse(m.toString())?.toLocal();
+    });
+  }
+
+  String _statutDispos() {
+    if (_nbDispos == null) return '';
+    if (_nbDispos == 0 || _dispoMaj == null) return 'Heures libres : non transmises';
+    final j = _dispoMaj!;
+    final d = '${j.day.toString().padLeft(2, '0')}/${j.month.toString().padLeft(2, '0')}';
+    return 'Heures libres : $_nbDispos créneau(x) transmis le $d';
   }
 
   Future<void> _chargerStats() async {
@@ -2112,6 +2230,8 @@ class _ProfilTabState extends State<_ProfilTab> {
                       const SizedBox(height: 14),
                       _aideCard(),
                       const SizedBox(height: 14),
+                      _motDePasseBtn(),
+                      const SizedBox(height: 10),
                       _deconnexionBtn(),
                     ]);
                     if (!desktop) return Column(children: [gauche, const SizedBox(height: 14), droite]);
@@ -2376,38 +2496,105 @@ class _ProfilTabState extends State<_ProfilTab> {
           const Expanded(child: Text('Notifications', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _navyText))),
           Switch(value: _notificationsActives, activeThumbColor: AppPalette.blue, onChanged: _savingProfil ? null : _toggleNotifications),
         ]),
+        const Divider(height: 28),
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => showSessionSettings(context, role: 'professeur'),
+          child: Row(children: [
+            Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.lock_clock_rounded, color: AppPalette.blue, size: 16)),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Session et sécurité', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _navyText))),
+            const Icon(Icons.chevron_right_rounded, color: _faint),
+          ]),
+        ),
       ]),
     );
   }
 
   Widget _aideCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppPalette.lightBlue, borderRadius: BorderRadius.circular(16)),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.lightbulb_outline_rounded, color: AppPalette.blue, size: 20),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Besoin d\'aide ?', style: TextStyle(color: _navyText, fontSize: 13, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          const Text('Notre équipe est disponible pour vous assister en cas de besoin.',
-              style: TextStyle(color: _muted, fontSize: 11.5, height: 1.4, fontWeight: FontWeight.w500)),
-        ])),
-      ]),
+    return Material(
+      color: AppPalette.lightBlue,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => const GuideUtilisationPage(role: GuideRole.professeur),
+        )),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.lightbulb_outline_rounded, color: AppPalette.blue, size: 20),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Besoin d\'aide ?', style: TextStyle(color: _navyText, fontSize: 13, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              const Text('Ouvrez le guide d\'utilisation : toutes les tâches de votre espace, pas à pas.',
+                  style: TextStyle(color: _muted, fontSize: 11.5, height: 1.4, fontWeight: FontWeight.w500)),
+            ])),
+            const Icon(Icons.chevron_right_rounded, color: AppPalette.blue),
+          ]),
+        ),
+      ),
     );
   }
 
   Widget _programmeBtn() {
+    final statut = _statutDispos();
+    final nonTransmis = _nbDispos == 0 || _dispoMaj == null;
+    return Column(children: [
+      SizedBox(
+        width: double.infinity, height: 52,
+        child: ElevatedButton.icon(
+          onPressed: () async {
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProgrammeScreen()));
+            _chargerDispos();
+          },
+          icon: const Icon(Icons.edit_calendar_rounded, size: 20),
+          label: const Text('Mon programme / heures libres', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+      ),
+      if (statut.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(statut,
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: nonTransmis ? const Color(0xFFB7791F) : const Color(0xFF059669))),
+        ),
+      const SizedBox(height: 10),
+      SizedBox(
+        width: double.infinity, height: 48,
+        child: OutlinedButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MesModulesScreen())),
+          icon: const Icon(Icons.menu_book_rounded, size: 19, color: Color(0xFF0A4DA2)),
+          label: const Text('Mes modules (marquer « Terminé »)',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF0A4DA2))),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFF0A4DA2), width: 1.5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _motDePasseBtn() {
     return SizedBox(
-      width: double.infinity, height: 52,
-      child: ElevatedButton.icon(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProgrammeScreen())),
-        icon: const Icon(Icons.edit_calendar_rounded, size: 20),
-        label: const Text('Mon programme / heures libres', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF10B981),
-          foregroundColor: Colors.white,
-          elevation: 0,
+      width: double.infinity, height: 50,
+      child: OutlinedButton.icon(
+        onPressed: () => showChangePasswordSheet(context),
+        icon: const Icon(Icons.lock_reset_rounded, color: Color(0xFF0A4DA2)),
+        label: const Text('Changer mon mot de passe', style: TextStyle(color: Color(0xFF0A4DA2), fontSize: 14, fontWeight: FontWeight.w700)),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFF0A4DA2), width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),

@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
+import '../services/non_lus_service.dart';
 import '../services/socket_service.dart';
 import '../widgets/delegue_badge.dart';
 import 'choisir_professeur_page.dart';
@@ -136,10 +137,6 @@ class _CanalScreenState extends State<CanalScreen> {
   List<Map<String, dynamic>> _mesCoordinations = [];
   bool _chargementCoordinations = false;
 
-  // ✅ NOUVEAU — nombre réel de messages non lus par canal (au lieu des
-  // badges fixes '3'/'1' précédents), indexé par canalId.
-  final Map<String, int> _nonLus = {};
-
   // Badge temps réel : userId en cache + callback socket
   String? _myUserId;
   void Function(dynamic)? _socketCanalCallback;
@@ -190,6 +187,7 @@ class _CanalScreenState extends State<CanalScreen> {
   @override
   void initState() {
     super.initState();
+    NonLusService.instance.addListener(_surNonLus);
     _initSocketBadges();
     final role = widget.profile.role.toLowerCase().trim();
     if (['professeur', 'prof', 'enseignant', 'teacher'].contains(role)) {
@@ -204,52 +202,18 @@ class _CanalScreenState extends State<CanalScreen> {
     }
   }
 
-  /// Compte les messages non lus (envoyés par quelqu'un d'autre, marqués
-  /// `lu: false` côté serveur) pour les canaux fixes 'Administration' et
-  /// 'Bureau des Étudiants', puis pour 'Admin & Filière' une fois son id
-  /// résolu par [_chargerMonCanalAdminFiliere].
+  /// Résout les ids des canaux standard puis demande les compteurs au serveur
+  /// (un seul appel pour tous les canaux — voir NonLusService).
   Future<void> _chargerNonLus() async {
     await _chargerCanauxStandard();
-    final myId = await ApiService.getUserId();
-    for (final canalId in [_std['administration']!, _std['bde']!]) {
-      final n = await _compterNonLus(canalId, myId);
-      if (mounted) setState(() => _nonLus[canalId] = n);
-    }
-    final canalIdAdminFiliere = _monCanalAdminFiliere?['canal_id']?.toString();
-    if (canalIdAdminFiliere != null && canalIdAdminFiliere.isNotEmpty) {
-      final n = await _compterNonLus(canalIdAdminFiliere, myId);
-      if (mounted) setState(() => _nonLus[canalIdAdminFiliere] = n);
-    }
-    _notifierParent();
-  }
-
-  Future<int> _compterNonLus(String canalId, String? myId) async {
-    try {
-      final headers = await ApiService.getHeaders();
-      final res = await http.get(
-        Uri.parse('${ApiService.baseUrl}/messages/canal/$canalId'),
-        headers: headers,
-      );
-      if (res.statusCode != 200) return 0;
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      final data = (body is Map ? body['data'] : body) as List? ?? [];
-      return data.where((m) {
-        final senderId = (m['expediteur_id'] ?? m['auteur_id'])?.toString();
-        if (senderId == myId) return false;
-        // Le nom du champ diffère selon les endpoints ('lu' pour les
-        // canaux, 'is_read' pour les privés) — on vérifie les deux.
-        return m['lu'] == false || m['is_read'] == false;
-      }).length;
-    } catch (_) {
-      return 0;
-    }
+    await NonLusService.instance.rafraichir();
   }
 
   /// Libellé du badge à afficher sur la carte du canal, ou null pour ne rien
   /// afficher (aucun message non lu, ou id de canal pas encore résolu).
   String? _badgeNonLus(String? canalId) {
     if (canalId == null || canalId.isEmpty) return null;
-    final n = _nonLus[canalId] ?? 0;
+    final n = NonLusService.instance.pour(canalId);
     return n > 0 ? '$n' : null;
   }
 
@@ -275,13 +239,7 @@ class _CanalScreenState extends State<CanalScreen> {
       }
       _chargementMonCanal = false;
     });
-    final canalId = _monCanalAdminFiliere?['canal_id']?.toString();
-    if (canalId != null && canalId.isNotEmpty) {
-      final myId = await ApiService.getUserId();
-      final n = await _compterNonLus(canalId, myId);
-      if (mounted) setState(() => _nonLus[canalId] = n);
-      _notifierParent();
-    }
+    NonLusService.instance.rafraichir();
   }
 
   Future<void> _chargerCanauxProfesseur() async {
@@ -333,10 +291,19 @@ class _CanalScreenState extends State<CanalScreen> {
 
   @override
   void dispose() {
+    NonLusService.instance.removeListener(_surNonLus);
     if (_socketCanalCallback != null) {
       SocketService().off('message:canal', _socketCanalCallback!);
     }
     super.dispose();
+  }
+
+  // Les compteurs viennent du serveur (NonLusService) : on redessine les
+  // cartes et on remonte le total au parent à chaque mise à jour.
+  void _surNonLus() {
+    if (!mounted) return;
+    setState(() {});
+    _notifierParent();
   }
 
   /// Initialise l'écoute Socket.IO pour mettre à jour les badges non-lus
@@ -368,15 +335,14 @@ class _CanalScreenState extends State<CanalScreen> {
     if (auteurId == _myUserId) return;
     final canalId = (json['canal_id'] ?? json['canalId'])?.toString();
     if (canalId == null || canalId.isEmpty) return;
-    setState(() => _nonLus[canalId] = (_nonLus[canalId] ?? 0) + 1);
-    _notifierParent();
+    // Compteur exact fourni par le serveur (le canal ouvert reste à zéro).
+    NonLusService.instance.rafraichir();
   }
 
   /// Somme tous les non-lus et remonte le total au parent (StudentShell)
   /// pour afficher un badge sur l'onglet « Canaux ».
   void _notifierParent() {
-    final total = _nonLus.values.fold<int>(0, (s, n) => s + n);
-    widget.onUnreadChanged?.call(total);
+    widget.onUnreadChanged?.call(NonLusService.instance.total);
   }
 
   @override
@@ -481,6 +447,7 @@ class _CanalScreenState extends State<CanalScreen> {
                       description: '${c['filiere_nom'] ?? ''} ${c['niveau'] ?? ''}',
                       couleur: _couleurNiveau(c['niveau']?.toString()),
                       tag: 'Coordination',
+                      badge: _badgeNonLus(c['canal_id'].toString()),
                       canalId: c['canal_id'].toString(),
                       type: 'prof_delegues'),
                   );
@@ -547,11 +514,11 @@ class _CanalScreenState extends State<CanalScreen> {
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.account_balance_rounded, nom: 'Administration & Professeurs',
               description: 'Canal officiel Admin ↔ Tous les professeurs',
-              couleur: const Color(0xFF059669), tag: 'Admin ↔ Professeurs', canalId: _std['admin_profs']!, type: 'admin_profs'),
+              couleur: const Color(0xFF059669), tag: 'Admin ↔ Professeurs', badge: _badgeNonLus(_std['admin_profs']), canalId: _std['admin_profs']!, type: 'admin_profs'),
             const SizedBox(height: 12),
             _carteCanal(context, icon: Icons.groups_rounded, nom: 'Salle des Professeurs',
               description: 'Canal d\'échanges entre professeurs',
-              couleur: _brandBlue, tag: 'Tous les professeurs', canalId: _std['professeurs']!, type: 'professeurs'),
+              couleur: _brandBlue, tag: 'Tous les professeurs', badge: _badgeNonLus(_std['professeurs']), canalId: _std['professeurs']!, type: 'professeurs'),
             const SizedBox(height: 22),
             _sectionLabel('COORDINATION PAR FILIÈRE'),
             const SizedBox(height: 12),
@@ -583,6 +550,7 @@ class _CanalScreenState extends State<CanalScreen> {
                   description: canal['description']?.toString() ?? 'Coordination pédagogique',
                   couleur: _couleurNiveau(canal['niveau']?.toString()),
                   tag: 'Coordination',
+                  badge: _badgeNonLus(canal['id'].toString()),
                   canalId: canal['id'].toString(),
                   type: 'prof_delegues'),
               )),
@@ -748,14 +716,13 @@ class _CanalScreenState extends State<CanalScreen> {
             couleur: _brandBlue, tag: 'Lecture seule',
             canalId: canalId, canWrite: false);
     }
-    if (canalId.isNotEmpty && _nonLus.containsKey(canalId)) {
-      setState(() {
-        _nonLus[canalId] = 0;
-      });
-      _notifierParent();
-    }
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page))
-        .then((_) => _chargerNonLus());
+    // Ouvrir un canal le marque comme lu (compteur à zéro) ; en revenant, on
+    // le remet à zéro une dernière fois puis on relit les compteurs.
+    final suivi = canalId.isNotEmpty && canalId != '0';
+    if (suivi) NonLusService.instance.canalOuvert(canalId);
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page)).then((_) {
+      if (suivi) NonLusService.instance.canalFerme(canalId);
+    });
   }
 }
 

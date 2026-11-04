@@ -11,6 +11,7 @@ import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../services/non_lus_service.dart';
 import '../widgets/delegue_badge.dart';
 import '../pages/discussion_privee_page.dart';
 import '../pages/emoji_gif_sticker_picker.dart';
@@ -130,9 +131,12 @@ Color _couleurPourNiveau(String? niveau) =>
 // PAGE ADMIN MESSAGES
 // ════════════════════════════════════════════════════════════════════════════
 class AdminMessages extends StatefulWidget {
-  const AdminMessages({super.key, this.role = 'admin'});
+  const AdminMessages({super.key, this.role = 'admin', this.onNonLus});
   /// 'admin' ou 'professeur' — filtre les groupes visibles
   final String role;
+
+  /// Appelé à chaque changement du total de messages non lus (marqueur du menu).
+  final ValueChanged<int>? onNonLus;
   @override State<AdminMessages> createState() => AdminMessagesState();
 }
 
@@ -608,8 +612,18 @@ class AdminMessagesState extends State<AdminMessages>
 
   bool get _isDesktop => AdminTheme.isDesktop(context);
 
+  int _dernierTotalNotifie = -1;
+
   @override
   Widget build(BuildContext context) {
+    // Remonte le total au menu (une seule fois par changement).
+    final total = _totalNonLus;
+    if (total != _dernierTotalNotifie && widget.onNonLus != null) {
+      _dernierTotalNotifie = total;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onNonLus?.call(total);
+      });
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: _isDesktop ? _layoutDesktop() : _layoutMobile(),
@@ -932,6 +946,11 @@ class AdminMessagesState extends State<AdminMessages>
       _showEmoji = false;
       _msgKeys.clear();
     });
+    // Synchronise le compteur serveur (canaux) : le marqueur du menu retombe.
+    if (g.type != 'prive' && int.tryParse(g.id) != null) {
+      NonLusService.instance.marquerLu(g.id);
+    }
+    Future.delayed(const Duration(seconds: 3), () => NonLusService.instance.rafraichir());
     _chargerTheme(g.id);
     if (g.type == 'groupe_etudiants' && g.filiereId != null) {
       SocketService().joinRoom('filiere:${g.filiereId}');
