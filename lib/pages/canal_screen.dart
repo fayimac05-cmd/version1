@@ -343,6 +343,7 @@ class _CanalScreenState extends State<CanalScreen> {
   /// en temps réel quand un message arrive dans un canal.
   Future<void> _initSocketBadges() async {
     _myUserId = await ApiService.getUserId();
+    await SocketService().connect();
     _socketCanalCallback = _onSocketCanalMessage;
     SocketService().onCanalMessage(_socketCanalCallback!);
   }
@@ -351,9 +352,21 @@ class _CanalScreenState extends State<CanalScreen> {
   /// non-lu du canal concerné (sauf si c'est notre propre message).
   void _onSocketCanalMessage(dynamic data) {
     if (!mounted) return;
-    final auteurId = (data['auteur_id'] ?? data['expediteur_id'])?.toString();
+    Map<String, dynamic>? json;
+    if (data is Map<String, dynamic>) {
+      json = data;
+    } else if (data is Map) {
+      json = Map<String, dynamic>.from(data);
+    } else if (data is String) {
+      try {
+        final decoded = jsonDecode(data);
+        if (decoded is Map) json = Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+    if (json == null) return;
+    final auteurId = (json['auteur_id'] ?? json['expediteur_id'])?.toString();
     if (auteurId == _myUserId) return;
-    final canalId = (data['canal_id'] ?? data['canalId'])?.toString();
+    final canalId = (json['canal_id'] ?? json['canalId'])?.toString();
     if (canalId == null || canalId.isEmpty) return;
     setState(() => _nonLus[canalId] = (_nonLus[canalId] ?? 0) + 1);
     _notifierParent();
@@ -866,16 +879,24 @@ class _CanalDetailState extends State<_CanalDetail> {
     SocketService().joinRoom('canal:${widget.canalId}');
     _detailSocketCallback = (data) {
       if (!mounted) return;
-      final json = data is Map<String, dynamic>
-          ? data
-          : jsonDecode(data.toString()) as Map<String, dynamic>;
+      Map<String, dynamic>? json;
+      if (data is Map<String, dynamic>) {
+        json = data;
+      } else if (data is Map) {
+        json = Map<String, dynamic>.from(data);
+      } else if (data is String) {
+        try {
+          final decoded = jsonDecode(data);
+          if (decoded is Map) json = Map<String, dynamic>.from(decoded);
+        } catch (_) {}
+      }
+      if (json == null) return;
       final cid = json['canal_id']?.toString() ?? json['canalId']?.toString();
       if (cid != widget.canalId) return;
       if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
       final msg = _MessageCanal.fromJson(json, widget.couleur);
       setState(() => _msgs.add(msg));
       _scrollBas();
-      // Marque immédiatement comme lu puisque l'utilisateur regarde le canal
       ApiService.marquerMessageLu('canal', msg.id);
     };
     SocketService().onCanalMessage(_detailSocketCallback!);
@@ -916,7 +937,22 @@ class _CanalDetailState extends State<_CanalDetail> {
         headers: headers,
         body: jsonEncode({'contenu': texte}),
       );
-      if (response.statusCode != 201 && mounted) {
+      if (response.statusCode == 201) {
+        try {
+          final body = jsonDecode(utf8.decode(response.bodyBytes));
+          final data = body is Map ? body['data'] : null;
+          if (data is Map && mounted) {
+            final serverMsg = _MessageCanal.fromJson(
+                Map<String, dynamic>.from(data), widget.couleur);
+            setState(() {
+              final idx = _msgs.indexWhere((m) => m.id == msgLocal.id);
+              if (idx != -1) {
+                _msgs[idx] = serverMsg;
+              }
+            });
+          }
+        } catch (_) {}
+      } else if (mounted) {
         try {
           final body = jsonDecode(utf8.decode(response.bodyBytes));
           final err = body is Map && body['error'] != null ? body['error'].toString() : 'Échec de l\'envoi (${response.statusCode})';
@@ -962,7 +998,22 @@ class _CanalDetailState extends State<_CanalDetail> {
         headers: headers,
         body: jsonEncode({'contenu': contenu}),
       );
-      if (response.statusCode != 201 && mounted) {
+      if (response.statusCode == 201) {
+        try {
+          final body = jsonDecode(utf8.decode(response.bodyBytes));
+          final data = body is Map ? body['data'] : null;
+          if (data is Map && mounted) {
+            final serverMsg = _MessageCanal.fromJson(
+                Map<String, dynamic>.from(data), widget.couleur);
+            setState(() {
+              final idx = _msgs.indexWhere((m) => m.id == msgLocal.id);
+              if (idx != -1) {
+                _msgs[idx] = serverMsg;
+              }
+            });
+          }
+        } catch (_) {}
+      } else if (mounted) {
         setState(() => _msgs.remove(msgLocal));
       }
     } catch (_) {
