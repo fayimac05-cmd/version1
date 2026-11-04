@@ -29,6 +29,7 @@
 //   par config d'établissement).
 // ============================================================
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -37,6 +38,8 @@ import '../models/student_profile.dart';
 import '../models/admin_role.dart';
 import '../services/api_service.dart';
 import '../services/api_extra.dart';
+import '../services/non_lus_service.dart';
+import '../widgets/change_password_sheet.dart';
 import '../theme/app_palette.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_dashboard.dart';
@@ -48,6 +51,7 @@ import '../admin/admin_bulletins.dart';
 import '../admin/admin_rattrapage.dart';
 import '../admin/admin_annuel.dart';
 import '../admin/admin_reinscriptions.dart';
+import '../admin/admin_disponibilites.dart';
 import '../admin/admin_reclamations.dart';
 import '../admin/admin_etudiants.dart';
 import '../admin/admin_professeurs.dart';
@@ -68,6 +72,8 @@ import '../admin/admin_delegues.dart';
 import '../admin/admin_bde_membres.dart';
 import '../admin/admin_cantine.dart';
 import '../widgets/mobile_nav.dart';
+import '../widgets/guide_utilisation.dart';
+import '../widgets/session_settings_sheet.dart';
 import '../widgets/scolarhub_logo.dart';
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
@@ -116,12 +122,14 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.replay_circle_filled_outlined, iconActive: Icons.replay_circle_filled_rounded, label: 'Rattrapage', group: 'ACADÉMIQUE'),
   _MenuItem(icon: Icons.event_available_outlined, iconActive: Icons.event_available_rounded, label: 'Fin d\'année', group: 'ACADÉMIQUE'),
   _MenuItem(icon: Icons.how_to_reg_outlined, iconActive: Icons.how_to_reg_rounded, label: 'Réinscriptions', group: 'ACADÉMIQUE'),
+  _MenuItem(icon: Icons.event_available_outlined, iconActive: Icons.event_available_rounded, label: 'Disponibilités profs', group: 'ACADÉMIQUE'),
+  _MenuItem(icon: Icons.help_outline_rounded, iconActive: Icons.help_rounded, label: 'Guide d\'utilisation', group: 'GÉNÉRAL'),
 ];
 
 const _menuGroups = <Map<String, Object>>[
-  {'key': 'GÉNÉRAL',    'items': [0, 1]},
+  {'key': 'GÉNÉRAL',    'items': [0, 1, 25]},
   {'key': 'SECTIONS',   'items': [14, 15]},
-  {'key': 'ACADÉMIQUE', 'items': [2, 3, 4, 5, 17, 21, 22, 23]},
+  {'key': 'ACADÉMIQUE', 'items': [2, 3, 24, 4, 5, 17, 21, 22, 23]},
   {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18, 20]},
   {'key': 'MESSAGERIE', 'items': [10]},
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
@@ -158,6 +166,7 @@ const Map<int, String> kMenuPermission = {
   21: 'notes',        // Rattrapage
   22: 'bulletins',    // Fin d'année
   23: 'etudiants',    // Réinscriptions
+  24: 'filieres',     // Disponibilités des professeurs
 };
 
 class AdminMenuService {
@@ -169,10 +178,10 @@ class AdminMenuService {
     switch (role) {
       case AdminRole.superAdmin:
         // Accès total (0..20)
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
       case AdminRole.scolarite:
         // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
-        return {0, 2, 3, 6, 7, 12, 23};
+        return {0, 2, 3, 6, 7, 12, 23, 24};
       case AdminRole.examens:
         // Tableau de bord, Notes & Moyennes, Bulletins, Réclamations, Statistiques, Éval. Professeurs, Élèves à risque
         return {0, 4, 17, 5, 12, 13, 16, 21, 22};
@@ -200,7 +209,7 @@ class AdminMenuService {
   /// retombe sur les accès par défaut du sous-rôle.
   static bool canAccessWith(AdminRole role, int itemIndex, Map<String, bool>? droits) {
     if (role == AdminRole.superAdmin) return true;
-    if (itemIndex == 0) return true;
+    if (itemIndex == 0 || itemIndex == 25) return true; // Guide : pour tous les membres
     final cle = kMenuPermission[itemIndex];
     if (cle != null && droits != null && droits.containsKey(cle)) {
       return droits[cle] == true;
@@ -283,6 +292,7 @@ class _AdminShellState extends State<AdminShell>
   // (voir _chargerBadges). Réclamations pas encore branchée : en attente
   // du contrôleur correspondant.
   final Map<int, int> _badges = {};
+  Timer? _badgesTimer;
 
   // Autorisations du membre connecté (interrupteurs de « Membres & Rôles »).
   // null tant qu'elles ne sont pas chargées → accès par défaut du sous-rôle.
@@ -329,17 +339,34 @@ class _AdminShellState extends State<AdminShell>
     final results = await Future.wait([
       ApiService.getNombreSessionsEnAttente(),
       ApiService.getNombreReclamationsEnAttente(),
+      DisposNonVues.compter(),
     ]);
     if (!mounted) return;
     setState(() {
+      if (results[2] > 0) { _badges[24] = results[2]; } else { _badges.remove(24); }
       if (results[0] > 0) { _badges[4] = results[0]; } else { _badges.remove(4); }
       if (results[1] > 0) { _badges[5] = results[1]; } else { _badges.remove(5); }
+    });
+  }
+
+  // Marqueur « Groupes & Messages » (index 10) : canaux + messages privés non lus.
+  // Le total vient de la page elle-même (mêmes chiffres que l'onglet Groupes
+  // et la liste), donc il baisse dès qu'on lit une discussion.
+  void _surNonLusMessages(int n) {
+    if (!mounted) return;
+    if ((_badges[10] ?? 0) == n) return;
+    setState(() {
+      if (n > 0) { _badges[10] = n; } else { _badges.remove(10); }
     });
   }
 
   @override
   void initState() {
     super.initState();
+    NonLusService.instance.demarrer();
+    // Les compteurs restent affichés tant que la demande n'est pas traitée ;
+    // on les recharge régulièrement pour qu'ils suivent les nouveautés.
+    _badgesTimer = Timer.periodic(const Duration(seconds: 30), (_) => _chargerBadges());
     // Config multi-établissement : recharge le type persisté puis
     // reconstruit l'interface à chaque changement de type.
     EtablissementConfig.instance.addListener(_onConfigChanged);
@@ -357,7 +384,7 @@ class _AdminShellState extends State<AdminShell>
       AdminProfesseurs(profile: widget.profile),
       const AdminParents(),
       const AdminMembres(),
-      AdminMessages(key: _messagesKey),
+      AdminMessages(key: _messagesKey, onNonLus: _surNonLusMessages),
       const AdminBDE(),
       const AdminStatistiques(),
       const AdminEvaluations(),
@@ -371,6 +398,9 @@ class _AdminShellState extends State<AdminShell>
       const AdminRattrapage(),
       const AdminAnnuel(),
       const AdminReinscriptions(),
+      AdminDisponibilites(onVu: () {
+        if (mounted && _badges.containsKey(24)) setState(() => _badges.remove(24));
+      }),
     ];
 
     _pageAnim = AnimationController(
@@ -383,6 +413,8 @@ class _AdminShellState extends State<AdminShell>
 
   @override
   void dispose() {
+    _badgesTimer?.cancel();
+    NonLusService.instance.arreter();
     EtablissementConfig.instance.removeListener(_onConfigChanged);
     _pageAnim.dispose();
     super.dispose();
@@ -602,6 +634,14 @@ class _AdminShellState extends State<AdminShell>
   }
 
   void _navigate(int index) {
+    // Guide d'utilisation : page à part (toujours à jour avec les droits du membre)
+    if (index == 25) {
+      if (_scaffoldKey.currentState?.isDrawerOpen == true) Navigator.pop(context);
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => GuideUtilisationPage(role: GuideRole.admin, peutVoir: _peutVoir),
+      ));
+      return;
+    }
     if (index == _idx) return;
     if (!_peutVoir(index)) return;
     final fromRight = index > _prevIdx;
@@ -777,6 +817,28 @@ class _AdminShellState extends State<AdminShell>
               _adminInfoTile(Icons.shield_outlined, 'Rôle système', widget.profile.roleLabel),
               const SizedBox(height: 20),
               OutlinedButton.icon(
+                onPressed: () { Navigator.pop(ctx); showChangePasswordSheet(context); },
+                icon: const Icon(Icons.lock_reset_rounded, color: Color(0xFF0A4DA2)),
+                label: const Text('Changer mon mot de passe', style: TextStyle(color: Color(0xFF0A4DA2), fontWeight: FontWeight.w700)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF0A4DA2)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () { Navigator.pop(ctx); showSessionSettings(context, role: 'admin'); },
+                icon: const Icon(Icons.lock_clock_rounded, color: Color(0xFF0A4DA2)),
+                label: const Text('Session et sécurité', style: TextStyle(color: Color(0xFF0A4DA2), fontWeight: FontWeight.w700)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF0A4DA2)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
                 onPressed: () { Navigator.pop(ctx); _showLogoutDialog(); },
                 icon: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
                 label: const Text('Déconnexion', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
@@ -884,6 +946,8 @@ class _AdminShellState extends State<AdminShell>
         onSelect: _navigate,
         titre: 'Tous les onglets',
         accent: _navy,
+        onMotDePasse: () => showChangePasswordSheet(context),
+        onDeconnexion: _showLogoutDialog,
       ),
       accent: _navy,
     );
@@ -1162,6 +1226,13 @@ class _AdminShellState extends State<AdminShell>
                       ),
                       const SizedBox(height: 8),
                       _SideBtn(
+                        icon: Icons.lock_reset_rounded,
+                        tooltip: 'Changer mon mot de passe',
+                        onTap: () => showChangePasswordSheet(context),
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 8),
+                      _SideBtn(
                         icon: Icons.logout_rounded,
                         tooltip: 'Déconnexion',
                         onTap: _showLogoutDialog,
@@ -1180,6 +1251,13 @@ class _AdminShellState extends State<AdminShell>
                             icon: Icons.dark_mode_outlined,
                             tooltip: 'Mode Sombre',
                             onTap: _toggleDarkMode,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 8),
+                          _SideBtn(
+                            icon: Icons.lock_reset_rounded,
+                            tooltip: 'Changer mon mot de passe',
+                            onTap: () => showChangePasswordSheet(context),
                             color: Colors.white,
                           ),
                           const SizedBox(width: 8),

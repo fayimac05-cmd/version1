@@ -133,6 +133,8 @@ Future<void> showMenuPlusSheet(
   required ValueChanged<int> onSelect,
   String titre = 'Tous les onglets',
   Color accent = const Color(0xFF0B1E4D),
+  VoidCallback? onDeconnexion, // bouton rouge « Se déconnecter » en bas de la liste
+  VoidCallback? onMotDePasse, // bouton « Changer mon mot de passe » (au-dessus)
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -150,6 +152,18 @@ Future<void> showMenuPlusSheet(
         currentIndex: currentIndex,
         titre: titre,
         accent: accent,
+        onMotDePasse: onMotDePasse == null
+            ? null
+            : () {
+                Navigator.of(ctx).pop();
+                onMotDePasse();
+              },
+        onDeconnexion: onDeconnexion == null
+            ? null
+            : () {
+                Navigator.of(ctx).pop();
+                onDeconnexion();
+              },
         onSelect: (i) {
           Navigator.of(ctx).pop();
           onSelect(i);
@@ -167,6 +181,8 @@ class _PlusSheet extends StatefulWidget {
     required this.titre,
     required this.accent,
     required this.onSelect,
+    this.onDeconnexion,
+    this.onMotDePasse,
   });
   final ScrollController scroll;
   final List<NavEntry> entries;
@@ -174,6 +190,8 @@ class _PlusSheet extends StatefulWidget {
   final String titre;
   final Color accent;
   final ValueChanged<int> onSelect;
+  final VoidCallback? onDeconnexion;
+  final VoidCallback? onMotDePasse;
 
   @override
   State<_PlusSheet> createState() => _PlusSheetState();
@@ -256,6 +274,32 @@ class _PlusSheetState extends State<_PlusSheet> {
                               for (final e in filtrees.where((x) => x.group == g))
                                 SizedBox(width: w, child: _tuile(e)),
                             ],
+                          ),
+                        ],
+                        if (widget.onMotDePasse != null && q.isEmpty) ...[
+                          const SizedBox(height: 18),
+                          OutlinedButton.icon(
+                            onPressed: widget.onMotDePasse,
+                            icon: Icon(Icons.lock_reset_rounded, color: widget.accent),
+                            label: Text('Changer mon mot de passe', style: TextStyle(color: widget.accent, fontWeight: FontWeight.w700)),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: widget.accent),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                        ],
+                        if (widget.onDeconnexion != null && q.isEmpty) ...[
+                          SizedBox(height: widget.onMotDePasse != null ? 10 : 18),
+                          OutlinedButton.icon(
+                            onPressed: widget.onDeconnexion,
+                            icon: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
+                            label: const Text('Se déconnecter', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFFDC2626)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
                           ),
                         ],
                       ],

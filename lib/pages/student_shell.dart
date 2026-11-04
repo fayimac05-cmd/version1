@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
+import '../services/non_lus_service.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'home_tab.dart';
@@ -27,7 +28,7 @@ class StudentShell extends StatefulWidget {
   State<StudentShell> createState() => _StudentShellState();
 }
 
-class _StudentShellState extends State<StudentShell> {
+class _StudentShellState extends State<StudentShell> with WidgetsBindingObserver {
   int _currentTab = 0;
   int _canauxUnread = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -44,8 +45,23 @@ class _StudentShellState extends State<StudentShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _rafraichirPhotos();
     _verifierReinscription();
+    // Compteurs de messages non lus (badge rouge de l'icône « Canaux »).
+    NonLusService.instance.demarrer();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    NonLusService.instance.arreter();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) NonLusService.instance.rafraichir();
   }
 
   Future<void> _verifierReinscription() async {
@@ -115,8 +131,11 @@ class _StudentShellState extends State<StudentShell> {
 
     return Scaffold(
       key: _scaffoldKey,
-      // Menu latéral : regroupe Planning, Chat IA, Révisions IA, Tickets
-      drawer: AppDrawer(profile: _profile),
+      // Menu latéral : regroupe Chat IA, Révisions IA, Tickets
+      drawer: AppDrawer(
+        profile: _profile,
+        onProfil: () => setState(() => _currentTab = 3), // onglet Profil
+      ),
       // ✅ CORRIGÉ — IndexedStack au lieu d'AnimatedSwitcher+KeyedSubtree :
       // l'ancienne version détruisait et recréait entièrement l'écran de
       // l'onglet à chaque changement (clé différente à chaque fois), ce qui
@@ -162,13 +181,16 @@ class _StudentShellState extends State<StudentShell> {
                 index: 0,
                 activeColor: AppPalette.blue,
               ),
-              _navItem(
-                icon: Icons.forum_outlined,
-                activeIcon: Icons.forum_rounded,
-                label: 'Canaux',
-                index: 1,
-                activeColor: AppPalette.yellow,
-                showDot: _canauxUnread > 0,
+              AnimatedBuilder(
+                animation: NonLusService.instance,
+                builder: (_, __) => _navItem(
+                  icon: Icons.forum_outlined,
+                  activeIcon: Icons.forum_rounded,
+                  label: 'Canaux',
+                  index: 1,
+                  activeColor: AppPalette.yellow,
+                  badge: NonLusService.instance.total,
+                ),
               ),
               _navItem(
                 icon: Icons.smart_toy_outlined,
@@ -271,23 +293,23 @@ class _StudentShellState extends State<StudentShell> {
                       ),
                     ),
                   )
-                else if (badge != null)
+                else if (badge != null && badge > 0)
                   Positioned(
-                    top: -4,
-                    right: -4,
+                    top: -6,
+                    right: -8,
                     child: Container(
-                      width: 16,
-                      height: 16,
+                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
-                        color: AppPalette.yellow,
-                        shape: BoxShape.circle,
+                        color: const Color(0xFFE53935),
+                        borderRadius: BorderRadius.circular(9),
                         border: Border.all(color: Colors.white, width: 1.5),
                       ),
                       child: Center(
-                        child: Text('$badge',
+                        child: Text(badge > 99 ? '99+' : '$badge',
                             style: const TextStyle(
-                                color: Color(0xFF3A2A00),
-                                fontSize: 8,
+                                color: Colors.white,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w800)),
                       ),
                     ),

@@ -9,6 +9,7 @@ import '../models/student_profile.dart';
 import '../models/event.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../services/non_lus_service.dart';
 import '../theme/app_palette.dart';
 import 'event_registration_page.dart';
 import 'notifications_page.dart';
@@ -947,14 +948,27 @@ Widget _buildProchainCours(BuildContext context) {
   }
  
   Widget _buildAccesRapides(BuildContext context) {
+    // Se reconstruit quand les compteurs (cours / planning) changent.
+    return AnimatedBuilder(
+      animation: NonLusService.instance,
+      builder: (_, __) => _accesRapidesContenu(context),
+    );
+  }
+
+  Widget _accesRapidesContenu(BuildContext context) {
     final items = [
       _QuickAction(
         Icons.bar_chart_rounded,
         'Résultats',
-        () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const BulletinScreen()),
-        ),
+        () async {
+          NonLusService.instance.sectionVue('bulletins');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BulletinScreen()),
+          );
+          NonLusService.instance.rafraichir();
+        },
+        badge: NonLusService.instance.bulletins,
       ),
       _QuickAction(
         Icons.qr_code_scanner_rounded,
@@ -967,28 +981,43 @@ Widget _buildProchainCours(BuildContext context) {
       _QuickAction(
         Icons.menu_book_rounded,
         'Cours',
-        () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const CoursesTab()),
-        ),
+        () async {
+          NonLusService.instance.sectionVue('cours');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CoursesTab()),
+          );
+          NonLusService.instance.rafraichir();
+        },
+        badge: NonLusService.instance.cours,
       ),
       _QuickAction(
         Icons.description_outlined,
         'Bulletins',
-        () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const BulletinScreen()),
-        ),
+        () async {
+          NonLusService.instance.sectionVue('bulletins');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BulletinScreen()),
+          );
+          NonLusService.instance.rafraichir();
+        },
+        badge: NonLusService.instance.bulletins,
       ),
       _QuickAction(
         Icons.calendar_month_rounded,
         'Planning',
-        () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PlanningTab(profile: widget.profile),
-          ),
-        ),
+        () async {
+          NonLusService.instance.sectionVue('planning');
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PlanningTab(profile: widget.profile),
+            ),
+          );
+          NonLusService.instance.rafraichir();
+        },
+        badge: NonLusService.instance.planning,
       ),
       _QuickAction(
         Icons.grade_rounded,
