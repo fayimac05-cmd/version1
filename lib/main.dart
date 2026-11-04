@@ -9,7 +9,18 @@ import 'pages/student_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final chrono = Stopwatch()..start();
 
+  // ⚡ L'écran d'accueil (vidéo + logo) n'a pas besoin de Supabase : on
+  // l'affiche IMMÉDIATEMENT et on initialise le reste en arrière-plan.
+  // Supabase n'est utilisé qu'après la connexion, bien plus tard.
+  runApp(const ScolarHubApp());
+  debugPrint('⏱ Première image lancée après ${chrono.elapsedMilliseconds} ms');
+
+  await _initialiserServices(chrono);
+}
+
+Future<void> _initialiserServices(Stopwatch chrono) async {
   // 1. Charger les variables d'environnement
   try {
     await dotenv.load(fileName: '.env');
@@ -39,13 +50,10 @@ Future<void> main() async {
       url: supabaseUrl,
       publishableKey: supabaseKey,
     );
-    debugPrint('✅ Supabase initialisé : $supabaseUrl');
+    debugPrint('✅ Supabase initialisé en ${chrono.elapsedMilliseconds} ms : $supabaseUrl');
   } catch (e) {
     debugPrint('❌ Erreur Supabase init : $e');
   }
-
-  // 3. Lancer l'application
-  runApp(const ScolarHubApp());
 }
 
 void goToDashboard(BuildContext context, StudentProfile profile) {
