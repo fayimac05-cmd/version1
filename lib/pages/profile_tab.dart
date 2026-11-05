@@ -449,7 +449,7 @@ _bentoCard(
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Rester connecté', style: TextStyle(color: _textMuted, fontWeight: FontWeight.w600))),
           ElevatedButton(
-            onPressed: () { Navigator.of(context).pop(); Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const SplashScreen()), (_) => false); },
+            onPressed: () { Navigator.of(context).pop(); widget.onLogout(); },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             child: const Text('Déconnexion', style: TextStyle(fontWeight: FontWeight.w600)),
           )
