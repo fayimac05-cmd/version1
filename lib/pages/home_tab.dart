@@ -795,7 +795,9 @@ Widget _buildProchainCours(BuildContext context) {
                 GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const CoursesTab()),
+                    MaterialPageRoute(
+                    builder: (_) => PlanningTab(profile: widget.profile),
+                    ),
                   ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
