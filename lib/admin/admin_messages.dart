@@ -18,6 +18,7 @@ import '../pages/emoji_gif_sticker_picker.dart';
 import '../pages/chat_theme.dart';
 import '../pages/chat_theme_picker_sheet.dart';
 import '../pages/voice_message.dart';
+import '../pages/video_message.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -2665,6 +2666,8 @@ class _BulleAdminState extends State<_BulleAdmin>
           texteColor: msg.estMoi ? _tMoi : _tAutre,
         );
       }
+      if (fType == 'video') return VideoMessageCard(url: url, nom: nom);
+      if (fType != 'audio') return FichierDocumentCard(url: url, nom: nom, texteColor: msg.estMoi ? _tMoi : _tAutre);
       final icone = fType == 'video'
           ? Icons.videocam_rounded
           : fType == 'audio'

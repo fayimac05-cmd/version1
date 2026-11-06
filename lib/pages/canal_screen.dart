@@ -18,6 +18,7 @@ import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
 import 'profil_public_page.dart';
 import 'voice_message.dart';
+import 'video_message.dart';
 import 'chat_theme.dart';
 import 'chat_theme_picker_sheet.dart';
 
@@ -2136,6 +2137,8 @@ class _BulleCanalState extends State<_BulleCanal> {
           avatarAvant: estMoi, // moi : photo au début ; les autres : à la fin
         );
       }
+      if (fType == 'video') return VideoMessageCard(url: url, nom: nom);
+      if (fType != 'audio') return FichierDocumentCard(url: url, nom: nom, texteColor: texteColor);
       final icone = fType == 'video' ? Icons.videocam_rounded : fType == 'audio' ? Icons.audiotrack_rounded : Icons.insert_drive_file_rounded;
       final couleur = fType == 'video' ? const Color(0xFFDC3545) : fType == 'audio' ? const Color(0xFFFF6B35) : const Color(0xFF7F66FF);
       return Row(mainAxisSize: MainAxisSize.min, children: [

@@ -18,6 +18,7 @@ import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
 import 'profil_public_page.dart';
 import 'voice_message.dart';
+import 'video_message.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -2047,6 +2048,8 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
               avatarAvant: estMoi, // moi : photo au début ; les autres : à la fin
             );
           }
+          if (fType == 'video') return VideoMessageCard(url: url, nom: nom);
+          if (fType != 'audio') return FichierDocumentCard(url: url, nom: nom, texteColor: textColor);
           final icone = fType == 'video' ? Icons.videocam_rounded : fType == 'audio' ? Icons.audiotrack_rounded : Icons.insert_drive_file_rounded;
           final couleurIcone = fType == 'video' ? const Color(0xFFDC2626) : fType == 'audio' ? const Color(0xFF15803D) : AppPalette.blue;
           return Row(mainAxisSize: MainAxisSize.min, children: [
