@@ -1581,11 +1581,6 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
       widget.onErreur(messageEchec ?? '$echecs affectation(s) de module n\'ont pas pu être enregistrées.');
     }
 
-    if (_photoBytes != null) {
-      final ok = await _envoyerPhoto(profId);
-      if (!ok) widget.onErreur('Professeur enregistré, mais la photo n\'a pas pu être envoyée.');
-    }
-
     await widget.onTermine(_edition);
     if (mounted) setState(() => _saving = false);
   }
@@ -1720,21 +1715,15 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Photo d\'identité', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                const Text('JPG, PNG (max. 2 Mo) — facultative', style: TextStyle(fontSize: 11.5, color: _texteGris)),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _choisirPhoto,
-                  icon: const Icon(Icons.info_outline, size: 16),
-                  label: Text(_photoBytes == null && _photoUrl.isEmpty ? 'Choisir une photo' : 'Changer la photo'),
-                ),
+                const Text('Photo de profil', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                const Text('Ajoutée par le professeur lui-même', style: TextStyle(fontSize: 11.5, color: _texteGris)),
               ]),
             ),
           ]),
           const SizedBox(height: 16),
           _cols([
-            _champ('Nom', _nomCtrl, icon: Icons.person_outline, hint: 'Ex. KABORE', req: true),
-            _champ('Prénoms', _prenomsCtrl, icon: Icons.person_outline, hint: 'Ex. Issa', req: true),
+            _champ('Nom', _nomCtrl, icon: Icons.person_outline, hint: 'Ex. KOURAOGO', req: true),
+            _champ('Prénoms', _prenomsCtrl, icon: Icons.person_outline, hint: 'Ex. Ibrahim', req: true),
           ]),
           const SizedBox(height: 12),
           _cols([
@@ -2095,12 +2084,6 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
         child: Column(children: [
           Align(alignment: Alignment.centerLeft, child: _titreSection(Icons.photo_camera_outlined, 'Aperçu de la photo')),
           _avatarPhoto(110),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _choisirPhoto,
-            icon: const Icon(Icons.photo_camera_outlined, size: 18),
-            label: const Text('Changer la photo'),
-          ),
         ]),
       ),
       const SizedBox(height: 14),

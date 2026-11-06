@@ -1090,7 +1090,7 @@ class _AuthPageState extends State<AuthPage> {
           _lbl('Nom de famille'),
           _champ(
             _nomCtrl,
-            'Ex: OUÉDRAOGO',
+            'Ex: KOURAOGO',
             Icons.person_outline,
             TextInputType.name,
           ),
@@ -1098,7 +1098,7 @@ class _AuthPageState extends State<AuthPage> {
           _lbl('Prénom'),
           _champ(
             _prenomCtrl,
-            'Ex: Mamadou',
+            'Ex: Ibrahim',
             Icons.person_outline,
             TextInputType.name,
           ),

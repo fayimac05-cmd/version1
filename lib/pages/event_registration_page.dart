@@ -101,7 +101,7 @@ class _EventRegistrationPageState extends State<EventRegistrationPage> {
               _buildTextField(
                 controller: _nomController,
                 label: 'Nom',
-                hint: 'Ex: OUÉDRAOGO',
+                hint: 'Ex: KOURAOGO',
                 icon: Icons.person_outline,
               ),
               const SizedBox(height: 20),

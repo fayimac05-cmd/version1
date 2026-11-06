@@ -1193,47 +1193,78 @@ class _ConversationViewState extends State<_ConversationView> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        _icnBtn(
-          Icons.emoji_emotions_outlined,
-          () => setState(() => _showEmoji = !_showEmoji),
-        ),
-        const SizedBox(width: 4),
-        _icnBtn(Icons.add_rounded, _menuPieceJointe),
-        const SizedBox(width: 6),
+        // Champ large façon WhatsApp : émoji à gauche, pièce jointe à droite,
+        // un seul bouton rond (micro / envoyer) à l'extérieur.
         Expanded(
           child: Container(
-            constraints: const BoxConstraints(maxHeight: 120),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 4),
-              ],
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: KeyboardListener(
-              focusNode: FocusNode(),
-              onKeyEvent: (e) {
-                if (e is KeyDownEvent &&
-                    e.logicalKey == LogicalKeyboardKey.enter &&
-                    !HardwareKeyboard.instance.isShiftPressed) {
-                  _envoyer();
-                }
-              },
-              child: TextField(
-                controller: _msgCtrl,
-                focusNode: _focusNode,
-                maxLines: null,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF111B21)),
-                decoration: const InputDecoration(
-                  hintText: 'Message...',
-                  hintStyle: TextStyle(fontSize: 14, color: Color(0xFF8696A0)),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    FocusScope.of(context).unfocus();
+                    setState(() => _showEmoji = !_showEmoji);
+                  },
+                  child: SizedBox(
+                    width: 44,
+                    height: 48,
+                    child: Icon(
+                      _showEmoji
+                          ? Icons.keyboard_alt_outlined
+                          : Icons.emoji_emotions_outlined,
+                      color: const Color(0xFF667781),
+                      size: 24,
+                    ),
                   ),
                 ),
-              ),
+                Expanded(
+                  child: KeyboardListener(
+                    focusNode: FocusNode(),
+                    onKeyEvent: (e) {
+                      if (e is KeyDownEvent &&
+                          e.logicalKey == LogicalKeyboardKey.enter &&
+                          !HardwareKeyboard.instance.isShiftPressed) {
+                        _envoyer();
+                      }
+                    },
+                    child: TextField(
+                      controller: _msgCtrl,
+                      focusNode: _focusNode,
+                      minLines: 1,
+                      maxLines: 5,
+                      textCapitalization: TextCapitalization.sentences,
+                      onTap: () {
+                        if (_showEmoji) setState(() => _showEmoji = false);
+                      },
+                      style: const TextStyle(
+                          fontSize: 16, color: Color(0xFF111B21)),
+                      decoration: const InputDecoration(
+                        hintText: 'Message...',
+                        hintStyle:
+                            TextStyle(fontSize: 15, color: Color(0xFF8696A0)),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _menuPieceJointe,
+                  child: const SizedBox(
+                    width: 44,
+                    height: 48,
+                    child: Icon(Icons.attach_file_rounded,
+                        color: Color(0xFF667781), size: 24),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1245,50 +1276,34 @@ class _ConversationViewState extends State<_ConversationView> {
                   key: const ValueKey('send'),
                   onTap: _envoyer,
                   child: Container(
-                    width: 42,
-                    height: 42,
+                    width: 50,
+                    height: 50,
                     decoration: const BoxDecoration(
                       color: AppPalette.blue,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.send_rounded,
-                      color: Colors.white,
-                      size: 19,
-                    ),
+                    child: const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 22),
                   ),
                 )
               : GestureDetector(
                   key: const ValueKey('mic'),
                   onTap: () => _envoyerMedia(TypeMessagePrive.vocal, '00:08'),
                   child: Container(
-                    width: 42,
-                    height: 42,
+                    width: 50,
+                    height: 50,
                     decoration: const BoxDecoration(
                       color: AppPalette.blue,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.mic_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
+                    child: const Icon(Icons.mic_rounded,
+                        color: Colors.white, size: 25),
                   ),
                 ),
         ),
       ],
     ),
   );
-
-  Widget _icnBtn(IconData icon, VoidCallback onTap) => GestureDetector(
-    onTap: onTap,
-    child: SizedBox(
-      width: 34,
-      height: 34,
-      child: Icon(icon, color: const Color(0xFF667781), size: 22),
-    ),
-  );
-
 
   void _menuMsg(MessagePrive msg) {
     showModalBottomSheet(

@@ -434,13 +434,13 @@ class _RegisterPageState extends State<RegisterPage> {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _buildLabel('Nom *'),
           const SizedBox(height: 8),
-          _buildTextField(controller: _nomCtrl, hint: 'OUÉDRAOGO', icon: Icons.person_outline, caps: true),
+          _buildTextField(controller: _nomCtrl, hint: 'KOURAOGO', icon: Icons.person_outline, caps: true),
         ])),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _buildLabel('Prénom(s) *'),
           const SizedBox(height: 8),
-          _buildTextField(controller: _prenomsCtrl, hint: 'Fatou', icon: Icons.person_outline),
+          _buildTextField(controller: _prenomsCtrl, hint: 'Ibrahim', icon: Icons.person_outline),
         ])),
       ]),
       const SizedBox(height: 18),

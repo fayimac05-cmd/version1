@@ -1123,8 +1123,8 @@ class _PanneauMembreState extends State<_PanneauMembre> {
                 titre: 'Informations du membre',
                 child: Column(children: [
                   _deuxColonnes(
-                    _champ('Nom', _nomCtrl, 'Ex. KABORE'),
-                    _champ('Prénom(s)', _prenomsCtrl, 'Ex. Issa'),
+                    _champ('Nom', _nomCtrl, 'Ex. KOURAOGO'),
+                    _champ('Prénom(s)', _prenomsCtrl, 'Ex. Ibrahim'),
                   ),
                   const SizedBox(height: 12),
                   _deuxColonnes(

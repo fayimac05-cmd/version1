@@ -487,6 +487,11 @@ class AdminMessagesState extends State<AdminMessages>
             estMoi: false,
             photoUrl: json['photo_url']?.toString(),
             lu: _groupeActif?.id == g.id,
+            idMessageRepondu: json['reponse_a_id']?.toString(),
+            texteRepondu: json['reponse_a_id'] == null
+                ? null
+                : (json['reponse_texte']?.toString() ?? 'Message supprimé'),
+            expediteurRepondu: json['reponse_auteur']?.toString(),
           ));
           if (_groupeActif?.id != g.id) g.nbNonLus++;
         });
@@ -1000,6 +1005,11 @@ class AdminMessagesState extends State<AdminMessages>
               lu: true,
               reactions: _reactionsDepuisJson(m['reactions']),
               epingle: m['epingle'] == true,
+              idMessageRepondu: m['reponse_a_id']?.toString(),
+              texteRepondu: m['reponse_a_id'] == null
+                  ? null
+                  : (m['reponse_texte']?.toString() ?? 'Message supprimé'),
+              expediteurRepondu: m['reponse_auteur']?.toString(),
             ));
           }
         });
@@ -1690,59 +1700,76 @@ class AdminMessagesState extends State<AdminMessages>
           color: const Color(0xFFF0EBE3),
           padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _icnBtn(Icons.add_rounded, () => _menuPieceJointe(g)),
-            const SizedBox(width: 6),
-            _icnBtn(
-              _showEmoji ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
-              () => setState(() => _showEmoji = !_showEmoji),
-            ),
-            const SizedBox(width: 6),
+            // Champ large façon WhatsApp : émoji à gauche, pièce jointe à droite,
+            // un seul bouton rond (micro / envoyer) à l'extérieur.
             Expanded(child: Container(
-              constraints: const BoxConstraints(maxHeight: 120),
               decoration: BoxDecoration(color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [BoxShadow(
-                      color: Colors.black.withValues(alpha:0.06), blurRadius: 4)]),
-              child: KeyboardListener(
-                focusNode: _keyboardFocusNode,
-                onKeyEvent: (e) {
-                  if (e is KeyDownEvent &&
-                      e.logicalKey == LogicalKeyboardKey.enter &&
-                      !HardwareKeyboard.instance.isShiftPressed) {
-                    _envoyer(g);
-                  }
-                },
-                child: TextField(
-                  controller: _msgCtrl,
-                  focusNode: _textFocusNode,
-                  maxLines: null,
-                  style: const TextStyle(fontSize: 14, color: Color(0xFF111B21)),
-                  decoration: InputDecoration(
-                    hintText: g.readonly ? 'Message broadcast...' : 'Message...',
-                    hintStyle: const TextStyle(
-                        fontSize: 14, color: Color(0xFF8696A0)),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10)))))),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: const Color(0xFFE2E8F0))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    _textFocusNode.unfocus();
+                    setState(() => _showEmoji = !_showEmoji);
+                  },
+                  child: SizedBox(width: 44, height: 48,
+                    child: Icon(
+                      _showEmoji ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
+                      color: const Color(0xFF667781), size: 24)),
+                ),
+                Expanded(child: KeyboardListener(
+                  focusNode: _keyboardFocusNode,
+                  onKeyEvent: (e) {
+                    if (e is KeyDownEvent &&
+                        e.logicalKey == LogicalKeyboardKey.enter &&
+                        !HardwareKeyboard.instance.isShiftPressed) {
+                      _envoyer(g);
+                    }
+                  },
+                  child: TextField(
+                    controller: _msgCtrl,
+                    focusNode: _textFocusNode,
+                    minLines: 1,
+                    maxLines: 5,
+                    textCapitalization: TextCapitalization.sentences,
+                    onTap: () {
+                      if (_showEmoji) setState(() => _showEmoji = false);
+                    },
+                    style: const TextStyle(fontSize: 16, color: Color(0xFF111B21)),
+                    decoration: InputDecoration(
+                      hintText: g.readonly ? 'Message broadcast...' : 'Message...',
+                      hintStyle: const TextStyle(fontSize: 15, color: Color(0xFF8696A0)),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14))))),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _menuPieceJointe(g),
+                  child: const SizedBox(width: 44, height: 48,
+                    child: Icon(Icons.attach_file_rounded,
+                        color: Color(0xFF667781), size: 24)),
+                ),
+              ]),
+            )),
             const SizedBox(width: 6),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
               child: _hasText
                   ? GestureDetector(key: const ValueKey('send'),
                       onTap: () => _envoyer(g),
-                      child: Container(width: 42, height: 42,
+                      child: Container(width: 50, height: 50,
                         decoration: const BoxDecoration(
                             color: AdminTheme.primary, shape: BoxShape.circle),
                         child: const Icon(Icons.send_rounded,
-                            color: Colors.white, size: 19)))
+                            color: Colors.white, size: 22)))
                   : GestureDetector(
                       key: const ValueKey('mic'),
                       onTap: _startRecording,
-                      child: Container(width: 42, height: 42,
+                      child: Container(width: 50, height: 50,
                         decoration: const BoxDecoration(
                             color: AdminTheme.primary, shape: BoxShape.circle),
                         child: const Icon(Icons.mic_rounded,
-                            color: Colors.white, size: 22)))),
+                            color: Colors.white, size: 25)))),
           ])),
     ]);
 
@@ -1959,7 +1986,11 @@ class AdminMessagesState extends State<AdminMessages>
         await http.post(
           Uri.parse('${ApiService.baseUrl}/messages/prives/${g.id}'),
           headers: headers,
-          body: jsonEncode({'contenu': texte}),
+          body: jsonEncode({
+            'contenu': texte,
+            if (rep != null && int.tryParse(rep.id) != null)
+              'reponse_a_id': int.parse(rep.id),
+          }),
         );
       } else if (g.type == 'groupe_etudiants') {
         // Envoi via HTTP (le serveur persiste et diffuse dans filiere:X par socket)

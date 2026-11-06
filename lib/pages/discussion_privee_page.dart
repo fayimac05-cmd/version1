@@ -44,6 +44,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
   final List<Map<String, dynamic>> _messages = [];
   bool _modeSelection = false;
   final Set<String> _selectionnes = {};
+  Map<String, dynamic>? _reponseA; // message ciblé : {id, texte, auteur}
 
   Color get _primaryColor => widget.themeColor ?? AppPalette.blue;
 
@@ -108,6 +109,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
           'heure': _formatHeure(json['created_at']),
           'lu': true,
           'photoUrl': json['photo_url']?.toString(),
+          ..._champsReponse(json),
         });
       });
 
@@ -153,6 +155,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
               'heure': _formatHeure(m['created_at']),
               'lu': m['is_read'] == true || estMoi == false,
               'photoUrl': m['photo_url']?.toString(),
+              ..._champsReponse(m),
             });
           }
           _loading = false;
@@ -169,6 +172,18 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
       debugPrint('[DiscussionPriveePage] Erreur chargement: $e');
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // Champs de la réponse ciblée renvoyés par le serveur.
+  Map<String, dynamic> _champsReponse(dynamic m) {
+    final id = m['reponse_a_id'];
+    if (id == null) return {};
+    final texte = m['reponse_texte']?.toString();
+    return {
+      'reponseId': id.toString(),
+      'reponseTexte': texte ?? 'Message supprimé',
+      'reponseAuteur': m['reponse_auteur']?.toString() ?? '',
+    };
   }
 
   String _formatHeure(dynamic raw) {
@@ -198,6 +213,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
   Future<void> _envoyer() async {
     final texte = _msgCtrl.text.trim();
     if (texte.isEmpty) return;
+    final rep = _reponseA;
 
     final tempId = 'T${DateTime.now().millisecondsSinceEpoch}';
     final localMsg = {
@@ -206,25 +222,30 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
       'estMoi': true,
       'heure': _now(),
       'lu': false,
+      if (rep != null) 'reponseId': rep['id'],
+      if (rep != null) 'reponseTexte': rep['texte'],
+      if (rep != null) 'reponseAuteur': rep['auteur'],
     };
 
     setState(() {
       _messages.add(localMsg);
       _hasText = false;
+      _reponseA = null;
     });
     _msgCtrl.clear();
     _scrollBas();
 
-    // 1. Émission Socket temps réel
-    SocketService().sendPrivateMessage(widget.destinataireId, {'contenu': texte});
-
-    // 2. Persistance HTTP REST
+    // Envoi HTTP : le serveur persiste (avec la réponse ciblée) et notifie
+    // le destinataire en temps réel par socket.
     try {
       final headers = await ApiService.getHeaders();
       final res = await http.post(
         Uri.parse('${ApiService.baseUrl}/messages/prives/${widget.destinataireId}'),
         headers: headers,
-        body: jsonEncode({'contenu': texte}),
+        body: jsonEncode({
+          'contenu': texte,
+          if (rep != null) 'reponse_a_id': int.tryParse(rep['id'].toString()),
+        }),
       );
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -308,6 +329,37 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
                           itemBuilder: (_, i) => _buildBulle(_messages[i]),
                         ),
             ),
+            if (_reponseA != null)
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border(left: BorderSide(color: _primaryColor, width: 4)),
+                  ),
+                  child: Row(children: [
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_reponseA!['auteur'].toString(),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primaryColor)),
+                        Text(_reponseA!['texte'].toString(),
+                            maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
+                      ],
+                    )),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF94A3B8)),
+                      onPressed: () => setState(() => _reponseA = null),
+                    ),
+                  ]),
+                ),
+              ),
             _buildZoneSaisie(),
             if (_showEmoji) _buildPanneauEmoji(),
           ],
@@ -407,6 +459,51 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
           onPressed: _selectionnes.isEmpty ? null : _supprimerSelection,
         ),
       ],
+    );
+  }
+
+  // Appui long sur un message : menu d'actions (comme le canal).
+  void _menuMessage(Map<String, dynamic> msg) {
+    final id = msg['id']?.toString() ?? '';
+    final texte = msg['texte']?.toString() ?? '';
+    Widget action(IconData icone, String titre, VoidCallback onTap, {Color? couleur}) => ListTile(
+          leading: Icon(icone, color: couleur ?? const Color(0xFF64748B)),
+          title: Text(titre, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: couleur ?? const Color(0xFF1E293B))),
+          onTap: () { Navigator.pop(context); onTap(); },
+        );
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        padding: EdgeInsets.only(top: 8, bottom: 8 + MediaQuery.of(context).padding.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 36, height: 4, margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2))),
+          action(Icons.reply_rounded, 'Répondre', () {
+            if (int.tryParse(id) == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Message en cours d\'envoi, réessayez dans un instant')));
+              return;
+            }
+            setState(() => _reponseA = {
+                  'id': id,
+                  'texte': _apercu(texte),
+                  'auteur': msg['estMoi'] == true ? 'Vous' : widget.destinataireNom,
+                });
+            _focusNode.requestFocus();
+          }),
+          action(Icons.copy_rounded, 'Copier le texte', () {
+            Clipboard.setData(ClipboardData(text: _apercu(texte)));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Texte copié')));
+          }),
+          action(Icons.check_box_outlined, 'Sélectionner', () => _demarrerSelection(id)),
+          action(Icons.delete_outline_rounded, 'Supprimer', () {
+            _demarrerSelection(id);
+            _supprimerSelection();
+          }, couleur: const Color(0xFFDC2626)),
+        ]),
+      ),
     );
   }
 
@@ -603,7 +700,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
 
     return GestureDetector(
       onTap: _modeSelection ? () => _basculerSelection(id) : null,
-      onLongPress: _modeSelection ? null : () => _demarrerSelection(id),
+      onLongPress: _modeSelection ? null : () => _menuMessage(msg),
       child: Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -654,6 +751,30 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (msg['reponseId'] != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+                      margin: const EdgeInsets.only(bottom: 5),
+                      decoration: BoxDecoration(
+                        color: (estMoi ? Colors.white : _primaryColor).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border(left: BorderSide(color: estMoi ? Colors.white70 : _primaryColor, width: 3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if ((msg['reponseAuteur']?.toString() ?? '').isNotEmpty)
+                            Text(msg['reponseAuteur'].toString(),
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700,
+                                    color: estMoi ? Colors.white : _primaryColor)),
+                          Text(_apercu(msg['reponseTexte']?.toString() ?? ''),
+                              maxLines: 2, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: estMoi ? Colors.white70 : const Color(0xFF64748B))),
+                        ],
+                      ),
+                    ),
                   _contenuTexte(msg['texte']?.toString() ?? '', estMoi),
                   const SizedBox(height: 3),
                   Row(
@@ -686,6 +807,13 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
       ),
       ),
     );
+  }
+
+  String _apercu(String t) {
+    if (t.startsWith('[GIF]')) return 'GIF';
+    if (t.startsWith('[STICKER]')) return '🏷️ Sticker';
+    if (t.startsWith('[FICHIER]')) return '📎 Fichier';
+    return t;
   }
 
   Widget _contenuTexte(String texte, bool estMoi) {
@@ -721,62 +849,83 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
   Widget _buildZoneSaisie() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
       child: SafeArea(
         top: false,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            IconButton(
-              icon: Icon(
-                _showEmoji ? Icons.keyboard_rounded : Icons.sentiment_satisfied_alt_rounded,
-                color: const Color(0xFF64748B),
-              ),
-              onPressed: () => setState(() => _showEmoji = !_showEmoji),
-            ),
+            // Champ large façon WhatsApp : émoji à l'intérieur, bouton rond à côté.
             Expanded(
               child: Container(
-                constraints: const BoxConstraints(maxHeight: 120),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(22),
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(26),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
-                child: KeyboardListener(
-                  focusNode: FocusNode(),
-                  onKeyEvent: (e) {
-                    if (e is KeyDownEvent &&
-                        e.logicalKey == LogicalKeyboardKey.enter &&
-                        !HardwareKeyboard.instance.isShiftPressed) {
-                      _envoyer();
-                    }
-                  },
-                  child: TextField(
-                    controller: _msgCtrl,
-                    focusNode: _focusNode,
-                    maxLines: null,
-                    style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
-                    decoration: const InputDecoration(
-                      hintText: 'Écrire un message...',
-                      hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        FocusScope.of(context).unfocus();
+                        setState(() => _showEmoji = !_showEmoji);
+                      },
+                      child: SizedBox(
+                        width: 44,
+                        height: 48,
+                        child: Icon(
+                          _showEmoji ? Icons.keyboard_rounded : Icons.sentiment_satisfied_alt_rounded,
+                          color: const Color(0xFF64748B),
+                          size: 24,
+                        ),
+                      ),
                     ),
-                  ),
+                    Expanded(
+                      child: KeyboardListener(
+                        focusNode: FocusNode(),
+                        onKeyEvent: (e) {
+                          if (e is KeyDownEvent &&
+                              e.logicalKey == LogicalKeyboardKey.enter &&
+                              !HardwareKeyboard.instance.isShiftPressed) {
+                            _envoyer();
+                          }
+                        },
+                        child: TextField(
+                          controller: _msgCtrl,
+                          focusNode: _focusNode,
+                          minLines: 1,
+                          maxLines: 5,
+                          textCapitalization: TextCapitalization.sentences,
+                          onTap: () {
+                            if (_showEmoji) setState(() => _showEmoji = false);
+                          },
+                          style: const TextStyle(fontSize: 16, color: Color(0xFF0F172A)),
+                          decoration: const InputDecoration(
+                            hintText: 'Écrire un message...',
+                            hintStyle: TextStyle(fontSize: 15, color: Color(0xFF94A3B8)),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.only(left: 2, right: 14, top: 14, bottom: 14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             GestureDetector(
               onTap: _hasText ? _envoyer : null,
               child: Container(
-                width: 42,
-                height: 42,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
                   color: _hasText ? _primaryColor : const Color(0xFFCBD5E1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
               ),
             ),
           ],
