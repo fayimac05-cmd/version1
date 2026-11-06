@@ -1408,7 +1408,7 @@ class _CanalDetailState extends State<_CanalDetail> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                   Text(_messageEnReponse!.expediteur, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: widget.couleur)),
-                  Text(_messageEnReponse!.texte, style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(_apercuMessage(_messageEnReponse!.texte), style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
                 ]),
               ),
               GestureDetector(
@@ -1473,7 +1473,7 @@ Widget _zoneSaisie() {
     );
   }
   return Container(
-  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+  padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
   decoration: const BoxDecoration(
     color: Colors.white, // Déplacé à l'intérieur !
     border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
@@ -1481,46 +1481,46 @@ Widget _zoneSaisie() {
   child: Row(
     crossAxisAlignment: CrossAxisAlignment.end,
     children: [
+      // Champ large façon WhatsApp : émoji à gauche, pièce jointe à droite,
+      // un seul bouton rond (micro / envoyer) à l'extérieur.
       Expanded(child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(26),
           border: Border.all(color: const Color(0xFFE2E8F0))),
-        child: TextField(
-          controller: _inputCtrl, maxLines: null,
-          onChanged: (v) => setState(() => _hasText = v.trim().isNotEmpty),
-          style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
-          decoration: const InputDecoration(
-            hintText: 'Écrire une annonce officielle...',
-            hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12))),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () { FocusScope.of(context).unfocus(); setState(() => _panneauOuvert = !_panneauOuvert); },
+            child: SizedBox(width: 44, height: 48,
+              child: Icon(_panneauOuvert ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
+                  color: const Color(0xFF64748B), size: 24)),
+          ),
+          Expanded(child: TextField(
+            controller: _inputCtrl, minLines: 1, maxLines: 5,
+            textCapitalization: TextCapitalization.sentences,
+            onTap: () { if (_panneauOuvert) setState(() => _panneauOuvert = false); },
+            onChanged: (v) => setState(() => _hasText = v.trim().isNotEmpty),
+            style: const TextStyle(fontSize: 16, color: Color(0xFF0F172A)),
+            decoration: const InputDecoration(
+              hintText: 'Écrire un message...',
+              hintStyle: TextStyle(fontSize: 15, color: Color(0xFF94A3B8)),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 14)))),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _menuPieceJointe,
+            child: SizedBox(width: 44, height: 48,
+              child: Icon(Icons.attach_file_rounded, color: const Color(0xFF64748B), size: 24)),
+          ),
+        ]),
       )),
-      const SizedBox(width: 10),
-      GestureDetector(
-        onTap: _menuPieceJointe,
-        child: Container(width: 44, height: 44,
-          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
-          child: Icon(Icons.add_rounded, color: widget.couleur, size: 24)),
-      ),
-      const SizedBox(width: 10),
-      GestureDetector(
-        onTap: () => setState(() => _panneauOuvert = !_panneauOuvert),
-        child: Container(width: 44, height: 44,
-          decoration: BoxDecoration(
-            color: _panneauOuvert ? widget.couleur.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(12)),
-          child: Icon(_panneauOuvert ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
-              color: widget.couleur, size: 22)),
-      ),
-      const SizedBox(width: 10),
+      const SizedBox(width: 6),
       GestureDetector(
         onTap: _hasText ? _envoyerMessage : _startRecording,
-        child: Container(width: 44, height: 44,
-          decoration: BoxDecoration(
-            color: widget.couleur,
-            shape: BoxShape.circle),
-          child: Icon(_hasText ? Icons.send_rounded : Icons.mic_rounded, color: Colors.white, size: _hasText ? 18 : 22)),
+        child: Container(width: 50, height: 50,
+          decoration: BoxDecoration(color: widget.couleur, shape: BoxShape.circle),
+          child: Icon(_hasText ? Icons.send_rounded : Icons.mic_rounded, color: Colors.white, size: _hasText ? 22 : 25)),
       ),
     ]),
 );
@@ -2015,7 +2015,7 @@ class _BulleCanalState extends State<_BulleCanal> {
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                             Text(message.expediteurRepondu ?? '', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: estMoi ? texteColor : message.color)),
                             const SizedBox(height: 2),
-                            Text(message.texteRepondu!, style: TextStyle(fontSize: 12, color: (estMoi ? texteColor.withValues(alpha: 0.85) : const Color(0xFF64748B))), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(_apercuMessage(message.texteRepondu!), style: TextStyle(fontSize: 12, color: (estMoi ? texteColor.withValues(alpha: 0.85) : const Color(0xFF64748B))), maxLines: 2, overflow: TextOverflow.ellipsis),
                           ]),
                         ),
                       _contenuBulleCanal(context, message, isPDF, texteColor, estMoi),
@@ -2439,4 +2439,20 @@ class _BlinkingDotCanalState extends State<_BlinkingDotCanal> with SingleTickerP
       child: Container(width: 10, height: 10, decoration: const BoxDecoration(color: Color(0xFFDC2626), shape: BoxShape.circle)),
     );
   }
+}
+
+/// Libellé lisible d'un message pour l'aperçu de réponse / la citation :
+/// évite d'afficher le texte brut « [FICHIER]vocal|https://... ».
+String _apercuMessage(String t) {
+  if (t.startsWith('[FICHIER]')) {
+    final p = t.substring(9).split('|');
+    if (p[0] == 'vocal') return '🎤 Message vocal';
+    if (p[0] == 'image') return '📷 Photo';
+    if (p[0] == 'video') return '🎥 Vidéo';
+    return '📎 ${p.length > 2 ? p.sublist(2).join('|') : 'Fichier'}';
+  }
+  if (t.startsWith('[GIF]')) return 'GIF';
+  if (t.startsWith('[STICKER]')) return '🏷️ Sticker';
+  if (t.startsWith('[SONDAGE]')) return '📊 Sondage';
+  return t;
 }

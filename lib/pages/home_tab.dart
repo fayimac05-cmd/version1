@@ -1141,47 +1141,54 @@ Widget _buildProchainCours(BuildContext context) {
   }
  
 Widget _buildCantineEtFiliereRow(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _squareActionCard(
-            gradientColors: const [Color(0xFF7C22E8), Color(0xFFC026D3)],
-            icon: Icons.restaurant_menu_rounded,
-            title: 'Menu cantine',
-            subtitle: 'Menu du jour',
-            badge: 'Ouvert',
-            badgeColor: const Color(0xFF2E8B3C),
-            watermarkIcon: Icons.lunch_dining_rounded,
-            imageAsset: 'assets/images/cantine_food.png',
-            onTap: () => _showCantineSheet(context),
-          ),
-        ),
+    // Téléphone : une carte par ligne, pleine largeur et plus grande.
+    // Tablette / ordinateur : les deux cartes côte à côte comme avant.
+    return LayoutBuilder(builder: (context, c) {
+      final grand = c.maxWidth < 560;
+      final imgW = grand ? c.maxWidth * 0.62 : 245.0;
+      final cantine = _squareActionCard(
+        gradientColors: const [Color(0xFF7C22E8), Color(0xFFC026D3)],
+        icon: Icons.restaurant_menu_rounded,
+        title: 'Menu cantine',
+        subtitle: 'Menu du jour',
+        badge: 'Ouvert',
+        badgeColor: const Color(0xFF2E8B3C),
+        watermarkIcon: Icons.lunch_dining_rounded,
+        imageAsset: 'assets/images/cantine_food.png',
+        grand: grand,
+        imageWidth: imgW,
+        onTap: () => _showCantineSheet(context),
+      );
+      final filiere = _squareActionCard(
+        gradientColors: const [Color(0xFF1261D1), Color(0xFF0A3D91)],
+        icon: Icons.groups_rounded,
+        title: 'Ma filière',
+        subtitle: widget.profile.filiere.isNotEmpty
+            ? widget.profile.filiere : 'Canal de la filière',
+        watermarkIcon: Icons.groups_rounded,
+        imageAsset: 'assets/images/students_group.png',
+        unreadCount: _nonLusMaFiliere,
+        grand: grand,
+        imageWidth: imgW,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => GroupeFiliere(profile: widget.profile)),
+          );
+          // Au retour, l'écran a marqué la lecture côté serveur —
+          // resynchronise le badge (doit repasser à 0).
+          if (mounted) _fetchNonLusMaFiliere();
+        },
+      );
+      if (grand) {
+        return Column(children: [cantine, const SizedBox(height: 14), filiere]);
+      }
+      return Row(children: [
+        Expanded(child: cantine),
         const SizedBox(width: 12),
-        Expanded(
-          child: _squareActionCard(
-            gradientColors: const [Color(0xFF1261D1), Color(0xFF0A3D91)],
-            icon: Icons.groups_rounded,
-            title: 'Ma filière',
-            subtitle: widget.profile.filiere.isNotEmpty
-                ? widget.profile.filiere : 'Canal de la filière',
-            watermarkIcon: Icons.groups_rounded,
-            imageAsset: 'assets/images/students_group.png',
-            unreadCount: _nonLusMaFiliere,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GroupeFiliere(profile: widget.profile),
-                ),
-              );
-              // Au retour, l'écran a marqué la lecture côté serveur —
-              // resynchronise le badge (doit repasser à 0).
-              if (mounted) _fetchNonLusMaFiliere();
-            },
-          ),
-        ),
-      ],
-    );
+        Expanded(child: filiere),
+      ]);
+    });
   }
  
   Widget _squareActionCard({
@@ -1195,11 +1202,13 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
     String? badge,
     Color? badgeColor,
     int? unreadCount,
+    bool grand = false,
+    double imageWidth = 245,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 184,
+        height: grand ? 200 : 184,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -1238,8 +1247,8 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
                           ).createShader(bounds),
                       child: Image.asset(
                         imageAsset,
-                        width: 245,
-                        height: 184,
+                        width: imageWidth,
+                        height: grand ? 200 : 184,
                         fit: BoxFit.cover,
                         alignment: Alignment.centerRight,
                         errorBuilder: (_, __, ___) => Icon(
@@ -1309,12 +1318,12 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
                   Row(
                     children: [
                       Container(
-                        width: 37, height: 37,
+                        width: grand ? 46 : 37, height: grand ? 46 : 37,
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.17),
                           borderRadius: BorderRadius.circular(11),
                         ),
-                        child: Icon(icon, color: Colors.white, size: 19),
+                        child: Icon(icon, color: Colors.white, size: grand ? 24 : 19),
                       ),
                       const Spacer(),
                       if (badge != null)
@@ -1335,32 +1344,32 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
                   ),
                   const Spacer(),
                   SizedBox(
-                    width: 150,
+                    width: grand ? 260 : 150,
                     child: Text(title,
                         maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white, fontSize: 15,
+                        style: TextStyle(
+                          color: Colors.white, fontSize: grand ? 19 : 15,
                           fontWeight: FontWeight.w800,
                         )),
                   ),
                   const SizedBox(height: 3),
                   SizedBox(
-                    width: 155,
+                    width: grand ? 280 : 155,
                     child: Text(subtitle,
                         maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 10.5, fontWeight: FontWeight.w500,
+                          fontSize: grand ? 13 : 10.5, fontWeight: FontWeight.w500,
                           height: 1.25,
                         )),
                   ),
                   const Spacer(),
                   Container(
-                    width: 35, height: 35,
+                    width: grand ? 44 : 35, height: grand ? 44 : 35,
                     decoration: const BoxDecoration(
                       color: AppPalette.yellow, shape: BoxShape.circle),
-                    child: const Icon(Icons.arrow_forward_rounded,
-                        color: Color(0xFF3A2A00), size: 17),
+                    child: Icon(Icons.arrow_forward_rounded,
+                        color: const Color(0xFF3A2A00), size: grand ? 22 : 17),
                   ),
                 ],
               ),

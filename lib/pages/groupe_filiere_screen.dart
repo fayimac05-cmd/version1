@@ -1463,7 +1463,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                 ),
               ],
             ),
-            padding: EdgeInsets.fromLTRB(12, 10, 12, _enregistrement ? 10 : 14),
+            padding: EdgeInsets.fromLTRB(8, 6, 8, _enregistrement ? 10 : 12),
             child: _enregistrement
                 ? VoiceRecordingBar(
                     paused: _voiceRecorder.isPaused,
@@ -1475,123 +1475,83 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                     onSend: _arreterEtEnvoyerEnregistrement,
                   )
                 : Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Bouton pièce jointe
-                GestureDetector(
-                  onTap: _menuPieceJointe,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppPalette.lightBlue,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      color: AppPalette.blue,
-                      size: 26,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // Champ texte
+                // Champ large façon WhatsApp : émoji à gauche, pièce jointe
+                // à droite, un seul bouton rond (micro / envoyer) à l'extérieur.
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(26),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    child: TextField(
-                      controller: _inputCtrl,
-                      maxLines: 4,
-                      minLines: 1,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Color(0xFF0F172A),
-                      ),
-                      decoration: const InputDecoration(
-                        hintText: 'Message au groupe...',
-                        hintStyle: TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 15,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            setState(() => _panneauOuvert = !_panneauOuvert);
+                          },
+                          child: SizedBox(
+                            width: 44, height: 48,
+                            child: Icon(
+                              _panneauOuvert ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
+                              color: const Color(0xFF64748B), size: 24),
+                          ),
                         ),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                        Expanded(
+                          child: TextField(
+                            controller: _inputCtrl,
+                            minLines: 1,
+                            maxLines: 5,
+                            textCapitalization: TextCapitalization.sentences,
+                            onTap: () {
+                              if (_panneauOuvert) setState(() => _panneauOuvert = false);
+                            },
+                            style: const TextStyle(fontSize: 16, color: Color(0xFF0F172A)),
+                            decoration: const InputDecoration(
+                              hintText: 'Message au groupe...',
+                              hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // Bouton emoji / GIF / stickers
-                GestureDetector(
-                  onTap: () => setState(() => _panneauOuvert = !_panneauOuvert),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: _panneauOuvert ? AppPalette.blue.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      _panneauOuvert ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
-                      color: AppPalette.blue,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // Bouton micro (vocal) — tap pour démarrer l'enregistrement
-                GestureDetector(
-                  onTap: _demarrerEnregistrement,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF15803D),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF15803D).withValues(alpha:0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _menuPieceJointe,
+                          child: const SizedBox(
+                            width: 44, height: 48,
+                            child: Icon(Icons.attach_file_rounded, color: Color(0xFF64748B), size: 24),
+                          ),
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.mic_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Bouton envoyer
-                GestureDetector(
-                  onTap: _envoyerTexte,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppPalette.blue,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppPalette.blue.withValues(alpha:0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                const SizedBox(width: 6),
+                // Micro quand le champ est vide, envoyer dès qu'il y a du texte.
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _inputCtrl,
+                  builder: (_, v, __) {
+                    final aTexte = v.text.trim().isNotEmpty;
+                    return GestureDetector(
+                      onTap: aTexte ? _envoyerTexte : _demarrerEnregistrement,
+                      child: Container(
+                        width: 50, height: 50,
+                        decoration: BoxDecoration(
+                          color: aTexte ? AppPalette.blue : const Color(0xFF15803D),
+                          shape: BoxShape.circle,
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.send_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
+                        child: Icon(
+                          aTexte ? Icons.send_rounded : Icons.mic_rounded,
+                          color: Colors.white, size: aTexte ? 22 : 25),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

@@ -3138,9 +3138,9 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
         children: [
           _section(Icons.person_outline, 'Informations personnelles'),
           _cols([
-            _champ('Nom', _nomCtrl, icon: Icons.person_outline, hint: 'Ex. KABORE', req: true),
+            _champ('Nom', _nomCtrl, icon: Icons.person_outline, hint: 'Ex. KOURAOGO', req: true),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _champ('Prénoms', _prenomsCtrl, icon: Icons.person_outline, hint: 'Ex. Issa', req: true),
+              _champ('Prénoms', _prenomsCtrl, icon: Icons.person_outline, hint: 'Ex. Ibrahim', req: true),
               const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text('Si plusieurs prénoms, seul le premier ou deux seront affichés sur la carte.',
@@ -3218,7 +3218,7 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
           _section(Icons.info_outline, 'Informations complémentaires'),
           _cols([
             _champ('Téléphone', _telCtrl, icon: Icons.phone_outlined, hint: 'Ex. 70 12 34 56', type: TextInputType.phone, req: true),
-            _champ('Email', _emailCtrl, icon: Icons.mail_outline, hint: 'Ex. issa.kabore@email.com', type: TextInputType.emailAddress, req: true),
+            _champ('Email', _emailCtrl, icon: Icons.mail_outline, hint: 'Ex. ibrahim.kouraogo@email.com', type: TextInputType.emailAddress, req: true),
             _champ('Adresse', _adresseCtrl, icon: Icons.location_on_outlined, hint: 'Ex. Quartier, ville', req: true),
           ]),
 

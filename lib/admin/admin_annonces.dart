@@ -112,6 +112,7 @@ class _PopupDropdown<T> extends StatelessWidget {
   final String Function(T) labelOf;
   final ValueChanged<T> onChanged;
   final double? width;
+  final IconData? icon;
 
   const _PopupDropdown({
     required this.value,
@@ -120,6 +121,7 @@ class _PopupDropdown<T> extends StatelessWidget {
     required this.labelOf,
     required this.onChanged,
     this.width,
+    this.icon,
   });
 
   Widget _label() => Text(
@@ -154,6 +156,10 @@ class _PopupDropdown<T> extends StatelessWidget {
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[
+            Icon(icon, size: 20, color: const Color(0xFF0A4DA2)),
+            const SizedBox(width: 10),
+          ],
           // Expanded uniquement quand la largeur est bornée (formulaire) ;
           // dans la barre de filtres / la pagination la largeur est libre et
           // un Expanded y provoquerait une erreur de layout (écran blanc).
@@ -1053,6 +1059,7 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
   String _categorie = 'generale';
   PlatformFile? _image;
   PlatformFile? _pieceJointe;
+  PlatformFile? _video;
 
   bool _isSaving = false;
 
@@ -1113,6 +1120,13 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
     setState(() => _image = res.files.first);
   }
 
+  Future<void> _pickVideo() async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['mp4', 'mov'], withData: true);
+    if (res == null || res.files.isEmpty) return;
+    if (res.files.first.size > 50 * 1024 * 1024) { _warn('Vidéo trop lourde (max 50 Mo).'); return; }
+    setState(() => _video = res.files.first);
+  }
+
   Future<void> _pickPieceJointe() async {
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -1132,11 +1146,11 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
   Widget build(BuildContext context) {
     final isDesktop = AdminTheme.isDesktop(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF3F6FB),
       body: SafeArea(
         child: Column(children: [
           _topBar(),
-          Container(height: 1, color: const Color(0xFFE2E8F0)),
+          const SizedBox(height: 6),
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(isDesktop ? 28 : 16),
@@ -1149,17 +1163,59 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
     );
   }
 
+  static const Color _bleu = Color(0xFF0A4DA2);
+  static const Color _jaune = Color(0xFFF8C400);
+
   Widget _topBar() => Container(
     color: Colors.white,
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-    child: Row(children: [
-      IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back_rounded)),
-      const SizedBox(width: 8),
-      Container(width: 40, height: 40, decoration: BoxDecoration(color: AdminTheme.iconBg, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.campaign_rounded, color: AdminTheme.iconFg, size: 20)),
-      const SizedBox(width: 12),
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(widget.annonce == null ? 'Publier une nouvelle annonce' : 'Modifier l\'annonce', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
-        const Text('Rédigez et diffusez votre annonce à la bonne audience.', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+    child: Stack(children: [
+      Positioned.fill(child: CustomPaint(painter: _VaguePainter())),
+      Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          child: Row(children: [
+            InkWell(
+              onTap: () => Navigator.pop(context),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2F8),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [BoxShadow(color: _navy.withValues(alpha: 0.08), blurRadius: 6, offset: const Offset(0, 2))],
+                ),
+                child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0B1E4D)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 50, height: 50,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [_bleu, Color(0xFF0B2A6B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(color: _bleu.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))],
+              ),
+              child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 28),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.annonce == null ? 'Publier une nouvelle annonce' : 'Modifier l\'annonce',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0B1E4D))),
+              const SizedBox(height: 2),
+              const Text('Rédigez et diffusez votre annonce à la bonne audience.',
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF475569))),
+            ])),
+            const SizedBox(width: 70),
+          ]),
+        ),
+        // Trait bleu sous le titre, qui vire au jaune à droite.
+        Padding(
+          padding: const EdgeInsets.only(left: 122, right: 0),
+          child: Container(height: 3, decoration: const BoxDecoration(
+            gradient: LinearGradient(colors: [_bleu, _bleu, _jaune], stops: [0.0, 0.8, 1.0]))),
+        ),
       ]),
     ]),
   );
@@ -1178,56 +1234,79 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
     _optionsCard(),
   ]);
 
+  // Carte à en-tête bleu marine : liseré jaune, icône blanche, titre blanc.
   Widget _cardShell({required String title, required IconData icon, required Widget child}) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(AdminTheme.radiusCard), border: Border.all(color: AdminTheme.border)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Icon(icon, color: AdminTheme.iconFg, size: 17),
-        const SizedBox(width: 8),
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-      ]),
-      const SizedBox(height: 4),
-      const Divider(color: AdminTheme.border),
-      const SizedBox(height: 10),
-      child,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [BoxShadow(color: const Color(0xFF0B1E4D).withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 4))],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(colors: [Color(0xFF0B2A6B), Color(0xFF0A4DA2)]),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: Row(children: [
+          Container(width: 4, height: 24, decoration: BoxDecoration(color: _jaune, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 10),
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(width: 10),
+          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white))),
+        ]),
+      ),
+      Padding(padding: const EdgeInsets.all(14), child: child),
     ]),
   );
 
-  // ── Colonne 1 : titre + contenu ─────────────────────────────────────────
-  Widget _contentCard() => _cardShell(
-    title: 'Titre de l\'annonce *',
-    icon: Icons.title_rounded,
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _textField(controller: _titreController, hint: 'Ex: Résultats du concours d\'entrée 2024'),
-      const SizedBox(height: 20),
-      const Text('Contenu de l\'annonce *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-      const SizedBox(height: 8),
-      _formatToolbar(),
-      Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: TextField(
-          controller: _contenuController,
-          focusNode: _contenuFocus,
-          maxLines: 10,
-          minLines: 8,
-          maxLength: 2000,
-          style: const TextStyle(fontSize: 13.5, height: 1.5),
-          onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            hintText: 'Écrivez votre annonce ici...',
-            hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.all(14),
+  // ── Colonne 1 : titre + contenu (deux cartes) ───────────────────────────
+  Widget _contentCard() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _cardShell(
+      title: 'Titre de l\'annonce *',
+      icon: Icons.description_outlined,
+      child: _textField(controller: _titreController, hint: 'Ex : Résultats du concours d\'entrée 2024'),
+    ),
+    const SizedBox(height: 16),
+    _cardShell(
+      title: 'Contenu de l\'annonce *',
+      icon: Icons.edit_outlined,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _formatToolbar(),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: TextField(
+            controller: _contenuController,
+            focusNode: _contenuFocus,
+            maxLines: 10,
+            minLines: 8,
+            maxLength: 2000,
+            style: const TextStyle(fontSize: 14.5, height: 1.5),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              hintText: 'Écrivez votre annonce ici...',
+              hintStyle: TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
+              border: InputBorder.none,
+              counterText: '',
+              contentPadding: EdgeInsets.all(14),
+            ),
           ),
         ),
-      ),
-    ]),
-  );
+        Padding(
+          padding: const EdgeInsets.only(top: 6, right: 6),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text('${_contenuController.text.length}/2000', style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+          ),
+        ),
+      ]),
+    ),
+  ]);
 
   Widget _formatToolbar() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1259,7 +1338,7 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
   );
 
   Widget _textField({required TextEditingController controller, required String hint}) => Container(
-    decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFCBD5E1))),
     child: TextField(
       controller: controller,
       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
@@ -1270,7 +1349,7 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
   // ── Colonne 2 : Destinataires ───────────────────────────────────────────
   Widget _destinatairesCard() => _cardShell(
     title: 'Destinataires',
-    icon: Icons.people_alt_outlined,
+    icon: Icons.groups_rounded,
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Choisissez à qui envoyer cette annonce.', style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
       const SizedBox(height: 10),
@@ -1287,7 +1366,7 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
         onTap: () => setState(() { _portee = PorteeAnnonce.filiere; _personnaliser = false; _cibleRole = 'tous'; }),
       ),
       if (_portee == PorteeAnnonce.filiere) Padding(
-        padding: const EdgeInsets.only(left: 30, bottom: 10),
+        padding: const EdgeInsets.only(bottom: 10),
         child: _PopupDropdown<String>(
           value: _selectedFiliere,
           hint: 'Choisir la filière',
@@ -1304,7 +1383,7 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
         onTap: () => setState(() { _portee = PorteeAnnonce.niveau; _personnaliser = false; _cibleRole = 'tous'; }),
       ),
       if (_portee == PorteeAnnonce.niveau) Padding(
-        padding: const EdgeInsets.only(left: 30, bottom: 10),
+        padding: const EdgeInsets.only(bottom: 10),
         child: _PopupDropdown<String>(
           value: _selectedNiveau,
           hint: 'Choisir le niveau',
@@ -1321,7 +1400,7 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
         onTap: () => setState(() { _personnaliser = true; _portee = PorteeAnnonce.globale; }),
       ),
       if (_personnaliser) Padding(
-        padding: const EdgeInsets.only(left: 30),
+        padding: const EdgeInsets.only(bottom: 4),
         child: _PopupDropdown<String>(
           value: _cibleRole == 'tous' ? null : _cibleRole,
           hint: 'Choisir le rôle',
@@ -1334,134 +1413,182 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
     ]),
   );
 
-  Widget _destinataireOption({required String label, required String sub, required bool selected, required VoidCallback onTap}) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(10),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded, size: 19, color: selected ? AdminTheme.iconFg : const Color(0xFFCBD5E1)),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: selected ? const Color(0xFF0F172A) : const Color(0xFF334155))),
-          const SizedBox(height: 2),
-          Text(sub, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-        ])),
-      ]),
+  Widget _destinataireOption({required String label, required String sub, required bool selected, required VoidCallback onTap}) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE8F0FB) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? _bleu : const Color(0xFFE3EAF5), width: selected ? 1.5 : 1),
+          boxShadow: [BoxShadow(color: _navy.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+              size: 24, color: selected ? _bleu : const Color(0xFFCBD5E1)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF0B1E4D))),
+            const SizedBox(height: 2),
+            Text(sub, style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+          ])),
+          if (selected) const Icon(Icons.check_circle_rounded, size: 22, color: _bleu),
+        ]),
+      ),
     ),
   );
 
   // ── Colonne 3 : Options supplémentaires ─────────────────────────────────
   Widget _optionsCard() => _cardShell(
     title: 'Options supplémentaires',
-    icon: Icons.tune_rounded,
+    icon: Icons.settings_rounded,
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Ajoutez des informations pour mieux cibler votre annonce.', style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+      const Text('Ajoutez des informations pour mieux cibler votre annonce.', style: TextStyle(fontSize: 12.5, color: Color(0xFF334155))),
       const SizedBox(height: 14),
-      const Text('Catégorie *', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-      const SizedBox(height: 6),
+      const Text('Catégorie *', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0B1E4D))),
+      const SizedBox(height: 8),
       _PopupDropdown<String>(
         value: _categorie,
         hint: 'Choisir',
+        icon: Icons.grid_view_rounded,
         items: categorieOptions.map((c) => c['val']!).toList(),
         labelOf: (v) => categorieOptions.firstWhere((c) => c['val'] == v)['label']!,
         onChanged: (v) => setState(() => _categorie = v),
         width: double.infinity,
       ),
       const SizedBox(height: 16),
-      const Text('Image (facultatif)', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-      const SizedBox(height: 6),
-      _dropzone(
-        file: _image,
-        icon: Icons.image_outlined,
-        label: 'Glissez une image ici ou cliquez',
-        hint: 'PNG, JPG (max 5 Mo)',
-        onTap: _pickImage,
-        onClear: () => setState(() => _image = null),
+      _fichierLigne(
+        file: _image, icon: Icons.image_rounded, couleur: _bleu,
+        titre: 'Image (facultatif)', hint: 'PNG, JPG • max 5 Mo',
+        onTap: _pickImage, onClear: () => setState(() => _image = null),
       ),
-      const SizedBox(height: 16),
-      const Text('Pièce jointe (facultatif)', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-      const SizedBox(height: 6),
-      _dropzone(
-        file: _pieceJointe,
-        icon: Icons.description_outlined,
-        label: 'Ajouter un fichier',
-        hint: 'PDF, DOC, DOCX (max 10 Mo)',
-        onTap: _pickPieceJointe,
-        onClear: () => setState(() => _pieceJointe = null),
+      const SizedBox(height: 10),
+      _fichierLigne(
+        file: _video, icon: Icons.play_circle_fill_rounded, couleur: _bleu,
+        titre: 'Vidéo (facultatif)', hint: 'MP4, MOV • max 50 Mo',
+        onTap: _pickVideo, onClear: () => setState(() => _video = null),
+      ),
+      const SizedBox(height: 10),
+      _fichierLigne(
+        file: _pieceJointe, icon: Icons.picture_as_pdf_rounded, couleur: _bleu,
+        titre: 'Pièce jointe (facultatif)', hint: 'PDF, DOC, DOCX • max 10 Mo',
+        onTap: _pickPieceJointe, onClear: () => setState(() => _pieceJointe = null),
       ),
     ]),
   );
 
-  Widget _dropzone({
+  // Ligne « fichier » : icône, titre + format, bouton Parcourir (ou nom du fichier choisi).
+  Widget _fichierLigne({
     required PlatformFile? file,
     required IconData icon,
-    required String label,
+    required Color couleur,
+    required String titre,
     required String hint,
     required VoidCallback onTap,
     required VoidCallback onClear,
-  }) {
-    if (file != null) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+  }) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F7FC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: file != null ? _bleu : const Color(0xFFE3EAF5)),
+          boxShadow: [BoxShadow(color: const Color(0xFF0B1E4D).withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
         child: Row(children: [
-          Icon(icon, size: 18, color: AdminTheme.iconFg),
+          Icon(icon, size: 30, color: couleur),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(file != null ? file.name : titre,
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0B1E4D))),
+            const SizedBox(height: 2),
+            Text(file != null ? 'Fichier prêt à être envoyé' : hint,
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11.5, color: Color(0xFF475569))),
+          ])),
           const SizedBox(width: 8),
-          Expanded(child: Text(file.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-          IconButton(onPressed: onClear, icon: const Icon(Icons.close_rounded, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+          if (file != null)
+            IconButton(onPressed: onClear, icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B)),
+                padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32))
+          else
+            OutlinedButton.icon(
+              onPressed: onTap,
+              icon: const Icon(Icons.folder_open_rounded, size: 18),
+              label: const Text('Parcourir', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _bleu,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: _bleu),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                minimumSize: const Size(0, 38),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
         ]),
       );
-    }
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE2E8F0), style: BorderStyle.solid),
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: const Color(0xFF94A3B8), size: 22),
-          const SizedBox(height: 6),
-          Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w600), textAlign: TextAlign.center),
-          const SizedBox(height: 2),
-          Text(hint, style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)), textAlign: TextAlign.center),
-        ]),
-      ),
-    );
-  }
 
   // ── Actions bas de page ─────────────────────────────────────────────────
-  Widget _footerActions() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-    decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE2E8F0)))),
-    child: Row(children: [
-      OutlinedButton(
-        onPressed: _isSaving ? null : () => Navigator.pop(context),
-        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), side: const BorderSide(color: Color(0xFFCBD5E1))),
-        child: const Text('Annuler', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+  Widget _footerActions() {
+    final annuler = OutlinedButton.icon(
+      onPressed: _isSaving ? null : () => Navigator.pop(context),
+      icon: const Icon(Icons.close_rounded, size: 20),
+      label: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF0B1E4D),
+        side: const BorderSide(color: Color(0xFFCBD5E1)),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      const Spacer(),
-      OutlinedButton(
-        onPressed: _isSaving ? null : () => _save(StatutAnnonce.brouillon),
-        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), side: const BorderSide(color: Color(0xFFCBD5E1))),
-        child: const Text('Enregistrer en brouillon', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+    );
+    final brouillon = OutlinedButton.icon(
+      onPressed: _isSaving ? null : () => _save(StatutAnnonce.brouillon),
+      icon: const Icon(Icons.save_outlined, size: 20),
+      label: const Text('Enregistrer en brouillon', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _bleu,
+        side: const BorderSide(color: _bleu),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      const SizedBox(width: 12),
-      ElevatedButton.icon(
-        onPressed: _isSaving ? null : () => _save(StatutAnnonce.publie),
-        icon: _isSaving
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : const Icon(Icons.send_rounded, size: 16, color: Colors.white),
-        label: const Text('Publier l\'annonce', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-        style: ElevatedButton.styleFrom(backgroundColor: _navy, padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
+    );
+    final publier = ElevatedButton.icon(
+      onPressed: _isSaving ? null : () => _save(StatutAnnonce.publie),
+      icon: _isSaving
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+          : const Icon(Icons.send_rounded, size: 20, color: Colors.white),
+      label: const Text('Publier l\'annonce', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _bleu,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 0,
       ),
-    ]),
-  );
+    );
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: _navy.withValues(alpha: 0.10), blurRadius: 12, offset: const Offset(0, 3))],
+      ),
+      child: LayoutBuilder(builder: (context, c) {
+        if (c.maxWidth >= 640) {
+          return Row(children: [annuler, const Spacer(), brouillon, const SizedBox(width: 12), publier]);
+        }
+        return Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 10, runSpacing: 10,
+          children: [annuler, brouillon, publier],
+        );
+      }),
+    );
+  }
 
   void _save(StatutAnnonce finalStatus) {
     final title = _titreController.text.trim();
@@ -1505,7 +1632,7 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
         final id = widget.annonce?.id ?? (result['data'] is Map ? result['data']['id']?.toString() : null);
         final erreurs = <String>[];
         if (id != null) {
-          for (final f in [_image, _pieceJointe]) {
+          for (final f in [_image, _video, _pieceJointe]) {
             if (f == null || f.bytes == null) continue;
             final up = await ApiService.uploadAnnonceFichier(id, f.bytes!, f.name);
             if (up['success'] != true) erreurs.add('${f.name} : ${up['error']}');
@@ -1527,4 +1654,39 @@ class _AnnonceFormPageState extends State<_AnnonceFormPage> {
       }
     });
   }
+}
+
+// Vague décorative bleu + jaune en haut à droite de l'en-tête (maquette).
+class _VaguePainter extends CustomPainter {
+  const _VaguePainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final largeur = (w * 0.26).clamp(120.0, 340.0);
+    final x0 = w - largeur;
+
+    final jaune = Path()
+      ..moveTo(x0 + largeur * 0.15, 0)
+      ..lineTo(w, 0)
+      ..lineTo(w, h * 0.55)
+      ..quadraticBezierTo(x0 + largeur * 0.55, h * 0.35, x0 + largeur * 0.15, 0)
+      ..close();
+    canvas.drawPath(jaune, Paint()..color = const Color(0xFFF8C400));
+
+    final bleu = Path()
+      ..moveTo(x0 + largeur * 0.38, 0)
+      ..lineTo(w, 0)
+      ..lineTo(w, h * 0.95)
+      ..quadraticBezierTo(x0 + largeur * 0.75, h * 0.55, x0 + largeur * 0.38, 0)
+      ..close();
+    canvas.drawPath(
+      bleu,
+      Paint()
+        ..shader = const LinearGradient(colors: [Color(0xFF0A4DA2), Color(0xFF0B2A6B)])
+            .createShader(Rect.fromLTWH(x0, 0, largeur, h)),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
