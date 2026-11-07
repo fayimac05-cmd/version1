@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,12 +21,16 @@ import 'checkin_screen.dart';
 import 'planning_tab.dart';
 import 'cantine_sheet.dart';
 import 'mes_notes_page.dart';
- 
+
+
 class HomeTab extends StatefulWidget {
-  const HomeTab({super.key, required this.profile, this.onMenuTap});
+  const HomeTab({super.key, required this.profile, this.onMenuTap, this.refreshSignal});
  
   final StudentProfile profile;
   final VoidCallback? onMenuTap;
+
+  /// Incrémenté par la barre du bas quand on appuie sur « Accueil ».
+  final ValueListenable<int>? refreshSignal;
  
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -39,6 +44,8 @@ class _HomeTabState extends State<HomeTab> {
   Timer? _autoScroll;
   Timer? _annoncesAutoScroll;
   Timer? _notifsPoll;
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
  
   List<Map<String, dynamic>> _annonces = [];
   bool _annoncesLoading = true;
@@ -78,6 +85,7 @@ class _HomeTabState extends State<HomeTab> {
   @override
   void initState() {
     super.initState();
+    widget.refreshSignal?.addListener(_onRefreshSignal);
     _fetchAnnonces();
     _fetchEvenements();
     _fetchApercuEtProchainCours();
@@ -115,6 +123,8 @@ class _HomeTabState extends State<HomeTab> {
  
   @override
   void dispose() {
+    widget.refreshSignal?.removeListener(_onRefreshSignal);
+    _scroll.dispose();
     _eventsCtrl.dispose();
     _annoncesCtrl.dispose();
     _autoScroll?.cancel();
@@ -125,6 +135,29 @@ class _HomeTabState extends State<HomeTab> {
     // les deux sont actifs en même temps. Voir socket_service.dart::off.
     SocketService().off('notification', _onNouvelleNotification);
     super.dispose();
+  }
+
+  // Recharge tout l'accueil (annonces, événements, aperçu, notes, badges).
+  Future<void> _rafraichirTout() async {
+    await Future.wait([
+      _fetchAnnonces(),
+      _fetchEvenements(),
+      _fetchApercuEtProchainCours(),
+      _fetchNotesNonLues(),
+      _fetchNotifsNonLues(),
+      _fetchNonLusMaFiliere(),
+    ]);
+    NonLusService.instance.rafraichir();
+  }
+
+  // Appui sur « Accueil » dans la barre du bas : remonte en haut puis rafraîchit.
+  void _onRefreshSignal() {
+    if (!mounted) return;
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      _scroll.animateTo(0,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+    _refreshKey.currentState?.show();
   }
 
   Future<void> _fetchNotifsNonLues() async {
@@ -434,19 +467,19 @@ class _HomeTabState extends State<HomeTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
-      body: RefreshIndicator(
+      // En-tête FIXE (hors de la zone qui défile) : il ne disparaît plus.
+      body: Column(
+        children: [
+          _buildHeader(context),
+          Expanded(
+            child: RefreshIndicator(
+        key: _refreshKey,
         color: AppPalette.blue,
-        onRefresh: () async {
-          await Future.wait([
-            _fetchAnnonces(),
-            _fetchEvenements(),
-            _fetchApercuEtProchainCours(),
-          ]);
-        },
+        onRefresh: _rafraichirTout,
         child: CustomScrollView(
+          controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(child: _buildHeader(context)),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 105),
               sliver: SliverList(
@@ -467,6 +500,9 @@ class _HomeTabState extends State<HomeTab> {
             ),
           ],
         ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -479,9 +515,16 @@ Widget _buildHeader(BuildContext context) {
  
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: SafeArea(
         bottom: false,

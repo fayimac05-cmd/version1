@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import '../models/student_profile.dart';
@@ -26,6 +27,7 @@ import '../admin/admin_messages.dart';
 import '../pages/discussion_privee_page.dart';
 import 'professor_dashboard.dart';
 import 'professeur_reclamations.dart';
+import '../services/messages_prefetch.dart';
 
 // ── Shell principal ────────────────────────────────────────────────────────
 
@@ -43,6 +45,8 @@ class _ProfessorShellState extends State<ProfessorShell> with WidgetsBindingObse
   // 4 = Notes, 5 = Messages, 6 = Profil, 7 = Réclamations.
   int _currentTab = 0;
   int? _msgNonLus; // total remonté par la page Messages quand elle est ouverte
+  // Incrémenté quand on appuie sur « Accueil » en y étant déjà : l'accueil se rafraîchit.
+  final ValueNotifier<int> _homeRefresh = ValueNotifier<int>(0);
 
   // Profil courant : copie locale du profil de connexion, mise à jour quand la
   // photo change (profil) ou est relue côté serveur (rafraîchissement du site).
@@ -56,12 +60,14 @@ class _ProfessorShellState extends State<ProfessorShell> with WidgetsBindingObse
     _rafraichirPhoto();
     // Marqueurs : messages (canaux + privés) et réclamations à traiter.
     NonLusService.instance.demarrer();
+    MessagesPrefetch.lancer();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     NonLusService.instance.arreter();
+    _homeRefresh.dispose();
     super.dispose();
   }
 
@@ -122,6 +128,7 @@ class _ProfessorShellState extends State<ProfessorShell> with WidgetsBindingObse
           onNotes: () => _goTo(4),
           onMessages: () => _goTo(5),
           onProfil: () => _goTo(6),
+          refreshSignal: _homeRefresh,
         );
       case 1:
         return _ClassesTab(
@@ -188,6 +195,7 @@ class _ProfessorShellState extends State<ProfessorShell> with WidgetsBindingObse
   }
 
   void _goTo(int index) {
+    if (index == 0 && _currentTab == 0) _homeRefresh.value++;
     setState(() {
       _currentTab = index;
       if (index != 3 && index != 4 && index != 8) {

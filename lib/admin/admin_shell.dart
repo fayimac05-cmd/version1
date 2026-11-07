@@ -75,6 +75,7 @@ import '../widgets/mobile_nav.dart';
 import '../widgets/guide_utilisation.dart';
 import '../widgets/session_settings_sheet.dart';
 import '../widgets/scolarhub_logo.dart';
+import '../services/messages_prefetch.dart';
 // import '../services/auth_service.dart';
 // import '../services/notifications_service.dart';
 // import 'package:shared_preferences/shared_preferences.dart';
@@ -364,6 +365,7 @@ class _AdminShellState extends State<AdminShell>
   void initState() {
     super.initState();
     NonLusService.instance.demarrer();
+    MessagesPrefetch.lancer();
     // Les compteurs restent affichés tant que la demande n'est pas traitée ;
     // on les recharge régulièrement pour qu'ils suivent les nouveautés.
     _badgesTimer = Timer.periodic(const Duration(seconds: 30), (_) => _chargerBadges());

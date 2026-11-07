@@ -13,6 +13,7 @@ import 'chat_ia_screen.dart';
 import 'app_drawer.dart';
 import '../services/annuel_service.dart';
 import 'reinscription_page.dart';
+import '../services/messages_prefetch.dart';
 
 class StudentShell extends StatefulWidget {
   const StudentShell({
@@ -32,6 +33,8 @@ class _StudentShellState extends State<StudentShell> with WidgetsBindingObserver
   int _currentTab = 0;
   int _canauxUnread = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  // Incrémenté à chaque appui sur « Accueil » : l'accueil se rafraîchit.
+  final ValueNotifier<int> _homeRefresh = ValueNotifier<int>(0);
 
   // Copie mutable du profil, tenue à jour après un changement de photo/
   // couverture (voir _onPhotoChanged) — propage la nouvelle photo à TOUTE
@@ -50,12 +53,14 @@ class _StudentShellState extends State<StudentShell> with WidgetsBindingObserver
     _verifierReinscription();
     // Compteurs de messages non lus (badge rouge de l'icône « Canaux »).
     NonLusService.instance.demarrer();
+    MessagesPrefetch.lancer();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     NonLusService.instance.arreter();
+    _homeRefresh.dispose();
     super.dispose();
   }
 
@@ -113,6 +118,7 @@ class _StudentShellState extends State<StudentShell> with WidgetsBindingObserver
       HomeTab(
         profile: _profile,
         onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+        refreshSignal: _homeRefresh,
       ),
       CanalScreen(
         profile: _profile,
@@ -230,7 +236,10 @@ class _StudentShellState extends State<StudentShell> with WidgetsBindingObserver
         : const Color(0xFFF4F5F7);
 
     return GestureDetector(
-      onTap: () => setState(() => _currentTab = index),
+      onTap: () {
+        if (index == 0) _homeRefresh.value++; // rafraîchit l'accueil
+        setState(() => _currentTab = index);
+      },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 56,

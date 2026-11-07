@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
+import '../services/messages_cache.dart';
 import '../services/non_lus_service.dart';
 import '../services/socket_service.dart';
 import '../widgets/delegue_badge.dart';
@@ -775,8 +776,23 @@ class _CanalDetailState extends State<_CanalDetail> {
 
   Future<void> _init() async {
     _myUserId = await ApiService.getUserId();
+    await _afficherCache(); // messages déjà vus : affichage immédiat
     await _chargerMessages();
     await _connecterSocket();
+  }
+
+  String get _cleCache => 'canal:${widget.canalId}:${_myUserId ?? ''}';
+
+  // Affiche tout de suite les derniers messages déjà vus (mémoire / disque).
+  Future<void> _afficherCache() async {
+    final brut = await MessagesCache.lireOuDisque(_cleCache);
+    if (brut == null || !mounted || _msgs.isNotEmpty) return;
+    setState(() {
+      _msgs.addAll(brut.whereType<Map>().map((m) =>
+          _MessageCanal.fromJson(Map<String, dynamic>.from(m), widget.couleur)));
+      _loading = false;
+    });
+    _scrollBasInitial();
   }
 
   Future<void> _chargerTheme() async {
@@ -820,13 +836,16 @@ class _CanalDetailState extends State<_CanalDetail> {
         final body = jsonDecode(utf8.decode(response.bodyBytes));
         final data = (body is Map ? body['data'] : body) as List? ?? [];
         if (!mounted) return;
+        MessagesCache.ecrire(_cleCache, data);
+        final avant = _msgs.length;
         setState(() {
           _msgs.clear();
           _msgs.addAll(data.map((m) =>
               _MessageCanal.fromJson(m as Map<String, dynamic>, widget.couleur)));
           _loading = false;
         });
-        _scrollBasInitial();
+        // Cache déjà affiché : on ne fait descendre que s'il y a du nouveau.
+        if (avant == 0 || _msgs.length > avant) _scrollBasInitial();
         // Marque comme lus tous les messages reçus (pas les miens) —
         // ouvrir le canal vaut consultation, comme WhatsApp.
         for (final m in _msgs) {
@@ -834,11 +853,11 @@ class _CanalDetailState extends State<_CanalDetail> {
         }
       } else {
         if (!mounted) return;
-        setState(() { _loading = false; _msgs.addAll(_fallbackMsgs()); });
+        setState(() { _loading = false; if (_msgs.isEmpty) _msgs.addAll(_fallbackMsgs()); });
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() { _loading = false; _msgs.addAll(_fallbackMsgs()); });
+      setState(() { _loading = false; if (_msgs.isEmpty) _msgs.addAll(_fallbackMsgs()); });
     }
   }
 
@@ -863,6 +882,7 @@ class _CanalDetailState extends State<_CanalDetail> {
       if (cid != widget.canalId) return;
       if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
       final msg = _MessageCanal.fromJson(json, widget.couleur);
+      MessagesCache.ajouter(_cleCache, json);
       setState(() => _msgs.add(msg));
       _scrollBas();
       ApiService.marquerMessageLu('canal', msg.id);

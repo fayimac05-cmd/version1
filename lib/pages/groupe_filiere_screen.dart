@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
+import '../services/messages_cache.dart';
 import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/delegue_badge.dart';
@@ -148,14 +149,33 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     try {
       final cle = _myUserId ?? '';
       var filiere = _filiereCache[cle];
-      if (filiere == null) {
+      if (filiere != null) {
+        // Déjà vu depuis le lancement : messages affichés immédiatement.
+        _filiereId = filiere;
+        await _afficherCache();
+      } else {
+        // Première ouverture après le lancement : filière + messages gardés
+        // sur l'appareil, on affiche sans attendre le réseau.
+        final memo = int.tryParse(await MessagesCache.lireTexte('filiere:$cle') ?? '');
+        if (memo != null) {
+          _filiereId = memo;
+          await _afficherCache();
+        }
         final headers = await ApiService.getHeaders();
         final me = await http.get(
             Uri.parse('${ApiService.baseUrl}/auth/me'), headers: headers);
         if (me.statusCode == 200) {
           final raw = jsonDecode(me.body)['filiere_id'];
           filiere = raw is int ? raw : int.tryParse('$raw');
-          if (filiere != null) _filiereCache[cle] = filiere;
+          if (filiere != null) {
+            _filiereCache[cle] = filiere;
+            MessagesCache.ecrireTexte('filiere:$cle', '$filiere');
+          }
+        } else {
+          filiere = memo; // serveur indisponible : on garde la filière mémorisée
+        }
+        if (memo != null && filiere != memo && mounted) {
+          setState(() => _messages = []); // la filière a changé : on repart de zéro
         }
       }
       _filiereId = filiere;
@@ -175,6 +195,22 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     } finally {
       if (mounted) setState(() => _chargementInitial = false);
     }
+  }
+
+  String get _cleCache => 'groupe:$_filiereId:${_myUserId ?? ''}';
+
+  // Affiche tout de suite les derniers messages déjà vus (mémoire / disque).
+  Future<void> _afficherCache() async {
+    final brut = await MessagesCache.lireOuDisque(_cleCache);
+    if (brut == null || !mounted || _messages.isNotEmpty) return;
+    setState(() {
+      _messages = brut
+          .whereType<Map>()
+          .map((m) => _messageDepuisJson(Map<String, dynamic>.from(m)))
+          .toList();
+      _chargementInitial = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBasInitial());
   }
 
   Future<void> _chargerMembres() async {
@@ -202,12 +238,17 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     );
     if (response.statusCode != 200 || !mounted) return;
     final data = jsonDecode(utf8.decode(response.bodyBytes))['data'] as List? ?? [];
+    MessagesCache.ecrire(_cleCache, data);
+    final avant = _messages.length;
     setState(() {
       _messages = data
           .map((m) => _messageDepuisJson(m as Map<String, dynamic>))
           .toList();
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBasInitial());
+    // Cache déjà affiché : on ne fait descendre que s'il y a du nouveau.
+    if (avant == 0 || _messages.length > avant) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollBasInitial());
+    }
     // Marque comme lus tous les messages reçus (pas les miens) — ouvrir la
     // discussion vaut consultation, comme WhatsApp.
     // Seulement les 20 derniers : un appel serveur par message saturait le
@@ -230,6 +271,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
       if (json['filiere_id']?.toString() != _filiereId?.toString()) return;
       // Mes propres messages sont déjà affichés à l'envoi
       if (_myUserId != null && json['auteur_id']?.toString() == _myUserId) return;
+      MessagesCache.ajouter(_cleCache, json);
       setState(() => _messages.add(_messageDepuisJson(json)));
       Future.delayed(const Duration(milliseconds: 100), _scrollBas);
     });
