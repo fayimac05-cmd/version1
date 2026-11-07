@@ -424,12 +424,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ))).toList());
     }
 
-    return GridView.count(
-      crossAxisCount: 2, shrinkWrap: true, mainAxisSpacing: 12,
-      crossAxisSpacing: 12, childAspectRatio: 1.3,
-      physics: const NeverScrollableScrollPhysics(),
-      children: kpis.map((k) => _kpiCard(k)).toList(),
-    );
+    return _grille2(kpis.map((k) => _kpiCard(k)).toList());
+  }
+
+  // Grille à 2 colonnes dont la hauteur s'adapte au contenu (plus de
+  // « BOTTOM OVERFLOWED » quand le texte passe sur 2 lignes ou que la police
+  // du téléphone est agrandie).
+  Widget _grille2(List<Widget> cartes) {
+    final lignes = <Widget>[];
+    for (var i = 0; i < cartes.length; i += 2) {
+      lignes.add(IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: cartes[i]),
+          const SizedBox(width: 12),
+          Expanded(child: i + 1 < cartes.length ? cartes[i + 1] : const SizedBox()),
+        ]),
+      ));
+      if (i + 2 < cartes.length) lignes.add(const SizedBox(height: 12));
+    }
+    return Column(children: lignes);
   }
 
   Widget _kpiCard(Map<String, dynamic> k) => Container(
