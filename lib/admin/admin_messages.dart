@@ -10,6 +10,8 @@ import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
 import '../services/api_service.dart';
+import '../services/messages_cache.dart';
+import '../services/messages_prefetch.dart';
 import '../services/socket_service.dart';
 import '../services/non_lus_service.dart';
 import '../widgets/delegue_badge.dart';
@@ -355,6 +357,22 @@ class AdminMessagesState extends State<AdminMessages>
 
       setState(() { adminGroupes = newGroupes; });
       _chargerNonLusCanaux(newGroupes);
+
+      // Préchargement en arrière-plan : les discussions s'ouvrent ensuite instantanément.
+      // (les conversations privées : les 8 premières seulement)
+      var nbPrives = 0;
+      final cibles = <String, String>{};
+      for (final g in newGroupes) {
+        if (g.type == 'prive') {
+          if (nbPrives++ >= 8) continue;
+          cibles['/messages/prives/${g.id}'] = _cleCacheAdmin(g);
+        } else if (g.type == 'groupe_etudiants') {
+          if (g.filiereId != null) cibles['/messages/groupe/${g.filiereId}'] = _cleCacheAdmin(g);
+        } else if (int.tryParse(g.id) != null) {
+          cibles['/messages/canal/${g.id}'] = _cleCacheAdmin(g);
+        }
+      }
+      MessagesPrefetch.precharger(cibles);
 
       await SocketService().connect();
       SocketService().onCanalMessage((data) {
@@ -945,6 +963,49 @@ class AdminMessagesState extends State<AdminMessages>
     }
   }
 
+  String _cleCacheAdmin(GroupeAdmin g) {
+    final base = g.type == 'prive'
+        ? 'prive:${g.id}'
+        : g.type == 'groupe_etudiants'
+            ? 'groupe:${g.filiereId}'
+            : 'canal:${g.id}';
+    return '$base:${_myUserId ?? ''}';
+  }
+
+  // Reconstruit les messages d'une conversation depuis le JSON du serveur (ou du cache).
+  void _remplirMessagesAdmin(GroupeAdmin g, List data) {
+    g.messages.clear();
+    for (final m in data) {
+      final rawDate = m['created_at'] ?? m['createdAt'];
+      final createdAt = (rawDate != null ? DateTime.tryParse(rawDate.toString()) : null)?.toLocal() ?? DateTime.now();
+      final heure = '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
+      final senderId = (m['expediteur_id'] ?? m['auteur_id'])?.toString();
+      final estMoi = _myUserId != null && senderId == _myUserId;
+      final nomComplet = '${m['prenoms'] ?? ''} ${m['nom'] ?? ''}'.trim();
+      final auteur = estMoi ? 'Moi' : (nomComplet.isNotEmpty ? nomComplet : (m['role'] == 'professeur' ? 'Professeur' : 'Utilisateur'));
+
+      g.messages.add(MessageAdmin(
+        id: m['id']?.toString() ?? UniqueKey().toString(),
+        expediteur: auteur,
+        texte: m['contenu']?.toString() ?? '',
+        heure: heure,
+        type: m['type']?.toString() ?? 'texte',
+        estMoi: estMoi,
+        etudiantRole: m['etudiant_role']?.toString(),
+        niveau: m['niveau']?.toString(),
+        photoUrl: m['photo_url']?.toString(),
+        lu: true,
+        reactions: _reactionsDepuisJson(m['reactions']),
+        epingle: m['epingle'] == true,
+        idMessageRepondu: m['reponse_a_id']?.toString(),
+        texteRepondu: m['reponse_a_id'] == null
+            ? null
+            : (m['reponse_texte']?.toString() ?? 'Message supprimé'),
+        expediteurRepondu: m['reponse_auteur']?.toString(),
+      ));
+    }
+  }
+
   Future<void> _selectionnerGroupe(GroupeAdmin g) async {
     setState(() {
       _groupeActif = g;
@@ -967,6 +1028,15 @@ class AdminMessagesState extends State<AdminMessages>
       }
     }
 
+    // Messages déjà vus : affichage immédiat (mémoire / disque), puis mise à jour.
+    if (g.messages.isEmpty) {
+      final brut = await MessagesCache.lireOuDisque(_cleCacheAdmin(g));
+      if (brut != null && mounted && _groupeActif?.id == g.id && g.messages.isEmpty) {
+        setState(() => _remplirMessagesAdmin(g, brut));
+        _scrollBasInitial();
+      }
+    }
+
     try {
       final headers = await ApiService.getHeaders();
       final url = g.type == 'prive'
@@ -982,45 +1052,17 @@ class AdminMessagesState extends State<AdminMessages>
       if (res.statusCode == 200 && mounted) {
         final body = jsonDecode(utf8.decode(res.bodyBytes));
         final data = (body is Map ? body['data'] : body) as List? ?? [];
-        setState(() {
-          g.messages.clear();
-          for (final m in data) {
-            final rawDate = m['created_at'] ?? m['createdAt'];
-            final createdAt = (rawDate != null ? DateTime.tryParse(rawDate.toString()) : null)?.toLocal() ?? DateTime.now();
-            final heure = '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
-            final senderId = (m['expediteur_id'] ?? m['auteur_id'])?.toString();
-            final estMoi = _myUserId != null && senderId == _myUserId;
-            final nomComplet = '${m['prenoms'] ?? ''} ${m['nom'] ?? ''}'.trim();
-            final auteur = estMoi ? 'Moi' : (nomComplet.isNotEmpty ? nomComplet : (m['role'] == 'professeur' ? 'Professeur' : 'Utilisateur'));
-
-            g.messages.add(MessageAdmin(
-              id: m['id']?.toString() ?? UniqueKey().toString(),
-              expediteur: auteur,
-              texte: m['contenu']?.toString() ?? '',
-              heure: heure,
-              type: m['type']?.toString() ?? 'texte',
-              estMoi: estMoi,
-              etudiantRole: m['etudiant_role']?.toString(),
-              niveau: m['niveau']?.toString(),
-              photoUrl: m['photo_url']?.toString(),
-              lu: true,
-              reactions: _reactionsDepuisJson(m['reactions']),
-              epingle: m['epingle'] == true,
-              idMessageRepondu: m['reponse_a_id']?.toString(),
-              texteRepondu: m['reponse_a_id'] == null
-                  ? null
-                  : (m['reponse_texte']?.toString() ?? 'Message supprimé'),
-              expediteurRepondu: m['reponse_auteur']?.toString(),
-            ));
-          }
-        });
+        final avantMsgs = g.messages.length;
+        MessagesCache.ecrire(_cleCacheAdmin(g), data);
+        setState(() => _remplirMessagesAdmin(g, data));
         // Marque tous les messages reçus (pas les miens) comme lus par moi —
         // ouvrir la conversation vaut consultation, comme WhatsApp.
         final typeBackend = _typeBackend(g);
         for (final m in g.messages) {
           if (!m.estMoi) ApiService.marquerMessageLu(typeBackend, m.id);
         }
-        _scrollBasInitial();
+        // Cache déjà affiché : on ne fait descendre que s'il y a du nouveau.
+        if (avantMsgs == 0 || g.messages.length > avantMsgs) _scrollBasInitial();
       }
     } catch (e) {
       debugPrint('[AdminMessages] Erreur chargement messages: $e');

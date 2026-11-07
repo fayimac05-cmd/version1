@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,8 +21,11 @@ class ProfessorDashboard extends StatefulWidget {
     this.onNotes,
     this.onMessages,
     this.onProfil,
+    this.refreshSignal,
   });
 
+  /// Incrémenté par le shell quand on appuie sur « Accueil » alors qu'on y est déjà.
+  final ValueListenable<int>? refreshSignal;
   final StudentProfile profile;
   final VoidCallback? onClasses;
   final VoidCallback? onCours;
@@ -44,6 +48,7 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
   List<Map<String, dynamic>> _coursDuJour = [];
   List<_RecentItem> _recentActivitiesCache = [];
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
 
   // ── Couleurs de la maquette — sidebar/bandeaux en bleu marine plein,
   // pastilles de statut, cartes d'action pleines (voir Nommer/etc. ailleurs
@@ -76,7 +81,18 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
   @override
   void initState() {
     super.initState();
+    widget.refreshSignal?.addListener(_onRefreshSignal);
     _chargerDashboard();
+  }
+
+  // Appui sur « Accueil » : remonte en haut puis rafraîchit.
+  void _onRefreshSignal() {
+    if (!mounted) return;
+    if (_scrollController.hasClients && _scrollController.offset > 0) {
+      _scrollController.animateTo(0,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+    _refreshKey.currentState?.show();
   }
 
   Future<void> _chargerDashboard() async {
@@ -313,6 +329,7 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
 
   @override
   void dispose() {
+    widget.refreshSignal?.removeListener(_onRefreshSignal);
     _defilTimer?.cancel();
     _progCtrl.dispose();
     _scrollController.dispose();
@@ -328,11 +345,28 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
       color: const Color(0xFFF4F7FB),
       child: SafeArea(
         bottom: false,
-        child: Scrollbar(
+        child: Column(children: [
+          // En-tête FIXE : « Bonjour, … » + cloche + profil ne défilent plus.
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(marge, 12, marge, 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF4F7FB),
+              border: Border(bottom: BorderSide(color: _border)),
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1380),
+                child: _buildTopRow(),
+              ),
+            ),
+          ),
+          Expanded(child: Scrollbar(
           controller: _scrollController,
           thumbVisibility: true,
           interactive: true,
           child: RefreshIndicator(
+            key: _refreshKey,
             onRefresh: _chargerDashboard,
             color: AppPalette.blue,
             child: SingleChildScrollView(
@@ -345,9 +379,8 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildTopRow(),
-                      const SizedBox(height: 20),
                       if (_loading) ...[
+
                         const LinearProgressIndicator(minHeight: 2),
                         const SizedBox(height: 14),
                       ],
@@ -368,7 +401,8 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
               ),
             ),
           ),
-        ),
+        )),
+        ]),
       ),
     );
   }

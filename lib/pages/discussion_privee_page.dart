@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
+import '../services/messages_cache.dart';
 import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import 'emoji_gif_sticker_picker.dart';
@@ -68,6 +69,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
 
   Future<void> _init() async {
     _myUserId = await ApiService.getUserId();
+    await _afficherCache(); // messages déjà vus : affichage immédiat
     await _chargerMessages();
     await _connecterSocket();
   }
@@ -100,6 +102,7 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
 
       final msgId = json['id']?.toString() ?? UniqueKey().toString();
       if (_messages.any((m) => m['id'] == msgId)) return;
+      MessagesCache.ajouter(_cleCache, json);
 
       setState(() {
         _messages.add({
@@ -133,6 +136,41 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
     });
   }
 
+  String get _cleCache => 'prive:${widget.destinataireId}:${_myUserId ?? ''}';
+
+  // Affiche tout de suite les derniers messages déjà vus (mémoire / disque).
+  Future<void> _afficherCache() async {
+    final brut = await MessagesCache.lireOuDisque(_cleCache);
+    if (brut == null || !mounted || _messages.isNotEmpty) return;
+    setState(() {
+      _remplirDepuis(brut);
+      _loading = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+      }
+    });
+  }
+
+  // Reconstruit la liste affichée depuis le JSON du serveur (ou du cache).
+  void _remplirDepuis(List list) {
+    _messages.clear();
+    for (final m in list) {
+      final senderId = m['expediteur_id']?.toString();
+      final estMoi = _myUserId != null && senderId == _myUserId;
+      _messages.add({
+        'id': m['id']?.toString() ?? UniqueKey().toString(),
+        'texte': m['contenu']?.toString() ?? '',
+        'estMoi': estMoi,
+        'heure': _formatHeure(m['created_at']),
+        'lu': m['is_read'] == true || estMoi == false,
+        'photoUrl': m['photo_url']?.toString(),
+        ..._champsReponse(m),
+      });
+    }
+  }
+
   Future<void> _chargerMessages() async {
     try {
       final headers = await ApiService.getHeaders();
@@ -143,28 +181,18 @@ class _DiscussionPriveePageState extends State<DiscussionPriveePage> {
       if (res.statusCode == 200 && mounted) {
         final body = jsonDecode(utf8.decode(res.bodyBytes));
         final list = (body is Map ? body['data'] : body) as List? ?? [];
+        MessagesCache.ecrire(_cleCache, list);
+        final avant = _messages.length;
         setState(() {
-          _messages.clear();
-          for (final m in list) {
-            final senderId = m['expediteur_id']?.toString();
-            final estMoi = _myUserId != null && senderId == _myUserId;
-            _messages.add({
-              'id': m['id']?.toString() ?? UniqueKey().toString(),
-              'texte': m['contenu']?.toString() ?? '',
-              'estMoi': estMoi,
-              'heure': _formatHeure(m['created_at']),
-              'lu': m['is_read'] == true || estMoi == false,
-              'photoUrl': m['photo_url']?.toString(),
-              ..._champsReponse(m),
-            });
-          }
+          _remplirDepuis(list);
           _loading = false;
         });
 
         // Marquer comme lus
         SocketService().sendReadReceipt(widget.destinataireId);
         await ApiService.post('/messages/prives/read/${widget.destinataireId}');
-        _scrollBas();
+        // Cache déjà affiché : on ne fait descendre que s'il y a du nouveau.
+        if (avant == 0 || _messages.length > avant) _scrollBas();
       } else if (mounted) {
         setState(() => _loading = false);
       }
