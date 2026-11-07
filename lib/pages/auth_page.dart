@@ -66,6 +66,11 @@ class _AuthPageState extends State<AuthPage> {
   bool _obscure = true;
   bool _obscure2 = true;
   bool _obscure3 = true;
+  // Première connexion : l'email enregistré par l'administration est conservé,
+  // sauf si la personne choisit d'en indiquer un autre.
+  bool _changerEmail = false;
+  bool get _emailEnregistre =>
+      !_changerEmail && (_userTrouve?['email'] ?? '').toString().isNotEmpty;
   bool _loading = false;
   String? _error;
 
@@ -673,9 +678,9 @@ class _AuthPageState extends State<AuthPage> {
       _error = null;
     });
     final isParent = _userTrouve?['role'] == 'parent';
-    final emailText = _emailCtrl.text.trim();
+    final emailText = _emailEnregistre ? '' : _emailCtrl.text.trim();
 
-    if (!isParent && emailText.isEmpty) {
+    if (!isParent && !_emailEnregistre && emailText.isEmpty) {
       _setError('Veuillez renseigner votre adresse email.');
       return;
     }
@@ -730,7 +735,9 @@ class _AuthPageState extends State<AuthPage> {
     if (_userId != null) {
       final result = await ApiService.setupPassword(
         userId: _userId!,
-        email: emailText.isNotEmpty ? emailText : (_userTrouve!['email']?.toString() ?? ''),
+        // Email vide = le serveur garde celui enregistré par l'administration
+        // (celui reçu ici est masqué, il ne faut surtout pas le renvoyer).
+        email: emailText,
         motDePasse: _newPassCtrl.text,
       );
       if (result['success'] == true) {
@@ -753,7 +760,9 @@ class _AuthPageState extends State<AuthPage> {
       nom: u['nom'] ?? '',
       prenoms: u['prenoms'] ?? '',
       matricule: _cleTrouvee!,
-      email: _emailCtrl.text.trim().isNotEmpty ? _emailCtrl.text.trim() : (u['email'] ?? ''),
+      email: _emailEnregistre
+          ? ''
+          : (_emailCtrl.text.trim().isNotEmpty ? _emailCtrl.text.trim() : (u['email'] ?? '')),
       telephone: u['tel'] ?? u['telephone'] ?? '',
       filiere: u['filiere'] ?? '',
       niveau: u['niveau'] ?? '',
@@ -849,6 +858,7 @@ class _AuthPageState extends State<AuthPage> {
     _userId = null;
     _parentId = null;
     _error = null;
+    _changerEmail = false;
     for (final c in [
       _matriculeCtrl,
       _nomCtrl,
@@ -1375,19 +1385,59 @@ class _AuthPageState extends State<AuthPage> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Première connexion — Définissez votre email et mot de passe.',
-            style: TextStyle(
+          Text(
+            _emailEnregistre
+                ? 'Première connexion — Choisissez votre mot de passe.'
+                : 'Première connexion — Définissez votre email et mot de passe.',
+            style: const TextStyle(
                 fontSize: 15, color: Color(0xFF64748B), height: 1.5),
           ),
           const SizedBox(height: 24),
           _lbl('Adresse email'),
-          _champ(
-            _emailCtrl,
-            'votre@email.com',
-            Icons.email_outlined,
-            TextInputType.emailAddress,
-          ),
+          if (_emailEnregistre)
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.email_outlined, color: Color(0xFF64748B), size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _userTrouve!['email'].toString(),
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0F172A)),
+                        ),
+                        const Text(
+                          'Enregistré par l\'administration',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _changerEmail = true),
+                    child: const Text('Changer'),
+                  ),
+                ],
+              ),
+            )
+          else
+            _champ(
+              _emailCtrl,
+              'votre@email.com',
+              Icons.email_outlined,
+              TextInputType.emailAddress,
+            ),
           const SizedBox(height: 18),
           _lbl('Choisissez un mot de passe'),
           _champPass(
