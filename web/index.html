@@ -55,6 +55,35 @@
     @keyframes sh-pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
     @keyframes sh-vie { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.09); } }
     @keyframes sh-glisse { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+    /* Bandeau « Installer l'application » (mobile uniquement) */
+    #sh-install {
+      position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 10000;
+      padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+      background: #fff; border-radius: 16px; border: 1px solid #DCEAFF;
+      box-shadow: 0 8px 28px rgba(8, 59, 135, .22);
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #0F172A;
+      display: none; max-width: 520px; margin: 0 auto;
+    }
+    #sh-install.sh-visible { display: block; animation: sh-monte .35s ease-out both; }
+    #sh-install .sh-ligne { display: flex; align-items: center; gap: 12px; }
+    #sh-install img { width: 44px; height: 44px; border-radius: 10px; flex: none; }
+    #sh-install .sh-titre { font-size: 15px; font-weight: 800; color: #083B87; }
+    #sh-install .sh-texte { font-size: 12.5px; color: #475569; line-height: 1.4; margin-top: 2px; }
+    #sh-install .sh-fermer {
+      position: absolute; top: 6px; right: 8px; border: 0; background: none;
+      font-size: 22px; line-height: 1; color: #94A3B8; padding: 6px; cursor: pointer;
+    }
+    #sh-install .sh-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    #sh-install .sh-btn {
+      flex: 1 1 140px; text-align: center; text-decoration: none; cursor: pointer;
+      border: 0; border-radius: 12px; padding: 11px 12px; font-size: 14px; font-weight: 700;
+      font-family: inherit;
+    }
+    #sh-install .sh-btn-principal { background: #0D55B0; color: #fff; }
+    #sh-install .sh-btn-secondaire { background: #EAF2FF; color: #083B87; }
+    #sh-install .sh-etapes { font-size: 13px; color: #334155; margin: 10px 0 0; padding-left: 0; list-style: none; }
+    #sh-install .sh-etapes li { margin: 4px 0; }
+    @keyframes sh-monte { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 <body>
@@ -78,6 +107,116 @@
       }
       window.addEventListener('flutter-first-frame', retirer);
       setTimeout(retirer, 15000);
+    })();
+  </script>
+  <!-- Bandeau d'installation de l'application (affiché seulement sur téléphone) -->
+  <div id="sh-install" role="dialog" aria-label="Installer ScolarHub">
+    <button class="sh-fermer" id="sh-install-fermer" aria-label="Fermer">&times;</button>
+    <div class="sh-ligne">
+      <img src="icons/Icon-192.png" alt="">
+      <div>
+        <div class="sh-titre">Installer ScolarHub</div>
+        <div class="sh-texte" id="sh-install-texte"></div>
+      </div>
+    </div>
+    <ul class="sh-etapes" id="sh-install-etapes" style="display:none"></ul>
+    <div class="sh-actions" id="sh-install-actions"></div>
+  </div>
+  <script>
+    (function () {
+      // ── Réglage : lien de téléchargement de l'APK (GitHub Releases).
+      // Le dépôt doit être PUBLIC pour que ce lien fonctionne sans compte GitHub.
+      // Laisser vide ('') pour ne pas proposer l'APK.
+      var APK_URL = 'https://github.com/fayimac05-cmd/version1/releases/latest/download/scolarhub.apk';
+
+      var ua = navigator.userAgent || '';
+      var estIos = /iphone|ipad|ipod/i.test(ua) ||
+                   (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+      var estAndroid = /android/i.test(ua);
+      if (!estIos && !estAndroid) return; // ordinateur : rien à afficher
+
+      // Déjà installée (ouverte comme une appli) : on n'affiche rien.
+      var installee = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+                      window.navigator.standalone === true;
+      if (installee) return;
+
+      // Fermé récemment : on ne réaffiche pas avant 7 jours.
+      var CLE = 'sh-install-ferme';
+      try {
+        var t = parseInt(localStorage.getItem(CLE) || '0', 10);
+        if (t && Date.now() - t < 7 * 24 * 3600 * 1000) return;
+      } catch (e) {}
+
+      var boite = document.getElementById('sh-install');
+      var texte = document.getElementById('sh-install-texte');
+      var etapes = document.getElementById('sh-install-etapes');
+      var actions = document.getElementById('sh-install-actions');
+      var promptInstall = null;
+
+      function ajouterBouton(libelle, classe, surClic, href) {
+        var el = document.createElement(href ? 'a' : 'button');
+        el.className = 'sh-btn ' + classe;
+        el.textContent = libelle;
+        if (href) { el.href = href; el.setAttribute('download', ''); }
+        if (surClic) el.addEventListener('click', surClic);
+        actions.appendChild(el);
+        return el;
+      }
+
+      function afficher() {
+        actions.innerHTML = '';
+        if (estIos) {
+          var safari = /safari/i.test(ua) && !/crios|fxios|edgios|opios/i.test(ua);
+          if (safari) {
+            texte.textContent = 'Ajoutez l\'application à votre écran d\'accueil, sans passer par l\'App Store.';
+            etapes.innerHTML =
+              '<li>1. Touchez le bouton <b>Partager</b> (le carré avec une flèche vers le haut) en bas de l\'écran.</li>' +
+              '<li>2. Choisissez <b>« Sur l\'écran d\'accueil »</b>.</li>' +
+              '<li>3. Touchez <b>Ajouter</b>.</li>';
+          } else {
+            texte.textContent = 'Pour installer l\'application sur iPhone, ouvrez ce site dans Safari.';
+            etapes.innerHTML =
+              '<li>Dans Safari : <b>Partager</b>, puis <b>« Sur l\'écran d\'accueil »</b>.</li>';
+          }
+          etapes.style.display = 'block';
+        } else {
+          texte.textContent = 'Accédez plus vite à ScolarHub depuis votre écran d\'accueil.';
+          etapes.style.display = 'none';
+          if (promptInstall) {
+            ajouterBouton('Installer l\'application', 'sh-btn-principal', function () {
+              promptInstall.prompt();
+              promptInstall.userChoice.then(function () { promptInstall = null; fermer(false); });
+            });
+          }
+          if (APK_URL) {
+            ajouterBouton('Télécharger l\'APK', promptInstall ? 'sh-btn-secondaire' : 'sh-btn-principal', null, APK_URL);
+          }
+          if (!actions.children.length) return; // rien à proposer
+        }
+        boite.classList.add('sh-visible');
+      }
+
+      function fermer(memoriser) {
+        boite.classList.remove('sh-visible');
+        if (memoriser !== false) {
+          try { localStorage.setItem(CLE, String(Date.now())); } catch (e) {}
+        }
+      }
+      document.getElementById('sh-install-fermer').addEventListener('click', function () { fermer(true); });
+
+      // Android / Chrome : l'installation « native » de la PWA n'est possible que si le navigateur la propose.
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        promptInstall = e;
+        if (boite.classList.contains('sh-visible')) afficher();
+      });
+      window.addEventListener('appinstalled', function () { fermer(false); });
+
+      // On attend que l'application soit affichée (et un petit délai) avant de montrer le bandeau.
+      var pret = false;
+      function planifier() { if (pret) return; pret = true; setTimeout(afficher, 2500); }
+      window.addEventListener('flutter-first-frame', planifier);
+      setTimeout(planifier, 15000);
     })();
   </script>
   <!--
