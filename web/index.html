@@ -48,8 +48,7 @@
       width: min(230px, 58vw); height: min(230px, 58vw); object-fit: contain;
       animation: sh-pop .9s ease-out both, sh-vie 1.6s ease-in-out .9s infinite;
     }
-    #sh-loader .sh-nom { margin-top: 22px; font-size: 30px; font-weight: 800; color: #083B87; letter-spacing: -.3px; }
-    #sh-loader .sh-nom b { color: #1769E0; }
+    #sh-loader .sh-titre { margin-top: 18px; height: 38px; width: auto; object-fit: contain; }
     #sh-loader .sh-barre { margin-top: 22px; width: 120px; height: 4px; border-radius: 4px; background: #DCEAFF; overflow: hidden; }
     #sh-loader .sh-barre i { display: block; width: 40%; height: 100%; border-radius: 4px; background: #F8C400; animation: sh-glisse 1.2s ease-in-out infinite; }
     @keyframes sh-pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
@@ -60,7 +59,7 @@
 <body>
   <div id="sh-loader">
     <img src="icons/logo.png" alt="ScolarHub">
-    <div class="sh-nom">Scolar<b>Hub</b></div>
+    <img class="sh-titre" src="icons/titre_scolarhub.png" alt="ScolarHub">
     <div class="sh-barre"><i></i></div>
   </div>
   <script>

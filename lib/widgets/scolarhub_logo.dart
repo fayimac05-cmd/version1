@@ -78,3 +78,44 @@ class _ScolarHubLogoVivantState extends State<ScolarHubLogoVivant>
     );
   }
 }
+
+/// Titre logo de l'application ScolarHub (« SCOLARHUB » stylisé avec toque).
+/// Utilisé pour remplacer l'écriture simple « ScolarHub » dans les titres et en-têtes.
+///
+/// Deux fichiers dans assets/images/ :
+///  - titre_scolarhub.png        : pour les fonds clairs (bleu & jaune)
+///  - titre_scolarhub_sombre.png : pour les fonds foncés (blanc & jaune)
+class ScolarHubTitle extends StatelessWidget {
+  const ScolarHubTitle({
+    super.key,
+    this.height = 24,
+    this.surFondSombre = false,
+  });
+
+  final double height;
+  final bool surFondSombre;
+
+  static const String assetClair = 'assets/images/titre_scolarhub.png';
+  static const String assetSombre = 'assets/images/titre_scolarhub_sombre.png';
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      assetClair,
+      height: height,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, __, ___) => Text(
+        'ScolarHub',
+        style: TextStyle(
+          fontSize: height * 0.8,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF0C4F9E),
+        ),
+      ),
+    );
+  }
+}
+
+typedef ScolarHubTitre = ScolarHubTitle;
+

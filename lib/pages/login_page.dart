@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app/scolar_hub_app.dart';
+import '../widgets/scolarhub_logo.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import '../services/api_service.dart';
@@ -434,14 +435,7 @@ class _LoginPageState extends State<LoginPage> {
                             color: AppPalette.blue, size: 24),
                       ),
                       const SizedBox(width: 12),
-                      const Text(
-                        'ScolarHub',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
+                      const ScolarHubTitle(height: 22, surFondSombre: true),
                     ],
                   ),
 

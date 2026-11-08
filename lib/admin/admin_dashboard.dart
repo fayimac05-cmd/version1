@@ -4,6 +4,7 @@ import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../admin/admin_theme.dart';
 import '../theme/app_palette.dart';
+import '../widgets/scolarhub_logo.dart';
 
 class AdminDashboard extends StatefulWidget {
   final StudentProfile profile;
@@ -280,12 +281,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           const Icon(Icons.school_rounded, color: Colors.white, size: 24),
           const SizedBox(height: 4),
-          RichText(
-            text: const TextSpan(children: [
-              TextSpan(text: 'Scolar', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Colors.white)),
-              TextSpan(text: 'Hub', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppPalette.yellow)),
-            ]),
-          ),
+          const ScolarHubTitle(height: 18, surFondSombre: true),
           const SizedBox(height: 2),
           const Text('Ensemble pour une\néducation de qualité',
               textAlign: TextAlign.right,

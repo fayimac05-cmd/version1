@@ -1060,12 +1060,7 @@ class _AdminShellState extends State<AdminShell>
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ScolarHub',
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: -0.5)),
+                        const ScolarHubTitle(height: 18, surFondSombre: true),
                         Text(EtablissementConfig.instance.nom.isNotEmpty ? EtablissementConfig.instance.nom : 'IST Ouaga 2000',
                             style: TextStyle(
                                 fontSize: 11,
