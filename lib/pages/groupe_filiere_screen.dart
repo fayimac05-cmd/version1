@@ -98,6 +98,22 @@ class _MessageGroupe {
 // ════════════════════════════════════════════════════════════════════════════
 // PAGE MESSAGERIE GROUPE
 // ════════════════════════════════════════════════════════════════════════════
+/// Libellé lisible d'un message pour l'aperçu de réponse / la citation :
+/// évite d'afficher le texte brut « [FICHIER]vocal|https://... ».
+String _apercuCitation(String t) {
+  if (t.startsWith('[FICHIER]')) {
+    final p = t.substring(9).split('|');
+    if (p[0] == 'vocal') return '🎤 Message vocal';
+    if (p[0] == 'image') return '📷 Photo';
+    if (p[0] == 'video') return '🎥 Vidéo';
+    return '📎 ${p.length > 2 ? p.sublist(2).join('|') : 'Fichier'}';
+  }
+  if (t.startsWith('[GIF]')) return 'GIF';
+  if (t.startsWith('[STICKER]')) return '🏷️ Sticker';
+  if (t.startsWith('[SONDAGE]')) return '📊 Sondage';
+  return t;
+}
+
 class GroupeFiliere extends StatefulWidget {
   final StudentProfile profile;
   const GroupeFiliere({super.key, required this.profile});
@@ -312,6 +328,11 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
           .toLocal(),
       reactions: _reactionsDepuisJson(json['reactions']),
       estMoi: estMoi,
+      idMessageRepondu: json['reponse_a_id']?.toString(),
+      texteRepondu: json['reponse_a_id'] == null
+          ? null
+          : (json['reponse_texte']?.toString() ?? 'Message supprimé'),
+      expediteurRepondu: json['reponse_auteur']?.toString(),
     );
   }
 
@@ -385,11 +406,45 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
     try {
       final headers = await ApiService.getHeaders();
+      final repId = rep != null ? int.tryParse(rep.id) : null;
       final response = await http.post(
         Uri.parse('${ApiService.baseUrl}/messages/groupe/$_filiereId'),
         headers: headers,
-        body: jsonEncode({'contenu': texte}),
+        body: jsonEncode({
+          'contenu': texte,
+          if (repId != null) 'reponse_a_id': repId,
+        }),
       );
+      if (response.statusCode == 201 && mounted) {
+        // Remplace l'écho local par le message confirmé : identifiant réel
+        // (pour pouvoir y répondre ensuite) et citation telle qu'enregistrée.
+        try {
+          final body = jsonDecode(utf8.decode(response.bodyBytes));
+          final data = body is Map ? body['data'] : null;
+          if (data is Map) {
+            final srv = Map<String, dynamic>.from(data);
+            final idx = _messages.indexWhere((m) => identical(m, msgLocal));
+            if (idx != -1) {
+              setState(() => _messages[idx] = _MessageGroupe(
+                    id: srv['id']?.toString() ?? msgLocal.id,
+                    auteur: msgLocal.auteur,
+                    contenu: msgLocal.contenu,
+                    type: msgLocal.type,
+                    heure: msgLocal.heure,
+                    reactions: msgLocal.reactions,
+                    estMoi: true,
+                    epingle: msgLocal.epingle,
+                    important: msgLocal.important,
+                    idMessageRepondu: srv['reponse_a_id']?.toString(),
+                    texteRepondu: srv['reponse_a_id'] == null
+                        ? null
+                        : (srv['reponse_texte']?.toString() ?? 'Message supprimé'),
+                    expediteurRepondu: srv['reponse_auteur']?.toString(),
+                  ));
+            }
+          }
+        } catch (_) {}
+      }
       if (response.statusCode != 201 && mounted) {
         setState(() => _messages.remove(msgLocal));
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -688,6 +743,18 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
           child: Text('${_selectionnes.length} sélectionné${_selectionnes.length > 1 ? 's' : ''}',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
         ),
+        if (_selectionnes.length == 1)
+          IconButton(
+            tooltip: 'Répondre',
+            icon: const Icon(Icons.reply_rounded, color: Colors.white),
+            onPressed: () {
+              final idx = _messages.indexWhere((m) => m.id == _selectionnes.first);
+              if (idx == -1) return;
+              final cible = _messages[idx];
+              setState(() { _modeSelection = false; _selectionnes.clear(); });
+              _repondreA(cible);
+            },
+          ),
         IconButton(
           icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
           onPressed: _selectionnes.isEmpty ? null : _supprimerSelection,
@@ -1484,7 +1551,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                     Text(_messageEnReponse!.auteur.nomComplet,
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppPalette.blue)),
-                    Text(_messageEnReponse!.contenu, style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(_apercuCitation(_messageEnReponse!.contenu), style: const TextStyle(fontSize: 12, color: Color(0xFF54656F)), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ]),
                 ),
                 GestureDetector(
@@ -1709,7 +1776,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
       onExit: (_) => setState(() => _hoveredMsgId = null),
       child: GestureDetector(
       onTap: _modeSelection ? () => _basculerSelection(msg.id) : null,
-      onLongPress: _modeSelection ? null : () => _demarrerSelection(msg.id),
+      onLongPress: _modeSelection ? null : () => _reagir(msg.id),
       child: Padding(
         padding: EdgeInsets.only(bottom: suiviParMemeAuteur ? 3 : 14),
         child: Row(
@@ -1798,7 +1865,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                             Text(msg.expediteurRepondu ?? '', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: estMoi ? Colors.white : AppPalette.blue)),
                             const SizedBox(height: 2),
-                            Text(msg.texteRepondu!, style: TextStyle(fontSize: 12, color: (estMoi ? Colors.white : const Color(0xFF54656F)).withValues(alpha: 0.85)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(_apercuCitation(msg.texteRepondu!), style: TextStyle(fontSize: 12, color: (estMoi ? Colors.white : const Color(0xFF54656F)).withValues(alpha: 0.85)), maxLines: 2, overflow: TextOverflow.ellipsis),
                           ]),
                         ),
                       _contenuMessage(msg, estMoi, theme),
