@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import '../app/scolar_hub_app.dart';
 import '../models/student_profile.dart';
@@ -973,14 +973,7 @@ class _AuthPageState extends State<AuthPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'ScolarHub',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppPalette.blue,
-                    ),
-                  ),
+                  const ScolarHubTitle(height: 22),
                   Text(
                     e == null
                         ? 'Votre espace scolaire'

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../config/etablissement_config.dart';
 import '../theme/app_palette.dart';
+import '../widgets/scolarhub_logo.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // CHOIX DU TYPE D'ÉTABLISSEMENT (onboarding / paramètres)
@@ -86,12 +87,7 @@ class _ChooseEtablissementTypePageState
                             color: Colors.white, size: 24),
                       ),
                       const SizedBox(width: 12),
-                      const Text('ScolarHub',
-                          style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: AppPalette.blue,
-                              letterSpacing: -0.3)),
+                      const ScolarHubTitle(height: 24),
                     ],
                   ),
                   const SizedBox(height: 28),

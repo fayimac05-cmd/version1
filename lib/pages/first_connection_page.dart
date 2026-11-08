@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_palette.dart';
+import '../widgets/scolarhub_logo.dart';
 import '../models/student_profile.dart';
 import '../services/supabase_service.dart';
 import '../services/api_service.dart';
@@ -225,10 +226,7 @@ class _FirstConnectionPageState extends State<FirstConnectionPage> {
                         child: const Icon(Icons.school_rounded, color: AppPalette.blue, size: 24),
                       ),
                       const SizedBox(width: 12),
-                      const Text(
-                        'ScolarHub',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
-                      ),
+                      const ScolarHubTitle(height: 22, surFondSombre: true),
                     ],
                   ),
 

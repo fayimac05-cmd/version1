@@ -225,17 +225,7 @@ class _ProfessorShellState extends State<ProfessorShell> with WidgetsBindingObse
                 children: [
                   const ScolarHubLogo(size: 42, surFondSombre: true),
                   const SizedBox(width: 11),
-                  const Expanded(
-                    child: Text(
-                      'ScolarHub',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ),
+                  const ScolarHubTitle(height: 22, surFondSombre: true),
                 ],
               ),
               const SizedBox(height: 28),
