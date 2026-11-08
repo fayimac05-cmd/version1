@@ -16,6 +16,14 @@ import 'rattrapage_etudiant.dart';
 // TP...) n'existe encore en base — quand ce champ sera ajouté à la table
 // notes / vue_notes_etudiants, on pourra afficher le type de chaque devoir
 // au lieu d'une simple liste de valeurs.
+// Les notes sont des DECIMAL en base : selon la source, le JSON peut contenir
+// un nombre (12.5) ou un texte ("12.5" / "12,5"). On accepte les deux.
+double? _versDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString().trim().replaceAll(',', '.'));
+}
+
 class _NoteModule {
   final String module;
   final String prof;
@@ -128,10 +136,10 @@ class _NotesTabState extends State<NotesTab> with SingleTickerProviderStateMixin
         _notes = List.generate(modules.length, (i) {
           final rows = modules[i].value;
           final devoirs = rows
-              .map((r) => (r['note'] as num?)?.toDouble())
+              .map((r) => _versDouble(r['note']))
               .whereType<double>()
               .toList();
-          final coef = (rows.first['coefficient'] as num?)?.toInt() ?? 1;
+          final coef = _versDouble(rows.first['coefficient'])?.round() ?? 1;
           final profNom = (rows.first['prof_nom'] as String? ?? '').trim();
           final profPrenoms = (rows.first['prof_prenoms'] as String? ?? '').trim();
           final prof = [profPrenoms, profNom].where((s) => s.isNotEmpty).join(' ');
@@ -523,7 +531,7 @@ class _NoteCard extends StatelessWidget {
                   color: const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(d.toStringAsFixed(1), style: const TextStyle(
+                child: Text(_formatNote(d), style: const TextStyle(
                     fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
               )).toList(),
             ),
@@ -704,7 +712,7 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
                 const SizedBox(height: 8),
                 _infoLigne('Professeur', widget.note.prof),
                 const SizedBox(height: 8),
-                _infoLigne('Moyenne', widget.note.note != null ? '${widget.note.note!.toStringAsFixed(1)} / 20 — ${widget.note.labelStatut}' : 'Non disponible'),
+                _infoLigne('Moyenne', widget.note.note != null ? '${_formatNote(widget.note.note!)} / 20 — ${widget.note.labelStatut}' : 'Non disponible'),
               ]),
             ),
             const SizedBox(height: 20),
@@ -808,6 +816,16 @@ class _ReclamationNoteSheetState extends State<_ReclamationNoteSheet> {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+/// Affiche une note sans décimale inutile : 12 → « 12 », 12.5 → « 12,5 »,
+/// 12.25 → « 12,25 » (virgule à la française).
+String _formatNote(double v) {
+  var t = v.toStringAsFixed(2);
+  if (t.contains('.')) {
+    t = t.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  }
+  return t.replaceAll('.', ',');
+}
+
 Widget _lbl(String text) => Padding(padding: const EdgeInsets.only(bottom: 10),
   child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
       color: Color(0xFF0F172A))));

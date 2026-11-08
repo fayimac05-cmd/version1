@@ -19,6 +19,19 @@ const Map<String, List<String>> semestresParNiveau = {
   'Master 2': ['S9', 'S10'],
 };
 
+/// Convertit une saisie (« 12,5 », « 12.5 », espaces tolérés) en note.
+/// Renvoie null si la saisie est vide ou n'est pas un nombre valide.
+double? parseNoteSaisie(String? texte) {
+  final t = (texte ?? '').trim().replaceAll(',', '.');
+  if (t.isEmpty) return null;
+  final v = double.tryParse(t);
+  if (v == null || v.isNaN || v.isInfinite) return null;
+  return v;
+}
+
+/// Vrai si la note est comprise entre 0 et 20 (bornes incluses).
+bool noteDansBareme(double v) => v >= 0 && v <= 20;
+
 List<String> semestresPourNiveau(String? niveau) =>
     semestresParNiveau[niveau] ?? semestresDisponibles;
 
@@ -108,7 +121,7 @@ class _NotesTabState extends State<NotesTab> {
   // planter le parseur — le calcul se fait via _noteValeur()).
   final Map<String, String> _notes = {};
 
-  double? _noteValeur(String matricule) => double.tryParse((_notes[matricule] ?? '').replaceAll(',', '.'));
+  double? _noteValeur(String matricule) => parseNoteSaisie(_notes[matricule]);
 
   @override
   void initState() {
@@ -203,11 +216,44 @@ class _NotesTabState extends State<NotesTab> {
           const SnackBar(content: Text('Veuillez indiquer l\'année académique.')));
       return;
     }
-    setState(() => _saving = true);
 
-    final notesData = _students
-        .map((s) => {'matricule': s['matricule'], 'valeur': _noteValeur(s['matricule']) ?? 0.0})
-        .toList();
+    // Une case vide = étudiant non noté (non envoyé). Une saisie invalide ou
+    // hors de 0–20 bloque l'envoi : plus jamais de 0/20 par erreur.
+    final notesData = <Map<String, dynamic>>[];
+    for (final s in _students) {
+      final brut = (_notes[s['matricule']] ?? '').trim();
+      if (brut.isEmpty) continue;
+      final v = parseNoteSaisie(brut);
+      final nom = '${s['prenoms'] ?? ''} ${s['nom'] ?? ''}'.trim();
+      if (v == null || !noteDansBareme(v)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Note invalide pour $nom : « $brut ». Entrez un nombre entre 0 et 20 (ex. 12,5).'),
+            backgroundColor: Colors.red));
+        return;
+      }
+      notesData.add({'matricule': s['matricule'], 'valeur': v});
+    }
+    if (notesData.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aucune note saisie.'), backgroundColor: Colors.red));
+      return;
+    }
+    final nbSansNote = _students.length - notesData.length;
+    if (nbSansNote > 0) {
+      final continuer = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Notes incomplètes'),
+          content: Text('$nbSansNote étudiant(s) n\'ont pas de note et ne seront pas enregistrés. Continuer ?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Revenir')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer quand même')),
+          ],
+        ),
+      );
+      if (continuer != true || !mounted) return;
+    }
+    setState(() => _saving = true);
 
     final res = await ProfessorService.createGradeSession({
       'filiere_id': int.parse(_classeId!),
@@ -728,7 +774,7 @@ class _NoteRowState extends State<_NoteRow> {
   @override
   void dispose() { _ctrl.dispose(); super.dispose(); }
 
-  double? get _valeur => double.tryParse(_ctrl.text.replaceAll(',', '.'));
+  double? get _valeur => parseNoteSaisie(_ctrl.text);
 
   Color get _couleurNote {
     final v = _valeur;
@@ -952,10 +998,22 @@ class _EditSessionSheetState extends State<_EditSessionSheet> {
   }
 
   Future<void> _resoumettre() async {
+    final notesData = <Map<String, dynamic>>[];
+    for (final n in widget.notes) {
+      final brut = (_ctrls[n['matricule']]?.text ?? '').trim();
+      final v = parseNoteSaisie(brut);
+      final nom = '${n['prenoms'] ?? ''} ${n['nom'] ?? ''}'.trim();
+      if (v == null || !noteDansBareme(v)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(brut.isEmpty
+                ? 'Note manquante pour $nom.'
+                : 'Note invalide pour $nom : « $brut ». Entrez un nombre entre 0 et 20 (ex. 12,5).'),
+            backgroundColor: Colors.red));
+        return;
+      }
+      notesData.add({'matricule': n['matricule'], 'valeur': v});
+    }
     setState(() => _saving = true);
-    final notesData = widget.notes
-        .map((n) => {'matricule': n['matricule'], 'valeur': double.tryParse((_ctrls[n['matricule']]?.text ?? '').replaceAll(',', '.')) ?? 0.0})
-        .toList();
 
     final res = await ProfessorService.updateGradeSession(widget.session['id'].toString(), {'notes': notesData});
     if (!mounted) return;

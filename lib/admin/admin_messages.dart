@@ -407,6 +407,11 @@ class AdminMessagesState extends State<AdminMessages>
             niveau: json['niveau']?.toString(),
             photoUrl: json['photo_url']?.toString(),
             lu: _groupeActif?.id == g.id,
+            idMessageRepondu: json['reponse_a_id']?.toString(),
+            texteRepondu: json['reponse_a_id'] == null
+                ? null
+                : (json['reponse_texte']?.toString() ?? 'Message supprimé'),
+            expediteurRepondu: json['reponse_auteur']?.toString(),
           ));
           if (_groupeActif?.id != g.id) g.nbNonLus++;
         });
@@ -450,6 +455,11 @@ class AdminMessagesState extends State<AdminMessages>
             niveau: json['niveau']?.toString(),
             photoUrl: json['photo_url']?.toString(),
             lu: _groupeActif?.id == g.id,
+            idMessageRepondu: json['reponse_a_id']?.toString(),
+            texteRepondu: json['reponse_a_id'] == null
+                ? null
+                : (json['reponse_texte']?.toString() ?? 'Message supprimé'),
+            expediteurRepondu: json['reponse_auteur']?.toString(),
           ));
           if (_groupeActif?.id != g.id) g.nbNonLus++;
         });
@@ -2040,14 +2050,22 @@ class AdminMessagesState extends State<AdminMessages>
         await http.post(
           Uri.parse('${ApiService.baseUrl}/messages/groupe/${g.filiereId}'),
           headers: headers,
-          body: jsonEncode({'contenu': texte}),
+          body: jsonEncode({
+            'contenu': texte,
+            if (rep != null && int.tryParse(rep.id) != null)
+              'reponse_a_id': int.parse(rep.id),
+          }),
         );
       } else {
         // Canaux officiels : envoi via HTTP (le serveur persiste et diffuse dans canal:X par socket)
         await http.post(
           Uri.parse('${ApiService.baseUrl}/messages/canal/${g.id}'),
           headers: headers,
-          body: jsonEncode({'contenu': texte}),
+          body: jsonEncode({
+            'contenu': texte,
+            if (rep != null && int.tryParse(rep.id) != null)
+              'reponse_a_id': int.parse(rep.id),
+          }),
         );
       }
     } catch (e) {

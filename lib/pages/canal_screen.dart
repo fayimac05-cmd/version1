@@ -95,6 +95,12 @@ class _MessageCanal {
       photoUrl: (json['photo_url'] ?? json['photoUrl'])?.toString(),
       expediteurId: (json['expediteur_id'] ?? json['auteur_id'])?.toString(),
       reactions: _reactionsDepuisJson(json['reactions']),
+      // Citation (réponse à un message) renvoyée par le serveur.
+      idMessageRepondu: json['reponse_a_id']?.toString(),
+      texteRepondu: json['reponse_a_id'] == null
+          ? null
+          : (json['reponse_texte']?.toString() ?? 'Message supprimé'),
+      expediteurRepondu: json['reponse_auteur']?.toString(),
     );
   }
 }
@@ -923,7 +929,11 @@ class _CanalDetailState extends State<_CanalDetail> {
       final response = await http.post(
         Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
         headers: headers,
-        body: jsonEncode({'contenu': texte}),
+        body: jsonEncode({
+          'contenu': texte,
+          // Réponse à un message : le serveur l'enregistre et renvoie la citation.
+          if (rep != null && int.tryParse(rep.id) != null) 'reponse_a_id': int.parse(rep.id),
+        }),
       );
       if (response.statusCode == 201) {
         try {
