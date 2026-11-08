@@ -1,0 +1,10 @@
+[33mcommit 0b5fb89887053ed055abad0c28ffa6cb83144dab[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfredo[m[33m)[m
+Author: fredis412 <fredericlankoande83@gmail.com>
+Date:   Mon Nov 2 20:53:00 2026 +0000
+
+    frederic
+
+ lib/pages/auth_page.dart      | 23 [32m+++++++++++[m[31m-[m
+ lib/pages/splash_screen.dart  | 81 [32m++++++++++++++++++++++++++++++++++++++++++[m[31m-[m
+ lib/services/api_service.dart | 24 [32m++++++++++++[m[31m-[m
+ 3 files changed, 125 insertions(+), 3 deletions(-)

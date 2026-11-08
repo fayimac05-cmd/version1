@@ -68,6 +68,7 @@ flutter:
     - assets/images/etablissement_banner.png
     - assets/images/logo_scolarhub.png
     - assets/images/logo_scolarhub_sombre.png
+    - assets/images/titre_scolarhub.png
     - assets/images/app_icon.png
     - assets/images/diplomes.png
     - assets/videos/diplomes.mp4

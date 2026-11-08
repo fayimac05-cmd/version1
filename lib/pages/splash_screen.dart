@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../app/scolar_hub_app.dart';
 import '../config/etablissement_config.dart';
@@ -387,14 +387,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const Spacer(),
-                RichText(
-                  text: const TextSpan(
-                    children: [
-                      TextSpan(text: 'Scolar', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white)),
-                      TextSpan(text: 'Hub', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Color(0xFFF8C400))),
-                    ],
-                  ),
-                ),
+                const ScolarHubTitle(height: 38, surFondSombre: true),
                 const SizedBox(height: 6),
                 const Text(
                   'Ton parcours, notre priorité',
@@ -435,20 +428,7 @@ class _SplashScreenState extends State<SplashScreen>
                     children: [
                       const ScolarHubLogoVivant(size: 170),
                       const SizedBox(height: 14),
-                      RichText(
-                        text: const TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Scolar',
-                              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Color(0xFF083B87)),
-                            ),
-                            TextSpan(
-                              text: 'Hub',
-                              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Color(0xFF1769E0)),
-                            ),
-                          ],
-                        ),
-                      ),
+                      const ScolarHubTitle(height: 34),
                       const SizedBox(height: 4),
                       const Text(
                         'Ton parcours, notre priorité',
@@ -770,28 +750,7 @@ class _SplashScreenState extends State<SplashScreen>
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RichText(
-              text: const TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Scolar',
-                    style: TextStyle(
-                      fontSize: 31,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF083B87),
-                    ),
-                  ),
-                  TextSpan(
-                    text: 'Hub',
-                    style: TextStyle(
-                      fontSize: 31,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1769E0),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const ScolarHubTitle(height: 32),
 
             const SizedBox(
               height: 3,
@@ -1477,28 +1436,7 @@ class _SplashScreenState extends State<SplashScreen>
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RichText(
-              text: const TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Scolar',
-                    style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF083B87),
-                    ),
-                  ),
-                  TextSpan(
-                    text: 'Hub',
-                    style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1769E0),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const ScolarHubTitle(height: 26),
             const Text(
               'Ton parcours, notre priorité',
               style: TextStyle(
