@@ -76,7 +76,7 @@ class _IntroVideoState extends State<IntroVideo> {
   Widget build(BuildContext context) {
     final c = _c;
     if (!_pret || c == null) {
-      return const ColoredBox(color: Color(0xFF0B1E4D));
+      return const ColoredBox(color: Colors.white);
     }
     return ClipRect(
       child: FittedBox(

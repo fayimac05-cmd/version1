@@ -15,6 +15,7 @@ import 'auth_page.dart';
 import '../widgets/scolarhub_logo.dart';
 import '../widgets/celebration_diplomes.dart';
 import '../widgets/intro_video.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -47,6 +48,30 @@ class _SplashScreenState extends State<SplashScreen>
   // revient sur cette page (bouton retour de la connexion), pas de rejeu.
   static bool _introDejaVue = false;
   bool _intro = !_introDejaVue;
+  // Faux tant qu'on n'a pas lu, sur l'appareil, si la vidéo a déjà été vue :
+  // on n'affiche (et on ne charge) la vidéo qu'une fois la réponse connue.
+  bool _introVerifiee = _introDejaVue;
+
+  // La vidéo n'est montrée qu'à la toute première ouverture, sur cet appareil
+  // ou ce navigateur. Changer le suffixe (v1 -> v2) la rejouera une fois
+  // pour tout le monde (ex. nouvelle vidéo).
+  static const String _cleIntroVue = 'intro_video_vue_v1';
+
+  Future<bool> _introDejaVueSurAppareil() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_cleIntroVue) ?? false;
+    } catch (_) {
+      return false; // en cas de doute, on montre la vidéo
+    }
+  }
+
+  Future<void> _marquerIntroVue() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_cleIntroVue, true);
+    } catch (_) {}
+  }
   static const Duration _dureeIntro = Duration(milliseconds: 3800); // durée du repli (dessin)
   static const Duration _dureeMax = Duration(seconds: 9); // filet de sécurité
   final Completer<void> _introFinie = Completer<void>();
@@ -165,10 +190,18 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _lancer() async {
+    // Déjà vue sur cet appareil : on passe directement à l'écran suivant.
+    if (_intro && await _introDejaVueSurAppareil()) {
+      _introDejaVue = true;
+      if (mounted) setState(() => _intro = false);
+    }
+    if (!mounted) return;
     if (_intro) {
+      setState(() => _introVerifiee = true); // lance la vidéo
       await Future.any([_introFinie.future, Future.delayed(_dureeMax)]);
       if (!mounted) return;
       _introDejaVue = true;
+      _marquerIntroVue();
       setState(() => _intro = false);
       await Future.delayed(const Duration(milliseconds: 250));
       if (!mounted) return;
@@ -332,71 +365,27 @@ class _SplashScreenState extends State<SplashScreen>
         Positioned.fill(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 500),
-            child: _intro ? _buildIntro() : const SizedBox.shrink(key: ValueKey('intro-fin')),
+            child: !_intro
+                ? const SizedBox.shrink(key: ValueKey('intro-fin'))
+                : (_introVerifiee
+                    ? _buildIntro()
+                    : const ColoredBox(key: ValueKey('intro-verif'), color: Colors.white)),
           ),
         ),
       ]),
     );
   }
 
-  // Écran d'intro : vidéo de remise de diplômes + logo ; repli : dessin animé.
+  // Écran d'intro : vidéo seule (le logo et le titre sont déjà dans la vidéo) ; repli : dessin animé.
   Widget _buildIntro() {
     if (_videoEchec) return _buildIntroDessin();
     return Container(
       key: const ValueKey('intro'),
-      color: const Color(0xFF0B1E4D),
+      color: Colors.white,
       child: Stack(
         fit: StackFit.expand,
         children: [
           IntroVideo(onTermine: _terminerIntro, onErreur: _videoEnErreur),
-          // Voile sombre en haut et en bas pour la lisibilité du logo et du texte.
-          const IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: [0.0, 0.32, 0.62, 1.0],
-                  colors: [Color(0xCC0B1E4D), Color(0x000B1E4D), Color(0x000B1E4D), Color(0xDD0B1E4D)],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 28),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: 1),
-                  duration: const Duration(milliseconds: 900),
-                  curve: Curves.easeOutBack,
-                  builder: (_, v, child) => Opacity(
-                    opacity: v.clamp(0.0, 1.0),
-                    child: Transform.scale(scale: 0.8 + 0.2 * v, child: child),
-                  ),
-                  // Logo transparent posé directement sur la vidéo, avec un
-                  // léger halo sombre rond pour rester lisible.
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.30), blurRadius: 30, spreadRadius: -6),
-                      ],
-                    ),
-                    child: const ScolarHubLogoVivant(size: 160),
-                  ),
-                ),
-                const Spacer(),
-                const ScolarHubTitle(height: 38, surFondSombre: true),
-                const SizedBox(height: 6),
-                const Text(
-                  'Ton parcours, notre priorité',
-                  style: TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 36),
-              ],
-            ),
-          ),
         ],
       ),
     );
