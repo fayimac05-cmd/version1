@@ -1380,25 +1380,34 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      // Wrap : si l'écran est étroit, le badge « 100% Privé » passe
+                      // à la ligne au lieu de déborder sous les boutons.
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 10,
+                        runSpacing: 4,
                         children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFF4ADE80),
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFF4ADE80),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${_membres.length} membres',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${_membres.length} membres',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.white70,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -1409,6 +1418,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   Icons.lock_outline,
