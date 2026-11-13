@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
+import '../services/professor_service.dart';
 import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../pages/emoji_gif_sticker_picker.dart';
@@ -16,7 +17,8 @@ class _FiliereInfo {
   final int id;
   final String nom;
   final String? description;
-  _FiliereInfo({required this.id, required this.nom, this.description});
+  final String niveau; // le serveur exige le niveau pour écrire dans un groupe
+  _FiliereInfo({required this.id, required this.nom, this.description, required this.niveau});
 }
 
 enum _TypeMsg { texte }
@@ -29,6 +31,10 @@ class _Msg {
   final DateTime heure;
   final bool estMoi;
   Map<String, String> reactions;
+  // Citation (réponse à un message)
+  final String? replyId;
+  final String? replyTexte;
+  final String? replyAuteur;
 
   _Msg({
     required this.id,
@@ -39,6 +45,9 @@ class _Msg {
     required this.heure,
     required this.estMoi,
     Map<String, String>? reactions,
+    this.replyId,
+    this.replyTexte,
+    this.replyAuteur,
   }) : reactions = reactions ?? {};
 
   _Msg copyWith({Map<String, String>? reactions}) => _Msg(
@@ -50,6 +59,9 @@ class _Msg {
         heure: heure,
         estMoi: estMoi,
         reactions: reactions ?? this.reactions,
+        replyId: replyId,
+        replyTexte: replyTexte,
+        replyAuteur: replyAuteur,
       );
 }
 
@@ -96,28 +108,31 @@ class _ProfGroupeScreenState extends State<ProfGroupeScreen> {
       _erreur = null;
     });
     try {
-      final headers = await ApiService.getHeaders();
-      final res = await http.get(
-        Uri.parse('${ApiService.baseUrl}/messages/groupe/mes-filieres'),
-        headers: headers,
-      );
+      final res = await ProfessorService.getModules();
       if (!mounted) return;
-      if (res.statusCode == 200) {
-        final body = jsonDecode(utf8.decode(res.bodyBytes));
-        final List data = body['data'] as List? ?? [];
+      if (res['success'] == true) {
+        final data = (res['data'] as List<dynamic>?) ?? [];
+        final vus = <String>{};
+        final liste = <_FiliereInfo>[];
+        for (final m in data) {
+          final fid = int.tryParse('${m['filiere_id']}');
+          final niveau = '${m['niveau'] ?? ''}'.trim();
+          if (fid == null || niveau.isEmpty) continue;
+          if (!vus.add('$fid|$niveau')) continue;
+          liste.add(_FiliereInfo(
+            id: fid,
+            nom: '${m['filiere_nom'] ?? 'Filière'}',
+            niveau: niveau,
+          ));
+        }
+        liste.sort((a, b) => '${a.nom}${a.niveau}'.compareTo('${b.nom}${b.niveau}'));
         setState(() {
-          _filieres = data
-              .map((f) => _FiliereInfo(
-                    id: (f['id'] as num).toInt(),
-                    nom: f['nom'] as String? ?? 'Filière',
-                    description: f['description'] as String?,
-                  ))
-              .toList();
+          _filieres = liste;
           _loading = false;
         });
       } else {
         setState(() {
-          _erreur = 'Erreur ${res.statusCode}';
+          _erreur = res['error']?.toString() ?? 'Impossible de charger les filières';
           _loading = false;
         });
       }
@@ -327,7 +342,7 @@ class _ProfGroupeScreenState extends State<ProfGroupeScreen> {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(f.nom,
+                  Text('${f.nom} · ${f.niveau}',
                       style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -388,6 +403,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
   String? _myUserId;
   bool _loading = true;
   bool _panneauOuvert = false;
+  _Msg? _enReponse;
 
   String get _nomProf =>
       '${widget.profile.prenoms} ${widget.profile.nom}';
@@ -410,7 +426,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
       final headers = await ApiService.getHeaders();
       final res = await http.get(
         Uri.parse(
-            '${ApiService.baseUrl}/messages/groupe/${widget.filiere.id}'),
+            '${ApiService.baseUrl}/messages/groupe/${widget.filiere.id}?niveau=${Uri.encodeQueryComponent(widget.filiere.niveau)}'),
         headers: headers,
       );
       if (!mounted || res.statusCode != 200) return;
@@ -435,6 +451,9 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
           ? data
           : jsonDecode(data.toString()) as Map<String, dynamic>;
       if (json['filiere_id']?.toString() != widget.filiere.id.toString()) return;
+      // Le prof reçoit tous les niveaux de la filière : on ne garde que le sien.
+      final nv = json['niveau']?.toString();
+      if (json['reponse_a_id'] == null && nv != null && nv.isNotEmpty && nv != widget.filiere.niveau) return;
       if (_myUserId != null &&
           json['auteur_id']?.toString() == _myUserId) return;
       setState(() => _messages.add(_depuisJson(json)));
@@ -457,6 +476,11 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
           (DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now())
               .toLocal(),
       estMoi: estMoi,
+      replyId: json['reponse_a_id']?.toString(),
+      replyTexte: json['reponse_a_id'] == null
+          ? null
+          : (json['reponse_texte']?.toString() ?? 'Message supprimé'),
+      replyAuteur: json['reponse_auteur']?.toString(),
     );
   }
 
@@ -484,28 +508,76 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
     final texte = _inputCtrl.text.trim();
     if (texte.isEmpty) return;
     _inputCtrl.clear();
+    await _poster(texte);
+  }
 
+  // ── GIF réel (URL publique GIPHY) — envoyé via le même canal texte ────
+  Future<void> _envoyerGif(String url) async {
+    setState(() => _panneauOuvert = false);
+    await _poster('[GIF]$url');
+  }
+
+  // Envoi commun : écho local immédiat, puis remplacement par le message
+  // confirmé (identifiant réel pour pouvoir y répondre, citation du serveur).
+  Future<void> _poster(String contenu) async {
+    final rep = _enReponse;
     final msgLocal = _Msg(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       auteurId: _myUserId ?? '',
       auteurNom: _nomProf,
-      contenu: texte,
+      contenu: contenu,
       type: _TypeMsg.texte,
       heure: DateTime.now(),
       estMoi: true,
+      replyId: rep?.id,
+      replyTexte: rep == null ? null : _apercu(rep.contenu),
+      replyAuteur: rep?.auteurNom,
     );
-    setState(() => _messages.add(msgLocal));
+    setState(() {
+      _messages.add(msgLocal);
+      _enReponse = null;
+    });
     _scrollBas();
 
     try {
       final headers = await ApiService.getHeaders();
+      final repId = rep != null ? int.tryParse(rep.id) : null;
       final res = await http.post(
-        Uri.parse(
-            '${ApiService.baseUrl}/messages/groupe/${widget.filiere.id}'),
+        Uri.parse('${ApiService.baseUrl}/messages/groupe/${widget.filiere.id}'),
         headers: headers,
-        body: jsonEncode({'contenu': texte}),
+        body: jsonEncode({
+          'contenu': contenu,
+          'niveau': widget.filiere.niveau,
+          if (repId != null) 'reponse_a_id': repId,
+        }),
       );
-      if (res.statusCode != 201 && mounted) {
+      if (!mounted) return;
+      if (res.statusCode == 201) {
+        try {
+          final body = jsonDecode(utf8.decode(res.bodyBytes));
+          final data = body is Map ? body['data'] : null;
+          if (data is Map) {
+            final srv = Map<String, dynamic>.from(data);
+            final idx = _messages.indexWhere((m) => identical(m, msgLocal));
+            if (idx != -1) {
+              setState(() => _messages[idx] = _Msg(
+                    id: srv['id']?.toString() ?? msgLocal.id,
+                    auteurId: msgLocal.auteurId,
+                    auteurNom: msgLocal.auteurNom,
+                    contenu: msgLocal.contenu,
+                    type: msgLocal.type,
+                    heure: msgLocal.heure,
+                    estMoi: true,
+                    replyId: srv['reponse_a_id']?.toString(),
+                    replyTexte: srv['reponse_a_id'] == null
+                        ? null
+                        : (srv['reponse_texte']?.toString() ?? 'Message supprimé'),
+                    replyAuteur: srv['reponse_auteur']?.toString(),
+                  ));
+            }
+          }
+        } catch (_) {}
+      } else {
         setState(() => _messages.remove(msgLocal));
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Échec de l\'envoi')));
@@ -518,34 +590,112 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
     }
   }
 
-  // ── GIF réel (URL publique GIPHY) — envoyé via le même canal texte ────
-  Future<void> _envoyerGif(String url) async {
-    setState(() => _panneauOuvert = false);
-    final contenu = '[GIF]$url';
-    final msgLocal = _Msg(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      auteurId: _myUserId ?? '',
-      auteurNom: _nomProf,
-      contenu: contenu,
-      type: _TypeMsg.texte,
-      heure: DateTime.now(),
-      estMoi: true,
+  String _apercu(String contenu) {
+    if (contenu.startsWith('[GIF]')) return 'GIF';
+    if (contenu.startsWith('[STICKER]')) return 'Sticker';
+    return contenu;
+  }
+
+  void _repondreA(_Msg msg) {
+    setState(() => _enReponse = msg);
+  }
+
+  // Appui long sur un message : menu avec « Répondre ».
+  void _menuMessage(_Msg msg) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(2))),
+          ListTile(
+            leading: const Icon(Icons.reply_rounded, color: AppPalette.blue),
+            title: const Text('Répondre'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _repondreA(msg);
+            },
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
     );
-    setState(() => _messages.add(msgLocal));
-    _scrollBas();
-    try {
-      final headers = await ApiService.getHeaders();
-      final res = await http.post(
-        Uri.parse('${ApiService.baseUrl}/messages/groupe/${widget.filiere.id}'),
-        headers: headers,
-        body: jsonEncode({'contenu': contenu}),
-      );
-      if (res.statusCode != 201 && mounted) {
-        setState(() => _messages.remove(msgLocal));
-      }
-    } catch (_) {
-      if (mounted) setState(() => _messages.remove(msgLocal));
-    }
+  }
+
+  // Bandeau « Réponse à … » au-dessus de la zone de saisie.
+  Widget _bandeauReponse() {
+    final r = _enReponse;
+    if (r == null) return const SizedBox.shrink();
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(10),
+          border: const Border(left: BorderSide(color: AppPalette.blue, width: 4)),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(r.estMoi ? 'Vous' : r.auteurNom,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppPalette.blue)),
+              Text(_apercu(r.contenu),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF54656F))),
+            ]),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            color: const Color(0xFF64748B),
+            onPressed: () => setState(() => _enReponse = null),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // Citation affichée dans la bulle.
+  Widget _citation(_Msg msg, bool estMoi) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      decoration: BoxDecoration(
+        color: estMoi
+            ? Colors.white.withValues(alpha: 0.18)
+            : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+            left: BorderSide(
+                color: estMoi ? Colors.white : AppPalette.blue, width: 3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if ((msg.replyAuteur ?? '').isNotEmpty)
+          Text(msg.replyAuteur!,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: estMoi ? Colors.white : AppPalette.blue)),
+        Text(_apercu(msg.replyTexte ?? ''),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 12,
+                color: estMoi ? Colors.white70 : const Color(0xFF475569))),
+      ]),
+    );
   }
 
   // ── Sticker : fichier local, écho visible seulement pour vous (pas
@@ -683,6 +833,8 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
                         ]);
                       }),
         ),
+
+        _bandeauReponse(),
 
         // Zone de saisie
         Container(
@@ -902,8 +1054,10 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
                             ]),
                       ),
 
-                    // Bulle
-                    Container(
+                    // Bulle (appui long = répondre)
+                    GestureDetector(
+                      onLongPress: () => _menuMessage(msg),
+                      child: Container(
                       constraints: BoxConstraints(
                           maxWidth:
                               MediaQuery.of(context).size.width * 0.72),
@@ -931,7 +1085,15 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
                             : Border.all(
                                 color: const Color(0xFFE2E8F0)),
                       ),
-                      child: _contenuMsg(msg.contenu, estMoi),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (msg.replyId != null) _citation(msg, estMoi),
+                          _contenuMsg(msg.contenu, estMoi),
+                        ],
+                      ),
+                    ),
                     ),
 
                     // Heure

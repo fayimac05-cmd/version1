@@ -1,10 +1,10 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../models/student_profile.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 import 'appel_qr_screen.dart';
+import 'fiche_appel_pdf.dart';
 
 class AppelTab extends StatefulWidget {
   const AppelTab({super.key, required this.profile, this.initialClasse});
@@ -243,36 +243,46 @@ class _AppelTabState extends State<AppelTab> {
     }
   }
 
+  /// Fiche d'appel en PDF, à partir de l'appel en cours à l'écran (statuts
+  /// présent / absent / retard tels que cochés). Pour la fiche d'un appel déjà
+  /// enregistré (avec son heure exacte), voir Historique > détails de l'appel.
   Future<void> _exporterPdf() async {
     final g = _groupeSelectionne;
-    if (g == null) return;
-    // En tronc commun, l'export PDF (par filière côté serveur) nécessite
-    // d'avoir filtré sur UNE filière précise — pas de PDF combiné.
-    dynamic module;
-    if (_estTroncCommun) {
-      if (_filtreFiliereTronc == 'Toutes les filières') {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Sélectionne une filière précise dans le filtre pour exporter (tronc commun).')));
-        return;
-      }
-      module = g.firstWhere((m) => m['filiere_nom']?.toString() == _filtreFiliereTronc, orElse: () => g.first);
-    } else {
-      module = g.first;
-    }
+    if (g == null || _students.isEmpty) return;
     setState(() => _exporting = true);
-    final res = await ProfessorService.telechargerListeEtudiantsPdf(
-      int.parse(module['filiere_id'].toString()),
-      niveau: module['niveau']?.toString(),
-      filiereNom: module['filiere_nom']?.toString(),
-    );
-    if (!mounted) return;
-    setState(() => _exporting = false);
-    if (res['success'] == true) {
-      final bytes = res['bytes'] as Uint8List;
-      await Printing.sharePdf(bytes: bytes, filename: 'liste_${module['filiere_nom'] ?? 'classe'}.pdf');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['error']?.toString() ?? 'Échec de l\'export.'), backgroundColor: Colors.red));
+    try {
+      final tronc = _estTroncCommun && _filtreFiliereTronc != 'Toutes les filières';
+      final liste = tronc ? _students.where((s) => s['_filiereNom'] == _filtreFiliereTronc).toList() : _students;
+      final lignes = liste
+          .map<Map<String, dynamic>>((s) => {
+                'prenoms': s['prenoms'],
+                'nom': s['nom'],
+                'matricule': s['matricule'],
+                'statut': _statuts[s['matricule']] ?? 'present',
+              })
+          .toList();
+      final filiere = _estTroncCommun
+          ? (tronc ? _filtreFiliereTronc : _filieresDuGroupe.join(' + '))
+          : (g.first['filiere_nom']?.toString() ?? '');
+      final cours = g.first['nom']?.toString() ?? '';
+      final maintenant = DateTime.now();
+      final bytes = await construireFicheAppelPdf(
+        filiere: filiere,
+        niveau: g.first['niveau']?.toString() ?? '',
+        cours: cours,
+        professeur: '${widget.profile.prenoms} ${widget.profile.nom}'.trim(),
+        dateHeure: maintenant,
+        lignes: lignes,
+      );
+      if (!mounted) return;
+      await Printing.sharePdf(bytes: bytes, filename: nomFichierFicheAppel(cours, maintenant));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Échec de la génération du PDF.'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -281,7 +291,10 @@ class _AppelTabState extends State<AppelTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AppelDetailSheet(appelId: appel['id'].toString()),
+      builder: (_) => _AppelDetailSheet(
+        appelId: appel['id'].toString(),
+        professeurNom: '${widget.profile.prenoms} ${widget.profile.nom}'.trim(),
+      ),
     );
     if (modified == true) {
       _chargerDonnees();
@@ -558,6 +571,7 @@ class _AppelTabState extends State<AppelTab> {
               niveau: module['niveau'],
               moduleId: int.parse(module['id'].toString()),
               moduleNom: module['nom'] ?? '',
+              professeurNom: '${widget.profile.prenoms} ${widget.profile.nom}'.trim(),
             ),
           )).then((_) => _chargerDonnees());
         },
@@ -788,7 +802,7 @@ class _AppelTabState extends State<AppelTab> {
         _actionRapideLigne(Icons.history_rounded, 'Voir l\'historique de ce module', () => setState(() => _tabInterne = 1)),
         _actionRapideLigne(
           _exporting ? Icons.hourglass_top_rounded : Icons.download_rounded,
-          _exporting ? 'Export en cours...' : 'Exporter la liste (PDF)',
+          _exporting ? 'Export en cours...' : 'Fiche d\'appel (PDF)',
           _exporting ? null : _exporterPdf,
         ),
       ]),
@@ -976,8 +990,9 @@ class _AppelHistoriqueCard extends StatelessWidget {
 }
 
 class _AppelDetailSheet extends StatefulWidget {
-  const _AppelDetailSheet({required this.appelId});
+  const _AppelDetailSheet({required this.appelId, this.professeurNom = ''});
   final String appelId;
+  final String professeurNom;
 
   @override
   State<_AppelDetailSheet> createState() => _AppelDetailSheetState();
@@ -987,6 +1002,7 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
   bool _loading = true;
   bool _saving = false;
   bool _editMode = false;
+  bool _pdfEnCours = false;
   dynamic _appel;
   List<dynamic> _presences = [];
 
@@ -1006,6 +1022,39 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
       }
       _loading = false;
     });
+  }
+
+  Future<void> _telechargerPdf() async {
+    if (_appel == null || _presences.isEmpty) return;
+    setState(() => _pdfEnCours = true);
+    try {
+      final date = dateHeureAppel(_appel) ?? DateTime.now();
+      final cours = '${_appel['module_nom'] ?? ''}';
+      final bytes = await construireFicheAppelPdf(
+        filiere: '${_appel['filiere_nom'] ?? ''}',
+        niveau: '${_appel['niveau'] ?? ''}',
+        cours: cours,
+        professeur: widget.professeurNom,
+        dateHeure: date,
+        lignes: _presences
+            .map<Map<String, dynamic>>((p) => {
+                  'prenoms': p['prenoms'],
+                  'nom': p['nom'],
+                  'matricule': p['matricule'],
+                  'statut': p['statut'],
+                })
+            .toList(),
+      );
+      if (!mounted) return;
+      await Printing.sharePdf(bytes: bytes, filename: nomFichierFicheAppel(cours, date));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Échec de la génération du PDF.'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _pdfEnCours = false);
+    }
   }
 
   Future<void> _sauvegarder() async {
@@ -1039,6 +1088,12 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
                 if (_appel != null) Text('${_appel['module_nom'] ?? ''} - ${_appel['filiere_nom'] ?? ''} (${_appel['niveau'] ?? ''})', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
               ]),
             ),
+            if (!_loading && _presences.isNotEmpty && !_editMode)
+              TextButton.icon(
+                onPressed: _pdfEnCours ? null : _telechargerPdf,
+                icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 18),
+                label: const Text('PDF'),
+              ),
             if (!_loading && _presences.isNotEmpty && !_editMode)
               TextButton.icon(onPressed: () => setState(() => _editMode = true), icon: const Icon(Icons.edit_rounded, size: 18), label: const Text('Modifier')),
           ]),
