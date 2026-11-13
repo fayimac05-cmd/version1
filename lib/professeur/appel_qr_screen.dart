@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
+import 'fiche_appel_pdf.dart';
 
 /// Session d'appel par QR code : le prof projette le QR + code à 6 chiffres,
 /// les étudiants pointent depuis leur téléphone, le suivi est en direct.
@@ -15,6 +17,7 @@ class AppelQrScreen extends StatefulWidget {
     required this.niveau,
     required this.moduleId,
     required this.moduleNom,
+    this.professeurNom = '',
   });
 
   final int filiereId;
@@ -23,12 +26,17 @@ class AppelQrScreen extends StatefulWidget {
   final int moduleId;
   final String moduleNom;
 
+  /// Nom du professeur, imprimé sur la fiche d'appel PDF.
+  final String professeurNom;
+
   @override
   State<AppelQrScreen> createState() => _AppelQrScreenState();
 }
 
 class _AppelQrScreenState extends State<AppelQrScreen> {
   String? _sessionId;
+  String? _appelId;
+  bool _pdfEnCours = false;
   String? _code;
   String? _token;
   bool _loading = true;
@@ -68,6 +76,7 @@ class _AppelQrScreenState extends State<AppelQrScreen> {
     setState(() {
       _loading = false;
       _sessionId = result['session_id'];
+      _appelId = result['appel_id']?.toString();
       _code = result['code'];
       _token = result['token'];
     });
@@ -76,8 +85,8 @@ class _AppelQrScreenState extends State<AppelQrScreen> {
     _rafraichir();
   }
 
-  Future<void> _rafraichir() async {
-    if (_sessionId == null || _cloture) return;
+  Future<void> _rafraichir({bool force = false}) async {
+    if (_sessionId == null || (_cloture && !force)) return;
     final result = await ProfessorService.getSessionQr(_sessionId!);
     if (!mounted || result['success'] != true) return;
     final data = result['data'] as Map<String, dynamic>;
@@ -116,6 +125,7 @@ class _AppelQrScreenState extends State<AppelQrScreen> {
     if (result['success'] == true) {
       _pollTimer?.cancel();
       setState(() => _cloture = true);
+      _rafraichir(force: true); // affiche aussi les absents ajoutés à la clôture
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Appel clôturé. ${result['nb_absents'] ?? 0} absent(s) notifié(s).'),
         backgroundColor: const Color(0xFF10B981),
@@ -124,6 +134,46 @@ class _AppelQrScreenState extends State<AppelQrScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(result['error'] ?? 'Erreur lors de la clôture.'),
           backgroundColor: Colors.red));
+    }
+  }
+
+  Future<void> _telechargerFiche() async {
+    if (_appelId == null) return;
+    setState(() => _pdfEnCours = true);
+    try {
+      final res = await ProfessorService.getAppelDetail(_appelId!);
+      if (res['success'] != true) {
+        throw Exception(res['error'] ?? 'Appel introuvable');
+      }
+      final appel = res['data'];
+      final presences = (appel['presences'] as List<dynamic>?) ?? [];
+      if (presences.isEmpty) throw Exception('Aucune présence');
+      final date = dateHeureAppel(appel) ?? DateTime.now();
+      final cours = '${appel['module_nom'] ?? widget.moduleNom}';
+      final bytes = await construireFicheAppelPdf(
+        filiere: '${appel['filiere_nom'] ?? widget.filiereNom}',
+        niveau: '${appel['niveau'] ?? widget.niveau ?? ''}',
+        cours: cours,
+        professeur: widget.professeurNom,
+        dateHeure: date,
+        lignes: presences
+            .map<Map<String, dynamic>>((p) => {
+                  'prenoms': p['prenoms'],
+                  'nom': p['nom'],
+                  'matricule': p['matricule'],
+                  'statut': p['statut'],
+                })
+            .toList(),
+      );
+      if (!mounted) return;
+      await Printing.sharePdf(bytes: bytes, filename: nomFichierFicheAppel(cours, date));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Échec de la génération du PDF.'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _pdfEnCours = false);
     }
   }
 
@@ -197,6 +247,24 @@ class _AppelQrScreenState extends State<AppelQrScreen> {
                           ),
                         ),
                     ]),
+                    if (_cloture) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          onPressed: _pdfEnCours ? null : _telechargerFiche,
+                          icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 18),
+                          label: Text(_pdfEnCours ? 'Génération...' : "Fiche d'appel (PDF)",
+                              style: const TextStyle(fontWeight: FontWeight.w700)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppPalette.blue,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     if (_presences.isEmpty)
                       const Padding(
