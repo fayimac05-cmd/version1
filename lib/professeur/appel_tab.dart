@@ -3,7 +3,9 @@ import 'package:printing/printing.dart';
 import '../models/student_profile.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
+import '../services/bonus_service.dart';
 import 'appel_qr_screen.dart';
+import 'bonus_widgets.dart';
 import 'fiche_appel_pdf.dart';
 
 class AppelTab extends StatefulWidget {
@@ -26,6 +28,7 @@ class _AppelTabState extends State<AppelTab> {
   static const Color _vert = Color(0xFF10B981);
   static const Color _rouge = Color(0xFFEF4444);
   static const Color _ambre = Color(0xFFF59E0B);
+  static const Color _violet = Color(0xFF7C3AED); // absence justifiée / permission
 
   List<dynamic> _classes = [];
   List<dynamic> _modules = [];
@@ -35,6 +38,9 @@ class _AppelTabState extends State<AppelTab> {
   bool _loadingStudents = false;
   bool _saving = false;
   bool _exporting = false;
+  final Map<String, double> _bonusTotaux = {}; // matricule -> bonus en attente sur ce module
+  double _dureeHeures = 2; // durée de la séance (sert aux heures d'absence / retard)
+  String? _pdfHistoriqueId; // appel de l'historique dont le PDF est en préparation
   String _searchQuery = '';
   String _searchEleve = '';
   int _tabInterne = 0; // 0 = Appel, 1 = Historique
@@ -156,6 +162,61 @@ class _AppelTabState extends State<AppelTab> {
       _students = merged;
       _loadingStudents = false;
     });
+    _chargerBonus();
+  }
+
+  /// Écran Bonus d'un module depuis la liste des modules — utilisable à tout
+  /// moment (les bonus se donnent surtout PENDANT le cours, après l'appel).
+  Future<void> _ouvrirBonusModuleDepuisListe(List<dynamic> groupe) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Chargement des étudiants…'), duration: Duration(seconds: 2)));
+    final etudiants = <dynamic>[];
+    for (final m in groupe) {
+      final res = await ProfessorService.getStudentsByFiliere(
+        int.parse(m['filiere_id'].toString()),
+        niveau: m['niveau']?.toString(),
+      );
+      if (res['success'] == true) {
+        for (final e in (res['data'] as List<dynamic>)) {
+          final t = Map<String, dynamic>.from(e as Map);
+          t['_moduleId'] = m['id'].toString();
+          etudiants.add(t);
+        }
+      }
+    }
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+    if (etudiants.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('Aucun étudiant dans cette classe.')));
+      return;
+    }
+    await ouvrirBonusModule(
+      context,
+      moduleId: groupe.first['id'].toString(),
+      moduleNom: groupe.first['nom']?.toString() ?? '',
+      etudiants: etudiants,
+    );
+  }
+
+  /// Bonus de participation en attente (module(s) du groupe sélectionné).
+  Future<void> _chargerBonus() async {
+    final g = _groupeSelectionne;
+    if (g == null) return;
+    final totaux = <String, double>{};
+    for (final m in g) {
+      final res = await BonusService.parModule(m['id'].toString());
+      if (res['success'] == true) {
+        (res['data'] as Map<String, dynamic>).forEach((mat, d) {
+          totaux[mat] = ((d['total'] as num?)?.toDouble() ?? 0);
+        });
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _bonusTotaux
+        ..clear()
+        ..addAll(totaux);
+    });
   }
 
   List<dynamic> get _studentsFiltres {
@@ -171,7 +232,7 @@ class _AppelTabState extends State<AppelTab> {
   }
 
   Map<String, int> get _compteStatuts {
-    final counts = {'present': 0, 'absent': 0, 'retard': 0};
+    final counts = {'present': 0, 'absent': 0, 'retard': 0, 'justifie': 0};
     for (final s in _students) {
       final st = _statuts[s['matricule']] ?? 'present';
       counts[st] = (counts[st] ?? 0) + 1;
@@ -198,6 +259,7 @@ class _AppelTabState extends State<AppelTab> {
   Future<void> _enregistrerAppel() async {
     final groupe = _groupeSelectionne;
     if (groupe == null) return;
+    final fiche = _parametresFiche(); // pour proposer le PDF après l'enregistrement
     setState(() => _saving = true);
 
     var toutOk = true;
@@ -214,6 +276,7 @@ class _AppelTabState extends State<AppelTab> {
         'filiere_nom': m['filiere_nom'],
         'niveau': m['niveau'],
         'module_id': int.parse(m['id'].toString()),
+        'duree_heures': _dureeHeures,
         'presences': presences,
       });
       if (res['success'] != true) {
@@ -229,6 +292,14 @@ class _AppelTabState extends State<AppelTab> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(_estTroncCommun ? 'Appel enregistré pour toutes les filières.' : 'Appel enregistré avec succès.'),
         backgroundColor: _vert,
+        duration: const Duration(seconds: 12),
+        action: fiche == null
+            ? null
+            : SnackBarAction(
+                label: 'Fiche PDF',
+                textColor: Colors.white,
+                onPressed: () => _partagerFiche(fiche),
+              ),
       ));
       setState(() {
         _students = [];
@@ -243,46 +314,96 @@ class _AppelTabState extends State<AppelTab> {
     }
   }
 
-  /// Fiche d'appel en PDF, à partir de l'appel en cours à l'écran (statuts
-  /// présent / absent / retard tels que cochés). Pour la fiche d'un appel déjà
-  /// enregistré (avec son heure exacte), voir Historique > détails de l'appel.
-  Future<void> _exporterPdf() async {
+  /// Capture l'appel à l'écran (statuts cochés) sous forme de paramètres de fiche.
+  /// Capturé AVANT l'enregistrement : après, la liste est vidée.
+  Map<String, dynamic>? _parametresFiche() {
     final g = _groupeSelectionne;
-    if (g == null || _students.isEmpty) return;
-    setState(() => _exporting = true);
+    if (g == null || _students.isEmpty) return null;
+    final tronc = _estTroncCommun && _filtreFiliereTronc != 'Toutes les filières';
+    final liste = tronc ? _students.where((s) => s['_filiereNom'] == _filtreFiliereTronc).toList() : _students;
+    final lignes = liste
+        .map<Map<String, dynamic>>((s) => {
+              'prenoms': s['prenoms'],
+              'nom': s['nom'],
+              'matricule': s['matricule'],
+              'statut': _statuts[s['matricule']] ?? 'present',
+            })
+        .toList();
+    final filiere = _estTroncCommun
+        ? (tronc ? _filtreFiliereTronc : _filieresDuGroupe.join(' + '))
+        : (g.first['filiere_nom']?.toString() ?? '');
+    return {
+      'filiere': filiere,
+      'niveau': g.first['niveau']?.toString() ?? '',
+      'cours': g.first['nom']?.toString() ?? '',
+      'dateHeure': DateTime.now(),
+      'lignes': lignes,
+    };
+  }
+
+  Future<void> _partagerFiche(Map<String, dynamic> f) async {
     try {
-      final tronc = _estTroncCommun && _filtreFiliereTronc != 'Toutes les filières';
-      final liste = tronc ? _students.where((s) => s['_filiereNom'] == _filtreFiliereTronc).toList() : _students;
-      final lignes = liste
-          .map<Map<String, dynamic>>((s) => {
-                'prenoms': s['prenoms'],
-                'nom': s['nom'],
-                'matricule': s['matricule'],
-                'statut': _statuts[s['matricule']] ?? 'present',
-              })
-          .toList();
-      final filiere = _estTroncCommun
-          ? (tronc ? _filtreFiliereTronc : _filieresDuGroupe.join(' + '))
-          : (g.first['filiere_nom']?.toString() ?? '');
-      final cours = g.first['nom']?.toString() ?? '';
-      final maintenant = DateTime.now();
+      final date = f['dateHeure'] as DateTime;
+      final cours = f['cours'] as String;
       final bytes = await construireFicheAppelPdf(
-        filiere: filiere,
-        niveau: g.first['niveau']?.toString() ?? '',
+        filiere: f['filiere'] as String,
+        niveau: f['niveau'] as String,
         cours: cours,
         professeur: '${widget.profile.prenoms} ${widget.profile.nom}'.trim(),
-        dateHeure: maintenant,
-        lignes: lignes,
+        dateHeure: date,
+        lignes: List<Map<String, dynamic>>.from(f['lignes'] as List),
       );
       if (!mounted) return;
-      await Printing.sharePdf(bytes: bytes, filename: nomFichierFicheAppel(cours, maintenant));
+      await Printing.sharePdf(bytes: bytes, filename: nomFichierFicheAppel(cours, date));
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Échec de la génération du PDF.'), backgroundColor: Colors.red));
       }
+    }
+  }
+
+  /// Fiche d'appel en PDF de l'appel en cours à l'écran.
+  Future<void> _exporterPdf() async {
+    final f = _parametresFiche();
+    if (f == null) return;
+    setState(() => _exporting = true);
+    await _partagerFiche(f);
+    if (mounted) setState(() => _exporting = false);
+  }
+
+  /// Fiche d'un appel DÉJÀ enregistré (historique) : on recharge ses présences.
+  Future<void> _pdfDepuisHistorique(dynamic appel) async {
+    final id = appel['id'].toString();
+    if (_pdfHistoriqueId != null) return;
+    setState(() => _pdfHistoriqueId = id);
+    try {
+      final res = await ProfessorService.getAppelDetail(id);
+      final data = res['success'] == true ? res['data'] : null;
+      final presences = data == null ? <dynamic>[] : (data['presences'] as List<dynamic>? ?? []);
+      if (data == null || presences.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Impossible de charger cet appel.'), backgroundColor: Colors.red));
+        }
+        return;
+      }
+      await _partagerFiche({
+        'filiere': '${data['filiere_nom'] ?? ''}',
+        'niveau': '${data['niveau'] ?? ''}',
+        'cours': '${data['module_nom'] ?? ''}',
+        'dateHeure': dateHeureAppel(data) ?? DateTime.now(),
+        'lignes': presences
+            .map<Map<String, dynamic>>((p) => {
+                  'prenoms': p['prenoms'],
+                  'nom': p['nom'],
+                  'matricule': p['matricule'],
+                  'statut': p['statut'],
+                })
+            .toList(),
+      });
     } finally {
-      if (mounted) setState(() => _exporting = false);
+      if (mounted) setState(() => _pdfHistoriqueId = null);
     }
   }
 
@@ -303,6 +424,8 @@ class _AppelTabState extends State<AppelTab> {
 
   @override
   Widget build(BuildContext context) {
+    final largeur = MediaQuery.of(context).size.width;
+    final marge = largeur < 360 ? 12.0 : (largeur < 600 ? 16.0 : 20.0);
     return Container(
       color: const Color(0xFFF4F7FB),
       child: SafeArea(
@@ -310,7 +433,7 @@ class _AppelTabState extends State<AppelTab> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
+                padding: EdgeInsets.fromLTRB(marge, 16, marge, 30),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1380),
@@ -343,44 +466,63 @@ class _AppelTabState extends State<AppelTab> {
   Widget _buildTopRow() {
     final photoUrl = widget.profile.photoUrl?.trim();
     final nomComplet = '${widget.profile.prenoms} ${widget.profile.nom}'.trim();
-    return Row(children: [
-      Expanded(
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
-          child: Row(children: [
-            const Icon(Icons.search_rounded, size: 19, color: _faint),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text('Rechercher une classe, un module...', style: TextStyle(color: _faint, fontSize: 13)),
-            ),
-          ]),
+    return LayoutBuilder(builder: (context, c) {
+      // Téléphone : seulement la photo (le nom est dans l'onglet Profil).
+      final compact = c.maxWidth < 560;
+      final avatar = CircleAvatar(
+        radius: compact ? 19 : 21,
+        backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+        backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+        child: photoUrl == null || photoUrl.isEmpty
+            ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
+            : null,
+      );
+      final cloche = compact ? 40.0 : 44.0;
+      return Row(children: [
+        Expanded(
+          child: Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
+            child: Row(children: [
+              const Icon(Icons.search_rounded, size: 19, color: _faint),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Rechercher une classe, un module...',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _faint, fontSize: 13)),
+              ),
+            ]),
+          ),
         ),
-      ),
-      const SizedBox(width: 16),
-      Container(
-        width: 44, height: 44,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
-        child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
-      ),
-      const SizedBox(width: 12),
-      Row(children: [
-        CircleAvatar(
-          radius: 21,
-          backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
-          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-          child: photoUrl == null || photoUrl.isEmpty
-              ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
-              : null,
+        SizedBox(width: compact ? 10 : 16),
+        Container(
+          width: cloche, height: cloche,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
+          child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
         ),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
-          Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}', style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
-        ]),
-      ]),
-    ]);
+        SizedBox(width: compact ? 8 : 12),
+        if (compact)
+          avatar
+        else
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: (c.maxWidth * 0.3).clamp(150.0, 280.0).toDouble()),
+            child: Row(children: [
+              avatar,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(nomComplet.isEmpty ? 'Professeur' : nomComplet,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                  Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ]),
+          ),
+      ]);
+    });
   }
 
   Widget _buildSelecteurModule() {
@@ -439,6 +581,28 @@ class _AppelTabState extends State<AppelTab> {
                       style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w500)),
                 ]),
               ),
+              // Bouton Bonus indépendant de l'appel : ouvre directement l'écran
+              // des bonus du module, sans passer par la liste d'appel.
+              Tooltip(
+                message: 'Bonus de participation (sans ouvrir l\'appel)',
+                child: Material(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => _ouvrirBonusModuleDepuisListe(groupe),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 16),
+                        SizedBox(width: 4),
+                        Text('Bonus', style: TextStyle(color: Color(0xFFB45309), fontSize: 12, fontWeight: FontWeight.w800)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1)),
             ]),
           ),
@@ -498,11 +662,13 @@ class _AppelTabState extends State<AppelTab> {
               child: const Icon(Icons.groups_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 12),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_titreSession, style: const TextStyle(color: _navyText, fontSize: 17, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 2),
-              Text(_sousTitreSession, style: const TextStyle(color: _muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
-            ]),
+            Flexible(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_titreSession, style: const TextStyle(color: _navyText, fontSize: 17, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text(_sousTitreSession, style: const TextStyle(color: _muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+              ]),
+            ),
           ]),
           Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.calendar_today_outlined, size: 14, color: _faint),
@@ -511,7 +677,7 @@ class _AppelTabState extends State<AppelTab> {
           ]),
           if (g != null && _estTroncCommun)
             SizedBox(
-              width: 240,
+              width: (MediaQuery.of(context).size.width - 96).clamp(160.0, 240.0).toDouble(),
               child: _dropdown(_filtreFiliereTronc, ['Toutes les filières', ..._filieresDuGroupe],
                   (v) => setState(() => _filtreFiliereTronc = v!), Icons.filter_alt_outlined),
             ),
@@ -619,14 +785,24 @@ class _AppelTabState extends State<AppelTab> {
               )),
             ]),
           );
-          final boutons = Row(mainAxisSize: MainAxisSize.min, children: [
+          final boutons = Wrap(spacing: 8, runSpacing: 8, children: [
             _actionRapide('Tout présent', Icons.check_rounded, AppPalette.blue, () => setState(() {
               for (final s in _studentsFiltres) { _statuts[s['matricule']] = 'present'; }
             })),
-            const SizedBox(width: 8),
             _actionRapide('Tout absent', Icons.close_rounded, _rouge, () => setState(() {
               for (final s in _studentsFiltres) { _statuts[s['matricule']] = 'absent'; }
             })),
+            _actionRapide('Bonus', Icons.star_rounded, const Color(0xFFD97706), () {
+              final g = _groupeSelectionne;
+              if (g == null) return;
+              ouvrirBonusModule(
+                context,
+                moduleId: g.first['id'].toString(),
+                moduleNom: g.first['nom']?.toString() ?? '',
+                etudiants: _students,
+                onChange: _chargerBonus,
+              );
+            }),
           ]);
           if (wrap) {
             return Column(children: [champ, const SizedBox(height: 10), boutons]);
@@ -646,8 +822,18 @@ class _AppelTabState extends State<AppelTab> {
               etudiant: _studentsFiltres[i],
               statut: _statuts[_studentsFiltres[i]['matricule']] ?? 'present',
               onChanged: (v) => setState(() => _statuts[_studentsFiltres[i]['matricule']] = v),
+              bonus: _bonusTotaux['${_studentsFiltres[i]['matricule']}'] ?? 0,
+              onBonus: () => ouvrirBonusEtudiant(
+                context,
+                moduleId: '${_studentsFiltres[i]['_moduleId']}',
+                matricule: '${_studentsFiltres[i]['matricule']}',
+                nomComplet: '${_studentsFiltres[i]['prenoms'] ?? ''} ${_studentsFiltres[i]['nom'] ?? ''}'.trim(),
+                onChange: _chargerBonus,
+              ),
             ),
         const SizedBox(height: 16),
+        _buildDureeSeance(),
+        const SizedBox(height: 14),
         SizedBox(
           width: double.infinity, height: 50,
           child: ElevatedButton.icon(
@@ -660,6 +846,28 @@ class _AppelTabState extends State<AppelTab> {
         ),
       ]),
     );
+  }
+
+  /// Durée de la séance : base du calcul des heures d'absence et de retard.
+  Widget _buildDureeSeance() {
+    const choix = <double>[1, 1.5, 2, 3, 4];
+    String lib(double h) => h == h.roundToDouble() ? '${h.toInt()} h' : '${h.floor()} h 30';
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Durée de la séance', style: TextStyle(color: _navyText, fontSize: 12.5, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, runSpacing: 6, children: [
+        for (final h in choix)
+          ChoiceChip(
+            label: Text(lib(h), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _dureeHeures == h ? Colors.white : _navyText)),
+            selected: _dureeHeures == h,
+            selectedColor: AppPalette.blue,
+            onSelected: (_) => setState(() => _dureeHeures = h),
+          ),
+      ]),
+      const SizedBox(height: 4),
+      const Text('Un absent compte toute la durée ; un retard compte le temps écoulé jusqu\'à son arrivée.',
+          style: TextStyle(color: _faint, fontSize: 10.5)),
+    ]);
   }
 
   Widget _actionRapide(String label, IconData icon, Color color, VoidCallback onTap) {
@@ -685,7 +893,13 @@ class _AppelTabState extends State<AppelTab> {
         if (items.isEmpty)
           const Text('Aucun appel enregistré pour ce module.', style: TextStyle(color: _faint, fontSize: 12.5))
         else
-          for (final a in items) _AppelHistoriqueCard(appel: a, onTap: () => _showAppelDetail(a)),
+          for (final a in items)
+            _AppelHistoriqueCard(
+              appel: a,
+              onTap: () => _showAppelDetail(a),
+              onPdf: () => _pdfDepuisHistorique(a),
+              pdfEnCours: _pdfHistoriqueId == a['id'].toString(),
+            ),
       ]),
     );
   }
@@ -711,7 +925,13 @@ class _AppelTabState extends State<AppelTab> {
           ]),
         ),
         const SizedBox(height: 10),
-        for (final a in _historiqueFiltre) _AppelHistoriqueCard(appel: a, onTap: () => _showAppelDetail(a)),
+        for (final a in _historiqueFiltre)
+          _AppelHistoriqueCard(
+            appel: a,
+            onTap: () => _showAppelDetail(a),
+            onPdf: () => _pdfDepuisHistorique(a),
+            pdfEnCours: _pdfHistoriqueId == a['id'].toString(),
+          ),
       ]),
     );
   }
@@ -744,7 +964,7 @@ class _AppelTabState extends State<AppelTab> {
               child: Stack(alignment: Alignment.center, children: [
                 CustomPaint(
                   size: const Size(130, 130),
-                  painter: _DonutAppelPainter(valeurs: [counts['present']!, counts['absent']!, counts['retard']!], couleurs: const [_vert, _rouge, _ambre]),
+                  painter: _DonutAppelPainter(valeurs: [counts['present']!, counts['absent']!, counts['retard']!, counts['justifie']!], couleurs: const [_vert, _rouge, _ambre, _violet]),
                 ),
                 Column(mainAxisSize: MainAxisSize.min, children: [
                   Text('${counts['present']}/$total', style: const TextStyle(color: _navyText, fontSize: 19, fontWeight: FontWeight.w900)),
@@ -759,6 +979,8 @@ class _AppelTabState extends State<AppelTab> {
           _legendeLigne('Absents', counts['absent']!, _rouge),
           const SizedBox(height: 8),
           _legendeLigne('Retards', counts['retard']!, _ambre),
+          const SizedBox(height: 8),
+          _legendeLigne('Justifiés', counts['justifie']!, _violet),
         ],
       ]),
     );
@@ -785,7 +1007,7 @@ class _AppelTabState extends State<AppelTab> {
         ]),
         const SizedBox(height: 8),
         const Text(
-          'Une fois enregistré, l\'appel est ajouté à l\'historique de la classe et les étudiants marqués absents reçoivent une notification.',
+          'Une fois enregistré, l\'appel est ajouté à l\'historique de la classe et les étudiants marqués absents reçoivent une notification. « Justifié » (maladie, permission…) n\'envoie aucune notification et ne compte pas comme absence.',
           style: TextStyle(color: _muted, fontSize: 11.5, height: 1.4, fontWeight: FontWeight.w500),
         ),
       ]),
@@ -828,7 +1050,9 @@ class _AppelTabState extends State<AppelTab> {
 
 // ── Ligne étudiant — vraie photo (photo_url) avec repli sur initiales ──────
 class _EtudiantPresenceRow extends StatelessWidget {
-  const _EtudiantPresenceRow({required this.numero, required this.etudiant, required this.statut, required this.onChanged});
+  const _EtudiantPresenceRow({required this.numero, required this.etudiant, required this.statut, required this.onChanged, this.bonus = 0, this.onBonus});
+  final double bonus;
+  final VoidCallback? onBonus;
   final int numero;
   final dynamic etudiant;
   final String statut;
@@ -838,6 +1062,7 @@ class _EtudiantPresenceRow extends StatelessWidget {
     {'value': 'present', 'label': 'Présent', 'color': Color(0xFF10B981)},
     {'value': 'absent', 'label': 'Absent', 'color': Color(0xFFEF4444)},
     {'value': 'retard', 'label': 'Retard', 'color': Color(0xFFF59E0B)},
+    {'value': 'justifie', 'label': 'Justifié', 'color': Color(0xFF7C3AED)},
   ];
 
   @override
@@ -861,24 +1086,40 @@ class _EtudiantPresenceRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('$prenoms ${etudiant['nom'] ?? ''}',
+                maxLines: 2, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-            Row(children: [
+            Wrap(spacing: 6, runSpacing: 3, crossAxisAlignment: WrapCrossAlignment.center, children: [
               Text('${etudiant['matricule'] ?? ''}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8))),
-              if ((etudiant['_filiereNom'] ?? '').toString().isNotEmpty) ...[
-                const SizedBox(width: 6),
+              if ((etudiant['_filiereNom'] ?? '').toString().isNotEmpty)
                 Text('• ${etudiant['_filiereNom']}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8))),
-              ],
-              if ((etudiant['total_absences'] ?? 0) > 0) ...[
-                const SizedBox(width: 8),
+              if ((etudiant['total_absences'] ?? 0) > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFFECACA))),
                   child: Text('${etudiant['total_absences']} abs.',
                       style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFFEF4444))),
                 ),
-              ],
             ]),
           ])),
+          if (onBonus != null)
+            InkWell(
+              onTap: onBonus,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD97706).withValues(alpha: bonus > 0 ? 0.14 : 0.06),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(bonus > 0 ? Icons.star_rounded : Icons.star_outline_rounded, size: 15, color: const Color(0xFFD97706)),
+                  if (bonus > 0) ...[
+                    const SizedBox(width: 3),
+                    Text(formatBonus(bonus), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
+                  ],
+                ]),
+              ),
+            ),
         ]),
         const SizedBox(height: 8),
         Row(children: _options.map((o) {
@@ -892,7 +1133,10 @@ class _EtudiantPresenceRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: isActive ? color : color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                child: Text(o['label'] as String, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isActive ? Colors.white : color)),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(o['label'] as String, maxLines: 1, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isActive ? Colors.white : color)),
+                ),
               ),
             ),
           );
@@ -942,9 +1186,11 @@ class _DonutAppelPainter extends CustomPainter {
 }
 
 class _AppelHistoriqueCard extends StatelessWidget {
-  const _AppelHistoriqueCard({required this.appel, required this.onTap});
+  const _AppelHistoriqueCard({required this.appel, required this.onTap, required this.onPdf, this.pdfEnCours = false});
   final dynamic appel;
   final VoidCallback onTap;
+  final VoidCallback onPdf;
+  final bool pdfEnCours;
 
   @override
   Widget build(BuildContext context) {
@@ -968,13 +1214,27 @@ class _AppelHistoriqueCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${appel['module_nom'] ?? ''} · ${appel['filiere_nom'] ?? ''} - ${appel['niveau'] ?? ''}',
+                maxLines: 2, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
             const SizedBox(height: 2),
             Text(date, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+            const SizedBox(height: 6),
+            Wrap(spacing: 4, runSpacing: 4, children: [
+              _pill('${appel['nb_presents'] ?? 0}P', const Color(0xFF10B981)),
+              _pill('${appel['nb_absents'] ?? 0}A', const Color(0xFFEF4444)),
+              if ((int.tryParse('${appel['nb_justifies'] ?? 0}') ?? 0) > 0)
+                _pill('${appel['nb_justifies']}J', const Color(0xFF7C3AED)),
+            ]),
           ])),
-          _pill('${appel['nb_presents'] ?? 0}P', const Color(0xFF10B981)),
-          const SizedBox(width: 4),
-          _pill('${appel['nb_absents'] ?? 0}A', const Color(0xFFEF4444)),
+          const SizedBox(width: 2),
+          IconButton(
+            tooltip: 'Exporter la fiche en PDF',
+            visualDensity: VisualDensity.compact,
+            onPressed: pdfEnCours ? null : onPdf,
+            icon: pdfEnCours
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.picture_as_pdf_rounded, size: 20, color: Color(0xFF0D6EFD)),
+          ),
         ]),
       ),
     );
@@ -1057,6 +1317,16 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
     }
   }
 
+  /// « · arrivé à 09h40 » pour un étudiant en retard dont l'heure est connue.
+  String _texteArrivee(dynamic p) {
+    if (p['statut'] != 'retard' || p['arrivee_at'] == null) return '';
+    var d = DateTime.tryParse(p['arrivee_at'].toString());
+    if (d == null) return '';
+    if (d.isUtc) d = d.toLocal();
+    String deux(int n) => n.toString().padLeft(2, '0');
+    return ' · arrivé à ${deux(d.hour)}h${deux(d.minute)}';
+  }
+
   Future<void> _sauvegarder() async {
     setState(() => _saving = true);
     final presences = _presences.map((p) => {'matricule': p['matricule'], 'statut': p['statut']}).toList();
@@ -1072,6 +1342,7 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final etroit = MediaQuery.of(context).size.width < 400;
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -1086,16 +1357,26 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Détails de l\'appel', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
                 if (_appel != null) Text('${_appel['module_nom'] ?? ''} - ${_appel['filiere_nom'] ?? ''} (${_appel['niveau'] ?? ''})', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                if (_appel != null && _appel['duree_heures'] != null)
+                  Text('Durée de la séance : ${_appel['duree_heures']} h', style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
               ]),
             ),
             if (!_loading && _presences.isNotEmpty && !_editMode)
-              TextButton.icon(
-                onPressed: _pdfEnCours ? null : _telechargerPdf,
-                icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 18),
-                label: const Text('PDF'),
-              ),
+              etroit
+                  ? IconButton(
+                      tooltip: 'Exporter en PDF',
+                      onPressed: _pdfEnCours ? null : _telechargerPdf,
+                      icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 20),
+                    )
+                  : TextButton.icon(
+                      onPressed: _pdfEnCours ? null : _telechargerPdf,
+                      icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 18),
+                      label: const Text('PDF'),
+                    ),
             if (!_loading && _presences.isNotEmpty && !_editMode)
-              TextButton.icon(onPressed: () => setState(() => _editMode = true), icon: const Icon(Icons.edit_rounded, size: 18), label: const Text('Modifier')),
+              etroit
+                  ? IconButton(tooltip: 'Modifier', onPressed: () => setState(() => _editMode = true), icon: const Icon(Icons.edit_rounded, size: 20))
+                  : TextButton.icon(onPressed: () => setState(() => _editMode = true), icon: const Icon(Icons.edit_rounded, size: 18), label: const Text('Modifier')),
           ]),
         ),
         const SizedBox(height: 12),
@@ -1121,15 +1402,21 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
                         }
                         final isPresent = p['statut'] == 'present';
                         final isAbs = p['statut'] == 'absent';
-                        final color = isPresent ? const Color(0xFF10B981) : (isAbs ? const Color(0xFFEF4444) : const Color(0xFFF59E0B));
+                        final isJust = p['statut'] == 'justifie';
+                        final color = isPresent
+                            ? const Color(0xFF10B981)
+                            : (isAbs ? const Color(0xFFEF4444) : (isJust ? const Color(0xFF7C3AED) : const Color(0xFFF59E0B)));
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text('${p['prenoms']} ${p['nom']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          subtitle: Text('${p['matricule']}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                          subtitle: Text(
+                            '${p['matricule']}${_texteArrivee(p)}',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
                           trailing: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                            child: Text((p['statut'] ?? '').toString().toUpperCase(), style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+                            child: Text(isJust ? 'JUSTIFIÉ' : (p['statut'] ?? '').toString().toUpperCase(), style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
                           ),
                         );
                       },

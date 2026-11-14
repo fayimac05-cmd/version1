@@ -12,6 +12,12 @@ import '../services/api_service.dart';
 import '../services/professor_service.dart';
 import '../utils/snackbar_helper.dart';
 
+String _anneeCourante() {
+  final d = DateTime.now();
+  final debut = d.month >= 9 ? d.year : d.year - 1;
+  return '$debut-${debut + 1}';
+}
+
 const Color _navy = Color(0xFF0B1E4D);
 const Color _blue = Color(0xFF1565E0);
 const String _domTech = 'Sciences & Technologies';
@@ -383,12 +389,13 @@ class _AdminFilieresState extends State<AdminFilieres> {
     final totalMod = v.fold<int>(0, (s, f) => s + f.nbModules);
     final niv = _tousNiveaux;
 
+    final compact = !isDesktop;
     final cards = [
-      _kpi(Icons.school_rounded, const Color(0xFF1D4ED8), 'Filières', '${v.length}', 'Filières enregistrées'),
-      _kpi(Icons.groups_rounded, const Color(0xFF10B981), 'Étudiants', '$totalEtu', 'Total des étudiants inscrits'),
-      _kpi(Icons.menu_book_rounded, const Color(0xFF7C3AED), 'Modules', '$totalMod', 'Tous les modules confondus'),
+      _kpi(Icons.school_rounded, const Color(0xFF1D4ED8), 'Filières', '${v.length}', 'Filières enregistrées', compact: compact),
+      _kpi(Icons.groups_rounded, const Color(0xFF10B981), 'Étudiants', '$totalEtu', 'Total des étudiants inscrits', compact: compact),
+      _kpi(Icons.menu_book_rounded, const Color(0xFF7C3AED), 'Modules', '$totalMod', 'Tous les modules confondus', compact: compact),
       _kpi(Icons.layers_rounded, const Color(0xFFF59E0B), "Niveaux d'études", '${niv.length}',
-          niv.isEmpty ? 'Aucun étudiant rattaché' : niv.map(_abrevNiveau).join(', ')),
+          niv.isEmpty ? 'Aucun étudiant rattaché' : niv.map(_abrevNiveau).join(', '), compact: compact),
     ];
 
     if (isDesktop) {
@@ -399,36 +406,48 @@ class _AdminFilieresState extends State<AdminFilieres> {
         ],
       ]);
     }
-    return GridView.count(
-      crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10, crossAxisSpacing: 10, mainAxisExtent: 112,
-      children: cards,
-    );
+    // Téléphone : 2 colonnes, hauteur = contenu (plus de débordement vertical).
+    final lignes = <Widget>[];
+    for (var i = 0; i < cards.length; i += 2) {
+      lignes.add(IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: cards[i]),
+          const SizedBox(width: 10),
+          Expanded(child: i + 1 < cards.length ? cards[i + 1] : const SizedBox()),
+        ]),
+      ));
+      if (i + 2 < cards.length) lignes.add(const SizedBox(height: 10));
+    }
+    return Column(children: lignes);
   }
 
-  Widget _kpi(IconData icon, Color c, String label, String value, String caption) => Container(
-    padding: const EdgeInsets.all(16),
+  Widget _kpi(IconData icon, Color c, String label, String value, String caption, {bool compact = false}) => Container(
+    padding: EdgeInsets.all(compact ? 12 : 16),
     decoration: BoxDecoration(
       color: Colors.white, borderRadius: BorderRadius.circular(16),
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
     ),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        width: 48, height: 48,
+    child: () {
+      final icone = Container(
+        width: compact ? 40 : 48, height: compact ? 40 : 48,
         decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(14)),
-        child: Icon(icon, color: Colors.white, size: 24),
-      ),
-      const SizedBox(width: 14),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Icon(icon, color: Colors.white, size: compact ? 21 : 24),
+      );
+      final textes = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
         const SizedBox(height: 2),
         Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _navy, height: 1.1)),
         const SizedBox(height: 4),
-        Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis,
+        Text(caption, maxLines: compact ? 2 : 1, overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-      ])),
-    ]),
+      ]);
+      // Téléphone : icône au-dessus du texte pour que les mots ne se coupent plus.
+      if (compact) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [icone, const SizedBox(height: 8), textes]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [icone, const SizedBox(width: 14), Expanded(child: textes)]);
+    }(),
   );
 
   // ── Barre de filtres ────────────────────────────────────────────────────
@@ -521,19 +540,23 @@ class _AdminFilieresState extends State<AdminFilieres> {
       const SizedBox(width: 8),
       Expanded(child: Text('Toutes les filières (${_visibles.length})',
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _navy))),
-      Text('${_filtered.length} filière${_filtered.length > 1 ? 's' : ''} trouvée${_filtered.length > 1 ? 's' : ''}',
-          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+      const SizedBox(width: 8),
+      Flexible(child: Text('${_filtered.length} filière${_filtered.length > 1 ? 's' : ''} trouvée${_filtered.length > 1 ? 's' : ''}',
+          textAlign: TextAlign.right, maxLines: 2, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)))),
     ]),
   );
 
   // ── Grille de cartes ────────────────────────────────────────────────────
   Widget _grille(bool isDesktop) => LayoutBuilder(builder: (ctx, c) {
     final cols = c.maxWidth >= 1000 ? 3 : (c.maxWidth >= 640 ? 2 : 1);
+    final ts = MediaQuery.textScalerOf(ctx).scale(1.0);
+    final hauteurCarte = 262.0 + (ts > 1 ? (ts - 1) * 140 : 0) + (c.maxWidth < 340 ? 24 : 0);
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols, mainAxisSpacing: 16, crossAxisSpacing: 16, mainAxisExtent: 262,
+        crossAxisCount: cols, mainAxisSpacing: 16, crossAxisSpacing: 16, mainAxisExtent: hauteurCarte,
       ),
       itemCount: _pageItems.length,
       itemBuilder: (_, i) => _carteFiliere(_pageItems[i]),
@@ -1615,7 +1638,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
   int _step = 0;
   final _nomCtrl    = TextEditingController();
   final _abbrCtrl   = TextEditingController(); // Nouveau contrôleur ajouté
-  final _anneeCtrl  = TextEditingController(text: '2024-2025');
+  final _anneeCtrl  = TextEditingController(text: _anneeCourante());
   String _niveau    = 'Licence 2';
   String _domaine   = 'Sciences & Technologies';
   final List<Map<String, dynamic>> _modules = [];
@@ -1753,7 +1776,7 @@ class _CreationFiliereState extends State<_CreationFiliere> {
         (v) => setState(() => _domaine = v!)),
     const SizedBox(height: 14),
     _label('Année académique'),
-    _input(_anneeCtrl, '2024-2025', Icons.calendar_today_rounded),
+    _input(_anneeCtrl, _anneeCourante(), Icons.calendar_today_rounded),
   ]);
 
   Widget _etape2() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

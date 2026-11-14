@@ -7,7 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 /// puis la liste avec « Présent » ou « Absent » devant chaque nom.
 ///
 /// [lignes] : une entrée par étudiant, avec les clés prenoms, nom, matricule
-/// et statut (present / absent / retard).
+/// et statut (present / absent / retard / justifie).
 Future<Uint8List> construireFicheAppelPdf({
   required String filiere,
   required String niveau,
@@ -23,6 +23,8 @@ Future<Uint8List> construireFicheAppelPdf({
   const rougeFond = PdfColor.fromInt(0xFFFEE2E2);
   const ambre = PdfColor.fromInt(0xFFB45309);
   const ambreFond = PdfColor.fromInt(0xFFFEF3C7);
+  const violet = PdfColor.fromInt(0xFF6D28D9);
+  const violetFond = PdfColor.fromInt(0xFFEDE9FE);
 
   String deux(int n) => n.toString().padLeft(2, '0');
   final dateTxt = '${deux(dateHeure.day)}/${deux(dateHeure.month)}/${dateHeure.year}';
@@ -33,6 +35,7 @@ Future<Uint8List> construireFicheAppelPdf({
   final presents = compte('present');
   final absents = compte('absent');
   final retards = compte('retard');
+  final justifies = compte('justifie');
 
   final gras = pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10);
   const normal = pw.TextStyle(fontSize: 10);
@@ -73,6 +76,9 @@ Future<Uint8List> construireFicheAppelPdf({
         break;
       case 'retard':
         texte = ambre; fond = ambreFond; libelle = 'Retard';
+        break;
+      case 'justifie':
+        texte = violet; fond = violetFond; libelle = 'Justifié';
         break;
       default:
         texte = vert; fond = vertFond; libelle = 'Présent';
@@ -140,6 +146,7 @@ Future<Uint8List> construireFicheAppelPdf({
         boite('$presents', 'Présents', vert, vertFond),
         boite('$absents', 'Absents', rouge, rougeFond),
         if (retards > 0) boite('$retards', 'En retard', ambre, ambreFond),
+        if (justifies > 0) boite('$justifies', 'Justifiés', violet, violetFond),
       ]),
       pw.SizedBox(height: 14),
       pw.Table(

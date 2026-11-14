@@ -389,7 +389,7 @@ class _AdminEDTState extends State<AdminEDT> {
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       titre, const SizedBox(height: 12),
-      Row(children: [Expanded(child: actualiser), const SizedBox(width: 10), Expanded(child: creer)]),
+      Wrap(spacing: 10, runSpacing: 10, children: [actualiser, creer]),
     ]);
   }
 
@@ -400,11 +400,12 @@ class _AdminEDTState extends State<AdminEDT> {
     final filieresConcernees = actifs.map((e) => e.filiereId).where((id) => id != null).toSet().length;
     final creneaux = actifs.fold<int>(0, (s, e) => s + e.creneaux.length);
 
+    final compact = !isDesktop;
     final cards = [
-      _kpi(Icons.calendar_month_rounded, const Color(0xFF1D4ED8), 'Programmes actifs', '${actifs.length}', 'Emplois du temps en cours'),
-      _kpi(Icons.school_rounded, const Color(0xFF10B981), 'Filières concernées', '$filieresConcernees', 'Avec un programme actif'),
-      _kpi(Icons.event_note_rounded, const Color(0xFF7C3AED), 'Créneaux programmés', '$creneaux', 'Dans les programmes actifs'),
-      _kpi(Icons.inventory_2_rounded, const Color(0xFFF59E0B), 'Programmes archivés', '$archives', 'Emplois du temps archivés'),
+      _kpi(Icons.calendar_month_rounded, const Color(0xFF1D4ED8), 'Programmes actifs', '${actifs.length}', 'Emplois du temps en cours', compact: compact),
+      _kpi(Icons.school_rounded, const Color(0xFF10B981), 'Filières concernées', '$filieresConcernees', 'Avec un programme actif', compact: compact),
+      _kpi(Icons.event_note_rounded, const Color(0xFF7C3AED), 'Créneaux programmés', '$creneaux', 'Dans les programmes actifs', compact: compact),
+      _kpi(Icons.inventory_2_rounded, const Color(0xFFF59E0B), 'Programmes archivés', '$archives', 'Emplois du temps archivés', compact: compact),
     ];
     if (isDesktop) {
       return Row(children: [
@@ -414,31 +415,45 @@ class _AdminEDTState extends State<AdminEDT> {
         ],
       ]);
     }
-    return GridView.count(
-      crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10, crossAxisSpacing: 10, mainAxisExtent: 118, children: cards,
-    );
+    // Téléphone : 2 colonnes, hauteur = contenu (plus de débordement vertical).
+    final lignes = <Widget>[];
+    for (var i = 0; i < cards.length; i += 2) {
+      lignes.add(IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: cards[i]),
+          const SizedBox(width: 10),
+          Expanded(child: i + 1 < cards.length ? cards[i + 1] : const SizedBox()),
+        ]),
+      ));
+      if (i + 2 < cards.length) lignes.add(const SizedBox(height: 10));
+    }
+    return Column(children: lignes);
   }
 
-  Widget _kpi(IconData icon, Color c, String label, String value, String caption) => Container(
-    padding: const EdgeInsets.all(16),
+  Widget _kpi(IconData icon, Color c, String label, String value, String caption, {bool compact = false}) => Container(
+    padding: EdgeInsets.all(compact ? 12 : 16),
     decoration: BoxDecoration(
       color: Colors.white, borderRadius: BorderRadius.circular(16),
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
     ),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(width: 48, height: 48, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(14)),
-          child: Icon(icon, color: Colors.white, size: 24)),
-      const SizedBox(width: 14),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+    child: () {
+      final icone = Container(
+          width: compact ? 40 : 48, height: compact ? 40 : 48,
+          decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(14)),
+          child: Icon(icon, color: Colors.white, size: compact ? 21 : 24));
+      final textes = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, maxLines: compact ? 2 : 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
         const SizedBox(height: 2),
         Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _navy, height: 1.1)),
         const SizedBox(height: 4),
-        Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-      ])),
-    ]),
+        Text(caption, maxLines: compact ? 2 : 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+      ]);
+      if (compact) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [icone, const SizedBox(height: 8), textes]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [icone, const SizedBox(width: 14), Expanded(child: textes)]);
+    }(),
   );
 
   // ── Filtres ─────────────────────────────────────────────────────────────
@@ -594,10 +609,12 @@ class _AdminEDTState extends State<AdminEDT> {
   Widget _grille() => LayoutBuilder(builder: (ctx, c) {
     final cols = c.maxWidth >= 1000 ? 3 : (c.maxWidth >= 640 ? 2 : 1);
     final items = _pageItems;
+    final ts = MediaQuery.textScalerOf(ctx).scale(1.0);
+    final hauteurCarte = 300.0 + (ts > 1 ? (ts - 1) * 150 : 0) + (c.maxWidth < 420 ? 28 : 0);
     return GridView.builder(
       shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols, mainAxisSpacing: 16, crossAxisSpacing: 16, mainAxisExtent: 300,
+        crossAxisCount: cols, mainAxisSpacing: 16, crossAxisSpacing: 16, mainAxisExtent: hauteurCarte,
       ),
       itemCount: items.length,
       itemBuilder: (_, i) => _carte(items[i]),
@@ -641,6 +658,7 @@ class _AdminEDTState extends State<AdminEDT> {
       ]),
     );
 
+    final etroit = MediaQuery.of(context).size.width < 420;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white, borderRadius: BorderRadius.circular(14),
@@ -664,9 +682,9 @@ class _AdminEDTState extends State<AdminEDT> {
                   const SizedBox(height: 2),
                   Text(abrev.isEmpty ? e.niveau : e.filiereNom, maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                  if (etroit) ...[const SizedBox(height: 6), _pillStatut(e.statut)],
                 ])),
-                const SizedBox(width: 6),
-                _pillStatut(e.statut),
+                if (!etroit) ...[const SizedBox(width: 6), _pillStatut(e.statut)],
                 _menu(e),
               ]),
               const SizedBox(height: 10),
@@ -928,7 +946,7 @@ class _PDrop<T> extends StatelessWidget {
           Expanded(child: boxLabel == null
               ? texte
               : Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(boxLabel!, style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                  Text(boxLabel!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
                   texte,
                 ])),
           const Icon(Icons.keyboard_arrow_down_rounded, size: 19, color: Color(0xFF64748B)),

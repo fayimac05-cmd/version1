@@ -2181,9 +2181,10 @@ class _FichePageState extends State<_FichePage> {
       padding: const EdgeInsets.all(18),
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))),
-      child: Row(
-        children: [
-          Container(
+      child: LayoutBuilder(builder: (context, c) {
+        // Téléphone : photo + identité en haut, boutons dessous.
+        final etroit = c.maxWidth < 440;
+        final photo = Container(
             width: 72,
             height: 72,
             decoration: BoxDecoration(
@@ -2192,10 +2193,8 @@ class _FichePageState extends State<_FichePage> {
               image: url.isNotEmpty ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover) : null,
             ),
             child: url.isEmpty ? Center(child: Text(ini, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _bleu))) : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+          );
+        final infos = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${_v('nom')} ${_v('prenoms')}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
@@ -2208,23 +2207,41 @@ class _FichePageState extends State<_FichePage> {
                   _badge(soir ? 'Cours du soir' : 'Cours du jour', soir ? const Color(0xFF6D28D9) : _bleu, soir ? const Color(0xFFEDE9FE) : const Color(0xFFDBEAFE)),
                 ]),
               ],
-            ),
-          ),
-          if (!_edition) ...[
-            IconButton.filledTonal(
+            );
+        final boutonModifier = IconButton.filledTonal(
               tooltip: 'Modifier les informations',
               onPressed: _demarrerEdition,
               icon: const Icon(Icons.edit_outlined),
-            ),
-            const SizedBox(width: 6),
-            OutlinedButton.icon(
+            );
+        final boutonCarte = OutlinedButton.icon(
               onPressed: widget.onCarte,
               icon: const Icon(Icons.badge_outlined, size: 16),
               label: const Text("Carte"),
-            ),
+            );
+        if (etroit) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              photo, const SizedBox(width: 14), Expanded(child: infos),
+            ]),
+            if (!_edition) ...[
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [boutonModifier, boutonCarte]),
+            ],
+          ]);
+        }
+        return Row(
+          children: [
+            photo,
+            const SizedBox(width: 16),
+            Expanded(child: infos),
+            if (!_edition) ...[
+              boutonModifier,
+              const SizedBox(width: 6),
+              boutonCarte,
+            ],
           ],
-        ],
-      ),
+        );
+      }),
     );
 
     final lecture = <Widget>[
@@ -2338,11 +2355,11 @@ class _FichePageState extends State<_FichePage> {
           decoration: BoxDecoration(color: AdminTheme.dangerLight, borderRadius: BorderRadius.circular(8)),
           child: Text(_erreur!, style: const TextStyle(fontSize: 12, color: AdminTheme.danger)),
         ),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.end,
+      Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 12, runSpacing: 10,
         children: [
           OutlinedButton(onPressed: _envoi ? null : () => setState(() => _edition = false), child: const Text('Annuler')),
-          const SizedBox(width: 12),
           ElevatedButton.icon(
             onPressed: _envoi ? null : _enregistrer,
             icon: _envoi
@@ -2358,7 +2375,7 @@ class _FichePageState extends State<_FichePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(MediaQuery.of(context).size.width < 400 ? 12 : 20),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 900),

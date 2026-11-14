@@ -8,6 +8,7 @@ import '../theme/app_palette.dart';
 import '../utils/snackbar_helper.dart';
 import '../widgets/delegue_badge.dart';
 import 'emoji_gif_sticker_picker.dart';
+import 'partager_message.dart';
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
 // ════════════════════════════════════════════════════════════════════════════
@@ -1388,15 +1389,6 @@ class _ConversationViewState extends State<_ConversationView> {
               _snack('Texte copié !');
             }),
             _act(
-              Icons.forward_rounded,
-              'Transférer',
-              const Color(0xFF54656F),
-              () {
-                Navigator.pop(context);
-                _transferer(msg);
-              },
-            ),
-            _act(
               msg.epingle ? Icons.push_pin_outlined : Icons.push_pin_rounded,
               msg.epingle ? 'Désépingler' : 'Épingler',
               const Color(0xFF54656F),
@@ -1416,27 +1408,11 @@ class _ConversationViewState extends State<_ConversationView> {
                 setState(() => msg.important = !msg.important);
               },
             ),
-            _act(
-              Icons.check_box_outlined,
-              'Sélectionner',
-              const Color(0xFF54656F),
-              () {
-                Navigator.pop(context);
-                _snack('Mode sélection');
-              },
-            ),
-            _act(
-              Icons.save_alt_rounded,
-              'Enregistrer sous',
-              const Color(0xFF54656F),
-              () {
-                Navigator.pop(context);
-                _snack('💾 Enregistrement...');
-              },
-            ),
             _act(Icons.share_rounded, 'Partager', const Color(0xFF54656F), () {
               Navigator.pop(context);
-              _snack('📤 Partage...');
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) partagerMessage(this.context, msg.texte);
+              });
             }),
             if (!msg.estMoi)
               _act(
@@ -1772,110 +1748,6 @@ class _ConversationViewState extends State<_ConversationView> {
         ),
         onTap: onTap,
       );
-
-  void _transferer(MessagePrive msg) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.55,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: Text(
-                'Transférer à...',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withValues(alpha:0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Center(
-                  child: Text('💬', style: TextStyle(fontSize: 22)),
-                ),
-              ),
-              title: const Text(
-                'Partager sur WhatsApp',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _snack('✅ Ouverture WhatsApp...');
-              },
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.builder(
-                itemCount: conversationsPrivees.length,
-                itemBuilder: (_, i) {
-                  final c = conversationsPrivees[i];
-                  if (c.id == _conv.id) return const SizedBox();
-                  return ListTile(
-                    leading: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppPalette.blue.withValues(alpha:0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          c.contact.initiales,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppPalette.blue,
-                          ),
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      c.contact.nomComplet,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      c.messages.add(
-                        MessagePrive(
-                          id: 'T${DateTime.now().millisecondsSinceEpoch}',
-                          texte: '↩️ Transféré : ${msg.texte}',
-                          heure: _now(),
-                          type: TypeMessagePrive.texte,
-                          estMoi: true,
-                        ),
-                      );
-                      _snack('✅ Transféré !');
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _envoyer() {
     final text = _msgCtrl.text.trim();
