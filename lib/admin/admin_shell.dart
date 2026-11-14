@@ -61,11 +61,8 @@ import '../admin/admin_messages.dart';
 import '../admin/admin_bde.dart';
 import '../admin/admin_statistiques.dart';
 import '../admin/admin_evaluations.dart';
-import '../admin/admin_secondaire.dart';
-import '../admin/admin_primaire.dart';
 import '../admin/admin_risque.dart';
 import '../config/etablissement_config.dart';
-import '../pages/choose_etablissement_type_page.dart';
 import '../pages/splash_screen.dart';
 import '../widgets/profile_header_cover.dart';
 import '../admin/admin_delegues.dart';
@@ -129,7 +126,6 @@ const _items = <_MenuItem>[
 
 const _menuGroups = <Map<String, Object>>[
   {'key': 'GÉNÉRAL',    'items': [0, 1, 25]},
-  {'key': 'SECTIONS',   'items': [14, 15]},
   {'key': 'ACADÉMIQUE', 'items': [2, 3, 24, 4, 5, 17, 21, 22, 23]},
   {'key': 'PERSONNES',  'items': [6, 7, 8, 9, 18, 20]},
   {'key': 'MESSAGERIE', 'items': [10]},
@@ -193,8 +189,8 @@ class AdminMenuService {
         // Tableau de bord, Annonces, Groupes & Messages, BDE & Événements, Bureau des Étudiants (nomination)
         return {0, 1, 10, 11, 20};
       case AdminRole.cycleDirecteur:
-        // Tableau de bord, Statistiques, Collège & Lycée, Primaire
-        return {0, 12, 14, 15};
+        // Tableau de bord, Statistiques
+        return {0, 12};
       case AdminRole.cantiniere:
         // Tableau de bord, Cantine — rien d'autre.
         return {0, 19};
@@ -390,8 +386,8 @@ class _AdminShellState extends State<AdminShell>
       const AdminBDE(),
       const AdminStatistiques(),
       const AdminEvaluations(),
-      const AdminSecondaire(),
-      const AdminPrimaire(),
+      const SizedBox.shrink(), // 14 : retiré (ancien Collège & Lycée)
+      const SizedBox.shrink(), // 15 : retiré (ancien Primaire)
       const AdminRisque(),
       AdminBulletins(profile: widget.profile),
       const AdminDelegues(),
@@ -606,16 +602,14 @@ class _AdminShellState extends State<AdminShell>
   }
 
   /// Visibilité d'un item de menu selon la config de l'établissement.
-  /// - 14 (Collège & Lycée) : uniquement si la section secondaire est active
-  /// - 15 (Primaire)        : uniquement si la section primaire est active
+  /// - 14 et 15 : anciennes sections Collège/Lycée et Primaire, retirées
   /// - 2 (Filières & Modules) et 11 (BDE) : réservés au supérieur
   bool _visibleParConfig(int index) {
     final config = EtablissementConfig.instance;
     switch (index) {
       case 14:
-        return config.sectionActive(SectionEnseignement.secondaire);
       case 15:
-        return config.sectionActive(SectionEnseignement.primaire);
+        return false; // sections retirées
       case 2:
         return config.sectionActive(SectionEnseignement.superieur);
       case 11:
@@ -910,7 +904,7 @@ class _AdminShellState extends State<AdminShell>
   // Ordre de priorité des onglets mis en avant dans la barre du bas ; seuls
   // ceux auxquels le membre a droit sont retenus (un sous-rôle limité n'en
   // verra que quelques-uns, et pas de bouton « Plus » s'il n'y en a pas plus de 5).
-  static const List<int> _prioriteMobile = [0, 10, 6, 1, 5, 4, 2, 3, 7, 8, 17, 12, 19, 14, 15, 9, 11, 13, 16, 18, 20, 21, 22, 23];
+  static const List<int> _prioriteMobile = [0, 10, 6, 1, 5, 4, 2, 3, 7, 8, 17, 12, 19, 9, 11, 13, 16, 18, 20, 21, 22, 23];
 
   NavEntry _entree(int i) => NavEntry(
         index: i,
@@ -1209,13 +1203,6 @@ class _AdminShellState extends State<AdminShell>
                 ? Column(
                     children: [
                       _SideBtn(
-                        icon: Icons.link_rounded,
-                        tooltip: 'Connecter mon établissement',
-                        onTap: _ouvrirChoixType,
-                        color: AppPalette.yellow,
-                      ),
-                      const SizedBox(height: 8),
-                      _SideBtn(
                         icon: Icons.dark_mode_outlined,
                         tooltip: 'Mode Sombre',
                         onTap: _toggleDarkMode,
@@ -1239,9 +1226,6 @@ class _AdminShellState extends State<AdminShell>
                   )
                 : Column(
                     children: [
-                      // Connexion de l'établissement (type + filtrage auto)
-                      _ConnectEtablissementButton(onTap: _ouvrirChoixType),
-                      const SizedBox(height: 8),
                       Row(
                         children: [
                           _SideBtn(
@@ -1283,17 +1267,6 @@ class _AdminShellState extends State<AdminShell>
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // CONNEXION DE L'ÉTABLISSEMENT (choix du type + filtrage auto)
-  // ═══════════════════════════════════════════════════════════════
-
-  void _ouvrirChoixType() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ChooseEtablissementTypePage()),
     );
   }
 
@@ -1606,61 +1579,6 @@ class _SideBtn extends StatelessWidget {
           ),
         ),
       );
-}
-
-// ── Bouton « Connecter mon établissement » ────────────────────────────────
-// Ouvre le choix du type d'établissement ; l'interface se filtre ensuite
-// automatiquement (sections, menus, options, vocabulaire).
-
-class _ConnectEtablissementButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ConnectEtablissementButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final config = EtablissementConfig.instance;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        decoration: BoxDecoration(
-          color: AppPalette.yellow.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppPalette.yellow.withValues(alpha: 0.18)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.link_rounded, color: AppPalette.yellow, size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Connecter mon établissement',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 1),
-                  Text(config.type.label,
-                      style: const TextStyle(
-                          fontSize: 10, color: Color(0xFFB9CBE8)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded,
-                color: AppPalette.yellow, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ── Bouton déconnexion étendu ─────────────────────────────────────────────

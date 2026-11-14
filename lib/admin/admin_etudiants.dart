@@ -220,8 +220,12 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
           _chargerEtudiants();
           _snack('Étudiant inscrit avec succès.');
         },
-        onCarte: (matricule) {
+        onCarte: (matricule, photoIdentite) {
           _carteMatriculeAttente = matricule;
+          if (photoIdentite != null) {
+            _photoCarte = photoIdentite; // pour la carte uniquement, jamais la photo de profil
+            _photoCarteMat = matricule;
+          }
           setState(() => _modeInscription = false);
           _chargerEtudiants();
         },
@@ -2168,6 +2172,58 @@ class _FichePageState extends State<_FichePage> {
 
   String _v(String k) => _m[k] ?? '';
 
+  /// Fiche d'inscription construite à partir des informations ENREGISTRÉES
+  /// (donc à jour après une modification). Photo = celle du dossier si elle existe.
+  Future<Uint8List> _fichePdf() async {
+    Uint8List? photo;
+    final url = _v('photoUrl');
+    if (url.isNotEmpty) {
+      try {
+        final r = await http.get(Uri.parse(url));
+        if (r.statusCode == 200) photo = r.bodyBytes;
+      } catch (_) {}
+    }
+    final nat = _v('nationalite').isEmpty ? 'Burkinabè' : _v('nationalite');
+    return _construireFicheInscription(_FicheData(
+      nom: _v('nom'),
+      prenoms: _v('prenoms'),
+      naissance: _v('dateNaissance'),
+      lieu: _v('lieuNaissance'),
+      nationalite: nat,
+      sexe: _v('sexe'),
+      matricule: e.matricule,
+      filiere: _v('filiere'),
+      niveau: _v('niveau'),
+      annee: _anneeCourante(),
+      regime: _v('regime'),
+      tel: _v('telephone'),
+      email: _v('email').endsWith('@sans-email.scolarhub') ? '' : _v('email'),
+      adresse: _v('adresse'),
+      urgNom: _v('urgenceNom'),
+      urgTel: _v('urgenceTel'),
+      urgLien: _v('urgenceLien'),
+      photo: photo,
+    ));
+  }
+
+  String get _nomFichierFiche => 'Fiche_inscription_${e.matricule.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}.pdf';
+
+  Future<void> _telechargerFiche() async {
+    try {
+      await Printing.sharePdf(bytes: await _fichePdf(), filename: _nomFichierFiche);
+    } catch (err) {
+      if (mounted) showAppSnackBar(context, "Impossible de générer la fiche : $err");
+    }
+  }
+
+  Future<void> _imprimerFiche() async {
+    try {
+      await Printing.layoutPdf(onLayout: (_) => _fichePdf(), name: _nomFichierFiche);
+    } catch (err) {
+      if (mounted) showAppSnackBar(context, "Impossible d'imprimer la fiche : $err");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final url = _v('photoUrl');
@@ -2218,6 +2274,16 @@ class _FichePageState extends State<_FichePage> {
               icon: const Icon(Icons.badge_outlined, size: 16),
               label: const Text("Carte"),
             );
+        final boutonFiche = OutlinedButton.icon(
+              onPressed: _telechargerFiche,
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+              label: const Text("Fiche"),
+            );
+        final boutonImprimer = IconButton(
+              tooltip: "Imprimer la fiche d'inscription",
+              onPressed: _imprimerFiche,
+              icon: const Icon(Icons.print_outlined),
+            );
         if (etroit) {
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2225,7 +2291,7 @@ class _FichePageState extends State<_FichePage> {
             ]),
             if (!_edition) ...[
               const SizedBox(height: 12),
-              Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [boutonModifier, boutonCarte]),
+              Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [boutonModifier, boutonCarte, boutonFiche, boutonImprimer]),
             ],
           ]);
         }
@@ -2238,6 +2304,9 @@ class _FichePageState extends State<_FichePage> {
               boutonModifier,
               const SizedBox(width: 6),
               boutonCarte,
+              const SizedBox(width: 6),
+              boutonFiche,
+              boutonImprimer,
             ],
           ],
         );
@@ -2411,7 +2480,7 @@ class _InscrireEtudiantPage extends StatefulWidget {
   final StudentProfile profile;
   final VoidCallback onRetour;
   final VoidCallback onInscrit;
-  final void Function(String matricule) onCarte;
+  final void Function(String matricule, Uint8List? photoIdentite) onCarte;
   const _InscrireEtudiantPage({
     required this.profile,
     required this.onRetour,
@@ -2658,7 +2727,7 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
     final etuId = (result['etudiant'] is Map) ? (result['etudiant']['id'] ?? '').toString() : '';
     final echecs = <String>[];
     if (etuId.isNotEmpty) {
-      if (_photo != null && !await _envoyerFichier('/etudiants/$etuId/photo', _photo!)) echecs.add('photo');
+      // La photo d'identité (carte + fiche) n'est PAS la photo de profil : elle n'est jamais envoyée comme telle.
       if (_cnib != null && !await _envoyerFichier('/etudiants/$etuId/document', _cnib!, type: 'cnib')) echecs.add('CNIB');
       if (_autre != null && !await _envoyerFichier('/etudiants/$etuId/document', _autre!, type: 'autre')) echecs.add('autre document');
     }
@@ -2669,7 +2738,7 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
     final smsOk = notif['sms'] is Map && notif['sms']['envoye'] == true;
     final emailOk = notif['email'] is Map && notif['email']['envoye'] == true;
     setState(() => _envoi = false);
-    _confirmation(mat, smsOk, emailOk, echecs);
+    _confirmation(mat, smsOk, emailOk, echecs, _photo?.bytes);
   }
 
   Future<bool> _envoyerFichier(String chemin, _Fichier f, {String? type}) async {
@@ -2686,7 +2755,7 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
     }
   }
 
-  void _confirmation(String matricule, bool smsOk, bool emailOk, List<String> echecs) {
+  void _confirmation(String matricule, bool smsOk, bool emailOk, List<String> echecs, Uint8List? photoIdentite) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -2735,7 +2804,7 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
             child: const Text('Terminer'),
           ),
           ElevatedButton.icon(
-            onPressed: () { Navigator.pop(dctx); widget.onCarte(matricule); },
+            onPressed: () { Navigator.pop(dctx); widget.onCarte(matricule, photoIdentite); },
             icon: const Icon(Icons.badge_outlined, size: 16, color: Colors.white),
             label: const Text('Générer la carte', style: TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(backgroundColor: _bleu),
@@ -2756,89 +2825,26 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
   );
 
   // ── Fiche d'inscription PDF (télécharger / imprimer) ──────────────────
-  Future<Uint8List> _fichePdf() async {
-    final pdf = pw.Document();
-    pw.Widget l(String a, String b) => pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 3),
-      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.SizedBox(width: 130, child: pw.Text(a, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700))),
-        pw.Expanded(child: pw.Text(b.isEmpty ? '................................' : b, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold))),
-      ]),
-    );
-    pw.Widget titre(String t) => pw.Container(
-      width: double.infinity,
-      margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
-      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      color: PdfColors.grey200,
-      child: pw.Text(t, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-    );
-    final sexe = _sexe == 'M' ? 'Masculin' : (_sexe == 'F' ? 'Féminin' : '');
-    final photo = _photo != null ? pw.MemoryImage(_photo!.bytes) : null;
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(36),
-        build: (_) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                    pw.Text(EtablissementConfig.instance.nom.toUpperCase(), style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 4),
-                    pw.Text("FICHE D'INSCRIPTION", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Année académique : $_annee', style: const pw.TextStyle(fontSize: 10)),
-                  ]),
-                ),
-                pw.Container(
-                  width: 80,
-                  height: 100,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey600, width: 0.6),
-                    image: photo != null ? pw.DecorationImage(image: photo, fit: pw.BoxFit.cover) : null,
-                  ),
-                  child: photo == null ? pw.Center(child: pw.Text('Photo', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600))) : null,
-                ),
-              ],
-            ),
-            titre('Informations personnelles'),
-            l('Nom', _nomCtrl.text.trim().toUpperCase()),
-            l('Prénoms', _prenomsCtrl.text.trim()),
-            l('Né(e) le', _fmtDate(_dateNaissance)),
-            l('Lieu de naissance', _lieuCtrl.text.trim()),
-            l('Nationalité', _nationaliteFinale),
-            l('Sexe', sexe),
-            l('Matricule', _matriculeCtrl.text.trim()),
-            titre('Informations académiques'),
-            l('Filière', _filiere ?? ''),
-            l('Niveau', _niveau ?? ''),
-            l('Année académique', _annee),
-            l('Régime', _regime == 'soir' ? 'Cours du soir' : 'Cours du jour'),
-            titre('Informations complémentaires'),
-            l('Téléphone', _telCtrl.text.trim()),
-            l('Email', _emailCtrl.text.trim()),
-            l('Adresse', _adresseCtrl.text.trim()),
-            titre('Personne à prévenir en cas de besoin'),
-            l('Nom et prénom', _urgNomCtrl.text.trim()),
-            l('Téléphone', _urgTelCtrl.text.trim()),
-            l('Lien', _urgLienCtrl.text.trim()),
-            pw.Spacer(),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text("Signature de l'étudiant", style: const pw.TextStyle(fontSize: 10)),
-                pw.Text("Le responsable", style: const pw.TextStyle(fontSize: 10)),
-              ],
-            ),
-            pw.SizedBox(height: 40),
-          ],
-        ),
-      ),
-    );
-    return pdf.save();
-  }
+  Future<Uint8List> _fichePdf() => _construireFicheInscription(_FicheData(
+        nom: _nomCtrl.text.trim(),
+        prenoms: _prenomsCtrl.text.trim(),
+        naissance: _dateNaissance,
+        lieu: _lieuCtrl.text.trim(),
+        nationalite: _nationaliteFinale,
+        sexe: _sexe ?? '',
+        matricule: _matriculeCtrl.text.trim(),
+        filiere: _filiere ?? '',
+        niveau: _niveau ?? '',
+        annee: _annee,
+        regime: _regime,
+        tel: _telCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        adresse: _adresseCtrl.text.trim(),
+        urgNom: _urgNomCtrl.text.trim(),
+        urgTel: _urgTelCtrl.text.trim(),
+        urgLien: _urgLienCtrl.text.trim(),
+        photo: _photo?.bytes,
+      ));
 
   // ── Widgets de base ───────────────────────────────────────────────────
   static const _bordure = Color(0xFFD1D5DB);
@@ -3274,7 +3280,7 @@ class _InscrireEtudiantPageState extends State<_InscrireEtudiantPage> {
 
           _section(Icons.attach_file, 'Pièces jointes'),
           _cols([
-            _zone('Photo d\'identité (facultative)', Icons.photo_camera_outlined, 'Format : JPG, PNG | Taille max : 2 Mo',
+            _zone('Photo d\'identité (carte et fiche, facultative)', Icons.photo_camera_outlined, 'Format : JPG, PNG | Taille max : 2 Mo',
                 _photo, _choisirPhoto, () => setState(() => _photo = null)),
             _zone('Copie de la CNIB (ou acte de naissance)', Icons.description_outlined, 'Format : PDF, JPG, PNG | Taille max : 5 Mo',
                 _cnib, () async { final f = await _choisirDocument(); if (f != null) setState(() => _cnib = f); }, () => setState(() => _cnib = null)),
@@ -3659,6 +3665,107 @@ class _DemandesDialogState extends State<_DemandesDialog> {
     );
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// FICHE D'INSCRIPTION (PDF) — commune à l'inscription et à la fiche étudiant
+// ════════════════════════════════════════════════════════════════════════════
+class _FicheData {
+  final String nom, prenoms, naissance, lieu, nationalite, sexe, matricule;
+  final String filiere, niveau, annee, regime, tel, email, adresse, urgNom, urgTel, urgLien;
+  final Uint8List? photo;
+  const _FicheData({
+    required this.nom, required this.prenoms, required this.naissance, required this.lieu,
+    required this.nationalite, required this.sexe, required this.matricule,
+    required this.filiere, required this.niveau, required this.annee, required this.regime,
+    required this.tel, required this.email, required this.adresse,
+    required this.urgNom, required this.urgTel, required this.urgLien, this.photo,
+  });
+}
+
+Future<Uint8List> _construireFicheInscription(_FicheData d) async {
+    final pdf = pw.Document();
+    pw.Widget l(String a, String b) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.SizedBox(width: 130, child: pw.Text(a, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700))),
+        pw.Expanded(child: pw.Text(b.isEmpty ? '................................' : b, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold))),
+      ]),
+    );
+    pw.Widget titre(String t) => pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      color: PdfColors.grey200,
+      child: pw.Text(t, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+    );
+    final sexe = d.sexe == 'M' ? 'Masculin' : (d.sexe == 'F' ? 'Féminin' : '');
+    final photo = d.photo != null ? pw.MemoryImage(d.photo!) : null;
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(36),
+        build: (_) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                    pw.Text(EtablissementConfig.instance.nom.toUpperCase(), style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 4),
+                    pw.Text("FICHE D'INSCRIPTION", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Année académique : ${d.annee}', style: const pw.TextStyle(fontSize: 10)),
+                  ]),
+                ),
+                pw.Container(
+                  width: 80,
+                  height: 100,
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey600, width: 0.6),
+                    image: photo != null ? pw.DecorationImage(image: photo, fit: pw.BoxFit.cover) : null,
+                  ),
+                  child: photo == null ? pw.Center(child: pw.Text('Photo', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600))) : null,
+                ),
+              ],
+            ),
+            titre('Informations personnelles'),
+            l('Nom', d.nom.trim().toUpperCase()),
+            l('Prénoms', d.prenoms),
+            l('Né(e) le', _fmtDate(d.naissance)),
+            l('Lieu de naissance', d.lieu),
+            l('Nationalité', d.nationalite),
+            l('Sexe', sexe),
+            l('Matricule', d.matricule),
+            titre('Informations académiques'),
+            l('Filière', d.filiere),
+            l('Niveau', d.niveau),
+            l('Année académique', d.annee),
+            l('Régime', d.regime == 'soir' ? 'Cours du soir' : 'Cours du jour'),
+            titre('Informations complémentaires'),
+            l('Téléphone', d.tel),
+            l('Email', d.email),
+            l('Adresse', d.adresse),
+            titre('Personne à prévenir en cas de besoin'),
+            l('Nom et prénom', d.urgNom),
+            l('Téléphone', d.urgTel),
+            l('Lien', d.urgLien),
+            pw.Spacer(),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text("Signature de l'étudiant", style: const pw.TextStyle(fontSize: 10)),
+                pw.Text("Le responsable", style: const pw.TextStyle(fontSize: 10)),
+              ],
+            ),
+            pw.SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+    return pdf.save();
+  }
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // OUTILS CARTE D'ÉTUDIANT

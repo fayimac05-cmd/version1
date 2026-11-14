@@ -276,9 +276,13 @@ _bentoCard(
       _enregistrer({'email': v}, () => _email = v);
     })),
     _customDivider(),
-    _immutableRow(Icons.phone_iphone_rounded, 'Numéro de Mobile', _telephone.isEmpty ? 'Non renseigné' : (_telVisible ? _telephone : '••••••••')),
+    _interactiveRow(Icons.phone_iphone_rounded, 'Numéro de Mobile', _telephone.isEmpty ? 'Non renseigné' : (_telVisible ? _telephone : '••••••••'), () => _editer(titre: 'Numéro de téléphone', valeur: _telephone, hint: 'ex: 70 12 34 56 ou +22670123456', maxLength: 20, onSave: (v) {
+      if (!RegExp(r'^\+?\d{8,15}$').hasMatch(v.replaceAll(RegExp(r'[\s.\-()]'), ''))) { _snack('Numéro de téléphone invalide.'); return; }
+      final propre = v.replaceAll(RegExp(r'[\s.\-()]'), '');
+      _enregistrer({'tel': propre}, () => _telephone = propre);
+    })),
     _customDivider(),
-    _immutableRow(Icons.location_on_outlined, 'Ville / Résidence', _adresse.isEmpty ? 'Non renseignée' : _adresse),
+    _interactiveRow(Icons.location_on_outlined, 'Ville / Résidence', _adresse.isEmpty ? 'Non renseignée' : _adresse, () => _editer(titre: 'Ville / Résidence', valeur: _adresse, hint: 'ex: Ouagadougou, Patte d\'oie', onSave: (v) => _enregistrer({'adresse': v}, () => _adresse = v))),
     _customDivider(),
     _immutableRow(Icons.cake_outlined, 'Date de naissance', _dateNaiss.isEmpty ? 'Non renseignée' : _dateNaiss),
     _customDivider(),
