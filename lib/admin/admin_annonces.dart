@@ -474,7 +474,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
         ),
       )).toList());
     }
-    return _grille2(kpis.map((k) => _kpiCard(k)).toList());
+    return _grille2(kpis.map((k) => _kpiCard(k, compact: true)).toList());
   }
 
   // Grille à 2 colonnes dont la hauteur s'adapte au contenu (plus de
@@ -495,27 +495,31 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
     return Column(children: lignes);
   }
 
-  Widget _kpiCard(Map<String, dynamic> k) => Container(
-    padding: const EdgeInsets.all(16),
+  Widget _kpiCard(Map<String, dynamic> k, {bool compact = false}) => Container(
+    padding: EdgeInsets.all(compact ? 12 : 16),
     decoration: BoxDecoration(
       color: Colors.white, borderRadius: BorderRadius.circular(AdminTheme.radiusCard),
       border: Border.all(color: AdminTheme.border), boxShadow: AdminTheme.cardShadow,
     ),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
+    child: () {
+      final icone = Container(
         width: 42, height: 42,
         decoration: BoxDecoration(color: k['bg'] as Color, borderRadius: BorderRadius.circular(11)),
         child: Icon(k['icon'] as IconData, color: k['fg'] as Color, size: 21),
-      ),
-      const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      );
+      final textes = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(k['value'] as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
         const SizedBox(height: 2),
         Text(k['label'] as String, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
         const SizedBox(height: 2),
         Text(k['sub'] as String, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: k['subColor'] as Color)),
-      ])),
-    ]),
+      ]);
+      // Téléphone : icône au-dessus du texte pour laisser toute la largeur aux mots.
+      if (compact) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [icone, const SizedBox(height: 10), textes]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [icone, const SizedBox(width: 12), Expanded(child: textes)]);
+    }(),
   );
 
   // ── Toggle Annonces / Historique ────────────────────────────────────────
@@ -523,8 +527,8 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(11)),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      _ongletBtn('Annonces (${_annonces.length})', !_ongletHistorique, () => setState(() => _ongletHistorique = false)),
-      _ongletBtn('Historique inscriptions (${_inscriptions.length})', _ongletHistorique, () => setState(() => _ongletHistorique = true)),
+      Flexible(child: _ongletBtn('Annonces (${_annonces.length})', !_ongletHistorique, () => setState(() => _ongletHistorique = false))),
+      Flexible(child: _ongletBtn('Historique inscriptions (${_inscriptions.length})', _ongletHistorique, () => setState(() => _ongletHistorique = true))),
     ]),
   );
 
@@ -532,13 +536,13 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
     onTap: onTap,
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 150),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: active ? Colors.white : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         boxShadow: active ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)] : null,
       ),
-      child: Text(label, style: TextStyle(
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(
         fontSize: 12.5, fontWeight: FontWeight.w700,
         color: active ? AdminTheme.iconFg : const Color(0xFF64748B),
       )),
@@ -631,8 +635,10 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.01), blurRadius: 10, offset: const Offset(0, 4))],
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Stack(clipBehavior: Clip.none, children: [
+      child: LayoutBuilder(builder: (context, c) {
+        // Téléphone : texte pleine largeur, puis tags et boutons dessous.
+        final etroit = c.maxWidth < 460;
+        final icone = Stack(clipBehavior: Clip.none, children: [
           Container(
             width: 42, height: 42,
             decoration: BoxDecoration(color: cibleConfig.color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
@@ -645,10 +651,8 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
               decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
             ),
           ),
-        ]),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ]);
+        final texte = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(a.titre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
             Text(a.contenu, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4), maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -664,19 +668,14 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
                 Text('${a.fichiers.length}', style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
               ],
             ]),
-          ]),
-        ),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          _buildCardTag(cibleConfig.label, cibleConfig.color),
-          const SizedBox(height: 6),
-          Container(
+          ]);
+        final tag = _buildCardTag(cibleConfig.label, cibleConfig.color);
+        final statut = Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
             child: Text(a.statut == StatutAnnonce.publie ? 'En ligne' : 'Brouillon', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: statusColor)),
-          ),
-          const SizedBox(height: 10),
-          Row(children: [
+          );
+        final boutons = Row(mainAxisSize: MainAxisSize.min, children: [
             OutlinedButton(
               onPressed: () => _showDetail(a),
               style: OutlinedButton.styleFrom(
@@ -708,9 +707,31 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
                 const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent), SizedBox(width: 8), Text('Supprimer', style: TextStyle(fontSize: 13, color: Colors.redAccent))])),
               ],
             ),
+          ]);
+        if (etroit) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [icone, const SizedBox(width: 14), Expanded(child: texte)]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [tag, statut])),
+              boutons,
+            ]),
+          ]);
+        }
+        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          icone,
+          const SizedBox(width: 14),
+          Expanded(child: texte),
+          const SizedBox(width: 10),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            tag,
+            const SizedBox(height: 6),
+            statut,
+            const SizedBox(height: 10),
+            boutons,
           ]),
-        ]),
-      ]),
+        ]);
+      }),
     );
   }
 
@@ -765,7 +786,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
       spacing: 12, runSpacing: 10,
       children: [
         Text('Affichage de $start à $end sur $total annonces', style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
-        Row(mainAxisSize: MainAxisSize.min, children: [
+        FittedBox(fit: BoxFit.scaleDown, child: Row(mainAxisSize: MainAxisSize.min, children: [
           IconButton(
             onPressed: _page > 1 ? () => setState(() => _page--) : null,
             icon: const Icon(Icons.chevron_left_rounded, size: 20),
@@ -804,7 +825,7 @@ class _AdminAnnoncesState extends State<AdminAnnonces> {
             labelOf: (v) => '$v par page',
             onChanged: (v) => setState(() { _parPage = v; _page = 1; }),
           ),
-        ]),
+        ])),
       ],
     );
   }

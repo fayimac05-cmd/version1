@@ -5,8 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:file_picker/file_picker.dart';
-import 'package:image_picker/image_picker.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/messages_cache.dart';
@@ -17,6 +15,8 @@ import 'choisir_professeur_page.dart';
 import 'messages_screen.dart';
 import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
+import 'message_actions.dart';
+import 'partager_message.dart';
 import 'profil_public_page.dart';
 import 'voice_message.dart';
 import 'video_message.dart';
@@ -1094,33 +1094,6 @@ class _CanalDetailState extends State<_CanalDetail> {
     setState(() => _messageEnReponse = msg);
   }
 
-  Future<void> _transfererMsg(_MessageCanal msg) async {
-    final contenu = 'Transféré : ${msg.texte}';
-    final p = widget.profile;
-    final now = TimeOfDay.now();
-    final heure = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final msgLocal = _MessageCanal(
-      id: 'local_${DateTime.now().millisecondsSinceEpoch}',
-      expediteur: '${p.prenoms} ${p.nom}',
-      initiales: '${p.prenoms[0]}${p.nom[0]}'.toUpperCase(),
-      texte: contenu, heure: heure, date: 'Aujourd\'hui',
-      type: 'texte', color: widget.couleur,
-      photoUrl: p.photoUrl,
-      expediteurId: _myUserId,
-      etudiantRole: null, niveau: null,
-    );
-    setState(() => _msgs.add(msgLocal));
-    _scrollBas();
-    try {
-      final headers = await ApiService.getHeaders();
-      await http.post(
-        Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
-        headers: headers,
-        body: jsonEncode({'contenu': contenu}),
-      );
-    } catch (_) {}
-  }
-
   // ── Menu pièce jointe ──────────────────────────────────────────────────
   void _menuPieceJointe() {
     showModalBottomSheet(context: context, backgroundColor: Colors.transparent,
@@ -1149,80 +1122,38 @@ class _CanalDetailState extends State<_CanalDetail> {
         onTap: onTap,
       );
 
-  // ── Envoi réel d'un fichier (document/photo/vidéo/audio) ─────────────
+  // ── Envoi réel de fichiers (document/photo/vidéo/audio) — sélection multiple ──
   Future<void> _envoyerFichier(String categorie) async {
-    List<int>? bytes;
-    String? nom;
-    String type = categorie;
-    try {
-      if (categorie == 'media') {
-        final result = await FilePicker.platform.pickFiles(type: FileType.media, withData: true);
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-        nom = result.files.first.name;
-        const videoExts = ['mp4', 'mov', 'avi', 'mkv', '3gp', 'webm'];
-        final ext = nom.contains('.') ? nom.split('.').last.toLowerCase() : '';
-        type = videoExts.contains(ext) ? 'video' : 'image';
-      } else if (categorie == 'camera') {
-        final picked = await ImagePicker().pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front, imageQuality: 85);
-        if (picked == null) return;
-        bytes = await picked.readAsBytes();
-        nom = picked.name;
-        type = 'image';
-      } else if (categorie == 'audio') {
-        final result = await FilePicker.platform.pickFiles(type: FileType.audio, withData: true);
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-        nom = result.files.first.name;
-        type = 'audio';
-      } else {
-        final result = await FilePicker.platform.pickFiles(withData: true);
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-        nom = result.files.first.name;
-        type = 'document';
-      }
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la sélection du fichier.')));
-      return;
-    }
-    if (bytes == null || bytes.isEmpty || nom == null) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible de lire le fichier sélectionné.')));
-      return;
-    }
-
+    final contenus = await preparerFichiersMessage(context, categorie);
+    if (!mounted || contenus.isEmpty) return;
     setState(() => _panneauOuvert = false);
-    final upload = await ApiService.uploaderFichierMessage(bytes, nom);
-    if (!mounted) return;
-    if (upload['success'] != true) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(upload['error']?.toString() ?? 'Échec de l\'envoi du fichier.')));
-      return;
-    }
-    final url = upload['url'].toString();
-    final contenu = '[FICHIER]$type|$url|$nom';
     final p = widget.profile;
-    final now = TimeOfDay.now();
-    final heure = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final msgLocal = _MessageCanal(
-      id: 'local_${DateTime.now().millisecondsSinceEpoch}',
-      expediteur: '${p.prenoms} ${p.nom}',
-      initiales: '${p.prenoms[0]}${p.nom[0]}'.toUpperCase(),
-      texte: contenu, heure: heure, date: 'Aujourd\'hui',
-      type: 'texte', color: widget.couleur,
-      photoUrl: p.photoUrl,
-      expediteurId: _myUserId,
-      etudiantRole: null, niveau: null,
-    );
-    setState(() => _msgs.add(msgLocal));
-    _scrollBas();
-    try {
-      final headers = await ApiService.getHeaders();
-      await http.post(
-        Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
-        headers: headers,
-        body: jsonEncode({'contenu': contenu}),
+    for (var i = 0; i < contenus.length; i++) {
+      if (!mounted) return;
+      final contenu = contenus[i];
+      final now = TimeOfDay.now();
+      final heure = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final msgLocal = _MessageCanal(
+        id: 'local_${DateTime.now().millisecondsSinceEpoch}_$i',
+        expediteur: '${p.prenoms} ${p.nom}',
+        initiales: '${p.prenoms[0]}${p.nom[0]}'.toUpperCase(),
+        texte: contenu, heure: heure, date: 'Aujourd\'hui',
+        type: 'texte', color: widget.couleur,
+        photoUrl: p.photoUrl,
+        expediteurId: _myUserId,
+        etudiantRole: null, niveau: null,
       );
-    } catch (_) {}
+      setState(() => _msgs.add(msgLocal));
+      _scrollBas();
+      try {
+        final headers = await ApiService.getHeaders();
+        await http.post(
+          Uri.parse('$_baseUrl/messages/canal/${widget.canalId}'),
+          headers: headers,
+          body: jsonEncode({'contenu': contenu}),
+        );
+      } catch (_) {}
+    }
   }
 
   // ── Sondage ────────────────────────────────────────────────────────────
@@ -1773,7 +1704,7 @@ Widget _zoneSaisie() {
                 title: const Text('Copier le texte de l\'annonce', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 onTap: () {
                   Navigator.pop(context);
-                  Clipboard.setData(ClipboardData(text: msg.texte));
+                  Clipboard.setData(ClipboardData(text: texteAPartager(msg.texte)));
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Texte copié')));
                 }),
               if (widget.canWrite)
@@ -1781,10 +1712,6 @@ Widget _zoneSaisie() {
                   leading: const Icon(Icons.reply_rounded, color: Color(0xFF64748B)),
                   title: const Text('Répondre', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                   onTap: () { Navigator.pop(context); _repondreA(msg); }),
-              ListTile(
-                leading: const Icon(Icons.forward_rounded, color: Color(0xFF64748B)),
-                title: const Text('Transférer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                onTap: () { Navigator.pop(context); _transfererMsg(msg); }),
               ListTile(
                 leading: Icon(msg.epingle ? Icons.push_pin_outlined : Icons.push_pin_rounded, color: widget.couleur),
                 title: Text(msg.epingle ? 'Désépingler le message' : 'Épingler en haut du canal', style: TextStyle(fontSize: 14, color: widget.couleur, fontWeight: FontWeight.w500)),
@@ -1796,26 +1723,24 @@ Widget _zoneSaisie() {
                 leading: Icon(msg.important ? Icons.star_rounded : Icons.star_outline_rounded, color: const Color(0xFF64748B)),
                 title: Text(msg.important ? 'Retirer des importants' : 'Marquer comme important', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 onTap: () { Navigator.pop(context); setState(() => msg.important = !msg.important); }),
-              ListTile(
-                leading: const Icon(Icons.check_box_outlined, color: Color(0xFF64748B)),
-                title: const Text('Sélectionner', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mode sélection')));
-                }),
-              ListTile(
-                leading: const Icon(Icons.save_alt_rounded, color: Color(0xFF64748B)),
-                title: const Text('Enregistrer sous', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enregistrement...')));
-                }),
+              if (estTelechargeable(msg.texte))
+                ListTile(
+                  leading: const Icon(Icons.download_rounded, color: Color(0xFF64748B)),
+                  title: const Text('Télécharger', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) telechargerMessage(this.context, msg.texte);
+                    });
+                  }),
               ListTile(
                 leading: const Icon(Icons.share_rounded, color: Color(0xFF64748B)),
                 title: const Text('Partager', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 onTap: () {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Partage...')));
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) partagerMessage(this.context, texteAPartager(msg.texte));
+                  });
                 }),
               ListTile(
                 leading: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF64748B)),

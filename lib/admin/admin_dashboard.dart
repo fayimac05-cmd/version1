@@ -6,6 +6,13 @@ import '../admin/admin_theme.dart';
 import '../theme/app_palette.dart';
 import '../widgets/scolarhub_logo.dart';
 
+/// Année universitaire en cours (rentrée en septembre) : nov. 2026 → « 2026-2027 ».
+String anneeUniversitaireCourante([DateTime? now]) {
+  final d = now ?? DateTime.now();
+  final debut = d.month >= 9 ? d.year : d.year - 1;
+  return '$debut-${debut + 1}';
+}
+
 class AdminDashboard extends StatefulWidget {
   final StudentProfile profile;
   const AdminDashboard({super.key, required this.profile});
@@ -299,7 +306,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.85))),
           const Spacer(),
           Wrap(spacing: 10, runSpacing: 8, children: [
-            _greetingChip(icon: Icons.calendar_today_rounded, label: 'Année universitaire 2024-2025'),
+            _greetingChip(icon: Icons.calendar_today_rounded, label: 'Année universitaire ${anneeUniversitaireCourante()}'),
             if (widget.profile.filtreParDomaine)
               _greetingChip(
                 icon: Icons.school_rounded,
@@ -771,9 +778,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         )),
         const SizedBox(height: 16),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Wrap(alignment: WrapAlignment.center, spacing: 20, runSpacing: 10, children: [
           _legend(AdminTheme.primary, 'Sciences & Technologies', '$_nbSciencesTech étudiants'),
-          const SizedBox(width: 20),
           _legend(AdminTheme.info, 'Sciences de Gestion', '$_nbSciencesGestion étudiants'),
         ]),
       ]),

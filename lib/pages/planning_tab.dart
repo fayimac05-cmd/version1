@@ -44,6 +44,9 @@ class _PlanningTabState extends State<PlanningTab>
   bool _loadingProgramme = true;
   Map<String, dynamic>? _edtActif;
   List<Map<String, dynamic>> _creneaux = [];
+  // Semaines publiées : [semaine en cours, puis semaines suivantes déjà envoyées].
+  List<Map<String, dynamic>> _semaines = [];
+  int _semIdx = 0;
   // Filière réelle de l'étudiant (nom + département) renvoyée par le serveur.
   Map<String, dynamic> _filiereInfo = {};
 
@@ -87,14 +90,23 @@ class _PlanningTabState extends State<PlanningTab>
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       final data = (body['data'] as Map?) ?? {};
       final actif = data['actif'] is Map ? Map<String, dynamic>.from(data['actif'] as Map) : null;
+      final prochains = (data['prochains'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final semaines = <Map<String, dynamic>>[
+        if (actif != null) actif,
+        ...prochains,
+      ];
       final histo = (data['historique'] as List? ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
       if (!mounted) return;
       setState(() {
         _filiereInfo = data['filiere'] is Map ? Map<String, dynamic>.from(data['filiere'] as Map) : {};
-        _edtActif = actif;
-        _creneaux = actif != null ? _parseCreneaux(actif['creneaux']) : [];
+        _semaines = semaines;
+        _semIdx = 0;
+        _edtActif = semaines.isNotEmpty ? semaines[0] : null;
+        _creneaux = _edtActif != null ? _parseCreneaux(_edtActif!['creneaux']) : [];
         _historique = histo;
         _loadingProgramme = false;
         _loadingHistorique = false;
@@ -108,6 +120,46 @@ class _PlanningTabState extends State<PlanningTab>
       }
     }
   }
+
+  void _choisirSemaine(int i) {
+    if (i < 0 || i >= _semaines.length) return;
+    setState(() {
+      _semIdx = i;
+      _edtActif = _semaines[i];
+      _creneaux = _parseCreneaux(_edtActif!['creneaux']);
+    });
+  }
+
+  /// « Cette semaine » si aujourd'hui est dans la période, sinon « Du 16 nov. ».
+  String _libelleSemaine(Map<String, dynamic> e) {
+    final d = _parseJour(e['dateDebut']?.toString());
+    final f = _parseJour(e['dateFin']?.toString());
+    final now = DateTime.now();
+    final auj = DateTime(now.year, now.month, now.day);
+    if (d != null && f != null && !auj.isBefore(d) && !auj.isAfter(f)) return 'Cette semaine';
+    if (d == null) return 'Programme';
+    return 'Semaine du ${d.day.toString().padLeft(2, '0')} ${_moisCourts[d.month - 1]}';
+  }
+
+  Widget _selecteurSemaines() => SizedBox(
+        height: 52,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          itemCount: _semaines.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) => ChoiceChip(
+            label: Text(_libelleSemaine(_semaines[i]),
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700,
+                    color: i == _semIdx ? Colors.white : _textMain)),
+            selected: i == _semIdx,
+            selectedColor: _brandBlue,
+            backgroundColor: Colors.white,
+            showCheckmark: false,
+            onSelected: (_) => _choisirSemaine(i),
+          ),
+        ),
+      );
 
   static const List<String> _moisCourts = [
     'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
@@ -391,7 +443,7 @@ class _PlanningTabState extends State<PlanningTab>
                 labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                 tabs: const [
-                  Tab(text: 'Cette semaine'),
+                  Tab(text: 'Programme'),
                   Tab(text: 'Dates importantes'),
                   Tab(text: 'Historique'),
                 ],
@@ -449,12 +501,17 @@ class _PlanningTabState extends State<PlanningTab>
       );
     }
 
-    return _buildGrilleSemaine(
+    final grille = _buildGrilleSemaine(
       _creneaux,
       dateDebut: _edtActif?['dateDebut']?.toString(),
       dateFin: _edtActif?['dateFin']?.toString(),
       edt: _edtActif,
     );
+    if (_semaines.length < 2) return grille;
+    return Column(children: [
+      _selecteurSemaines(),
+      Expanded(child: grille),
+    ]);
   }
 
   // ── Tableau semaine : EXACTEMENT le même rendu que le programme officiel

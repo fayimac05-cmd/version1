@@ -165,15 +165,16 @@ class _NommerTabState extends State<_NommerTab> {
           ),
           child: Column(children: [
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _filiereId,
-              hint: const Text('Sélectionner une filière'),
+              hint: const Text('Sélectionner une filière', maxLines: 1, overflow: TextOverflow.ellipsis),
               decoration: InputDecoration(
                 labelText: 'Filière',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
               items: _filieres.map((f) => DropdownMenuItem(
                 value: f['id'].toString(),
-                child: Text('${f['nom']}'),
+                child: Text('${f['nom']}', overflow: TextOverflow.ellipsis),
               )).toList(),
               onChanged: (v) {
                 final f = _filieres.firstWhere((x) => x['id'].toString() == v);
@@ -185,8 +186,9 @@ class _NommerTabState extends State<_NommerTab> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _niveau,
-              hint: const Text('Sélectionner un niveau'),
+              hint: const Text('Sélectionner un niveau', maxLines: 1, overflow: TextOverflow.ellipsis),
               decoration: InputDecoration(
                 labelText: 'Niveau',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -254,11 +256,9 @@ class _EtudiantNominationRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Flexible(child: Text('${etudiant['prenoms']} ${etudiant['nom']}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-              const SizedBox(width: 6),
+            Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text('${etudiant['prenoms']} ${etudiant['nom']}',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
               DelegueBadge(role: role, niveau: niveau, compact: true),
             ]),
           ]),
@@ -367,8 +367,10 @@ class _ListeDeleguesTabState extends State<_ListeDeleguesTab> {
                   child: Row(children: [
                     const Icon(Icons.groups_rounded, color: Colors.white, size: 28),
                     const SizedBox(width: 12),
-                    Text('${_delegues.length} délégué(s)/adjoint(s) au total',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    Expanded(
+                      child: Text('${_delegues.length} délégué(s)/adjoint(s) au total',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    ),
                   ]),
                 ),
                 ..._delegues.map((d) => Container(
@@ -382,11 +384,9 @@ class _ListeDeleguesTabState extends State<_ListeDeleguesTab> {
                       child: Row(children: [
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Row(children: [
-                              Flexible(child: Text('${d['prenoms']} ${d['nom']}',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
-                              const SizedBox(width: 6),
+                            Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                              Text('${d['prenoms']} ${d['nom']}',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
                               DelegueBadge(role: d['etudiant_role'], niveau: d['niveau'], compact: true),
                             ]),
                             const SizedBox(height: 4),

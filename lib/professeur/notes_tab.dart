@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
-import '../services/api_service.dart' show libelleSemestre;
+import '../services/api_service.dart' show ApiService, libelleSemestre;
+import '../services/bonus_service.dart';
+import 'bonus_widgets.dart';
 import '../services/professor_service.dart';
 import '../services/rattrapage_service.dart' show RattrapageService;
 import '../theme/app_palette.dart';
@@ -70,6 +72,11 @@ class _NotesTabState extends State<NotesTab> {
   List<dynamic> _classes = [];
   List<dynamic> _modules = [];
   List<dynamic> _students = [];
+  // matricule -> assiduité sur le module choisi (absences, retards, heures)
+  Map<String, Map<String, dynamic>> _assiduite = {};
+  // matricule -> bonus de participation en attente (module choisi)
+  Map<String, double> _bonus = {};
+  bool _appliquerBonus = true;
   List<dynamic> _sessions = [];
   bool _loading = true;
   bool _loadingStudents = false;
@@ -121,7 +128,16 @@ class _NotesTabState extends State<NotesTab> {
   // planter le parseur — le calcul se fait via _noteValeur()).
   final Map<String, String> _notes = {};
 
-  double? _noteValeur(String matricule) => parseNoteSaisie(_notes[matricule]);
+  double _bonusDe(String matricule) => _bonus[matricule] ?? 0;
+  bool get _aDesBonus => _bonus.values.any((v) => v > 0);
+
+  // Note prise en compte dans les stats : saisie + bonus (plafonnée à 20) si l'option est active.
+  double? _noteValeur(String matricule) {
+    final v = parseNoteSaisie(_notes[matricule]);
+    if (v == null || !_appliquerBonus) return v;
+    final total = v + _bonusDe(matricule);
+    return total > 20 ? 20 : total;
+  }
 
   @override
   void initState() {
@@ -189,6 +205,8 @@ class _NotesTabState extends State<NotesTab> {
     setState(() {
       _loadingStudents = true;
       _students = [];
+      _assiduite = {};
+      _bonus = {};
       _notes.clear();
     });
     final result = await ProfessorService.getStudentsByFiliere(int.parse(_classeId!), niveau: _niveau);
@@ -197,6 +215,47 @@ class _NotesTabState extends State<NotesTab> {
       _students = result['success'] == true ? result['data'] as List<dynamic> : [];
       _loadingStudents = false;
     });
+  }
+
+  /// Absences / retards (en nombre et en heures) de chaque étudiant sur le
+  /// module choisi, pour les voir pendant la saisie des notes.
+  Future<void> _chargerAssiduite() async {
+    final classeId = _classeId, niveau = _niveau, moduleId = _moduleId;
+    final annee = _anneeCtrl.text.trim();
+    if (classeId == null || niveau == null || moduleId == null || annee.isEmpty) {
+      if (mounted) setState(() => _assiduite = {});
+      return;
+    }
+    final sem = _semestreModule != null ? 'S${_semestreModule!}' : (_semestre ?? '');
+    final res = await ApiService.getListeClasseAvecNotes(
+      filiereId: classeId, niveau: niveau, moduleId: moduleId, semestre: sem, anneeAcademique: annee,
+    );
+    if (!mounted || moduleId != _moduleId) return; // le module a changé entre-temps
+    final map = <String, Map<String, dynamic>>{};
+    if (res['success'] == true) {
+      final liste = (res['data'] is Map ? res['data']['etudiants'] : null) as List<dynamic>? ?? [];
+      for (final e in liste) {
+        map['${e['matricule']}'] = Map<String, dynamic>.from(e as Map);
+      }
+    }
+    setState(() => _assiduite = map);
+  }
+
+  Future<void> _chargerBonus() async {
+    final moduleId = _moduleId;
+    if (moduleId == null) {
+      if (mounted) setState(() => _bonus = {});
+      return;
+    }
+    final res = await BonusService.parModule(moduleId);
+    if (!mounted || moduleId != _moduleId) return;
+    final map = <String, double>{};
+    if (res['success'] == true) {
+      (res['data'] as Map<String, dynamic>).forEach((mat, d) {
+        map[mat] = ((d['total'] as num?)?.toDouble() ?? 0);
+      });
+    }
+    setState(() => _bonus = map);
   }
 
   Future<void> _enregistrerSession() async {
@@ -264,6 +323,8 @@ class _NotesTabState extends State<NotesTab> {
       // Le serveur impose de toute façon le semestre du module.
       'semestre': semMod != null ? 'S$semMod' : _semestre,
       'annee_academique': _anneeCtrl.text.trim(),
+      // Le serveur ajoute les bonus en attente à chaque note (plafond 20) puis les marque utilisés.
+      'appliquer_bonus': _appliquerBonus && _aDesBonus,
     });
 
     if (!mounted) return;
@@ -344,6 +405,8 @@ class _NotesTabState extends State<NotesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final largeur = MediaQuery.of(context).size.width;
+    final marge = largeur < 360 ? 12.0 : (largeur < 600 ? 16.0 : 20.0);
     return Container(
       color: const Color(0xFFF4F7FB),
       child: SafeArea(
@@ -351,7 +414,7 @@ class _NotesTabState extends State<NotesTab> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
+                padding: EdgeInsets.fromLTRB(marge, 16, marge, 30),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1380),
@@ -367,10 +430,12 @@ class _NotesTabState extends State<NotesTab> {
                             child: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 24),
                           ),
                           const SizedBox(width: 12),
-                          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text('Saisie des notes', style: TextStyle(color: _navyText, fontSize: 22, fontWeight: FontWeight.w900)),
-                            Text('Gérez et suivez les notes de vos étudiants.', style: TextStyle(color: _muted, fontSize: 12.5, fontWeight: FontWeight.w500)),
-                          ]),
+                          const Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text('Saisie des notes', style: TextStyle(color: _navyText, fontSize: 22, fontWeight: FontWeight.w900)),
+                              Text('Gérez et suivez les notes de vos étudiants.', style: TextStyle(color: _muted, fontSize: 12.5, fontWeight: FontWeight.w500)),
+                            ]),
+                          ),
                         ]),
                         const SizedBox(height: 18),
                         _buildTabsInternes(),
@@ -388,48 +453,66 @@ class _NotesTabState extends State<NotesTab> {
   Widget _buildTopRow() {
     final photoUrl = widget.profile.photoUrl?.trim();
     final nomComplet = '${widget.profile.prenoms} ${widget.profile.nom}'.trim();
-    return Row(children: [
-      Expanded(
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
-          child: Row(children: const [
-            Icon(Icons.search_rounded, size: 19, color: _faint),
-            SizedBox(width: 8),
-            Expanded(child: Text('Rechercher un étudiant, une classe, un module...', style: TextStyle(color: _faint, fontSize: 13))),
-          ]),
+    return LayoutBuilder(builder: (context, c) {
+      // Téléphone : seulement la photo (le nom est dans l'onglet Profil).
+      final compact = c.maxWidth < 560;
+      final avatar = CircleAvatar(
+        radius: compact ? 19 : 21,
+        backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
+        backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+        child: photoUrl == null || photoUrl.isEmpty
+            ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
+            : null,
+      );
+      final cloche = compact ? 40.0 : 44.0;
+      return Row(children: [
+        Expanded(
+          child: Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
+            child: const Row(children: [
+              Icon(Icons.search_rounded, size: 19, color: _faint),
+              SizedBox(width: 8),
+              Expanded(child: Text('Rechercher un étudiant, une classe, un module...',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _faint, fontSize: 13))),
+            ]),
+          ),
         ),
-      ),
-      const SizedBox(width: 16),
-      Container(
-        width: 44, height: 44,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
-        child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
-      ),
-      const SizedBox(width: 12),
-      Row(children: [
-        CircleAvatar(
-          radius: 21,
-          backgroundColor: AppPalette.blue.withValues(alpha: 0.14),
-          backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-          child: photoUrl == null || photoUrl.isEmpty
-              ? Text(nomComplet.isNotEmpty ? nomComplet[0].toUpperCase() : 'P', style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w900))
-              : null,
+        SizedBox(width: compact ? 10 : 16),
+        Container(
+          width: cloche, height: cloche,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _border)),
+          child: const Icon(Icons.notifications_none_rounded, color: _navyText, size: 22),
         ),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(nomComplet.isEmpty ? 'Professeur' : nomComplet, style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
-          Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}', style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
-        ]),
-      ]),
-    ]);
+        SizedBox(width: compact ? 8 : 12),
+        if (compact)
+          avatar
+        else
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: (c.maxWidth * 0.3).clamp(150.0, 280.0).toDouble()),
+            child: Row(children: [
+              avatar,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(nomComplet.isEmpty ? 'Professeur' : nomComplet,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                  Text('Professeur${widget.profile.matricule.isNotEmpty ? " • ${widget.profile.matricule}" : ""}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _faint, fontSize: 11, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ]),
+          ),
+      ]);
+    });
   }
 
   Widget _buildTabsInternes() {
-    return Row(children: [
+    return Wrap(spacing: 8, runSpacing: 8, children: [
       _tabBouton('Saisie des notes', 0),
-      const SizedBox(width: 8),
       _tabBouton('Mes sessions (${_sessions.length})', 1),
     ]);
   }
@@ -490,8 +573,9 @@ class _NotesTabState extends State<NotesTab> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
       child: Column(children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: _classeKey,
-          hint: const Text('Sélectionner une classe'),
+          hint: const Text('Sélectionner une classe', maxLines: 1, overflow: TextOverflow.ellipsis),
           decoration: InputDecoration(
             labelText: 'Classe / Filière',
             prefixIcon: const Icon(Icons.groups_outlined, color: AppPalette.blue),
@@ -519,8 +603,9 @@ class _NotesTabState extends State<NotesTab> {
         ),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: _moduleId,
-          hint: Text(_classeId == null ? 'Choisir d\'abord une classe' : 'Sélectionner un module'),
+          hint: Text(_classeId == null ? 'Choisir d\'abord une classe' : 'Sélectionner un module', maxLines: 1, overflow: TextOverflow.ellipsis),
           decoration: InputDecoration(
             labelText: 'Module',
             prefixIcon: const Icon(Icons.menu_book_outlined, color: AppPalette.blue),
@@ -529,14 +614,18 @@ class _NotesTabState extends State<NotesTab> {
           ),
           items: _modulesDeLaClasse.map<DropdownMenuItem<String>>((m) => DropdownMenuItem(
               value: m['id'].toString(), child: Text('${m['nom']}', overflow: TextOverflow.ellipsis))).toList(),
-          onChanged: _classeId == null ? null : (v) => setState(() { _moduleId = v; _semestre = null; }),
+          onChanged: _classeId == null ? null : (v) {
+            setState(() { _moduleId = v; _semestre = null; _assiduite = {}; _bonus = {}; });
+            _chargerAssiduite();
+            _chargerBonus();
+          },
         ),
         const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: _moduleId != null && _semestreModule == null
+        _ChampsDeux(
+          premier: _moduleId != null && _semestreModule == null
                 // Ancien module sans semestre : choix limité au niveau (secours).
                 ? DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: _semestre,
                     hint: const Text('Semestre'),
                     decoration: InputDecoration(
@@ -551,7 +640,7 @@ class _NotesTabState extends State<NotesTab> {
                 // Semestre imposé par le module : lecture seule.
                 : InputDecorator(
                     decoration: InputDecoration(
-                      labelText: 'Semestre (défini par le module)',
+                      labelText: 'Semestre (du module)',
                       prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppPalette.blue),
                       filled: true,
                       fillColor: const Color(0xFFF1F5F9),
@@ -563,20 +652,16 @@ class _NotesTabState extends State<NotesTab> {
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _moduleId == null ? _faint : _navyText),
                     ),
                   ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: _anneeCtrl,
-              decoration: InputDecoration(
-                labelText: 'Année académique',
-                prefixIcon: const Icon(Icons.event_outlined, color: AppPalette.blue),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
+          second: TextField(
+            controller: _anneeCtrl,
+            decoration: InputDecoration(
+              labelText: 'Année académique',
+              prefixIcon: const Icon(Icons.event_outlined, color: AppPalette.blue),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
           ),
-        ]),
+        ),
       ]),
     );
   }
@@ -588,11 +673,15 @@ class _NotesTabState extends State<NotesTab> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Liste des étudiants', style: TextStyle(color: _navyText, fontSize: 14.5, fontWeight: FontWeight.w900)),
         const SizedBox(height: 12),
+        if (_moduleId != null) _buildBarreBonus(),
         for (var i = 0; i < _students.length; i++)
           _NoteRow(
             numero: i + 1,
             etudiant: _students[i],
             initialNote: _notes[_students[i]['matricule']],
+            bonus: _bonusDe('${_students[i]['matricule']}'),
+            appliquerBonus: _appliquerBonus,
+            assiduite: _moduleId == null ? null : _assiduite['${_students[i]['matricule']}'],
             onNoteChanged: (v) => setState(() => _notes[_students[i]['matricule']] = v),
           ),
         const SizedBox(height: 16),
@@ -606,6 +695,53 @@ class _NotesTabState extends State<NotesTab> {
             onPressed: _saving ? null : _enregistrerSession,
           ),
         ),
+      ]),
+    );
+  }
+
+  /// Bonus de participation : gérer, et choisir de les ajouter aux notes.
+  Widget _buildBarreBonus() {
+    const or = Color(0xFFD97706);
+    final nb = _bonus.values.where((v) => v > 0).length;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(color: or.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: or.withValues(alpha: 0.25))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.star_rounded, color: or, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              nb == 0 ? 'Aucun bonus de participation sur ce module' : '$nb étudiant(s) avec bonus de participation',
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF92400E)),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final m = _moduleChoisi;
+              ouvrirBonusModule(
+                context,
+                moduleId: _moduleId!,
+                moduleNom: m == null ? '' : '${m['nom'] ?? ''}',
+                etudiants: _students,
+                onChange: _chargerBonus,
+              );
+            },
+            child: const Text('Gérer', style: TextStyle(fontWeight: FontWeight.w800, color: or)),
+          ),
+        ]),
+        if (_aDesBonus)
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            activeThumbColor: or,
+            title: const Text('Ajouter les bonus aux notes', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            subtitle: const Text('Note finale = note saisie + bonus (maximum 20). Chaque bonus n\'est utilisé qu\'une seule fois.',
+                style: TextStyle(fontSize: 10.5)),
+            value: _appliquerBonus,
+            onChanged: (v) => setState(() => _appliquerBonus = v),
+          ),
       ]),
     );
   }
@@ -752,7 +888,10 @@ class _NotesTabState extends State<NotesTab> {
 // ── Ligne étudiant — vraie photo, matricule masqué, note colorée en
 // direct, appréciation calculée automatiquement à partir de la valeur.
 class _NoteRow extends StatefulWidget {
-  const _NoteRow({required this.numero, required this.etudiant, required this.initialNote, required this.onNoteChanged});
+  const _NoteRow({required this.numero, required this.etudiant, required this.initialNote, required this.onNoteChanged, this.assiduite, this.bonus = 0, this.appliquerBonus = false});
+  final double bonus;
+  final bool appliquerBonus;
+  final Map<String, dynamic>? assiduite;
   final int numero;
   final dynamic etudiant;
   final String? initialNote;
@@ -776,8 +915,16 @@ class _NoteRowState extends State<_NoteRow> {
 
   double? get _valeur => parseNoteSaisie(_ctrl.text);
 
-  Color get _couleurNote {
+  // Note après bonus (si l'option est active), plafonnée à 20.
+  double? get _valeurFinale {
     final v = _valeur;
+    if (v == null || !widget.appliquerBonus || widget.bonus <= 0) return v;
+    final t = v + widget.bonus;
+    return t > 20 ? 20 : t;
+  }
+
+  Color get _couleurNote {
+    final v = _valeurFinale;
     if (v == null) return const Color(0xFF94A3B8);
     if (v >= 16) return const Color(0xFF10B981);
     if (v >= 12) return const Color(0xFFF59E0B);
@@ -789,12 +936,11 @@ class _NoteRowState extends State<_NoteRow> {
   Widget build(BuildContext context) {
     final photoUrl = widget.etudiant['photo_url']?.toString();
     final prenoms = '${widget.etudiant['prenoms'] ?? ''}';
-    final appreciation = appreciationPourNote(_valeur);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE8EEF5))),
-      child: Row(children: [
+    final appreciation = appreciationPourNote(_valeurFinale);
+    return LayoutBuilder(builder: (context, c) {
+      // Téléphone étroit : identité sur une ligne, note + appréciation dessous.
+      final etroit = c.maxWidth < 400;
+      final identite = <Widget>[
         SizedBox(width: 20, child: Text('${widget.numero}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w700))),
         const SizedBox(width: 4),
         ClipOval(
@@ -804,11 +950,24 @@ class _NoteRowState extends State<_NoteRow> {
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Text('$prenoms ${widget.etudiant['nom'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$prenoms ${widget.etudiant['nom'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+            if (widget.assiduite != null) _chipsAssiduite(widget.assiduite!),
+            if (widget.bonus > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: _chip(
+                  _valeur != null && widget.appliquerBonus
+                      ? 'Bonus ${formatBonus(widget.bonus)} → ${_fmtNote(_valeurFinale!)}/20'
+                      : 'Bonus ${formatBonus(widget.bonus)}',
+                  const Color(0xFFD97706),
+                ),
+              ),
+          ]),
         ),
-        const SizedBox(width: 8),
-        SizedBox(
+      ];
+      final champ = SizedBox(
           width: 62,
           child: TextField(
             controller: _ctrl,
@@ -825,9 +984,8 @@ class _NoteRowState extends State<_NoteRow> {
               contentPadding: const EdgeInsets.symmetric(vertical: 8),
             ),
           ),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(
+        );
+      final appr = SizedBox(
           width: 90,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -836,8 +994,54 @@ class _NoteRowState extends State<_NoteRow> {
             child: Text(appreciation.label, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: appreciation.color)),
           ),
-        ),
-      ]),
+        );
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE8EEF5))),
+        child: etroit
+            ? Column(children: [
+                Row(children: identite),
+                const SizedBox(height: 8),
+                Row(children: [champ, const SizedBox(width: 10), appr]),
+              ])
+            : Row(children: [...identite, const SizedBox(width: 8), champ, const SizedBox(width: 10), appr]),
+      );
+    });
+  }
+
+  static String _fmtNote(double v) => v.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '').replaceAll('.', ',');
+
+  static String _fmtHeures(num h) {
+    final minutes = (h * 60).round();
+    if (minutes <= 0) return '0 h';
+    if (minutes < 60) return '$minutes min';
+    final hh = minutes ~/ 60, mm = minutes % 60;
+    return mm == 0 ? '$hh h' : '$hh h ${mm.toString().padLeft(2, '0')}';
+  }
+
+  Widget _chip(String texte, Color couleur) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(color: couleur.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+        child: Text(texte, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: couleur)),
+      );
+
+  Widget _chipsAssiduite(Map<String, dynamic> a) {
+    final nbAbs = (a['nb_absences'] as num?)?.toInt() ?? 0;
+    final hAbs = (a['heures_absence'] as num?) ?? 0;
+    final nbRet = (a['nb_retards'] as num?)?.toInt() ?? 0;
+    final hRet = (a['heures_retard'] as num?) ?? 0;
+    final nbJus = (a['nb_justifies'] as num?)?.toInt() ?? 0;
+    final hJus = (a['heures_justifiees'] as num?) ?? 0;
+    final chips = <Widget>[
+      if (nbAbs > 0) _chip('$nbAbs abs. · ${_fmtHeures(hAbs)}', const Color(0xFFEF4444)),
+      if (nbRet > 0) _chip('$nbRet retard${nbRet > 1 ? 's' : ''} · ${_fmtHeures(hRet)}', const Color(0xFFD97706)),
+      if (nbJus > 0) _chip('$nbJus justifié${nbJus > 1 ? 's' : ''} · ${_fmtHeures(hJus)}', const Color(0xFF7C3AED)),
+    ];
+    if (chips.isEmpty) chips.add(_chip('Aucune absence', const Color(0xFF10B981)));
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 4, runSpacing: 3, children: chips),
     );
   }
 
@@ -920,10 +1124,12 @@ class _SessionCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
             ]),
           ),
+          const SizedBox(width: 8),
           Container(
+            constraints: const BoxConstraints(maxWidth: 120),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(color: statutColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-            child: Text(statutLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statutColor)),
+            child: Text(statutLabel, maxLines: 2, textAlign: TextAlign.center, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statutColor)),
           ),
         ]),
         if (statut == 'rejetee' && motif != null && motif.toString().isNotEmpty) ...[
@@ -1095,5 +1301,26 @@ class _EditSessionSheetState extends State<_EditSessionSheet> {
         ),
       ]),
     );
+  }
+}
+
+/// Deux champs côte à côte, l'un sous l'autre sur petit écran.
+class _ChampsDeux extends StatelessWidget {
+  const _ChampsDeux({required this.premier, required this.second});
+  final Widget premier;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      if (c.maxWidth < 480) {
+        return Column(children: [premier, const SizedBox(height: 10), second]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: premier),
+        const SizedBox(width: 10),
+        Expanded(child: second),
+      ]);
+    });
   }
 }
