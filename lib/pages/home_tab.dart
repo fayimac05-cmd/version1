@@ -20,6 +20,7 @@ import 'groupe_filiere_screen.dart';
 import 'checkin_screen.dart';
 import 'planning_tab.dart';
 import 'cantine_sheet.dart';
+import '../services/cantine_service.dart';
 import 'mes_notes_page.dart';
 
 
@@ -44,6 +45,7 @@ class _HomeTabState extends State<HomeTab> {
   Timer? _autoScroll;
   Timer? _annoncesAutoScroll;
   Timer? _notifsPoll;
+  bool _menuCantinePublie = false; // au moins un repas publié aujourd'hui
   final ScrollController _scroll = ScrollController();
   final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
  
@@ -92,11 +94,15 @@ class _HomeTabState extends State<HomeTab> {
     _fetchNotesNonLues();
     _fetchNotifsNonLues();
     _fetchNonLusMaFiliere();
+    _fetchMenuCantine();
     // Temps réel : une nouvelle notification incrémente le badge immédiatement.
     SocketService().onNotification(_onNouvelleNotification);
     // Filet de sécurité indépendant du socket : re-synchronise le compteur
     // toutes les 30s, même si la connexion temps réel a un souci ponctuel.
-    _notifsPoll = Timer.periodic(const Duration(seconds: 30), (_) => _fetchNotifsNonLues());
+    _notifsPoll = Timer.periodic(const Duration(seconds: 30), (_) {
+      _fetchNotifsNonLues();
+      _fetchMenuCantine();
+    });
  
     _autoScroll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || _carouselLength <= 1) return;
@@ -146,6 +152,7 @@ class _HomeTabState extends State<HomeTab> {
       _fetchNotesNonLues(),
       _fetchNotifsNonLues(),
       _fetchNonLusMaFiliere(),
+      _fetchMenuCantine(),
     ]);
     NonLusService.instance.rafraichir();
   }
@@ -182,6 +189,15 @@ class _HomeTabState extends State<HomeTab> {
   void _onNouvelleNotification(dynamic data) {
     if (!mounted) return;
     setState(() => _notifsNonLues += 1);
+    _fetchMenuCantine(); // une publication de menu arrive aussi par notification
+  }
+
+  // Marqueur « Menu publié » de la carte cantine : vrai si un repas est publié aujourd'hui.
+  Future<void> _fetchMenuCantine() async {
+    final r = await CantineService.aujourdhui();
+    if (!mounted || r['success'] != true) return;
+    final publie = (r['menus'] as List<MenuPublie>).any((m) => m.plats.isNotEmpty);
+    if (publie != _menuCantinePublie) setState(() => _menuCantinePublie = publie);
   }
 
   Future<void> _ouvrirNotifications() async {
@@ -1196,7 +1212,7 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
         icon: Icons.restaurant_menu_rounded,
         title: 'Menu cantine',
         subtitle: 'Menu du jour',
-        badge: 'Ouvert',
+        badge: _menuCantinePublie ? 'Menu publié' : null,
         badgeColor: const Color(0xFF2E8B3C),
         watermarkIcon: Icons.lunch_dining_rounded,
         imageAsset: 'assets/images/cantine_food.png',
@@ -2078,13 +2094,9 @@ Widget _annonceVide() {
     );
   }
  
-  void _showCantineSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const CantineSheet(),
-    );
+  Future<void> _showCantineSheet(BuildContext context) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CantineSheet()));
+    if (mounted) _fetchMenuCantine();
   }
 }
 class _QuickAction {
