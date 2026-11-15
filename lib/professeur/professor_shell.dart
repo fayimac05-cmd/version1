@@ -1027,6 +1027,7 @@ class _ClassesTabState extends State<_ClassesTab> {
       backgroundColor: Colors.transparent,
       builder: (_) => _ClasseDetailSheet(
         classe: classe,
+        professeurNom: '${widget.profile.prenoms} ${widget.profile.nom}'.trim(),
         onFaireAppel: widget.onFaireAppel,
         onSaisirNotes: widget.onSaisirNotes,
       ),
@@ -1035,8 +1036,9 @@ class _ClassesTabState extends State<_ClassesTab> {
 }
 
 class _ClasseDetailSheet extends StatefulWidget {
-  const _ClasseDetailSheet({required this.classe, required this.onFaireAppel, required this.onSaisirNotes});
+  const _ClasseDetailSheet({required this.classe, required this.onFaireAppel, required this.onSaisirNotes, this.professeurNom = ''});
   final dynamic classe;
+  final String professeurNom;
   final ValueChanged<Map<String, dynamic>> onFaireAppel;
   final ValueChanged<Map<String, dynamic>> onSaisirNotes;
 
@@ -1225,7 +1227,7 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => ProfesseurListeEtudiantsScreen(classe: Map<String, dynamic>.from(widget.classe as Map))),
+                    MaterialPageRoute(builder: (_) => ProfesseurListeEtudiantsScreen(classe: Map<String, dynamic>.from(widget.classe as Map), professeurNom: widget.professeurNom)),
                   );
                 },
               ),
@@ -1254,7 +1256,6 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                                 style: const TextStyle(color: AppPalette.blue, fontWeight: FontWeight.w700)),
                           ),
                           title: Text('$prenoms ${e['nom'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          subtitle: Text('${e['matricule'] ?? ''}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                           trailing: IconButton(
                             icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppPalette.blue, size: 20),
                             tooltip: 'Écrire en privé',
@@ -1268,7 +1269,6 @@ class _ClasseDetailSheetState extends State<_ClasseDetailSheet> {
                                     destinataireId: userId,
                                     destinataireNom: '$prenoms ${e['nom'] ?? ''}'.trim(),
                                     destinataireRole: 'Étudiant',
-                                    destinataireSousTitre: e['matricule']?.toString(),
                                     themeColor: const Color(0xFF1E40AF),
                                   ),
                                 ),

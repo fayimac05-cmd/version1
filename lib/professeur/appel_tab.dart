@@ -8,6 +8,25 @@ import 'appel_qr_screen.dart';
 import 'bonus_widgets.dart';
 import 'fiche_appel_pdf.dart';
 
+/// Recherche par nom : insensible aux accents et à la casse, et dans n'importe
+/// quel ordre ("kouraogo ibra" trouve « Ibrahim KOURAOGO »).
+String _normaliserNom(String s) {
+  const de = 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ';
+  const vers = 'aaaaaaceeeeiiiinooooouuuuyy';
+  final b = StringBuffer();
+  for (final c in s.toLowerCase().split('')) {
+    final i = de.indexOf(c);
+    b.write(i >= 0 ? vers[i] : c);
+  }
+  return b.toString();
+}
+
+bool _nomCorrespond(String nomComplet, String recherche) {
+  final mots = _normaliserNom(recherche).split(RegExp(r'\s+')).where((m) => m.isNotEmpty);
+  final cible = _normaliserNom(nomComplet);
+  return mots.every(cible.contains);
+}
+
 class AppelTab extends StatefulWidget {
   const AppelTab({super.key, required this.profile, this.initialClasse});
 
@@ -225,8 +244,8 @@ class _AppelTabState extends State<AppelTab> {
       list = list.where((s) => s['_filiereNom'] == _filtreFiliereTronc).toList();
     }
     if (_searchEleve.trim().isNotEmpty) {
-      final q = _searchEleve.trim().toLowerCase();
-      list = list.where((s) => '${s['prenoms']} ${s['nom']}'.toLowerCase().contains(q)).toList();
+      final q = _searchEleve.trim();
+      list = list.where((s) => _nomCorrespond('${s['prenoms']} ${s['nom']}', q)).toList();
     }
     return list;
   }
@@ -1089,9 +1108,8 @@ class _EtudiantPresenceRow extends StatelessWidget {
                 maxLines: 2, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
             Wrap(spacing: 6, runSpacing: 3, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              Text('${etudiant['matricule'] ?? ''}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8))),
               if ((etudiant['_filiereNom'] ?? '').toString().isNotEmpty)
-                Text('• ${etudiant['_filiereNom']}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8))),
+                Text('${etudiant['_filiereNom']}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8))),
               if ((etudiant['total_absences'] ?? 0) > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1262,6 +1280,7 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
   bool _loading = true;
   bool _saving = false;
   bool _editMode = false;
+  String _rechercheModif = '';
   bool _pdfEnCours = false;
   dynamic _appel;
   List<dynamic> _presences = [];
@@ -1340,9 +1359,90 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
     }
   }
 
+  // Vue lecture : même présentation que la fiche d'appel PDF
+  // (N°, Nom, Prénom(s), Statut coloré).
+  Widget _tableauLecture() {
+    const bleu = Color(0xFF1E40AF);
+    const bordure = BorderSide(color: Color(0xFFCBD5E1), width: 0.6);
+    Widget cell(String t, {bool entete = false}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          child: Text(t,
+              style: TextStyle(
+                fontSize: entete ? 12.5 : 13,
+                fontWeight: entete ? FontWeight.w700 : FontWeight.w500,
+                color: entete ? Colors.white : const Color(0xFF0F172A),
+              )),
+        );
+    Widget statutCell(dynamic p) {
+      final st = (p['statut'] ?? 'present').toString().toLowerCase();
+      late final Color texte;
+      late final Color fond;
+      late final String libelle;
+      switch (st) {
+        case 'absent':
+          texte = const Color(0xFFB91C1C); fond = const Color(0xFFFEE2E2); libelle = 'Absent';
+          break;
+        case 'retard':
+          texte = const Color(0xFFB45309); fond = const Color(0xFFFEF3C7); libelle = 'Retard';
+          break;
+        case 'justifie':
+          texte = const Color(0xFF6D28D9); fond = const Color(0xFFEDE9FE); libelle = 'Justifié';
+          break;
+        default:
+          texte = const Color(0xFF047857); fond = const Color(0xFFD1FAE5); libelle = 'Présent';
+      }
+      final arrivee = _texteArrivee(p).replaceFirst(' · arrivé à ', '');
+      return Container(
+        color: fond,
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(libelle, textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: texte)),
+          if (arrivee.isNotEmpty) Text(arrivee, style: TextStyle(fontSize: 10.5, color: texte)),
+        ]),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+      children: [
+        Table(
+          border: const TableBorder(
+            top: bordure, bottom: bordure, left: bordure, right: bordure,
+            horizontalInside: bordure, verticalInside: bordure,
+          ),
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          columnWidths: const {
+            0: FixedColumnWidth(36),
+            1: FlexColumnWidth(2),
+            2: FlexColumnWidth(2.4),
+            3: FixedColumnWidth(84),
+          },
+          children: [
+            TableRow(
+              decoration: const BoxDecoration(color: bleu),
+              children: [cell('N°', entete: true), cell('Nom', entete: true), cell('Prénom(s)', entete: true), cell('Statut', entete: true)],
+            ),
+            for (var i = 0; i < _presences.length; i++)
+              TableRow(children: [
+                cell('${i + 1}'),
+                cell('${_presences[i]['nom'] ?? ''}'.trim()),
+                cell('${_presences[i]['prenoms'] ?? ''}'.trim()),
+                statutCell(_presences[i]),
+              ]),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final etroit = MediaQuery.of(context).size.width < 400;
+    final rech = _editMode ? _rechercheModif.trim() : '';
+    final visibles = [
+      for (var k = 0; k < _presences.length; k++)
+        if (rech.isEmpty || _nomCorrespond('${_presences[k]['prenoms']} ${_presences[k]['nom']}', rech)) k,
+    ];
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -1381,20 +1481,35 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
         ),
         const SizedBox(height: 12),
         const Divider(),
+        if (_editMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+            child: TextField(
+              onChanged: (v) => setState(() => _rechercheModif = v),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un étudiant (ex. retardataire)…',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _presences.isEmpty
                   ? const Center(child: Text('Aucun détail trouvé'))
-                  : ListView.separated(
+                  : !_editMode
+                      ? _tableauLecture()
+                      : ListView.separated(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      itemCount: _presences.length,
+                      itemCount: visibles.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {
-                        final p = _presences[i];
+                        final p = _presences[visibles[i]];
                         if (_editMode) {
                           return _EtudiantPresenceRow(
-                            numero: i + 1,
+                            numero: visibles[i] + 1,
                             etudiant: p,
                             statut: p['statut'] ?? 'present',
                             onChanged: (val) => setState(() => p['statut'] = val),
@@ -1409,10 +1524,12 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text('${p['prenoms']} ${p['nom']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          subtitle: Text(
-                            '${p['matricule']}${_texteArrivee(p)}',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                          ),
+                          subtitle: _texteArrivee(p).isEmpty
+                              ? null
+                              : Text(
+                                  _texteArrivee(p).replaceFirst(' · ', ''),
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                ),
                           trailing: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
@@ -1428,7 +1545,7 @@ class _AppelDetailSheetState extends State<_AppelDetailSheet> {
             padding: const EdgeInsets.all(16.0),
             child: Row(children: [
               Expanded(child: TextButton(
-                onPressed: _saving ? null : () { setState(() => _editMode = false); _chargerDetails(); },
+                onPressed: _saving ? null : () { setState(() { _editMode = false; _rechercheModif = ''; }); _chargerDetails(); },
                 child: const Text('Annuler'),
               )),
               const SizedBox(width: 16),

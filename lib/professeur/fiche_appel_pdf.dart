@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../config/etablissement_config.dart';
 
 /// Fiche d'appel (liste de présence) en PDF : en-tête complet (filière,
 /// niveau, cours, professeur, date, heure), totaux de présents / absents,
@@ -16,6 +17,8 @@ Future<Uint8List> construireFicheAppelPdf({
   required DateTime dateHeure,
   required List<Map<String, dynamic>> lignes,
 }) async {
+  await EtablissementConfig.instance.charger();
+  final etablissement = EtablissementConfig.instance.nom.trim();
   const bleu = PdfColor.fromInt(0xFF1E40AF);
   const vert = PdfColor.fromInt(0xFF047857);
   const vertFond = PdfColor.fromInt(0xFFD1FAE5);
@@ -95,7 +98,7 @@ Future<Uint8List> construireFicheAppelPdf({
     repeat: true,
     decoration: const pw.BoxDecoration(color: bleu),
     children: [
-      for (final t in ['N°', 'Nom & Prénoms', 'Matricule', 'Statut'])
+      for (final t in ['N°', 'Nom', 'Prénom(s)', 'Statut'])
         cellule(t, style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
     ],
   );
@@ -104,8 +107,8 @@ Future<Uint8List> construireFicheAppelPdf({
     for (var i = 0; i < lignes.length; i++)
       pw.TableRow(children: [
         cellule('${i + 1}'),
-        cellule('${lignes[i]['prenoms'] ?? ''} ${lignes[i]['nom'] ?? ''}'.trim()),
-        cellule('${lignes[i]['matricule'] ?? ''}'),
+        cellule('${lignes[i]['nom'] ?? ''}'.trim()),
+        cellule('${lignes[i]['prenoms'] ?? ''}'.trim()),
         celluleStatut(statutDe(lignes[i])),
       ]),
   ];
@@ -121,10 +124,26 @@ Future<Uint8List> construireFicheAppelPdf({
           style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
     ]),
     build: (ctx) => [
-      pw.Text('ScolarHub', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: bleu)),
-      pw.SizedBox(height: 2),
-      pw.Text('FICHE D\'APPEL - LISTE DE PRÉSENCE',
-          style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold, color: bleu)),
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: bleu, width: 1.2),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Column(children: [
+          if (etablissement.isNotEmpty) ...[
+            pw.Text(etablissement.toUpperCase(),
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold, color: bleu)),
+            pw.SizedBox(height: 6),
+            pw.Container(height: 0.8, width: 120, color: bleu),
+            pw.SizedBox(height: 6),
+          ],
+          pw.Text('FICHE D\'APPEL - LISTE DE PRÉSENCE',
+              style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold, color: PdfColors.black)),
+        ]),
+      ),
       pw.SizedBox(height: 12),
       pw.Container(
         padding: const pw.EdgeInsets.all(10),
@@ -153,8 +172,8 @@ Future<Uint8List> construireFicheAppelPdf({
         border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
         columnWidths: {
           0: pw.FixedColumnWidth(28),
-          1: pw.FlexColumnWidth(3),
-          2: pw.FlexColumnWidth(1.6),
+          1: pw.FlexColumnWidth(2),
+          2: pw.FlexColumnWidth(2.4),
           3: pw.FixedColumnWidth(70),
         },
         children: [entete, ...rangees],
