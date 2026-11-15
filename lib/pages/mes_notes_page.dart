@@ -7,6 +7,7 @@ import '../theme/app_palette.dart';
 import 'reclamation_form_sheet.dart';
 import 'mes_reclamations_page.dart';
 import 'mes_previsions_page.dart';
+import '../services/releves_pdf.dart';
 
 /// Écran "Mes notes" — extrait de home_tab.dart (anciennement classe privée
 /// `_NotesPage`, qui recevait ses données déjà chargées par HomeTab). Se
@@ -127,7 +128,11 @@ class _MesNotesPageState extends State<MesNotesPage> {
   }
 
   String _mentionNote(Map<String, dynamic> note) {
-    return (note['mention'] ?? '').toString().trim();
+    final m = (note['mention'] ?? '').toString().trim();
+    if (m.isNotEmpty) return m;
+    // Pas de mention enregistrée : appréciation calculée à partir de la note.
+    return appreciationDepuisNote(
+        double.tryParse('${note['valeur'] ?? note['note'] ?? note['score'] ?? ''}'));
   }
 
   String _dateNote(Map<String, dynamic> note) {
@@ -175,6 +180,30 @@ class _MesNotesPageState extends State<MesNotesPage> {
     if (mounted) setState(() {});
   }
 
+  bool _pdfEnCours = false;
+
+  Future<void> _telechargerPdf() async {
+    if (_pdfEnCours) return;
+    setState(() => _pdfEnCours = true);
+    try {
+      await telechargerNotesPdf(
+        nom: widget.profile.nom,
+        prenoms: widget.profile.prenoms,
+        filiere: widget.profile.filiere,
+        niveau: widget.profile.niveau,
+        notes: _notes,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible de générer le PDF.'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pdfEnCours = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -197,6 +226,11 @@ class _MesNotesPageState extends State<MesNotesPage> {
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         actions: [
+          IconButton(
+            icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 20, color: const Color(0xFFEF4444)),
+            tooltip: 'Télécharger mes notes (PDF)',
+            onPressed: _pdfEnCours || _notes.isEmpty ? null : _telechargerPdf,
+          ),
           IconButton(
             icon: const Icon(Icons.query_stats_rounded, size: 20),
             tooltip: 'Prévision de mes moyennes',

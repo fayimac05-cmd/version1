@@ -289,7 +289,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
           bottomPadding: 0,
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: TabBar(
             controller: _tab,
             labelColor: AdminTheme.primary,
@@ -328,76 +328,81 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
     final renvoyes  = adminEtudiants.where((e) => e.statut == 'renvoye').length;
     final total     = adminEtudiants.length;
 
+    return LayoutBuilder(builder: (context, box) {
+    final compact = box.maxWidth < 640; // téléphone / fenêtre étroite
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(compact ? 12 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          // ── Bento Grid — ligne 1 : 4 KPIs ────────────────────────────
-          Row(children: [
-            _kpi('$total',     'Total étudiants', Icons.people_rounded,
-                AdminTheme.primary, AdminTheme.primaryLight),
-            const SizedBox(width: 12),
-            _kpi('$actifs',    'Actifs',           Icons.check_circle_rounded,
-                AdminTheme.success, AdminTheme.successLight),
-            const SizedBox(width: 12),
-            _kpi('$suspendus', 'Suspendus',        Icons.pause_circle_rounded,
-                AdminTheme.warning, AdminTheme.warningLight),
-            const SizedBox(width: 12),
-            _kpi('$renvoyes',  'Renvoyés',         Icons.cancel_rounded,
-                AdminTheme.danger, AdminTheme.dangerLight),
-          ]),
+          // ── ligne 1 : 4 KPIs (2×2 sur petit écran) ───────────────────
+          compact
+              ? Column(children: [
+                  Row(children: [
+                    _kpi('$total', 'Total étudiants', Icons.people_rounded,
+                        AdminTheme.primary, AdminTheme.primaryLight),
+                    const SizedBox(width: 12),
+                    _kpi('$actifs', 'Actifs', Icons.check_circle_rounded,
+                        AdminTheme.success, AdminTheme.successLight),
+                  ]),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    _kpi('$suspendus', 'Suspendus', Icons.pause_circle_rounded,
+                        AdminTheme.warning, AdminTheme.warningLight),
+                    const SizedBox(width: 12),
+                    _kpi('$renvoyes', 'Renvoyés', Icons.cancel_rounded,
+                        AdminTheme.danger, AdminTheme.dangerLight),
+                  ]),
+                ])
+              : Row(children: [
+                  _kpi('$total', 'Total étudiants', Icons.people_rounded,
+                      AdminTheme.primary, AdminTheme.primaryLight),
+                  const SizedBox(width: 12),
+                  _kpi('$actifs', 'Actifs', Icons.check_circle_rounded,
+                      AdminTheme.success, AdminTheme.successLight),
+                  const SizedBox(width: 12),
+                  _kpi('$suspendus', 'Suspendus', Icons.pause_circle_rounded,
+                      AdminTheme.warning, AdminTheme.warningLight),
+                  const SizedBox(width: 12),
+                  _kpi('$renvoyes', 'Renvoyés', Icons.cancel_rounded,
+                      AdminTheme.danger, AdminTheme.dangerLight),
+                ]),
           const SizedBox(height: 16),
 
-          // ── Bento Grid — ligne 2 : courbe (2/3) + taux réussite (1/3) ─
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 2,
-                child: _chartCard(
-                  'Inscriptions mensuelles${_anneesReelles.isNotEmpty ? ' ${_anneesReelles.last}' : ''}',
-                  Icons.show_chart_rounded,
-                  _inscriptionsChart(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 1,
-                child: _metricCard(
-                  'Taux de réussite',
-                  _moyennes.isEmpty ? '—' : '${_tauxReussite('Technologies').toStringAsFixed(1)}%',
-                  'Sciences & Tech',
-                  Icons.trending_up_rounded,
-                  AdminTheme.success,
-                  sous: _moyennes.isEmpty ? null : 'SG : ${_tauxReussite('Gestion').toStringAsFixed(1)}%',
-                ),
-              ),
-            ],
+          // ── ligne 2 : courbe + taux de réussite ──────────────────────
+          _duo(
+            compact,
+            _chartCard(
+              'Inscriptions mensuelles${_anneesReelles.isNotEmpty ? ' ${_anneesReelles.last}' : ''}',
+              Icons.show_chart_rounded,
+              _inscriptionsChart(),
+            ),
+            _metricCard(
+              'Taux de réussite',
+              _moyennes.isEmpty ? '—' : '${_tauxReussite('Technologies').toStringAsFixed(1)}%',
+              'Sciences & Tech',
+              Icons.trending_up_rounded,
+              AdminTheme.success,
+              sous: _moyennes.isEmpty ? null : 'SG : ${_tauxReussite('Gestion').toStringAsFixed(1)}%',
+            ),
+            flexA: 2, flexB: 1,
           ),
           const SizedBox(height: 16),
 
-          // ── Bento Grid — ligne 3 : donut domaines + donut statuts ──────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _chartCard(
-                  'Répartition domaines',
-                  Icons.donut_large_rounded,
-                  _donutDomaines(actifs, suspendus, renvoyes),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _chartCard(
-                  'Statuts étudiants',
-                  Icons.pie_chart_rounded,
-                  _donutStatuts(actifs, suspendus, renvoyes),
-                ),
-              ),
-            ],
+          // ── ligne 3 : donut domaines + donut statuts ─────────────────
+          _duo(
+            compact,
+            _chartCard(
+              'Répartition domaines',
+              Icons.donut_large_rounded,
+              _donutDomaines(actifs, suspendus, renvoyes),
+            ),
+            _chartCard(
+              'Statuts étudiants',
+              Icons.pie_chart_rounded,
+              _donutStatuts(actifs, suspendus, renvoyes),
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -409,6 +414,22 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
           ),
         ],
       ),
+    );
+    });
+  }
+
+  /// Deux blocs côte à côte (écran large) ou l'un sous l'autre (petit écran).
+  Widget _duo(bool compact, Widget a, Widget b, {int flexA = 1, int flexB = 1}) {
+    if (compact) {
+      return Column(children: [a, const SizedBox(height: 16), b]);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: flexA, child: a),
+        const SizedBox(width: 12),
+        Expanded(flex: flexB, child: b),
+      ],
     );
   }
 
@@ -613,11 +634,14 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
         )),
       ),
       const SizedBox(height: 10),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        _dot(AdminTheme.primary, 'Sciences & Tech ($st)'),
-        const SizedBox(width: 14),
-        _dot(AdminTheme.info, 'Gestion ($sg)'),
-      ]),
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 14, runSpacing: 4,
+        children: [
+          _dot(AdminTheme.primary, 'Sciences & Tech ($st)'),
+          _dot(AdminTheme.info, 'Gestion ($sg)'),
+        ],
+      ),
     ]);
   }
 
@@ -736,23 +760,27 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
   // ════════════════════════════════════════════════════════════════════════
 
   Widget _tabHistorique() {
+    return LayoutBuilder(builder: (context, box) {
+    final compact = box.maxWidth < 640;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(compact ? 12 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Filtre domaine / filière avec AnimatedSwitcher [UX-3] ──────
-          Row(children: [
-            const Text('Voir par :',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151))),
-            const SizedBox(width: 10),
-            _toggleBtn('Par domaine', 'domaine'),
-            const SizedBox(width: 8),
-            _toggleBtn('Par filière', 'filiere'),
-          ]),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8, runSpacing: 8,
+            children: [
+              const Text('Voir par :',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF374151))),
+              _toggleBtn('Par domaine', 'domaine'),
+              _toggleBtn('Par filière', 'filiere'),
+            ],
+          ),
           const SizedBox(height: 16),
 
           // [UX-3] AnimatedSwitcher fluide entre les deux vues
@@ -801,6 +829,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
         ],
       ),
     );
+    });
   }
 
   Widget _toggleBtn(String label, String value) {
@@ -1132,14 +1161,14 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF374151)))),
           Expanded(
-              child: Text('Réussite ST',
+              child: Text('Rés. ST',
                   style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: AdminTheme.primary),
                   textAlign: TextAlign.center)),
           Expanded(
-              child: Text('Réussite SG',
+              child: Text('Rés. SG',
                   style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -1380,8 +1409,10 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
         Icons.history_rounded),
   ];
 
-  Widget _tabListes() => ListView(
-        padding: const EdgeInsets.all(20),
+  Widget _tabListes() => LayoutBuilder(builder: (context, box) {
+    final compact = box.maxWidth < 640;
+    return ListView(
+        padding: EdgeInsets.all(compact ? 12 : 20),
         children: [
           const Text('Listes exportables',
               style: TextStyle(
@@ -1392,57 +1423,71 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
           const Text('Téléchargez les listes au format PDF ou Excel',
               style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
           const SizedBox(height: 16),
-          ..._exports.map((item) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2))
-                  ],
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                        color: AdminTheme.primaryLight,
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Icon(item.icon, color: AdminTheme.primary, size: 19),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(item.titre,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1A1A2E))),
-                        Text(item.sous,
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF6B7280))),
-                      ],
-                    ),
-                  ),
-                  Row(children: [
-                    // [ARCH-2] Export réel — à connecter à un service
-                    _exportBtn('PDF',   AdminTheme.danger,
-                        () => _doExport(item.titre, 'pdf')),
-                    const SizedBox(width: 6),
-                    _exportBtn('Excel', AdminTheme.success,
-                        () => _doExport(item.titre, 'excel')),
-                  ]),
-                ]),
-              )),
+          ..._exports.map((item) {
+            final icone = Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: AdminTheme.primaryLight,
+                  borderRadius: BorderRadius.circular(10)),
+              child: Icon(item.icon, color: AdminTheme.primary, size: 19),
+            );
+            final textes = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.titre,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A2E))),
+                Text(item.sous,
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFF6B7280))),
+              ],
+            );
+            // [ARCH-2] Export réel — à connecter à un service
+            final boutons = Row(mainAxisSize: MainAxisSize.min, children: [
+              _exportBtn('PDF', AdminTheme.danger,
+                  () => _doExport(item.titre, 'pdf')),
+              const SizedBox(width: 6),
+              _exportBtn('Excel', AdminTheme.success,
+                  () => _doExport(item.titre, 'excel')),
+            ]);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: EdgeInsets.all(compact ? 12 : 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2))
+                ],
+              ),
+              child: compact
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        icone,
+                        const SizedBox(width: 12),
+                        Expanded(child: textes),
+                      ]),
+                      const SizedBox(height: 10),
+                      boutons,
+                    ])
+                  : Row(children: [
+                      icone,
+                      const SizedBox(width: 14),
+                      Expanded(child: textes),
+                      boutons,
+                    ]),
+            );
+          }),
         ],
       );
+  });
 
   // [ARCH-2] Méthode d'export — à remplacer par un vrai ExportService
   void _doExport(String titre, String format) {
@@ -1484,7 +1529,7 @@ class _AdminStatistiquesState extends State<AdminStatistiques>
 
   // [UX-4] Padding 24px + ombre légère
   Widget _chartCard(String titre, IconData icon, Widget child) => Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),

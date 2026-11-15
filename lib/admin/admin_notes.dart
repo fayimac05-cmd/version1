@@ -3,6 +3,7 @@ import '../admin/admin_theme.dart';
 import '../admin/admin_annonces.dart' show istNiveaux;
 import '../services/api_service.dart';
 import '../services/notes_admin_service.dart';
+import '../services/rapports_pdf.dart';
 import '../services/rattrapage_service.dart' show RattrapageService;
 import '../utils/snackbar_helper.dart';
 import '../models/student_profile.dart';
@@ -565,40 +566,129 @@ class _AdminNotesState extends State<AdminNotes> {
 
   // ── Détail (Traiter / Voir) ───────────────────────────────────────────
   void _voir(NoteSession s) {
-    final moy = s.notes.isEmpty ? 0.0 : s.notes.fold<double>(0, (a, n) => a + n.valeur) / s.notes.length;
+    final valeurs = s.notes.map((n) => n.valeur).toList();
+    final eff = valeurs.length;
+    final moy = eff == 0 ? 0.0 : valeurs.fold<double>(0, (a, v) => a + v) / eff;
+    final faibles = valeurs.where((v) => v < seuilNoteFaible).length;
+    final fortes = valeurs.where((v) => v >= seuilNoteForte).length;
+    final reussite = eff == 0 ? 0.0 : valeurs.where((v) => v >= 10).length * 100 / eff;
+    final notes = [...s.notes]..sort((x, y) {
+        final c = x.nom.toLowerCase().compareTo(y.nom.toLowerCase());
+        return c != 0 ? c : x.prenoms.toLowerCase().compareTo(y.prenoms.toLowerCase());
+      });
+
+    Widget stat(String label, String valeur, Color fg, Color bg) => Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+            child: Column(children: [
+              Text(valeur, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg)),
+              const SizedBox(height: 2),
+              Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, color: fg.withOpacity(0.85))),
+            ]),
+          ),
+        );
+
+    Widget cellule(String t, {required double flex, bool gras = false, Color? couleur, TextAlign align = TextAlign.left, bool mono = false}) =>
+        Expanded(
+          flex: (flex * 10).round(),
+          child: Text(t,
+              textAlign: align,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: gras ? FontWeight.w700 : FontWeight.w500,
+                color: couleur ?? AdminTheme.textPrimary,
+                fontFamily: mono ? 'monospace' : null,
+              )),
+        );
+
+    Widget entete() => Container(
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+          decoration: BoxDecoration(
+            color: AdminTheme.primary.withOpacity(0.08),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+          ),
+          child: Row(children: [
+            cellule('Matricule', flex: 2.2, gras: true, couleur: AdminTheme.primary),
+            cellule('Nom', flex: 2.4, gras: true, couleur: AdminTheme.primary),
+            cellule('Prénom(s)', flex: 2.8, gras: true, couleur: AdminTheme.primary),
+            cellule('Note', flex: 1.2, gras: true, couleur: AdminTheme.primary, align: TextAlign.center),
+            cellule('Appréciation', flex: 2.0, gras: true, couleur: AdminTheme.primary, align: TextAlign.center),
+          ]),
+        );
+
     showDialog(context: context, builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       title: Row(children: [
         Expanded(child: Text(s.moduleNom, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
         _statusBadge(s.statut),
       ]),
-      content: SizedBox(width: 520, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${s.profPrenoms} ${s.profNom} · ${s.filiereNom} · ${s.niveau}${s.semestre != null ? ' · ${s.semestre}' : ''}', style: AdminTheme.bodyMedium),
+      content: SizedBox(width: 680, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${s.filiereNom} · ${s.niveau}${s.semestre != null ? ' · ${s.semestre}' : ''}${s.anneeAcademique != null && s.anneeAcademique!.isNotEmpty ? ' · ${s.anneeAcademique}' : ''}',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 2),
+        Text('Professeur : ${s.profPrenoms} ${s.profNom} · Session du ${s.dateFormatee} · Coef. ${s.coefficient.toStringAsFixed(s.coefficient == s.coefficient.roundToDouble() ? 0 : 1)}', style: AdminTheme.caption),
         if (s.mention != null && s.mention!.isNotEmpty) Text('Mention du professeur : ${s.mention}', style: AdminTheme.caption),
-        const SizedBox(height: 10),
-        Flexible(child: SingleChildScrollView(child: Column(children: s.notes.map((n) {
-          final blam = n.valeur < 7;
-          final ok = n.valeur >= 10;
-          return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [
-            Expanded(child: Text('${n.prenoms} ${n.nom}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-            Text(n.matricule, style: AdminTheme.caption.copyWith(fontFamily: 'monospace')),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(color: blam ? AdminTheme.dangerLight : ok ? AdminTheme.successLight : AdminTheme.warningLight, borderRadius: BorderRadius.circular(8)),
-              child: Text('${n.valeur.toStringAsFixed(1)}/20', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: blam ? AdminTheme.danger : ok ? AdminTheme.success : AdminTheme.warning)),
-            ),
-          ]));
-        }).toList()))),
-        const Divider(),
+        const SizedBox(height: 12),
         Row(children: [
-          const Text('Moyenne de la classe', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-          const Spacer(),
-          Text('${moy.toStringAsFixed(2)}/20', style: TextStyle(fontWeight: FontWeight.w800, color: moy >= 10 ? AdminTheme.primary : AdminTheme.danger)),
+          stat('Effectif', '$eff', AdminTheme.primary, AdminTheme.primary.withOpacity(0.08)),
+          stat('Moyenne', '${moy.toStringAsFixed(2)}/20', moy >= 10 ? AdminTheme.success : AdminTheme.danger, moy >= 10 ? AdminTheme.successLight : AdminTheme.dangerLight),
+          stat('Faibles (< ${seuilNoteFaible.toStringAsFixed(0)})', '$faibles', AdminTheme.danger, AdminTheme.dangerLight),
+          stat('Fortes (>= ${seuilNoteForte.toStringAsFixed(0)})', '$fortes', AdminTheme.success, AdminTheme.successLight),
+          stat('Réussite', '${reussite.toStringAsFixed(0)} %', AdminTheme.primary, AdminTheme.primary.withOpacity(0.08)),
         ]),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(border: Border.all(color: AdminTheme.border), borderRadius: BorderRadius.circular(10)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            entete(),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 340),
+              child: notes.isEmpty
+                  ? const Padding(padding: EdgeInsets.all(20), child: Text('Aucune note dans cette session.'))
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: notes.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: AdminTheme.border),
+                      itemBuilder: (_, i) {
+                        final n = notes[i];
+                        final faible = n.valeur < seuilNoteFaible;
+                        final forte = n.valeur >= seuilNoteForte;
+                        final coul = faible ? AdminTheme.danger : (forte ? AdminTheme.success : AdminTheme.textPrimary);
+                        return Container(
+                          color: i.isEven ? Colors.transparent : AdminTheme.primary.withOpacity(0.025),
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                          child: Row(children: [
+                            cellule(n.matricule, flex: 2.2, mono: true, couleur: AdminTheme.textSecondary),
+                            cellule(n.nom, flex: 2.4, gras: true),
+                            cellule(n.prenoms, flex: 2.8),
+                            cellule('${n.valeur.toStringAsFixed(1)}/20', flex: 1.2, gras: true, couleur: coul, align: TextAlign.center),
+                            cellule(appreciationNote(n.valeur), flex: 2.0, couleur: coul, align: TextAlign.center),
+                          ]),
+                        );
+                      },
+                    ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 10),
       ])),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer')),
+        TextButton.icon(
+          onPressed: () => _exporterSession(s, imprimer: true),
+          icon: const Icon(Icons.print_rounded, size: 16),
+          label: const Text('Imprimer'),
+        ),
+        TextButton.icon(
+          onPressed: () => _exporterSession(s),
+          icon: const Icon(Icons.picture_as_pdf_rounded, size: 16, color: AdminTheme.danger),
+          label: const Text('PDF', style: TextStyle(color: AdminTheme.danger)),
+        ),
         if (s.statut == 'en_attente' || s.statut == 'stockee')
           TextButton(onPressed: () { Navigator.pop(ctx); _rejeter(s); }, child: const Text('Rejeter', style: TextStyle(color: AdminTheme.danger))),
         if (s.statut == 'en_attente')
@@ -612,6 +702,27 @@ class _AdminNotesState extends State<AdminNotes> {
           ),
       ],
     ));
+  }
+
+  Future<void> _exporterSession(NoteSession s, {bool imprimer = false}) async {
+    try {
+      await exporterSessionNotes(
+        module: s.moduleNom,
+        filiere: s.filiereNom,
+        niveau: s.niveau,
+        semestre: s.semestre ?? '',
+        anneeAcademique: s.anneeAcademique ?? '',
+        professeur: '${s.profPrenoms} ${s.profNom}'.trim(),
+        dateSession: s.dateFormatee,
+        statut: _libelleStatut(s.statut),
+        notes: [
+          for (final n in s.notes) {'matricule': n.matricule, 'nom': n.nom, 'prenoms': n.prenoms, 'valeur': n.valeur},
+        ],
+        imprimer: imprimer,
+      );
+    } catch (_) {
+      _snack('Impossible de générer le PDF.', isError: true);
+    }
   }
 
   void _confirmerTransfert(List<NoteSession> l) {
