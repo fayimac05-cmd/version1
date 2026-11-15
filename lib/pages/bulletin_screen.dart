@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../config/etablissement_config.dart';
 import '../services/api_service.dart';
+import '../services/releves_pdf.dart';
+import '../services/rapports_pdf.dart' show formaterDateNaissance;
 import '../widgets/app_bubble_bg.dart';
 
 // ── Modèles ──────────────────────────────────────────────────────────────────
@@ -63,6 +65,8 @@ class _BulletinScreenState extends State<BulletinScreen> {
   String _prenoms = '';
   String _filiere = '';
   String _niveau = '';
+  String _dateNaissance = '';
+  String _lieuNaissance = '';
   List<_BulletinData> _bulletins = [];
 
   @override
@@ -129,12 +133,48 @@ class _BulletinScreenState extends State<BulletinScreen> {
         _prenoms = etudiantInfo?['prenoms'] as String? ?? '';
         _filiere = etudiantInfo?['filiere_nom'] as String? ?? '';
         _niveau = etudiantInfo?['niveau'] as String? ?? '';
+        _dateNaissance = formaterDateNaissance(etudiantInfo?['date_naissance']);
+        _lieuNaissance = (etudiantInfo?['lieu_naissance'] ?? '').toString();
         _bulletins = bulletins;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() { _loading = false; _erreur = true; });
+    }
+  }
+
+  bool _pdfEnCours = false;
+
+  Future<void> _telechargerPdf(_BulletinData b) async {
+    if (_pdfEnCours) return;
+    setState(() => _pdfEnCours = true);
+    try {
+      await telechargerBulletinPdf(
+        nom: _nom,
+        prenoms: _prenoms,
+        filiere: _filiere,
+        niveau: _niveau,
+        dateNaissance: _dateNaissance,
+        lieuNaissance: _lieuNaissance,
+        anneeAcademique: b.anneeAcademique,
+        semestre: b.sessionType == 'rattrapage' ? '${b.semestre} (après rattrapage)' : b.semestre,
+        moyenneGenerale: b.moyenneGenerale,
+        statutLabel: b.statutLabel,
+        valide: b.statut == 'valide',
+        datePublication: b.datePublication,
+        matieres: [
+          for (final m in b.matieres) {'nom': m.nom, 'coefficient': m.coefficient, 'moyenne': m.moyenne},
+        ],
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible de générer le PDF.'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pdfEnCours = false);
     }
   }
 
@@ -257,6 +297,21 @@ class _BulletinScreenState extends State<BulletinScreen> {
               ),
             ),
             const SizedBox(height: 20),
+
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: _pdfEnCours ? null : () => _telechargerPdf(b),
+                icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 18),
+                label: Text(_pdfEnCours ? 'Génération...' : 'Télécharger en PDF',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFEF4444),
+                  side: const BorderSide(color: Color(0xFFEF4444)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // 3. TABLEAU DES MATIÈRES (notes de modules déjà validées)
             if (b.matieres.isEmpty)

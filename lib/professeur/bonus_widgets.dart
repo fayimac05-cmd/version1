@@ -260,6 +260,18 @@ String _dateCourte(dynamic iso) {
   return '${deux(l.day)}/${deux(l.month)}';
 }
 
+/// Recherche insensible aux accents et à la casse.
+String _normaliserNom(String s) {
+  const de = 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ';
+  const vers = 'aaaaaaceeeeiiiinooooouuuuyy';
+  final b = StringBuffer();
+  for (final c in s.toLowerCase().split('')) {
+    final i = de.indexOf(c);
+    b.write(i >= 0 ? vers[i] : c);
+  }
+  return b.toString();
+}
+
 // ── Écran Bonus du module ────────────────────────────────────────────────
 class _BonusModuleSheet extends StatefulWidget {
   const _BonusModuleSheet({required this.moduleId, required this.moduleNom, required this.etudiants, this.onChange});
@@ -308,7 +320,12 @@ class _BonusModuleSheetState extends State<_BonusModuleSheet> {
   @override
   Widget build(BuildContext context) {
     final q = _recherche.trim().toLowerCase();
-    final liste = widget.etudiants.where((e) => q.isEmpty || '${e['prenoms']} ${e['nom']}'.toLowerCase().contains(q)).toList();
+    final mots = _normaliserNom(q).split(RegExp(r'\s+')).where((m) => m.isNotEmpty).toList();
+    final liste = widget.etudiants.where((e) {
+      if (mots.isEmpty) return true;
+      final cible = _normaliserNom('${e['prenoms']} ${e['nom']}');
+      return mots.every(cible.contains);
+    }).toList();
     final nbAvecBonus = _totaux.values.where((v) => v > 0).length;
     return Container(
       height: MediaQuery.of(context).size.height * 0.88,
@@ -337,7 +354,7 @@ class _BonusModuleSheetState extends State<_BonusModuleSheet> {
           child: TextField(
             onChanged: (v) => setState(() => _recherche = v),
             decoration: InputDecoration(
-              hintText: 'Rechercher un étudiant…',
+              hintText: 'Rechercher un étudiant (nom ou prénom)…',
               prefixIcon: const Icon(Icons.search_rounded, size: 20),
               isDense: true,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

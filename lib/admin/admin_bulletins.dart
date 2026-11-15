@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_annonces.dart' show istNiveaux;
 import '../admin/admin_notes.dart' show semestresPourNiveau;
-import '../config/etablissement_config.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/bulletins_admin_service.dart';
+import '../services/rapports_pdf.dart';
 import '../services/rattrapage_service.dart';
 import '../utils/snackbar_helper.dart';
 
@@ -567,9 +564,15 @@ class _AdminBulletinsState extends State<AdminBulletins> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AdminTheme.radiusButton))),
       ),
       OutlinedButton.icon(
-        onPressed: _etus.isEmpty ? null : _exporterPdf,
-        icon: const Icon(Icons.download_rounded, size: 16),
-        label: const Text('Exporter PDF'),
+        onPressed: _etus.isEmpty ? null : () => _exporterPdf(),
+        icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+        label: const Text('Télécharger PDF'),
+        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
+      ),
+      OutlinedButton.icon(
+        onPressed: _etus.isEmpty ? null : () => _exporterPdf(imprimer: true),
+        icon: const Icon(Icons.print_rounded, size: 16),
+        label: const Text('Imprimer'),
         style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
       ),
       OutlinedButton.icon(
@@ -732,75 +735,48 @@ class _AdminBulletinsState extends State<AdminBulletins> {
     }
   }
 
-  Future<void> _exporterPdf() async {
-    final doc = pw.Document();
-    // Logo de l'établissement (le PDF reste généré sans logo s'il ne charge pas).
-    final cfg = EtablissementConfig.instance;
-    pw.ImageProvider? logoEcole;
-    if (cfg.logoUrl.startsWith('http')) {
-      try {
-        logoEcole = await networkImage(cfg.logoUrl);
-      } catch (_) {}
-    }
-    final entetes = <String>[
-      'Etudiant', 'Matricule',
-      ..._colonnes().map((c) => c.module != null ? '${c.module!['nom']} (Coef. ${c.module!['coefficient']})' : 'UE ${c.titre}'),
-      'Moyenne $_cSemestre', 'Appreciation', 'Resultat',
-    ];
-    final lignes = _etus.map((e) {
-      final id = _id(e);
-      final detail = (e['detail_modules'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-      final moy = _moyenne(e);
-      return <String>[
-        '${e['prenoms'] ?? ''} ${e['nom'] ?? ''}'.trim(),
-        '${e['matricule'] ?? ''}',
-        ..._colonnes().map((c) {
-          if (c.module != null) {
-            final d = detail.where((x) => x['module_id'].toString() == c.module!['id'].toString());
-            final v = d.isEmpty ? null : (d.first['moyenne_module'] as num?)?.toDouble();
+  Future<void> _exporterPdf({bool imprimer = false}) async {
+    try {
+      final cols = _colonnes();
+      final lignes = _etus.map((e) {
+        final id = _id(e);
+        final detail = (e['detail_modules'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        final moy = _moyenne(e);
+        return <String, dynamic>{
+          'matricule': e['matricule'],
+          'nom': e['nom'],
+          'prenoms': e['prenoms'],
+          'dateNaissance': formaterDateNaissance(e['date_naissance']),
+          'lieuNaissance': e['lieu_naissance'] ?? '',
+          'valeursModules': cols.map((c) {
+            if (c.module != null) {
+              final d = detail.where((x) => x['module_id'].toString() == c.module!['id'].toString());
+              final v = d.isEmpty ? null : (d.first['moyenne_module'] as num?)?.toDouble();
+              return v == null ? '-' : v.toStringAsFixed(2);
+            }
+            final ues = (e['ues_detail'] as List<dynamic>? ?? []);
+            final u = c.ueIndex! < ues.length ? ues[c.ueIndex!] as Map<String, dynamic> : null;
+            final v = (u?['moyenne'] as num?)?.toDouble();
             return v == null ? '-' : v.toStringAsFixed(2);
-          }
-          final ues = (e['ues_detail'] as List<dynamic>? ?? []);
-          final u = c.ueIndex! < ues.length ? ues[c.ueIndex!] as Map<String, dynamic> : null;
-          final v = (u?['moyenne'] as num?)?.toDouble();
-          return v == null ? '-' : v.toStringAsFixed(2);
-        }),
-        moy == null ? '-' : moy.toStringAsFixed(2),
-        _apprec[id] ?? '-',
-        (_statut[id] ?? 'ajourne') == 'valide' ? 'Valide' : 'Non valide',
-      ];
-    }).toList();
-    doc.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4.landscape,
-      margin: const pw.EdgeInsets.all(24),
-      build: (_) => [
-        if (logoEcole != null || cfg.nom.isNotEmpty) ...[
-          pw.Row(children: [
-            if (logoEcole != null) ...[
-              pw.Image(logoEcole, height: 48, fit: pw.BoxFit.contain),
-              pw.SizedBox(width: 12),
-            ],
-            if (cfg.nom.isNotEmpty)
-              pw.Text(cfg.nom.toUpperCase(), style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-          ]),
-          pw.Divider(thickness: 1),
-          pw.SizedBox(height: 6),
-        ],
-        pw.Text('Resultats du $_cSemestre - $_cAnnee', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-        pw.SizedBox(height: 4),
-        pw.Text('$_cNiveau - ${_nomFiliere(_cFiliere)}', style: const pw.TextStyle(fontSize: 11)),
-        pw.SizedBox(height: 12),
-        pw.TableHelper.fromTextArray(
-          headers: entetes,
-          data: lignes,
-          headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
-          cellStyle: const pw.TextStyle(fontSize: 8),
-          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-          cellAlignment: pw.Alignment.centerLeft,
-        ),
-      ],
-    ));
-    await Printing.sharePdf(bytes: await doc.save(), filename: 'bulletins_${_cSemestre}_$_cAnnee.pdf');
+          }).toList(),
+          'moyenne': moy,
+          'appreciation': _apprec[id] ?? appreciationNote(moy),
+          'valide': (_statut[id] ?? 'ajourne') == 'valide',
+        };
+      }).toList();
+      await exporterBulletinsClasse(
+        filiere: _nomFiliere(_cFiliere),
+        niveau: _cNiveau ?? '',
+        semestre: _cSemestre ?? '',
+        anneeAcademique: _cAnnee ?? '',
+        apresRattrapage: _cSession == 'rattrapage',
+        titresModules: cols.map((c) => c.module != null ? '${c.module!['nom']} (C${c.module!['coefficient']})' : 'UE ${c.titre}').toList(),
+        etudiants: lignes,
+        imprimer: imprimer,
+      );
+    } catch (_) {
+      _snack('Impossible de générer le PDF.', isError: true);
+    }
   }
 
   String _nomFiliere(String? id) {

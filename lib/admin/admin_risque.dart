@@ -122,7 +122,7 @@ class _AdminRisqueState extends State<AdminRisque> {
       body: RefreshIndicator(
         onRefresh: _charger,
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           children: [
             Row(children: [
               const Expanded(
@@ -148,7 +148,7 @@ class _AdminRisqueState extends State<AdminRisque> {
               _statCard('Modéré', nbModere, _couleurs['modere']!),
             ]),
             const SizedBox(height: 16),
-            Wrap(spacing: 8, children: [
+            Wrap(spacing: 8, runSpacing: 4, children: [
               for (final f in ['tous', 'critique', 'eleve', 'modere'])
                 ChoiceChip(
                   label: Text(f == 'tous' ? 'Tous' : _labels[f]!),
@@ -230,9 +230,11 @@ class _AdminRisqueState extends State<AdminRisque> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('${e['prenoms'] ?? ''} ${e['nom'] ?? ''}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
               const SizedBox(height: 2),
               Text('${e['matricule'] ?? ''} · ${e['filiere_nom'] ?? 'Sans filière'}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
             ]),
           ),
@@ -247,24 +249,23 @@ class _AdminRisqueState extends State<AdminRisque> {
           ),
         ]),
         const SizedBox(height: 10),
-        Row(children: [
+        Wrap(spacing: 14, runSpacing: 6, children: [
           _indicateur(Icons.school_outlined,
               moyenne != null ? 'Moy. $moyenne/20' : 'Pas de note'),
-          const SizedBox(width: 14),
           _indicateur(Icons.event_busy_outlined,
               '${e['nb_absences'] ?? 0} abs. / ${e['nb_seances'] ?? 0} séances (${e['taux_absence'] ?? 0}%)'),
-          const SizedBox(width: 14),
           _indicateur(Icons.schedule_outlined, '${e['nb_retards'] ?? 0} retard(s)'),
         ]),
         if (niveau == 'critique' || niveau == 'eleve') ...[
           const SizedBox(height: 10),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 10, runSpacing: 6,
+            children: [
             if ((e['tel_parent'] ?? '').toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Text('Parent : ${e['nom_parent'] ?? ''} (${e['tel_parent']})',
+              Text('Parent : ${e['nom_parent'] ?? ''} (${e['tel_parent']})',
                     style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-              ),
             OutlinedButton.icon(
               onPressed: () => _alerter(e),
               icon: const Icon(Icons.notification_important_outlined, size: 16),
@@ -285,7 +286,9 @@ class _AdminRisqueState extends State<AdminRisque> {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 14, color: const Color(0xFF64748B)),
       const SizedBox(width: 4),
-      Text(text, style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
+      Flexible(
+        child: Text(text, style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
+      ),
     ]);
   }
 }

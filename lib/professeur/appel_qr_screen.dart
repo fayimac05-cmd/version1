@@ -295,8 +295,6 @@ class _AppelQrScreenState extends State<AppelQrScreen> {
                                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                                       color: Color(0xFF0F172A))),
                             ),
-                            Text('${p['matricule'] ?? ''}',
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
                           ]),
                         )),
                   ],

@@ -337,7 +337,6 @@ class _RattrapageTabState extends State<RattrapageTab> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(child: Text('${e['prenoms'] ?? ''} ${e['nom'] ?? ''}'.trim(), style: const TextStyle(color: _navyText, fontSize: 13.5, fontWeight: FontWeight.w800))),
-          Text('${e['matricule'] ?? ''}', style: const TextStyle(color: _faint, fontSize: 11.5)),
         ]),
         const SizedBox(height: 6),
         Wrap(spacing: 6, runSpacing: 6, children: [
@@ -509,7 +508,7 @@ class _EditeurNotesRattrapageState extends State<_EditeurNotesRattrapage> {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('${e['prenoms'] ?? ''} ${e['nom'] ?? ''}'.trim(), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-                      Text('${e['matricule']} · note normale ${_noteNormale(e)}', style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+                      Text('Note normale ${_noteNormale(e)}', style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
                     ]),
                   ),
                   SizedBox(

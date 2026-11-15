@@ -169,7 +169,6 @@ class _GradeSessionScreenState extends State<GradeSessionScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('${student['prenoms']} ${student['nom']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  Text(matricule, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                 ],
                               ),
                             ),

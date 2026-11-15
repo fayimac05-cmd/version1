@@ -17,6 +17,7 @@ import '../config/etablissement_config.dart';
 import '../admin/admin_theme.dart';
 import '../admin/admin_widgets.dart';
 import '../utils/snackbar_helper.dart';
+import '../services/rapports_pdf.dart' show exporterListeEtudiants;
 import '../widgets/delegue_badge.dart';
 class AdminEtudiants extends StatefulWidget {
   final StudentProfile profile;
@@ -690,61 +691,127 @@ class _AdminEtudiantsState extends State<AdminEtudiants>
   // rattaché à un module précis)
   // ════════════════════════════════════════════════════════════════════════
   Future<void> _exporterListePDF() async {
-    if (liste.isEmpty) {
-      showAppSnackBar(context, 'Aucun étudiant à exporter avec ces filtres.');
+    final filieres = _filieresDisponibles;
+    bool imprimer = false;
+
+    List<String> niveauxDe(String? f) {
+      final n = adminEtudiants.where((e) => f == null || e.filiere == f).map((e) => e.niveau).where((x) => x.isNotEmpty).toSet().toList();
+      n.sort();
+      return n;
+    }
+    int nb(String? f, String? n) => adminEtudiants.where((e) => (f == null || e.filiere == f) && (n == null || e.niveau == n)).length;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) {
+        Widget puce(String texte, String? f, String? n, {bool principal = false}) => ActionChip(
+              label: Text(texte, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: principal ? Colors.white : AdminTheme.primary)),
+              backgroundColor: principal ? AdminTheme.primary : AdminTheme.primary.withOpacity(0.08),
+              side: BorderSide.none,
+              onPressed: () { Navigator.pop(ctx); _genererListe(f, niveau: n, imprimer: imprimer); },
+            );
+
+        Widget bloc(String titre, IconData icone, String? f, String sousTitre) {
+          final nivs = niveauxDe(f);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(icone, size: 18, color: AdminTheme.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(titre, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800))),
+              ]),
+              Padding(padding: const EdgeInsets.only(left: 26, top: 1), child: Text(sousTitre, style: AdminTheme.caption)),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 26),
+                child: Wrap(spacing: 6, runSpacing: 4, children: [
+                  puce(f == null ? 'Toute la liste (filtres actuels)' : 'Tous les niveaux (${nb(f, null)})', f, null, principal: true),
+                  for (final n in nivs) puce('$n (${nb(f, n)})', f, n),
+                ]),
+              ),
+            ]),
+          );
+        }
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Liste des étudiants (PDF)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: false, icon: Icon(Icons.download_rounded, size: 16), label: Text('Télécharger')),
+                    ButtonSegment(value: true, icon: Icon(Icons.print_rounded, size: 16), label: Text('Imprimer')),
+                  ],
+                  selected: {imprimer},
+                  onSelectionChanged: (v) => setD(() => imprimer = v.first),
+                ),
+                const SizedBox(height: 6),
+                bloc('Ensemble de l\'établissement', Icons.apartment_rounded, null, 'Choisis un niveau pour toutes les filières, ou la liste complète'),
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text('PAR FILIÈRE', style: AdminTheme.caption.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+                ),
+                for (final f in filieres) ...[
+                  bloc(f, Icons.menu_book_rounded, f, '${nb(f, null)} étudiant(s)'),
+                  const Divider(height: 1),
+                ],
+                if (filieres.isEmpty) const Padding(padding: EdgeInsets.all(8), child: Text('Aucune filière.')),
+              ]),
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer'))],
+        );
+      }),
+    );
+  }
+
+  /// [filiere] null = toutes les filières ; [niveau] null = tous les niveaux.
+  /// Sans filière ni niveau : liste générale qui respecte les filtres actuels.
+  Future<void> _genererListe(String? filiere, {String? niveau, bool imprimer = false}) async {
+    final general = filiere == null && niveau == null;
+    final source = general
+        ? liste
+        : adminEtudiants.where((e) => (filiere == null || e.filiere == filiere) && (niveau == null || e.niveau == niveau)).toList();
+    if (source.isEmpty) {
+      showAppSnackBar(context, 'Aucun étudiant à exporter.');
       return;
     }
-    final pdf = pw.Document();
-    final filtreLabel = [
-      if (_filtreFiliere != 'toutes') _filtreFiliere,
-      if (_filtreNiveau != 'tous') _filtreNiveau,
-      if (_filtreStatut != 'tous') _filtreStatut,
-      if (_filtreRegime != 'tous') (_filtreRegime == 'soir' ? 'Cours du soir' : 'Cours du jour'),
-    ].join(' · ');
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        build: (context) => [
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text(EtablissementConfig.instance.nom.toUpperCase(), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Liste des étudiants', style: const pw.TextStyle(fontSize: 9)),
-              ]),
-              pw.Text('${liste.length} étudiant(s)', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-            ],
-          ),
-          if (filtreLabel.isNotEmpty) ...[
-            pw.SizedBox(height: 4),
-            pw.Text('Filtres : $filtreLabel', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-          ],
-          pw.SizedBox(height: 14),
-          pw.TableHelper.fromTextArray(
-            headers: ['N°', 'Matricule', 'Nom', 'Prénoms', 'Filière', 'Niveau', 'Régime', 'Statut'],
-            data: liste.asMap().entries.map((entry) => [
-              '${entry.key + 1}',
-              entry.value.matricule,
-              entry.value.nom,
-              entry.value.prenoms,
-              entry.value.filiere,
-              entry.value.niveau,
-              _x(entry.value, 'regime') == 'soir' ? 'Soir' : 'Jour',
-              entry.value.statut,
-            ]).toList(),
-            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E40AF)),
-            cellStyle: const pw.TextStyle(fontSize: 8.5),
-            cellAlignment: pw.Alignment.centerLeft,
-            cellPadding: const pw.EdgeInsets.all(5),
-          ),
+    final filtreLabel = !general
+        ? ''
+        : [
+            if (_filtreNiveau != 'tous') _filtreNiveau,
+            if (_filtreStatut != 'tous') _filtreStatut,
+            if (_filtreRegime != 'tous') (_filtreRegime == 'soir' ? 'Cours du soir' : 'Cours du jour'),
+            if (_recherche.isNotEmpty) 'Recherche : $_recherche',
+          ].join(' · ');
+    try {
+      await exporterListeEtudiants(
+        filiere: filiere,
+        niveauChoisi: niveau,
+        anneeAcademique: _anneeCourante(),
+        filtres: filtreLabel,
+        imprimer: imprimer,
+        etudiants: [
+          for (final e in source)
+            {
+              'matricule': e.matricule,
+              'nom': e.nom,
+              'prenoms': e.prenoms,
+              'filiere': e.filiere,
+              'niveau': e.niveau,
+              'domaine': e.domaine,
+            },
         ],
-      ),
-    );
-
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Liste_Etudiants.pdf');
+      );
+    } catch (err) {
+      if (mounted) showAppSnackBar(context, 'Génération du PDF impossible : $err');
+    }
   }
 
   // ════════════════════════════════════════════════════════════════════════

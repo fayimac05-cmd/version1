@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../config/etablissement_config.dart';
 import '../services/api_service.dart';
 import '../services/professor_service.dart';
 import '../theme/app_palette.dart';
 
 /// Liste des étudiants d'une classe (filière+niveau). S'affiche
-/// immédiatement (nom, prénoms, matricule) — le choix module/semestre/année
+/// immédiatement (nom, prénoms) — le choix module/semestre/année
 /// est optionnel et ne sert qu'à enrichir avec les notes des sessions
 /// validées, le coefficient du module et les heures d'absence.
 class ProfesseurListeEtudiantsScreen extends StatefulWidget {
-  const ProfesseurListeEtudiantsScreen({super.key, required this.classe});
+  const ProfesseurListeEtudiantsScreen({super.key, required this.classe, this.professeurNom = ''});
   final Map<String, dynamic> classe; // {id, nom, niveau}
+
+  /// Nom du professeur, imprimé sur le PDF.
+  final String professeurNom;
 
   @override
   State<ProfesseurListeEtudiantsScreen> createState() => _ProfesseurListeEtudiantsScreenState();
@@ -145,16 +149,90 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
   }
 
   Future<void> _genererPDF() async {
-    final pdf = pw.Document();
+    await EtablissementConfig.instance.charger();
+    final etablissement = EtablissementConfig.instance.nom.trim();
+    const bleu = PdfColor.fromInt(0xFF1E40AF);
+    const gris = PdfColor.fromInt(0xFF64748B);
+    const fond = PdfColor.fromInt(0xFFF1F5F9);
+    final enrichi = _notesData != null;
+    final filiere = '${widget.classe['nom'] ?? ''}';
+    final niveau = _niveau ?? '';
+    final professeur = widget.professeurNom.trim();
+    final d = DateTime.now();
+    String deux(int n) => n.toString().padLeft(2, '0');
+    final dateTxt = '${deux(d.day)}/${deux(d.month)}/${d.year}';
 
-    if (_notesData != null) {
+    pw.Widget info(String cle, String valeur) => pw.Expanded(
+          child: pw.RichText(
+            text: pw.TextSpan(children: [
+              pw.TextSpan(text: '$cle : ', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+              pw.TextSpan(text: valeur.isEmpty ? '-' : valeur, style: const pw.TextStyle(fontSize: 10)),
+            ]),
+          ),
+        );
+
+    final lignesInfo = <List<List<String>>>[
+      [['Filière', filiere], ['Niveau', niveau]],
+      [['Professeur', professeur], ['Date', dateTxt]],
+      if (enrichi) ...[
+        [['Module', '${_notesData!['module_nom'] ?? ''}'], ['Semestre', _semestreAffiche()]],
+        [['Année académique', _anneeCtrl.text.trim()], ['Coefficient', '${_notesData!['coefficient'] ?? ''}']],
+      ],
+    ];
+
+    final entete = <pw.Widget>[
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: pw.BoxDecoration(border: pw.Border.all(color: bleu, width: 1.2), borderRadius: pw.BorderRadius.circular(6)),
+        child: pw.Column(children: [
+          if (etablissement.isNotEmpty) ...[
+            pw.Text(etablissement.toUpperCase(),
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold, color: bleu)),
+            pw.SizedBox(height: 6),
+            pw.Container(height: 0.8, width: 120, color: bleu),
+            pw.SizedBox(height: 6),
+          ],
+          pw.Text('LISTE DES ÉTUDIANTS',
+              style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold, color: PdfColors.black)),
+        ]),
+      ),
+      pw.SizedBox(height: 10),
+      pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400, width: 0.5), borderRadius: pw.BorderRadius.circular(6)),
+        child: pw.Column(children: [
+          for (var k = 0; k < lignesInfo.length; k++) ...[
+            if (k > 0) pw.SizedBox(height: 6),
+            pw.Row(children: [for (final c in lignesInfo[k]) info(c[0], c[1])]),
+          ],
+        ]),
+      ),
+      pw.SizedBox(height: 10),
+      pw.Container(
+        padding: const pw.EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+        decoration: pw.BoxDecoration(color: PdfColors.blue50, borderRadius: pw.BorderRadius.circular(6)),
+        child: pw.Text(
+          'Effectif : ${enrichi ? (_notesData!['etudiants'] as List<dynamic>).length : _etudiants.length} étudiant(s)',
+          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: bleu),
+        ),
+      ),
+      pw.SizedBox(height: 12),
+    ];
+
+    final pdf = pw.Document();
+    pw.Widget pied(pw.Context ctx) => pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('ScolarHub - liste des étudiants du $dateTxt', style: const pw.TextStyle(fontSize: 8, color: gris)),
+          pw.Text('Page ${ctx.pageNumber} / ${ctx.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: gris)),
+        ]);
+
+    if (enrichi) {
       final nbSessions = (_notesData!['nb_sessions'] as num).toInt();
       final etudiants = _notesData!['etudiants'] as List<dynamic>;
       final coefficient = _notesData!['coefficient'];
-      final moduleNom = _notesData!['module_nom'] ?? '';
-
       final headers = [
-        'N°', 'Matricule', 'Nom', 'Prénoms',
+        'N°', 'Nom', 'Prénom(s)',
         ...List.generate(nbSessions, (i) => 'Note ${i + 1}'),
         'Coef.', 'H. absence',
       ];
@@ -165,61 +243,167 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
         final nbAbsences = (e['nb_absences'] as num).toInt();
         final heures = nbAbsences * _dureeSeance;
         data.add([
-          '${i + 1}', e['matricule']?.toString() ?? '', e['nom']?.toString() ?? '', e['prenoms']?.toString() ?? '',
+          '${i + 1}', e['nom']?.toString() ?? '', e['prenoms']?.toString() ?? '',
           ...notes.map((n) => n == null ? '-' : n.toString()),
           '$coefficient', '${heures.toStringAsFixed(heures % 1 == 0 ? 0 : 1)}h',
         ]);
       }
-
-      pdf.addPage(pw.Page(
+      pdf.addPage(pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
-        build: (context) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Text('LISTE DES ÉTUDIANTS', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF1E40AF))),
-          pw.SizedBox(height: 4),
-          pw.Text('${widget.classe['nom']} — $_niveau · $moduleNom · ${_semestreAffiche()} (${_anneeCtrl.text})', style: const pw.TextStyle(fontSize: 10)),
-          pw.SizedBox(height: 14),
+        margin: const pw.EdgeInsets.all(30),
+        footer: pied,
+        build: (ctx) => [
+          ...entete,
           pw.TableHelper.fromTextArray(
             headers: headers, data: data,
-            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E40AF)),
-            cellStyle: const pw.TextStyle(fontSize: 8.5),
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9.5),
+            headerDecoration: const pw.BoxDecoration(color: bleu),
+            cellStyle: const pw.TextStyle(fontSize: 9.5),
+            oddRowDecoration: const pw.BoxDecoration(color: fond),
             cellAlignment: pw.Alignment.centerLeft,
-            cellPadding: const pw.EdgeInsets.all(5),
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(28),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FlexColumnWidth(2.4),
+            },
           ),
-          pw.SizedBox(height: 12),
-          pw.Text('Durée d\'une séance utilisée pour le calcul des heures d\'absence : ${_dureeSeance}h.', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
-        ]),
+          pw.SizedBox(height: 10),
+          pw.Text('Durée d\'une séance utilisée pour le calcul des heures d\'absence : ${_dureeSeance}h.',
+              style: const pw.TextStyle(fontSize: 8, color: gris)),
+        ],
       ));
-      await _imprimerOuTelecharger(pdf, 'Liste_Etudiants_${widget.classe['nom']}.pdf');
+      await _imprimerOuTelecharger(pdf, 'Liste_Etudiants_${filiere.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}.pdf');
       return;
     }
 
-    pdf.addPage(pw.Page(
+    pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
-      build: (context) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.Text('LISTE DES ÉTUDIANTS', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF1E40AF))),
-        pw.SizedBox(height: 4),
-        pw.Text('${widget.classe['nom']} — $_niveau', style: const pw.TextStyle(fontSize: 10)),
-        pw.SizedBox(height: 14),
+      margin: const pw.EdgeInsets.all(32),
+      footer: pied,
+      build: (ctx) => [
+        ...entete,
         pw.TableHelper.fromTextArray(
-          headers: ['N°', 'Matricule', 'Nom', 'Prénoms'],
+          headers: ['N°', 'Nom', 'Prénom(s)'],
           data: _etudiants.asMap().entries.map((entry) => [
             '${entry.key + 1}',
-            entry.value['matricule']?.toString() ?? '',
             entry.value['nom']?.toString() ?? '',
             entry.value['prenoms']?.toString() ?? '',
           ]).toList(),
-          border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-          headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E40AF)),
-          cellStyle: const pw.TextStyle(fontSize: 9),
+          border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+          headerDecoration: const pw.BoxDecoration(color: bleu),
+          cellStyle: const pw.TextStyle(fontSize: 10),
+          oddRowDecoration: const pw.BoxDecoration(color: fond),
           cellAlignment: pw.Alignment.centerLeft,
-          cellPadding: const pw.EdgeInsets.all(6),
+          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          columnWidths: {
+            0: const pw.FixedColumnWidth(28),
+            1: const pw.FlexColumnWidth(2),
+            2: const pw.FlexColumnWidth(2.4),
+          },
         ),
-      ]),
+      ],
     ));
-    await _imprimerOuTelecharger(pdf, 'Liste_Etudiants_${widget.classe['nom']}.pdf');
+    await _imprimerOuTelecharger(pdf, 'Liste_Etudiants_${filiere.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}.pdf');
+  }
+
+  // ── Tableau affiché à l'écran : N°, Nom, Prénom(s) (+ notes et absences
+  // quand un module est chargé), pleine largeur, lignes alternées.
+  Widget _tableauEtudiants() {
+    const bleu = Color(0xFF1E40AF);
+    const bord = BorderSide(color: Color(0xFFE2E8F0), width: 0.8);
+    final enrichi = _notesData != null;
+    final nbSessions = enrichi ? (_notesData!['nb_sessions'] as num).toInt() : 0;
+    final lignes = enrichi ? (_notesData!['etudiants'] as List<dynamic>) : _etudiants;
+
+    Widget cell(String t, {bool entete = false, Color? couleur, bool gras = false, TextAlign align = TextAlign.left}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Text(t,
+              textAlign: align,
+              style: TextStyle(
+                fontSize: entete ? 12.5 : 13,
+                fontWeight: entete || gras ? FontWeight.w700 : FontWeight.w500,
+                color: entete ? Colors.white : (couleur ?? const Color(0xFF0F172A)),
+              )),
+        );
+
+    final colonnes = <int, TableColumnWidth>{
+      0: const FixedColumnWidth(48),
+      1: const FlexColumnWidth(2),
+      2: const FlexColumnWidth(2.4),
+      if (enrichi) ...{
+        for (var i = 0; i < nbSessions; i++) 3 + i: const FixedColumnWidth(80),
+        3 + nbSessions: const FixedColumnWidth(70),
+        4 + nbSessions: const FixedColumnWidth(100),
+      },
+    };
+
+    final enteteRow = TableRow(
+      decoration: const BoxDecoration(color: bleu),
+      children: [
+        cell('N°', entete: true),
+        cell('Nom', entete: true),
+        cell('Prénom(s)', entete: true),
+        if (enrichi) ...[
+          for (var i = 0; i < nbSessions; i++) cell('Note ${i + 1}', entete: true, align: TextAlign.center),
+          cell('Coef.', entete: true, align: TextAlign.center),
+          cell('H. absence', entete: true, align: TextAlign.center),
+        ],
+      ],
+    );
+
+    final rows = <TableRow>[
+      for (var i = 0; i < lignes.length; i++)
+        TableRow(
+          decoration: BoxDecoration(color: i.isOdd ? const Color(0xFFF8FAFC) : Colors.white),
+          children: [
+            cell('${i + 1}', couleur: const Color(0xFF64748B)),
+            cell('${lignes[i]['nom'] ?? ''}', gras: true),
+            cell('${lignes[i]['prenoms'] ?? ''}'),
+            if (enrichi) ...[
+              for (final n in (lignes[i]['notes'] as List<dynamic>))
+                cell(n == null ? '-' : n.toString(), gras: true, align: TextAlign.center),
+              cell('${_notesData!['coefficient']}', align: TextAlign.center),
+              () {
+                final nbAbs = (lignes[i]['nb_absences'] as num).toInt();
+                final h = nbAbs * _dureeSeance;
+                return cell('${h.toStringAsFixed(h % 1 == 0 ? 0 : 1)}h',
+                    gras: true, align: TextAlign.center, couleur: nbAbs > 0 ? Colors.redAccent : null);
+              }(),
+            ],
+          ],
+        ),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: lignes.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: Text('Aucun étudiant dans cette classe.', style: TextStyle(color: Color(0xFF94A3B8)))),
+            )
+          : LayoutBuilder(builder: (context, c) {
+              final largeurMin = enrichi ? 48 + 260 + nbSessions * 80 + 170 : 0.0;
+              final table = Table(
+                border: const TableBorder(horizontalInside: bord),
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                columnWidths: colonnes,
+                children: [enteteRow, ...rows],
+              );
+              if (!enrichi || c.maxWidth >= largeurMin) return table;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(width: largeurMin.toDouble(), child: table),
+              );
+            }),
+    );
   }
 
   @override
@@ -258,53 +442,7 @@ class _ProfesseurListeEtudiantsScreenState extends State<ProfesseurListeEtudiant
                       ),
                     ]),
                     const SizedBox(height: 12),
-                    // ── Tableau (mis à jour avec Note 1/2/3, Coef., Heures
-                    // d'absence dès que le module est chargé ci-dessous — ce
-                    // sont de vraies colonnes, au même niveau que Nom/Prénoms,
-                    // pas du texte regroupé à côté du nom).
-                    Container(
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                      clipBehavior: Clip.antiAlias,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
-                          columns: [
-                            const DataColumn(label: Text('Matricule', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                            const DataColumn(label: Text('Nom', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                            const DataColumn(label: Text('Prénom(s)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                            if (_notesData != null) ...[
-                              for (var i = 0; i < (_notesData!['nb_sessions'] as num).toInt(); i++)
-                                DataColumn(label: Text('Note ${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                              const DataColumn(label: Text('Coef.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                              const DataColumn(label: Text('H. absence', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                            ],
-                          ],
-                          rows: _notesData != null
-                              ? (_notesData!['etudiants'] as List<dynamic>).map((e) {
-                                  final notes = e['notes'] as List<dynamic>;
-                                  final nbAbsences = (e['nb_absences'] as num).toInt();
-                                  final heures = nbAbsences * _dureeSeance;
-                                  return DataRow(cells: [
-                                    DataCell(Text('${e['matricule']}', style: const TextStyle(fontSize: 12))),
-                                    DataCell(Text('${e['nom']}', style: const TextStyle(fontSize: 12))),
-                                    DataCell(Text('${e['prenoms']}', style: const TextStyle(fontSize: 12))),
-                                    ...notes.map((n) => DataCell(Text(n == null ? '-' : n.toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)))),
-                                    DataCell(Text('${_notesData!['coefficient']}', style: const TextStyle(fontSize: 12))),
-                                    DataCell(Text(
-                                      '${heures.toStringAsFixed(heures % 1 == 0 ? 0 : 1)}h',
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: nbAbsences > 0 ? Colors.redAccent : const Color(0xFF0F172A)),
-                                    )),
-                                  ]);
-                                }).toList()
-                              : _etudiants.map((e) => DataRow(cells: [
-                                    DataCell(Text('${e['matricule']}', style: const TextStyle(fontSize: 12))),
-                                    DataCell(Text('${e['nom']}', style: const TextStyle(fontSize: 12))),
-                                    DataCell(Text('${e['prenoms']}', style: const TextStyle(fontSize: 12))),
-                                  ])).toList(),
-                        ),
-                      ),
-                    ),
+                    _tableauEtudiants(),
                     const SizedBox(height: 12),
                     Container(
                       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
