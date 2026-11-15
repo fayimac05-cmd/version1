@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
@@ -21,6 +19,8 @@ import '../pages/chat_theme.dart';
 import '../pages/chat_theme_picker_sheet.dart';
 import '../pages/voice_message.dart';
 import '../pages/video_message.dart';
+import '../pages/message_actions.dart';
+import '../pages/partager_message.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES
@@ -937,7 +937,7 @@ class AdminMessagesState extends State<AdminMessages>
 
   Tab _tabLabel(String label, int count) => Tab(
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Text(label),
+      Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
       if (count > 0) ...[
         const SizedBox(width: 4),
         Container(width: 16, height: 16,
@@ -1537,11 +1537,8 @@ class AdminMessagesState extends State<AdminMessages>
               }),
           _act(Icons.copy_rounded, 'Copier',
               const Color(0xFF54656F), () { Navigator.pop(context);
-                Clipboard.setData(ClipboardData(text: msg.texte));
+                Clipboard.setData(ClipboardData(text: texteAPartager(msg.texte)));
                 _snack('Texte copié !'); }),
-          _act(Icons.forward_rounded, 'Transférer',
-              const Color(0xFF54656F), () { Navigator.pop(context);
-                _transferer(msg); }),
           _act(msg.epingle ? Icons.push_pin_outlined : Icons.push_pin_rounded,
             msg.epingle ? 'Désépingler' : 'Épingler',
             const Color(0xFF54656F), () { Navigator.pop(context);
@@ -1550,15 +1547,17 @@ class AdminMessagesState extends State<AdminMessages>
             msg.important ? 'Retirer des importants' : 'Marquer comme important',
             const Color(0xFF54656F), () { Navigator.pop(context);
               setState(() => msg.important = !msg.important); }),
-          _act(Icons.check_box_outlined, 'Sélectionner',
-              const Color(0xFF54656F), () { Navigator.pop(context);
-                _snack('Mode sélection'); }),
-          _act(Icons.save_alt_rounded, 'Enregistrer sous',
-              const Color(0xFF54656F), () { Navigator.pop(context);
-                _snack('Enregistrement...'); }),
+          if (estTelechargeable(msg.texte))
+            _act(Icons.download_rounded, 'Télécharger',
+                const Color(0xFF54656F), () { Navigator.pop(context);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) telechargerMessage(this.context, msg.texte);
+                  }); }),
           _act(Icons.share_rounded, 'Partager',
               const Color(0xFF54656F), () { Navigator.pop(context);
-                _snack('Partage...'); }),
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) partagerMessage(this.context, texteAPartager(msg.texte));
+                }); }),
           if (msg.estMoi)
             _act(Icons.delete_outline_rounded, 'Supprimer',
                 const Color(0xFFDC2626), () { Navigator.pop(context);
@@ -1889,58 +1888,6 @@ class AdminMessagesState extends State<AdminMessages>
             fontSize: 14, fontWeight: FontWeight.w500)),
         onTap: onTap);
 
-  void _transferer(MessageAdmin msg) {
-    showModalBottomSheet(context: context, isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.5,
-        decoration: const BoxDecoration(color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        child: Column(children: [
-          const SizedBox(height: 8),
-          Container(width: 40, height: 4, decoration: BoxDecoration(
-              color: const Color(0xFFE5E7EB),
-              borderRadius: BorderRadius.circular(2))),
-          const Padding(padding: EdgeInsets.all(14),
-            child: Text('Transférer à...', style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w800))),
-          const Divider(height: 1),
-          ListTile(
-            leading: Container(width: 40, height: 40,
-              decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withValues(alpha:0.1),
-                  borderRadius: BorderRadius.circular(10)),
-              child: const Center(child: Icon(
-                  Icons.share_rounded, color: Color(0xFF25D366), size: 22))),
-            title: const Text('Partager sur WhatsApp',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-            onTap: () { Navigator.pop(context);
-              _snack('Ouverture WhatsApp...'); }),
-          const Divider(height: 1),
-          Expanded(child: ListView.builder(
-            itemCount: adminGroupes.length,
-            itemBuilder: (_, i) {
-              final g = adminGroupes[i];
-              return ListTile(
-                leading: Container(width: 36, height: 36,
-                  decoration: BoxDecoration(
-                      color: AdminTheme.primaryLight,
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Center(child: Text(g.avatar,
-                      style: const TextStyle(fontSize: 16)))),
-                title: Text(g.nom, style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w700)),
-                onTap: () { Navigator.pop(context);
-                  setState(() => g.messages.add(MessageAdmin(
-                    id: 'T${DateTime.now().millisecondsSinceEpoch}',
-                    expediteur: 'Admin',
-                    texte: 'Transféré : ${msg.texte}',
-                    heure: _now(), type: 'texte', estMoi: true)));
-                   _snack('Transféré !'); });
-            })),
-        ])));
-  }
-
   void _infoGroupe(GroupeAdmin g) {
     showModalBottomSheet(context: context,
       shape: const RoundedRectangleBorder(
@@ -2111,90 +2058,38 @@ class AdminMessagesState extends State<AdminMessages>
     }
   }
 
-  // ── Envoi réel d'un fichier (document/photo/vidéo/audio) — sélectionné
-  // depuis l'appareil, uploadé sur Cloudinary via le backend, puis envoyé
-  // comme un vrai message texte contenant "[FICHIER]type|url|nom" — aucune
-  // modification des tables de messages existantes n'est nécessaire.
+  // ── Envoi réel de fichiers (document/photo/vidéo/audio) — sélection multiple.
+  // Chaque fichier est uploadé sur Cloudinary puis posté comme message
+  // "[FICHIER]type|url|nom".
   Future<void> _envoyerFichier(GroupeAdmin g, String categorie) async {
-    List<int>? bytes;
-    String? nom;
-    String type = categorie;
-
-    try {
-      if (categorie == 'media') {
-        final result = await FilePicker.platform.pickFiles(type: FileType.media, withData: true);
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-        nom = result.files.first.name;
-        const videoExts = ['mp4', 'mov', 'avi', 'mkv', '3gp', 'webm'];
-        final ext = nom.contains('.') ? nom.split('.').last.toLowerCase() : '';
-        type = videoExts.contains(ext) ? 'video' : 'image';
-      } else if (categorie == 'camera') {
-        final picked = await ImagePicker().pickImage(
-          source: ImageSource.camera,
-          preferredCameraDevice: CameraDevice.front,
-          imageQuality: 85,
-        );
-        if (picked == null) return;
-        bytes = await picked.readAsBytes();
-        nom = picked.name;
-        type = 'image';
-      } else if (categorie == 'audio') {
-        final result = await FilePicker.platform.pickFiles(type: FileType.audio, withData: true);
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-        nom = result.files.first.name;
-        type = 'audio';
-      } else {
-        final result = await FilePicker.platform.pickFiles(withData: true);
-        if (result == null || result.files.isEmpty) return;
-        bytes = result.files.first.bytes;
-        nom = result.files.first.name;
-        type = 'document';
+    final contenus = await preparerFichiersMessage(context, categorie);
+    if (!mounted || contenus.isEmpty) return;
+    for (var i = 0; i < contenus.length; i++) {
+      if (!mounted) return;
+      final contenu = contenus[i];
+      setState(() {
+        g.messages.add(MessageAdmin(
+          id: 'MD${DateTime.now().millisecondsSinceEpoch}_$i',
+          expediteur: 'Administration', texte: contenu,
+          heure: _now(), type: 'texte', estMoi: true));
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollCtrl.hasClients) {
+          _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+        }
+      });
+      try {
+        final headers = await ApiService.getHeaders();
+        final Uri uri = g.type == 'prive'
+            ? Uri.parse('${ApiService.baseUrl}/messages/prives/${g.id}')
+            : g.type == 'groupe_etudiants'
+                ? Uri.parse('${ApiService.baseUrl}/messages/groupe/${g.filiereId}')
+                : Uri.parse('${ApiService.baseUrl}/messages/canal/${g.id}');
+        await http.post(uri, headers: headers, body: jsonEncode({'contenu': contenu}));
+      } catch (e) {
+        debugPrint('[AdminMessages] Erreur envoi fichier: $e');
       }
-    } catch (_) {
-      _snack('Erreur lors de la sélection du fichier.');
-      return;
-    }
-
-    if (bytes == null || bytes.isEmpty || nom == null) {
-      _snack('Impossible de lire le fichier sélectionné.');
-      return;
-    }
-
-    _snack('Envoi en cours...');
-    final upload = await ApiService.uploaderFichierMessage(bytes, nom);
-    if (!mounted) return;
-    if (upload['success'] != true) {
-      _snack(upload['error']?.toString() ?? 'Échec de l\'envoi du fichier.');
-      return;
-    }
-    final url = upload['url'].toString();
-    final contenu = '[FICHIER]$type|$url|$nom';
-
-    setState(() {
-      g.messages.add(MessageAdmin(
-        id: 'MD${DateTime.now().millisecondsSinceEpoch}',
-        expediteur: 'Administration', texte: contenu,
-        heure: _now(), type: 'texte', estMoi: true));
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-      }
-    });
-
-    try {
-      final headers = await ApiService.getHeaders();
-      final Uri uri = g.type == 'prive'
-          ? Uri.parse('${ApiService.baseUrl}/messages/prives/${g.id}')
-          : g.type == 'groupe_etudiants'
-              ? Uri.parse('${ApiService.baseUrl}/messages/groupe/${g.filiereId}')
-              : Uri.parse('${ApiService.baseUrl}/messages/canal/${g.id}');
-      await http.post(uri, headers: headers, body: jsonEncode({'contenu': contenu}));
-    } catch (e) {
-      debugPrint('[AdminMessages] Erreur envoi fichier: $e');
     }
   }
 
@@ -3495,15 +3390,25 @@ class _VisionneuseImage extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Align(
-                alignment: Alignment.topLeft,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
-                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                alignment: Alignment.topCenter,
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                    ),
                   ),
-                ),
+                  GestureDetector(
+                    onTap: () => ouvrirFichier(context, url, telecharger: true),
+                    child: Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
+                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ]),
               ),
             ),
           ),

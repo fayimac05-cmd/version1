@@ -151,6 +151,12 @@ class _AdminBulletinsState extends State<AdminBulletins> {
   }
 
   // ── Build ─────────────────────────────────────────────────────────────
+  // Marge de page : réduite sur téléphone.
+  double get _marge {
+    final l = MediaQuery.of(context).size.width;
+    return l < 360 ? 12.0 : (l < 600 ? 16.0 : 24.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,7 +164,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
       body: _chargementBase
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(_marge),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _entete(),
                 const SizedBox(height: 14),
@@ -180,29 +186,36 @@ class _AdminBulletinsState extends State<AdminBulletins> {
     );
   }
 
-  Widget _entete() => Row(children: [
-        Container(
-          width: 52, height: 52,
-          decoration: BoxDecoration(color: AdminTheme.primary, borderRadius: BorderRadius.circular(14)),
-          child: const Icon(Icons.description_rounded, color: Colors.white, size: 26),
-        ),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Publication des bulletins', style: AdminTheme.headingLarge),
-          Text('Calcul des moyennes, validation et diffusion individuelle.', style: AdminTheme.bodyMedium),
-        ])),
-        OutlinedButton.icon(
-          onPressed: _ouvrirRegles,
-          icon: const Icon(Icons.rule_rounded, size: 18),
-          label: const Text('Règles de validation'),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: _charge && !_chargement ? _charger : null,
-          icon: const Icon(Icons.refresh_rounded, size: 18),
-          label: const Text('Actualiser'),
-        ),
-      ]);
+  // Titre sur toute la largeur ; les boutons passent dessous (ligne si assez de place).
+  Widget _entete() => Wrap(
+        spacing: 14, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Row(mainAxisSize: MainAxisSize.max, children: [
+            Container(
+              width: 52, height: 52,
+              decoration: BoxDecoration(color: AdminTheme.primary, borderRadius: BorderRadius.circular(14)),
+              child: const Icon(Icons.description_rounded, color: Colors.white, size: 26),
+            ),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Publication des bulletins', style: AdminTheme.headingLarge),
+              Text('Calcul des moyennes, validation et diffusion individuelle.', style: AdminTheme.bodyMedium),
+            ])),
+          ]),
+          Wrap(spacing: 10, runSpacing: 8, children: [
+            OutlinedButton.icon(
+              onPressed: _ouvrirRegles,
+              icon: const Icon(Icons.rule_rounded, size: 18),
+              label: const Text('Règles de validation'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _charge && !_chargement ? _charger : null,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Actualiser'),
+            ),
+          ]),
+        ],
+      );
 
   Widget _bandeauInfo() => Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -252,14 +265,19 @@ class _AdminBulletinsState extends State<AdminBulletins> {
     );
   }
 
-  Widget _champ(String label, double largeur, Widget child) => SizedBox(
-        width: largeur,
+  Widget _champ(String label, double largeur, Widget child) {
+    // Jamais plus large que l'écran disponible (marges + padding de la carte).
+    final dispo = MediaQuery.of(context).size.width - 2 * _marge - 34;
+    final w = largeur > dispo ? (dispo < 120 ? 120.0 : dispo) : largeur;
+    return SizedBox(
+        width: w,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminTheme.textSecondary)),
           const SizedBox(height: 6),
           child,
         ]),
       );
+  }
 
   Widget _liste(String? v, List<String> ids, List<String> labels, String hint, ValueChanged<String?>? onChanged) => Container(
         height: 44,
@@ -276,7 +294,7 @@ class _AdminBulletinsState extends State<AdminBulletins> {
 
   // ── KPI ───────────────────────────────────────────────────────────────
   Widget _kpis() {
-    Widget carte(IconData ic, Color fg, Color bg, String gros, String petit) => Expanded(child: Container(
+    Widget carte(IconData ic, Color fg, Color bg, String gros, String petit) => Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(color: AdminTheme.surface, borderRadius: BorderRadius.circular(AdminTheme.radiusCard), border: Border.all(color: AdminTheme.border), boxShadow: AdminTheme.cardShadow),
           child: Row(children: [
@@ -284,19 +302,23 @@ class _AdminBulletinsState extends State<AdminBulletins> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(gros, style: TextStyle(fontSize: gros.length > 6 ? 15 : 22, fontWeight: FontWeight.w800, color: AdminTheme.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
-              Text(petit, style: AdminTheme.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(petit, style: AdminTheme.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
             ])),
           ]),
-        ));
-    return Row(children: [
+        );
+    final cartes = [
       carte(Icons.groups_rounded, AdminTheme.info, AdminTheme.infoLight, '${_etus.length}', 'Étudiants'),
-      const SizedBox(width: 12),
       carte(Icons.menu_book_rounded, AdminTheme.primary, AdminTheme.primaryLight, '${_modules.length}', 'Modules'),
-      const SizedBox(width: 12),
       carte(Icons.calculate_rounded, AdminTheme.info, AdminTheme.infoLight, 'Moyenne calculée', 'automatiquement'),
-      const SizedBox(width: 12),
       carte(Icons.check_circle_rounded, AdminTheme.success, AdminTheme.successLight, '${_sel.length}', 'Sélectionnés pour diffusion'),
-    ]);
+    ];
+    return LayoutBuilder(builder: (context, c) {
+      // Grand écran : 4 colonnes ; tablette : 2 ; petit téléphone : 1.
+      final cols = c.maxWidth >= 760 ? 4 : (c.maxWidth >= 400 ? 2 : 1);
+      const gap = 12.0;
+      final w = ((c.maxWidth - gap * (cols - 1)) / cols).floorToDouble();
+      return Wrap(spacing: gap, runSpacing: gap, children: [for (final k in cartes) SizedBox(width: w, child: k)]);
+    });
   }
 
   // ── Bloc tableau ──────────────────────────────────────────────────────
@@ -305,13 +327,14 @@ class _AdminBulletinsState extends State<AdminBulletins> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: AdminTheme.surface, borderRadius: BorderRadius.circular(AdminTheme.radiusCard), border: Border.all(color: AdminTheme.border), boxShadow: AdminTheme.cardShadow),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+        Wrap(spacing: 14, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
           Text(_cSession == 'rattrapage' ? 'Bulletins après rattrapage' : 'Bulletins des étudiants', style: AdminTheme.headingMedium),
-          const Spacer(),
-          const Icon(Icons.circle, size: 9, color: AdminTheme.success), const SizedBox(width: 5),
-          Text('Semestre validé', style: AdminTheme.caption), const SizedBox(width: 14),
-          const Icon(Icons.circle, size: 9, color: AdminTheme.danger), const SizedBox(width: 5),
-          Text('Non validé', style: AdminTheme.caption),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.circle, size: 9, color: AdminTheme.success), const SizedBox(width: 5),
+            Text('Semestre validé', style: AdminTheme.caption), const SizedBox(width: 14),
+            const Icon(Icons.circle, size: 9, color: AdminTheme.danger), const SizedBox(width: 5),
+            Text('Non validé', style: AdminTheme.caption),
+          ]),
         ]),
         const SizedBox(height: 8),
         Wrap(spacing: 10, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [

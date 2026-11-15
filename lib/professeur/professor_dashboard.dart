@@ -877,7 +877,7 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
           else ...[
             // Les cours défilent (un par page) ; les points indiquent la position.
             SizedBox(
-              height: 100,
+              height: _hauteurProgramme(context),
               child: PageView.builder(
                 controller: _progCtrl,
                 itemCount: _coursDuJour.length,
@@ -912,6 +912,13 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
   }
 
   String get _jourAujourdhui => _joursFr[DateTime.now().weekday - 1];
+
+  // Hauteur de la ligne de cours : suit la taille de texte du téléphone
+  // (police agrandie dans les réglages Android) pour ne plus déborder.
+  double _hauteurProgramme(BuildContext context) {
+    final s = MediaQuery.textScalerOf(context).scale(1.0);
+    return (100 + (s - 1) * 60).clamp(100.0, 200.0).toDouble();
+  }
 
   // ── Statut du créneau : "En cours" (vert) si l'heure actuelle y est,
   // "À venir" (bleu clair) si c'est plus tard aujourd'hui, "Terminé" (gris)
@@ -1002,11 +1009,11 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
           ),
         ),
         const SizedBox(width: 6),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             decoration: BoxDecoration(color: statut.bg, borderRadius: BorderRadius.circular(20)),
-            child: Text(statut.label, style: TextStyle(color: statut.fg, fontSize: 10, fontWeight: FontWeight.w800)),
+            child: Text(statut.label, maxLines: 1, style: TextStyle(color: statut.fg, fontSize: 10, fontWeight: FontWeight.w800)),
           ),
           const SizedBox(height: 6),
           const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1), size: 18),
@@ -1249,14 +1256,16 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
       builder: (context) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Vos prochains cours', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _navyText)),
-              const SizedBox(height: 10),
-              for (var i = 0; i < _coursDuJour.length; i++) _programmeRow(_coursDuJour[i], i),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Vos prochains cours', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _navyText)),
+                const SizedBox(height: 10),
+                for (var i = 0; i < _coursDuJour.length; i++) _programmeRow(_coursDuJour[i], i),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'video_message.dart';
 
 // ════════════════════════════════════════════════════════════════════════
 // CRÉATION D'UN SONDAGE — entièrement configurable par le créateur :
@@ -444,15 +445,25 @@ class VisionneuseImage extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Align(
-                alignment: Alignment.topLeft,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
-                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                alignment: Alignment.topCenter,
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                    ),
                   ),
-                ),
+                  GestureDetector(
+                    onTap: () => ouvrirFichier(context, url, telecharger: true),
+                    child: Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
+                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ]),
               ),
             ),
           ),

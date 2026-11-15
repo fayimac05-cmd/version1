@@ -1030,7 +1030,7 @@ Widget _buildProchainCours(BuildContext context) {
           NonLusService.instance.sectionVue('cours');
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const CoursesTab()),
+            MaterialPageRoute(builder: (_) => CoursesTab(profile: widget.profile)),
           );
           NonLusService.instance.rafraichir();
         },

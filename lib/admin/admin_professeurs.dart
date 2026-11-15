@@ -3,6 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import '../config/etablissement_config.dart';
 import '../models/student_profile.dart';
 import '../services/api_service.dart';
 import '../services/api_extra.dart';
@@ -20,6 +24,115 @@ const List<String> kGrades = [
   'Chargé de cours', 'Vacataire', 'Ingénieur formateur', 'Autre',
 ];
 const List<String> kDiplomes = ['Licence', 'Master', 'Ingénieur', 'Doctorat (PhD)', 'Habilitation', 'Autre'];
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  FICHE D'INSCRIPTION DU PROFESSEUR (PDF) — formulaire + fiche enregistrée
+// ═════════════════════════════════════════════════════════════════════════════
+class _FicheProfData {
+  final String nom, prenoms, sexe, naissance, lieu, nationalite, matricule;
+  final String tel, email, grade, diplome, expertise, domaines, note;
+  final List<String> affectations;
+  final Uint8List? photo;
+  const _FicheProfData({
+    required this.nom, required this.prenoms, required this.sexe, required this.naissance,
+    required this.lieu, required this.nationalite, required this.matricule,
+    required this.tel, required this.email, required this.grade, required this.diplome,
+    required this.expertise, required this.domaines, required this.note,
+    required this.affectations, this.photo,
+  });
+}
+
+Future<Uint8List?> _telechargerImage(String url) async {
+  if (url.isEmpty) return null;
+  try {
+    final r = await http.get(Uri.parse(url));
+    return r.statusCode == 200 ? r.bodyBytes : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<Uint8List> _construireFicheProf(_FicheProfData d) async {
+  final pdf = pw.Document();
+  pw.Widget l(String a, String b) => pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 3),
+        child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.SizedBox(width: 130, child: pw.Text(a, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700))),
+          pw.Expanded(child: pw.Text(b.isEmpty ? '................................' : b, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold))),
+        ]),
+      );
+  pw.Widget titre(String t) => pw.Container(
+        width: double.infinity,
+        margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        color: PdfColors.grey200,
+        child: pw.Text(t, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      );
+  final sexe = d.sexe == 'M' ? 'Masculin' : (d.sexe == 'F' ? 'Féminin' : '');
+  final photo = d.photo != null ? pw.MemoryImage(d.photo!) : null;
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(36),
+      build: (_) => [
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Expanded(
+            child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text(EtablissementConfig.instance.nom.toUpperCase(), style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 4),
+              pw.Text("FICHE D'INSCRIPTION — PROFESSEUR", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            ]),
+          ),
+          pw.Container(
+            width: 80,
+            height: 100,
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey600, width: 0.6),
+              image: photo != null ? pw.DecorationImage(image: photo, fit: pw.BoxFit.cover) : null,
+            ),
+            child: photo == null ? pw.Center(child: pw.Text('Photo', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600))) : null,
+          ),
+        ]),
+        titre('Informations personnelles'),
+        l('Nom', d.nom.trim().toUpperCase()),
+        l('Prénoms', d.prenoms),
+        l('Né(e) le', d.naissance.isEmpty ? '' : _fmtDate(d.naissance)),
+        l('Lieu de naissance', d.lieu),
+        l('Nationalité', d.nationalite),
+        l('Sexe', sexe),
+        l('Matricule', d.matricule),
+        titre('Coordonnées'),
+        l('Téléphone', d.tel),
+        l('Email', d.email),
+        titre('Informations professionnelles'),
+        l('Grade / Fonction', d.grade),
+        l('Diplôme', d.diplome),
+        l('Spécialité', d.expertise),
+        l('Domaines', d.domaines),
+        titre('Affectations (filière · niveau — modules)'),
+        if (d.affectations.isEmpty) l('Affectations', ''),
+        for (final a in d.affectations)
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 2),
+            child: pw.Text('•  $a', style: const pw.TextStyle(fontSize: 10.5)),
+          ),
+        if (d.note.isNotEmpty) ...[titre('Note'), pw.Text(d.note, style: const pw.TextStyle(fontSize: 10.5))],
+        pw.SizedBox(height: 40),
+        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('Signature du professeur', style: const pw.TextStyle(fontSize: 10)),
+          pw.Text('Le responsable', style: const pw.TextStyle(fontSize: 10)),
+        ]),
+        pw.SizedBox(height: 40),
+      ],
+    ),
+  );
+  return pdf.save();
+}
+
+String _nomFichierProf(String nom, String prenoms) {
+  final n = '${prenoms}_$nom'.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+  return 'Fiche_professeur_${n.isEmpty ? 'inscription' : n}.pdf';
+}
 
 const Color _bordureGris = Color(0xFFE5E7EB);
 const Color _bordureChamp = Color(0xFFD1D5DB);
@@ -985,6 +1098,62 @@ class _FicheProfDialogState extends State<_FicheProfDialog> {
     }
   }
 
+  Future<Uint8List> _fichePdf() async {
+    final mods = _liste(prof['modules']);
+    final affs = _liste(prof['affectations']);
+    final groupes = <String, List<String>>{};
+    for (final m in mods) {
+      groupes.putIfAbsent('${_s(m['filiere_nom'])} · ${_s(m['niveau'])}', () => []).add(_s(m['module_nom']));
+    }
+    final couverts = mods.map((m) => '${m['filiere_id']}|${m['niveau']}').toSet();
+    final lignes = <String>[
+      for (final e in groupes.entries) '${e.key} — ${e.value.where((x) => x.isNotEmpty).join(', ')}',
+      for (final a in affs)
+        if (!couverts.contains('${a['filiere_id']}|${a['niveau']}')) '${_s(a['filiere_nom'])} · ${_s(a['niveau'])}',
+    ];
+    final dn = _s(prof['date_naissance']);
+    return _construireFicheProf(_FicheProfData(
+      nom: _s(prof['nom']),
+      prenoms: _s(prof['prenoms']),
+      sexe: _s(prof['sexe']),
+      naissance: dn.length >= 10 ? dn.substring(0, 10) : dn,
+      lieu: _s(prof['lieu_naissance']),
+      nationalite: _s(prof['nationalite']),
+      matricule: _s(prof['matricule']),
+      tel: _s(prof['tel']),
+      email: _s(prof['email']),
+      grade: _s(prof['grade']),
+      diplome: _s(prof['diplome']),
+      expertise: _s(prof['expertise']),
+      domaines: _s(prof['domaine']).replaceAll(',', ', '),
+      note: _s(prof['note']),
+      affectations: lignes,
+      photo: await _telechargerImage(_s(prof['photo_url'])),
+    ));
+  }
+
+  Future<void> _telechargerFiche() async {
+    try {
+      await Printing.sharePdf(bytes: await _fichePdf(), filename: _nomFichierProf(_s(prof['nom']), _s(prof['prenoms'])));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Impossible de générer la fiche.'), backgroundColor: Color(0xFFDC2626)));
+      }
+    }
+  }
+
+  Future<void> _imprimerFiche() async {
+    try {
+      await Printing.layoutPdf(onLayout: (_) => _fichePdf(), name: _nomFichierProf(_s(prof['nom']), _s(prof['prenoms'])));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Impossible d\'imprimer la fiche.'), backgroundColor: Color(0xFFDC2626)));
+      }
+    }
+  }
+
   Widget _ligne(String l, String v) => v.trim().isEmpty
       ? const SizedBox.shrink()
       : Padding(
@@ -1135,6 +1304,16 @@ class _FicheProfDialogState extends State<_FicheProfDialog> {
                 onPressed: _demanderHeures,
                 icon: const Icon(Icons.event_available_outlined, size: 17),
                 label: const Text('Demander les heures libres'),
+              ),
+              TextButton.icon(
+                onPressed: _telechargerFiche,
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 17),
+                label: const Text("Fiche d'inscription"),
+              ),
+              IconButton(
+                tooltip: "Imprimer la fiche d'inscription",
+                onPressed: _imprimerFiche,
+                icon: const Icon(Icons.print_outlined, size: 20),
               ),
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer')),
               ElevatedButton.icon(
@@ -1326,6 +1505,97 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
       if (!_domainesSel.contains(_domaineDeFiliere(f))) return false;
       return q.isEmpty || _s(f['nom']).toLowerCase().contains(q);
     }).toList();
+  }
+
+  /// Données de la fiche d'inscription, prises dans le formulaire (avant ou après enregistrement).
+  Future<_FicheProfData> _donneesFiche() async {
+    String t(TextEditingController c) => c.text.trim();
+    final nat = _nationalite == 'Autre' ? t(_natAutreCtrl) : (_nationalite ?? '');
+    final affs = <String>[];
+    for (final a in _lignes) {
+      if (a.fid == null || a.niveau == null) continue;
+      final mods = (_modulesParFiliere[a.fid] ?? const <Map<String, dynamic>>[])
+          .where((m) => a.modules.contains(int.tryParse(_s(m['id']))))
+          .map((m) => _s(m['nom']))
+          .where((n) => n.isNotEmpty)
+          .toList();
+      affs.add('${_nomFiliere(a.fid)} · ${a.niveau}${mods.isEmpty ? '' : ' — ${mods.join(', ')}'}');
+    }
+    return _FicheProfData(
+      nom: t(_nomCtrl),
+      prenoms: t(_prenomsCtrl),
+      sexe: _sexe ?? '',
+      naissance: _dateNaissance,
+      lieu: t(_lieuCtrl),
+      nationalite: nat,
+      matricule: t(_matriculeCtrl),
+      tel: t(_telCtrl),
+      email: t(_emailCtrl),
+      grade: _grade ?? '',
+      diplome: _diplome ?? '',
+      expertise: t(_expertiseCtrl),
+      domaines: _domainesSel.join(', '),
+      note: t(_noteCtrl),
+      affectations: affs,
+      photo: _photoBytes ?? await _telechargerImage(_photoUrl),
+    );
+  }
+
+  Future<void> _telechargerFiche() async {
+    try {
+      final d = await _donneesFiche();
+      await Printing.sharePdf(bytes: await _construireFicheProf(d), filename: _nomFichierProf(d.nom, d.prenoms));
+    } catch (_) {
+      if (mounted) setState(() => _erreur = 'Impossible de générer la fiche.');
+    }
+  }
+
+  Future<void> _imprimerFiche() async {
+    try {
+      final d = await _donneesFiche();
+      await Printing.layoutPdf(onLayout: (_) async => _construireFicheProf(d), name: _nomFichierProf(d.nom, d.prenoms));
+    } catch (_) {
+      if (mounted) setState(() => _erreur = 'Impossible d\'imprimer la fiche.');
+    }
+  }
+
+  /// Après l'enregistrement : proposer la fiche d'inscription (téléchargement / impression).
+  Future<void> _dialogueApresEnregistrement() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(children: [
+          const Icon(Icons.check_circle, color: Color(0xFF15803D)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(_edition ? 'Modifications enregistrées' : 'Professeur enregistré',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+        ]),
+        content: const Text(
+          "Vous pouvez télécharger ou imprimer la fiche d'inscription du professeur. "
+          "Elle reste disponible plus tard depuis sa fiche.",
+          style: TextStyle(fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx), child: const Text('Terminer')),
+          OutlinedButton.icon(
+            onPressed: _imprimerFiche,
+            icon: const Icon(Icons.print_outlined, size: 17),
+            label: const Text('Imprimer'),
+          ),
+          ElevatedButton.icon(
+            onPressed: _telechargerFiche,
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 17, color: Colors.white),
+            label: const Text('Télécharger la fiche', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary),
+          ),
+        ],
+      ),
+    );
   }
 
   String _nomFiliere(String? fid) {
@@ -1581,8 +1851,9 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
       widget.onErreur(messageEchec ?? '$echecs affectation(s) de module n\'ont pas pu être enregistrées.');
     }
 
-    await widget.onTermine(_edition);
     if (mounted) setState(() => _saving = false);
+    await _dialogueApresEnregistrement();
+    await widget.onTermine(_edition);
   }
 
   // ── Widgets de base ───────────────────────────────────────────────────────
@@ -2077,6 +2348,23 @@ class _FormulaireProfPageState extends State<_FormulaireProfPage> {
           l(Icons.layers_outlined, 'Niveaux', '${_niveauxSel.length} sélectionné(s)'),
           l(Icons.event_note_outlined, 'Affectations', '${_lignes.length} ligne(s)'),
           l(Icons.menu_book_outlined, 'Modules', '$_nbModulesTotal module(s)'),
+        ]),
+      ),
+      const SizedBox(height: 14),
+      _carte(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _titreSection(Icons.description_outlined, "Fiche d'inscription"),
+          OutlinedButton.icon(
+            onPressed: _telechargerFiche,
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('Télécharger la fiche (PDF)'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _imprimerFiche,
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: const Text('Imprimer la fiche'),
+          ),
         ]),
       ),
       const SizedBox(height: 14),

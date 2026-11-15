@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../models/student_profile.dart';
 import '../services/professor_service.dart';
 import '../services/api_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/app_bubble_bg.dart';
 
 class CoursesTab extends StatefulWidget {
-  const CoursesTab({super.key});
+  const CoursesTab({super.key, this.profile});
+
+  /// Profil de l'étudiant connecté : sert à afficher sa filière et son niveau.
+  final StudentProfile? profile;
 
   @override
   State<CoursesTab> createState() => _CoursesTabState();
@@ -25,6 +29,19 @@ class _CoursesTabState extends State<CoursesTab> {
 
   List<Map<String, dynamic>> _cours = [];
   bool _isLoading = true;
+
+  // Filière et niveau de l'étudiant : profil connecté, sinon déduits des cours reçus.
+  String get _sousTitre {
+    final p = widget.profile;
+    var filiere = (p?.filiere ?? '').trim();
+    var niveau = (p?.niveau ?? '').trim();
+    if ((filiere.isEmpty || niveau.isEmpty) && _cours.isNotEmpty) {
+      if (filiere.isEmpty) filiere = '${_cours.first['filiere'] ?? ''}'.trim();
+      if (niveau.isEmpty) niveau = '${_cours.first['niveau'] ?? ''}'.trim();
+    }
+    final parts = [filiere, niveau].where((x) => x.isNotEmpty).toList();
+    return parts.isEmpty ? 'Supports de cours de ma classe' : parts.join(' · ');
+  }
 
   @override
   void initState() {
@@ -53,6 +70,8 @@ class _CoursesTabState extends State<CoursesTab> {
               'nouveau': false,
               'color': _moduleColors[i % _moduleColors.length],
               'fichier_url': e['fichier_url'],
+              'filiere': e['filiere_nom'] ?? '',
+              'niveau': e['niveau'] ?? '',
             };
           });
           _isLoading = false;
@@ -112,7 +131,7 @@ class _CoursesTabState extends State<CoursesTab> {
         // ── Header ─────────────────────────────────────────────────────
         AppPageHeader(
           title: 'Mes Cours',
-          subtitle: 'Licence Informatique L2',
+          subtitle: _sousTitre,
           onBack: () => Navigator.pop(context),
           trailing: _nbNouveaux > 0
               ? Container(
@@ -184,11 +203,15 @@ class _CoursesTabState extends State<CoursesTab> {
                     boxShadow: selected ? [BoxShadow(color: color.withValues(alpha:0.25),
                         blurRadius: 8, offset: const Offset(0, 2))] : [],
                   ),
-                  child: Text(
-                    mod == 'Tous' ? 'Tous  ${_cours.length}' :
-                    mod.length > 14 ? '${mod.substring(0, 14)}…' : mod,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                        color: selected ? Colors.white : const Color(0xFF64748B)),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 230),
+                    child: Text(
+                      mod == 'Tous' ? 'Tous  ${_cours.length}' : mod,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                          color: selected ? Colors.white : const Color(0xFF64748B)),
+                    ),
                   ),
                 ),
               );
@@ -257,13 +280,18 @@ class _CoursesTabState extends State<CoursesTab> {
               fontWeight: FontWeight.bold, color: Color(0xFF0F172A), height: 1.3),
               maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 7),
-          Row(children: [
-            const Icon(Icons.person_outline, size: 14, color: Color(0xFF64748B)),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(Icons.person_outline, size: 14, color: Color(0xFF64748B)),
+            ),
             const SizedBox(width: 4),
-            Flexible(child: Text(cours['prof'],
+            Expanded(child: Text(cours['prof'],
                 style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                overflow: TextOverflow.ellipsis)),
-            const SizedBox(width: 10),
+                maxLines: 2, overflow: TextOverflow.ellipsis)),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
             const Icon(Icons.access_time, size: 14, color: Color(0xFF64748B)),
             const SizedBox(width: 4),
             Flexible(child: Text(cours['date'],

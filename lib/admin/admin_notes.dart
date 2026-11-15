@@ -224,7 +224,7 @@ class _AdminNotesState extends State<AdminNotes> {
                   final tableau = _blocTableau();
                   final panneau = _panneauMoyenne();
                   return SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
+                    padding: EdgeInsets.all(c.maxWidth < 420 ? 12 : (c.maxWidth < 700 ? 16 : 20)),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       _entete(),
                       const SizedBox(height: 16),
@@ -243,21 +243,28 @@ class _AdminNotesState extends State<AdminNotes> {
     );
   }
 
-  Widget _entete() => Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  Widget _entete() => LayoutBuilder(builder: (context, c) {
+        final etroit = c.maxWidth < 560;
+        final titres = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Notes & Moyennes', style: AdminTheme.headingLarge),
           Text('Réception, stockage, transfert des notes et moyennes provisoires par module', style: AdminTheme.bodyMedium),
-        ])),
-        IconButton(onPressed: _loadData, icon: const Icon(Icons.refresh_rounded, color: AdminTheme.textSecondary), tooltip: 'Actualiser'),
-        const SizedBox(width: 6),
-        ElevatedButton.icon(
-          onPressed: _ouvrirSaisieDirecte,
-          icon: const Icon(Icons.edit_note_rounded, size: 18),
-          label: const Text('Saisie directe'),
-          style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary, foregroundColor: Colors.white, elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AdminTheme.radiusButton))),
-        ),
-      ]);
+        ]);
+        final actions = Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(onPressed: _loadData, icon: const Icon(Icons.refresh_rounded, color: AdminTheme.textSecondary), tooltip: 'Actualiser'),
+          const SizedBox(width: 6),
+          ElevatedButton.icon(
+            onPressed: _ouvrirSaisieDirecte,
+            icon: const Icon(Icons.edit_note_rounded, size: 18),
+            label: const Text('Saisie directe'),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary, foregroundColor: Colors.white, elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AdminTheme.radiusButton))),
+          ),
+        ]);
+        if (etroit) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [titres, const SizedBox(height: 8), actions]);
+        }
+        return Row(children: [Expanded(child: titres), actions]);
+      });
 
   void _ouvrirSaisieDirecte() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(
@@ -270,7 +277,7 @@ class _AdminNotesState extends State<AdminNotes> {
   Widget _kpis() {
     Widget carte(IconData ic, String titre, int n, Color fg, Color bg, String? statut, {int? onglet}) {
       final actif = (statut != null && _fStatut == statut);
-      return Expanded(child: InkWell(
+      return InkWell(
         borderRadius: BorderRadius.circular(AdminTheme.radiusCard),
         onTap: () => setState(() {
           _page = 0; _sel.clear();
@@ -291,20 +298,32 @@ class _AdminNotesState extends State<AdminNotes> {
             ])),
           ]),
         ),
-      ));
+      );
     }
 
-    return Row(children: [
-      Expanded(child: Row(children: [
-        carte(Icons.inbox_rounded, 'Notes reçues', _nbRecues, AdminTheme.info, AdminTheme.infoLight, null),
-        const SizedBox(width: 10),
-        carte(Icons.hourglass_top_rounded, 'En attente', _nbAttente, AdminTheme.warning, AdminTheme.warningLight, 'en_attente'),
-        const SizedBox(width: 10),
-        carte(Icons.inventory_2_rounded, 'Stockées', _nbStockees, AdminTheme.textSecondary, AdminTheme.surfaceAlt, 'stockee'),
-        const SizedBox(width: 10),
-        carte(Icons.send_rounded, 'Transférées', _nbTransferees, AdminTheme.success, AdminTheme.successLight, 'validee'),
-      ])),
-    ]);
+    final cartes = [
+      carte(Icons.inbox_rounded, 'Notes reçues', _nbRecues, AdminTheme.info, AdminTheme.infoLight, null),
+      carte(Icons.hourglass_top_rounded, 'En attente', _nbAttente, AdminTheme.warning, AdminTheme.warningLight, 'en_attente'),
+      carte(Icons.inventory_2_rounded, 'Stockées', _nbStockees, AdminTheme.textSecondary, AdminTheme.surfaceAlt, 'stockee'),
+      carte(Icons.send_rounded, 'Transférées', _nbTransferees, AdminTheme.success, AdminTheme.successLight, 'validee'),
+    ];
+    return LayoutBuilder(builder: (context, c) {
+      if (c.maxWidth >= 640) {
+        return Row(children: [
+          for (var i = 0; i < cartes.length; i++) ...[
+            if (i > 0) const SizedBox(width: 10),
+            Expanded(child: cartes[i]),
+          ],
+        ]);
+      }
+      // Téléphone : grille 2 × 2
+      Widget ligne(int a) => IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: cartes[a]),
+            const SizedBox(width: 10),
+            Expanded(child: cartes[a + 1]),
+          ]));
+      return Column(children: [ligne(0), const SizedBox(height: 10), ligne(2)]);
+    });
   }
 
   // ── Bloc tableau : filtres + onglets + liste ──────────────────────────
@@ -342,7 +361,7 @@ class _AdminNotesState extends State<AdminNotes> {
         Padding(
           padding: const EdgeInsets.all(14),
           child: Row(children: [
-            Text(liste.isEmpty ? '' : 'Affichage ${_page * _parPage + 1}–${_page * _parPage + page.length} sur ${liste.length}', style: AdminTheme.caption),
+            Flexible(child: Text(liste.isEmpty ? '' : 'Affichage ${_page * _parPage + 1}–${_page * _parPage + page.length} sur ${liste.length}', style: AdminTheme.caption, maxLines: 2, overflow: TextOverflow.ellipsis)),
             const Spacer(),
             IconButton(onPressed: _page > 0 ? () => setState(() => _page--) : null, icon: const Icon(Icons.chevron_left_rounded)),
             Text('${_page + 1} / $nbPages', style: AdminTheme.caption.copyWith(fontWeight: FontWeight.w700)),
@@ -373,7 +392,7 @@ class _AdminNotesState extends State<AdminNotes> {
   }
 
   Widget _filtre(String titre, String? valeur, List<String> ids, List<String> labels, ValueChanged<String?> onChanged) => Container(
-        width: 170,
+        width: (MediaQuery.of(context).size.width - 84).clamp(120.0, 170.0),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(color: AdminTheme.surface, borderRadius: BorderRadius.circular(AdminTheme.radiusButton), border: Border.all(color: AdminTheme.border)),
         child: DropdownButtonHideUnderline(child: DropdownButton<String>(
@@ -394,7 +413,7 @@ class _AdminNotesState extends State<AdminNotes> {
       return InkWell(
         onTap: () => setState(() { _tab = i; _page = 0; _sel.clear(); if (i != 0) _fStatut = null; }),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: actif ? AdminTheme.primary : Colors.transparent, width: 2))),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: actif ? AdminTheme.primary : AdminTheme.textSecondary)),

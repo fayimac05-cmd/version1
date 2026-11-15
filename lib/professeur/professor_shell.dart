@@ -1964,6 +1964,8 @@ class _ProfilTabState extends State<_ProfilTab> {
   // ── Adresse / attestation / préférences — état local, persisté côté
   // serveur via PATCH /api/auth/profil et POST /api/upload/attestation-service.
   late String? _adresse = profile.adresse;
+  late String _email = profile.email;
+  late String _tel = profile.telephone;
   late String? _photoUrl = profile.photoUrl;
   late String? _attestationUrl = profile.attestationUrl;
   late String _langue = profile.langue;
@@ -2095,6 +2097,47 @@ class _ProfilTabState extends State<_ProfilTab> {
     if (nouvelle == null) return;
     final ok = await _sauvegarderProfil({'adresse': nouvelle});
     if (ok && mounted) setState(() => _adresse = nouvelle);
+  }
+
+  // Modification du téléphone / de l'e-mail par le professeur lui-même.
+  Future<void> _modifierContact({required bool email}) async {
+    final ctrl = TextEditingController(text: email ? _email : _tel);
+    final saisie = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(email ? 'Adresse e-mail' : 'Numéro de téléphone'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: email ? TextInputType.emailAddress : TextInputType.phone,
+          decoration: InputDecoration(
+            hintText: email ? 'ex: nom@gmail.com' : 'ex: 70 12 34 56 ou +22670123456',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.blue, foregroundColor: Colors.white),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+    if (saisie == null || !mounted) return;
+    final propre = email ? saisie.toLowerCase() : saisie.replaceAll(RegExp(r'[\s.\-()]'), '');
+    final valide = email
+        ? RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(propre)
+        : RegExp(r'^\+?\d{8,15}$').hasMatch(propre);
+    if (!valide) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(email ? 'Adresse e-mail invalide.' : 'Numéro de téléphone invalide.'), backgroundColor: Colors.red));
+      return;
+    }
+    final ok = await _sauvegarderProfil(email ? {'email': propre} : {'tel': propre});
+    if (ok && mounted) setState(() => email ? _email = propre : _tel = propre);
   }
 
   Future<void> _toggleNotifications(bool valeur) async {
@@ -2323,9 +2366,9 @@ class _ProfilTabState extends State<_ProfilTab> {
         const SizedBox(height: 14),
         _profilLigne(Icons.badge_outlined, 'Nom complet', '${profile.prenoms} ${profile.nom}'),
         const Divider(height: 24),
-        _profilLigne(Icons.email_outlined, 'Email', profile.email.isNotEmpty ? profile.email : '—'),
+        _profilLigne(Icons.email_outlined, 'Email', _email.isNotEmpty ? _email : '—'),
         const Divider(height: 24),
-        _profilLigne(Icons.phone_outlined, 'Téléphone', profile.telephone.isNotEmpty ? profile.telephone : '—'),
+        _profilLigne(Icons.phone_outlined, 'Téléphone', _tel.isNotEmpty ? _tel : '—'),
         const Divider(height: 24),
         _profilLigne(Icons.badge_outlined, 'Matricule', profile.matricule),
       ]),
@@ -2414,9 +2457,23 @@ class _ProfilTabState extends State<_ProfilTab> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _cardTitre(Icons.contact_phone_outlined, 'Mes contacts'),
         const SizedBox(height: 14),
-        _profilLigne(Icons.phone_outlined, 'Téléphone principal', profile.telephone.isNotEmpty ? profile.telephone : '—'),
+        Row(children: [
+          Expanded(child: _profilLigne(Icons.phone_outlined, 'Téléphone principal', _tel.isNotEmpty ? _tel : '—')),
+          IconButton(
+            onPressed: _savingProfil ? null : () => _modifierContact(email: false),
+            icon: const Icon(Icons.edit_outlined, size: 18, color: AppPalette.blue),
+            tooltip: 'Modifier',
+          ),
+        ]),
         const Divider(height: 24),
-        _profilLigne(Icons.email_outlined, 'Email professionnel', profile.email.isNotEmpty ? profile.email : '—'),
+        Row(children: [
+          Expanded(child: _profilLigne(Icons.email_outlined, 'Email professionnel', _email.isNotEmpty ? _email : '—')),
+          IconButton(
+            onPressed: _savingProfil ? null : () => _modifierContact(email: true),
+            icon: const Icon(Icons.edit_outlined, size: 18, color: AppPalette.blue),
+            tooltip: 'Modifier',
+          ),
+        ]),
         const Divider(height: 24),
         Row(children: [
           Expanded(child: _profilLigne(Icons.location_on_outlined, 'Adresse', (_adresse ?? '').isNotEmpty ? _adresse! : 'Non renseignée')),
