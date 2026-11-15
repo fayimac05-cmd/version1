@@ -15,6 +15,7 @@ import 'auth_page.dart';
 import '../widgets/scolarhub_logo.dart';
 import '../widgets/celebration_diplomes.dart';
 import '../widgets/intro_video.dart';
+import '../services/onesignal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -248,8 +249,10 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     SocketService().connect(profile.matricule);
+    OneSignalService.login(profile.matricule);
 
     void logout() {
+      OneSignalService.logout();
       ApiService.clearToken().then((_) {
         ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const SplashScreen()),

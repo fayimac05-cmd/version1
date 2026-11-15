@@ -6,6 +6,7 @@ import 'app/scolar_hub_app.dart';
 import 'models/student_profile.dart';
 import 'pages/splash_screen.dart';
 import 'pages/student_shell.dart';
+import 'services/onesignal_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +55,9 @@ Future<void> _initialiserServices(Stopwatch chrono) async {
   } catch (e) {
     debugPrint('❌ Erreur Supabase init : $e');
   }
+
+  // 3. Initialiser OneSignal Push Notifications
+  await OneSignalService.init();
 }
 
 void goToDashboard(BuildContext context, StudentProfile profile) {

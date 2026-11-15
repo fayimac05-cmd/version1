@@ -18,6 +18,7 @@ import '../pages/register_page.dart';
 import '../config/etablissement_config.dart';
 import '../services/socket_service.dart';
 import '../services/supabase_service.dart';
+import '../services/onesignal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/session_service.dart';
 
@@ -327,6 +328,9 @@ class _AuthPageState extends State<AuthPage> {
       'matriculeEnfant': profile.matriculeEnfant,
     });
 
+    // Lier l'utilisateur connecté à OneSignal pour les notifications ciblées
+    OneSignalService.login(profile.matricule.isNotEmpty ? profile.matricule : (profile.email ?? ''));
+
     // Utilise le navigateur global : le context de cette page n'existe plus
     // au moment où l'utilisateur se déconnecte depuis son tableau de bord.
     // ✅ CORRIGÉ — clearToken() n'était pas attendu avant la navigation.
@@ -338,6 +342,7 @@ class _AuthPageState extends State<AuthPage> {
     // (compatible VoidCallback, attendu par les écrans onLogout:) tout en
     // chaînant via .then() pour préserver l'ordre.
     void logout() {
+      OneSignalService.logout();
       ApiService.clearToken().then((_) {
         SessionService.oublier();
         ScolarHubApp.navigatorKey.currentState?.pushAndRemoveUntil(

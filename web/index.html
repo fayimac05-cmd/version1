@@ -31,6 +31,59 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>ScolarHub</title>
+
+  <!-- OneSignal Web Push -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "1d27fa01-4cdf-4ea7-8c47-1af912cc740b",
+        notifyButton: {
+          enable: true,
+          size: 'medium',
+          position: 'bottom-right',
+          text: {
+            'tip.state.unsubscribed': 'Activer les notifications',
+            'tip.state.subscribed': 'Notifications activées',
+            'tip.state.blocked': 'Notifications bloquées',
+            'message.prenotify': 'Cliquez pour activer les notifications',
+            'message.action.subscribed': 'Merci de vous être abonné !',
+            'message.action.resubscribed': 'Notifications réactivées !',
+            'message.action.unsubscribed': 'Vous ne recevrez plus de notifications.',
+            'dialog.main.title': 'Gérer les notifications',
+            'dialog.main.button.subscribe': 'Activer',
+            'dialog.main.button.unsubscribe': 'Désactiver',
+            'dialog.blocked.title': 'Débloquer les notifications',
+            'dialog.blocked.message': 'Autorisez les notifications dans les paramètres du navigateur.',
+          }
+        },
+        welcomeNotification: {
+          title: "ScolarHub",
+          message: "Merci ! Vous recevrez les notifications de ScolarHub.",
+        },
+        promptOptions: {
+          slidedown: {
+            prompts: [
+              {
+                type: "push",
+                autoPrompt: true,
+                text: {
+                  actionMessage: "Recevez les notifications de notes, messages et appels en temps réel.",
+                  acceptButton: "Activer",
+                  cancelButton: "Plus tard",
+                },
+                delay: {
+                  pageViews: 1,
+                  timeDelay: 5,
+                },
+              }
+            ]
+          }
+        }
+      });
+    });
+  </script>
   <meta name="theme-color" content="#0D55B0">
   <link rel="manifest" href="manifest.json">
 

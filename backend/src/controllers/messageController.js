@@ -6,6 +6,7 @@
 const pool = require('../config/db');
 const supabase = require('../config/supabase');
 const { notifierUser, assurerColonnesReponse, citationCanal, citationGroupe } = require('../socket/socketHandler');
+const { envoyerNotification } = require('../services/onesignal.service');
 
 const { resolveFiliere, normalizeNiveau } = require('../utils/filieres');
 const { ensureCanauxStandard } = require('../utils/canauxStandard');
@@ -518,6 +519,30 @@ const envoyerMessageCanal = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.to(`canal:${id}`).emit('message:canal', message);
 
+    // 🔔 Notification push OneSignal aux membres du canal (hors expéditeur)
+    try {
+      const { rows: membres } = await pool.query(
+        `SELECT u.matricule FROM canal_membres cm
+         JOIN users u ON u.id = cm.user_id
+         WHERE cm.canal_id = $1 AND cm.user_id != $2 AND u.matricule IS NOT NULL`,
+        [id, req.user.id]
+      );
+      if (membres.length > 0) {
+        const matricules = membres.map(m => m.matricule);
+        const canalNom = canal?.nom || 'Canal';
+        const expediteurNom = `${message.prenoms || ''} ${message.nom || ''}`.trim();
+        const apercu = contenu.trim().length > 80 ? contenu.trim().substring(0, 80) + '...' : contenu.trim();
+        envoyerNotification({
+          titre: `📢 ${canalNom}`,
+          message: `${expediteurNom}: ${apercu}`,
+          destinataires: matricules,
+          donnees: { type: 'message_canal', canal_id: id },
+        }).catch(e => console.warn('[OneSignal] Erreur notif canal:', e.message));
+      }
+    } catch (e) {
+      console.warn('[OneSignal] Erreur notif canal:', e.message);
+    }
+
     res.status(201).json({ success: true, data: message });
   } catch (err) {
     console.error(err);
@@ -661,6 +686,26 @@ const envoyerMessagePrive = async (req, res) => {
     // userId est un UUID : ne surtout pas le convertir en entier
     const io = req.app.get('io');
     if (io) notifierUser(io, userId, 'message:prive', messageComplet);
+
+    // 🔔 Notification push OneSignal au destinataire
+    try {
+      const { rows: destRows } = await pool.query(
+        `SELECT matricule FROM users WHERE id = $1`,
+        [userId]
+      );
+      if (destRows[0]?.matricule) {
+        const expediteurNom = `${senderRows[0]?.prenoms || ''} ${senderRows[0]?.nom || ''}`.trim();
+        const apercu = contenu.trim().length > 80 ? contenu.trim().substring(0, 80) + '...' : contenu.trim();
+        envoyerNotification({
+          titre: `💬 ${expediteurNom}`,
+          message: apercu,
+          destinataires: destRows[0].matricule,
+          donnees: { type: 'message_prive', expediteur_id: req.user.id },
+        }).catch(e => console.warn('[OneSignal] Erreur notif message privé:', e.message));
+      }
+    } catch (e) {
+      console.warn('[OneSignal] Erreur notif message privé:', e.message);
+    }
 
     res.status(201).json({ success: true, data: messageComplet });
   } catch (err) {
@@ -861,6 +906,31 @@ const envoyerMessageGroupe = async (req, res) => {
     // Diffusion limitée à la salle « filière + niveau » : les autres niveaux ne reçoivent rien.
     const io = req.app.get('io');
     if (io) io.to(roomGroupe(filiereId, acces.niveau)).emit('message:groupe', messageAvecAuteur);
+
+    // 🔔 Notification push OneSignal aux étudiants du groupe (hors expéditeur)
+    try {
+      const { rows: membres } = await pool.query(
+        `SELECT u.matricule FROM etudiants e
+         JOIN users u ON u.id = e.user_id
+         WHERE e.filiere_id = $1 AND e.niveau = $2 AND e.user_id != $3
+           AND u.matricule IS NOT NULL
+           AND COALESCE(u.statut, 'actif') NOT IN ('suspendu', 'renvoye')`,
+        [filiereId, acces.niveau, req.user.id]
+      );
+      if (membres.length > 0) {
+        const matricules = membres.map(m => m.matricule);
+        const expediteurNom = `${userRows[0]?.prenoms || ''} ${userRows[0]?.nom || ''}`.trim();
+        const apercu = contenu.trim().length > 80 ? contenu.trim().substring(0, 80) + '...' : contenu.trim();
+        envoyerNotification({
+          titre: `👥 Groupe ${acces.niveau}`,
+          message: `${expediteurNom}: ${apercu}`,
+          destinataires: matricules,
+          donnees: { type: 'message_groupe', filiere_id: filiereId, niveau: acces.niveau },
+        }).catch(e => console.warn('[OneSignal] Erreur notif groupe:', e.message));
+      }
+    } catch (e) {
+      console.warn('[OneSignal] Erreur notif groupe:', e.message);
+    }
 
     res.status(201).json({ success: true, data: messageAvecAuteur });
   } catch (err) {

@@ -1,6 +1,7 @@
 const PDFDocument = require('pdfkit');
 const pool = require('../config/db');
 const { envoyerNotificationAuto } = require('./notifications.controller');
+const { envoyerNotification } = require('../services/onesignal.service');
 const { parseSemestre, niveauCompatible, niveauDuSemestre } = require('../utils/semestres');
 
 // ── Multi-établissement ─────────────────────────────────────────────────────
@@ -349,11 +350,13 @@ const validateSessionAdmin = async (req, res) => {
                 const moduleRes = await pool.query('SELECT nom FROM modules WHERE id = $1', [result.rows[0].module_id]);
                 const moduleNom = moduleRes.rows[0]?.nom || 'un module';
                 const etusRes = await pool.query(
-                    `SELECT DISTINCT e.user_id FROM notes n
+                    `SELECT DISTINCT e.user_id, u.matricule FROM notes n
                      JOIN etudiants e ON e.id = n.etudiant_id
+                     JOIN users u ON u.id = e.user_id
                      WHERE n.session_id = $1 AND e.user_id IS NOT NULL`,
                     [session_id]
                 );
+                const matricules = [];
                 for (const row of etusRes.rows) {
                     await envoyerNotificationAuto(
                         row.user_id,
@@ -362,6 +365,16 @@ const validateSessionAdmin = async (req, res) => {
                         'note',
                         null
                     );
+                    if (row.matricule) matricules.push(row.matricule);
+                }
+                // 🔔 Notification push OneSignal à tous les étudiants concernés
+                if (matricules.length > 0) {
+                    envoyerNotification({
+                        titre: '📝 Nouvelle note disponible',
+                        message: `Vos notes de ${moduleNom} ont été publiées. Consultez vos résultats.`,
+                        destinataires: matricules,
+                        donnees: { type: 'note_publiee', session_id },
+                    }).catch(e => console.warn('[OneSignal] Erreur notif notes:', e.message));
                 }
             } catch (notifErr) {
                 console.error('[validateSessionAdmin] notification', notifErr.message);

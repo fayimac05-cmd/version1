@@ -42,6 +42,7 @@ dependencies:
   flutter_dotenv: ^5.0.2
   qr_flutter: ^4.1.0
   video_player: ^2.11.1
+  onesignal_flutter: ^5.2.7
 
 dev_dependencies:
   flutter_test:
