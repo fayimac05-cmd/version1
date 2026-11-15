@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1050003258121",
+    "project_id": "scolarhub-989fd",
+    "storage_bucket": "scolarhub-989fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1050003258121:android:4aecf8a684639a074e71d8",
+        "android_client_info": {
+          "package_name": "com.scolarhub.appname"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfHnOY2-9wXf1dEdxXnTP_p179NEkVX3A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
