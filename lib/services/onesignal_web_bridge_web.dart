@@ -25,3 +25,21 @@ bool isWebNotificationGranted() {
   }
 }
 
+
+@JS('oneSignalLogin')
+external void _oneSignalLogin(JSString externalId);
+
+@JS('oneSignalLogout')
+external void _oneSignalLogout();
+
+void webOneSignalLogin(String externalId) {
+  try {
+    _oneSignalLogin(externalId.toJS);
+  } catch (_) {}
+}
+
+void webOneSignalLogout() {
+  try {
+    _oneSignalLogout();
+  } catch (_) {}
+}

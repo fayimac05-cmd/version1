@@ -45,8 +45,12 @@ class OneSignalService {
   /// Associe l'utilisateur connecté (par son matricule ou son identifiant)
   /// pour lui envoyer des notifications ciblées depuis le backend.
   static Future<void> login(String externalUserId) async {
-    if (kIsWeb) return; // Géré côté JS pour le web
     if (externalUserId.trim().isEmpty) return;
+    if (kIsWeb) {
+      // Sur le web : SDK JS (index.html) via la passerelle
+      webOneSignalLogin(externalUserId.trim());
+      return;
+    }
     try {
       await OneSignal.login(externalUserId.trim());
       debugPrint('👤 [OneSignal] Utilisateur connecté: $externalUserId');
@@ -57,7 +61,10 @@ class OneSignalService {
 
   /// Déconnecte l'utilisateur de OneSignal lors du logout
   static Future<void> logout() async {
-    if (kIsWeb) return; // Géré côté JS pour le web
+    if (kIsWeb) {
+      webOneSignalLogout();
+      return;
+    }
     try {
       await OneSignal.logout();
       debugPrint('🚪 [OneSignal] Utilisateur déconnecté');

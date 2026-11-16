@@ -3,3 +3,7 @@ Future<bool> requestWebNotificationPermission() async => false;
 
 bool isWebNotificationGranted() => false;
 
+
+void webOneSignalLogin(String externalId) {}
+
+void webOneSignalLogout() {}
