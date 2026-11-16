@@ -86,17 +86,6 @@
         }
       });
 
-      // Demander la permission directement si pas encore accordée
-      const permission = await OneSignal.Notifications.permission;
-      if (!permission) {
-        setTimeout(async () => {
-          try {
-            await OneSignal.Notifications.requestPermission();
-          } catch(e) {
-            console.log('[OneSignal] Permission refusée ou déjà demandée.');
-          }
-        }, 4000);
-      }
     });
   </script>
   <meta name="theme-color" content="#0D55B0">
