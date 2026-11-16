@@ -39,6 +39,7 @@
     OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "1d27fa01-4cdf-4ea7-8c47-1af912cc740b",
+        allowLocalhostAsSecureOrigin: true,
         notifyButton: {
           enable: true,
           size: 'large',
@@ -150,6 +151,36 @@
     #sh-install .sh-etapes { font-size: 13px; color: #334155; margin: 10px 0 0; padding-left: 0; list-style: none; }
     #sh-install .sh-etapes li { margin: 4px 0; }
     @keyframes sh-monte { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Bandeau d'activation des notifications */
+    #sh-notif-prompt {
+      position: fixed; top: 16px; right: 16px; z-index: 9999999;
+      padding: 14px 16px; background: #ffffff; border-radius: 16px;
+      border: 1px solid #DCEAFF; box-shadow: 0 10px 32px rgba(13, 85, 176, 0.22);
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      color: #0F172A; max-width: 360px; display: none;
+      pointer-events: auto !important;
+      animation: sh-notif-enter .35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes sh-notif-enter {
+      from { opacity: 0; transform: translateY(-16px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    #sh-notif-prompt * { pointer-events: auto !important; }
+    #sh-notif-prompt .sh-np-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    #sh-notif-prompt .sh-np-icon {
+      width: 36px; height: 36px; border-radius: 10px; background: #EFF6FF;
+      display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none;
+    }
+    #sh-notif-prompt .sh-np-title { font-size: 14.5px; font-weight: 700; color: #083B87; }
+    #sh-notif-prompt .sh-np-body { font-size: 12.5px; color: #475569; line-height: 1.4; margin-bottom: 12px; }
+    #sh-notif-prompt .sh-np-actions { display: flex; gap: 8px; }
+    #sh-notif-prompt .sh-np-btn {
+      flex: 1; border: 0; border-radius: 10px; padding: 9px 12px;
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    #sh-notif-prompt .sh-np-btn-ok { background: #0D55B0; color: #fff; }
+    #sh-notif-prompt .sh-np-btn-cancel { background: #F1F5F9; color: #64748B; }
   </style>
 </head>
 <body>
@@ -283,6 +314,139 @@
       function planifier() { if (pret) return; pret = true; setTimeout(afficher, 2500); }
       window.addEventListener('flutter-first-frame', planifier);
       setTimeout(planifier, 15000);
+    })();
+  </script>
+
+  <!-- Invite interactive d'activation des notifications push -->
+  <div id="sh-notif-prompt">
+    <div class="sh-np-header">
+      <div class="sh-np-icon">🔔</div>
+      <div class="sh-np-title">Notifications ScolarHub</div>
+    </div>
+    <div class="sh-np-body">
+      Activez les notifications pour recevoir vos notes, messages, appels et annonces en temps réel.
+    </div>
+    <div class="sh-np-actions">
+      <button class="sh-np-btn sh-np-btn-ok" id="sh-np-ok">Activer</button>
+      <button class="sh-np-btn sh-np-btn-cancel" id="sh-np-cancel">Plus tard</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      function cacherDefinitivement() {
+        var promptEl = document.getElementById('sh-notif-prompt');
+        if (promptEl) {
+          promptEl.style.display = 'none';
+          if (promptEl.parentNode) promptEl.parentNode.removeChild(promptEl);
+        }
+      }
+
+      // Fonctions passerelle vers Flutter Web
+      window.demanderPermissionOneSignal = async function() {
+        cacherDefinitivement();
+        try {
+          if (window.OneSignalDeferred) {
+            return new Promise(function(resolve) {
+              window.OneSignalDeferred.push(async function(OneSignal) {
+                try {
+                  var granted = await OneSignal.Notifications.requestPermission();
+                  if (granted || (typeof Notification !== 'undefined' && Notification.permission === 'granted')) {
+                    cacherDefinitivement();
+                    resolve(true);
+                  } else {
+                    resolve(false);
+                  }
+                } catch(e) {
+                  resolve(typeof Notification !== 'undefined' && Notification.permission === 'granted');
+                }
+              });
+            });
+          } else if ('Notification' in window) {
+            var perm = await Notification.requestPermission();
+            if (perm === 'granted') cacherDefinitivement();
+            return perm === 'granted';
+          }
+          return false;
+        } catch(e) {
+          console.error('[OneSignal Bridge] Erreur:', e);
+          return false;
+        }
+      };
+
+      window.estPermissionOneSignalAccordee = function() {
+        if (typeof Notification === 'undefined') return false;
+        return Notification.permission === 'granted';
+      };
+
+      function verifierNotification() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') {
+          cacherDefinitivement();
+          return;
+        }
+
+        var promptEl = document.getElementById('sh-notif-prompt');
+
+        var refuseRecemment = false;
+        try {
+          var t = parseInt(localStorage.getItem('sh_notif_dismissed') || '0', 10);
+          if (t && Date.now() - t < 24 * 3600 * 1000) refuseRecemment = true;
+        } catch (e) {}
+
+        if (!refuseRecemment && promptEl) {
+          promptEl.style.display = 'block';
+        }
+      }
+
+      function declencherPermission() {
+        if (window.OneSignalDeferred) {
+          window.OneSignalDeferred.push(async function(OneSignal) {
+            try {
+              var granted = await OneSignal.Notifications.requestPermission();
+              if (granted || Notification.permission === 'granted') {
+                cacherDefinitivement();
+              }
+            } catch (err) {
+              console.warn('[OneSignal] Erreur demande permission:', err);
+            }
+          });
+        } else if ('Notification' in window) {
+          Notification.requestPermission().then(function(perm) {
+            if (perm === 'granted') {
+              cacherDefinitivement();
+            }
+          });
+        }
+      }
+
+      // Écouter si la permission change
+      if (window.OneSignalDeferred) {
+        window.OneSignalDeferred.push(function(OneSignal) {
+          OneSignal.Notifications.addEventListener('permissionChange', function(permission) {
+            if (permission) {
+              cacherDefinitivement();
+            }
+          });
+        });
+      }
+
+      var btnOk = document.getElementById('sh-np-ok');
+      if (btnOk) btnOk.addEventListener('click', declencherPermission);
+
+      var btnCancel = document.getElementById('sh-np-cancel');
+      if (btnCancel) {
+        btnCancel.addEventListener('click', function () {
+          var promptEl = document.getElementById('sh-notif-prompt');
+          if (promptEl) promptEl.style.display = 'none';
+          try { localStorage.setItem('sh_notif_dismissed', String(Date.now())); } catch (e) {}
+        });
+      }
+
+      window.addEventListener('flutter-first-frame', function () {
+        setTimeout(verifierNotification, 1800);
+      });
+      setTimeout(verifierNotification, 4000);
     })();
   </script>
   <!--
