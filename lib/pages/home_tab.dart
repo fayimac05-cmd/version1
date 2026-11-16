@@ -21,6 +21,7 @@ import 'checkin_screen.dart';
 import 'planning_tab.dart';
 import 'cantine_sheet.dart';
 import '../services/cantine_service.dart';
+import '../services/onesignal_service.dart';
 import 'mes_notes_page.dart';
 
 
@@ -57,6 +58,7 @@ class _HomeTabState extends State<HomeTab> {
   int _notifsNonLues = 0;
   // ── Badge non-lu de "Ma filière" ──────────────────────────────────────
   int _nonLusMaFiliere = 0;
+  bool _notifsActive = false;
  
   bool _apercuLoading = true;
   double? _moyenne;
@@ -87,6 +89,7 @@ class _HomeTabState extends State<HomeTab> {
   @override
   void initState() {
     super.initState();
+    _notifsActive = OneSignalService.hasPermission();
     widget.refreshSignal?.addListener(_onRefreshSignal);
     _fetchAnnonces();
     _fetchEvenements();
@@ -500,6 +503,10 @@ class _HomeTabState extends State<HomeTab> {
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 105),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  if (!_notifsActive) ...[
+                    _buildNotificationBanner(context),
+                    const SizedBox(height: 16),
+                  ],
                   _buildProchainCours(context),
                   const SizedBox(height: 20),
                   _buildApercuDuJour(),
@@ -522,7 +529,115 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
- 
+
+  Widget _buildNotificationBanner(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D55B0), Color(0xFF1E3A8A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D55B0).withValues(alpha: 0.22),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Activez vos notifications !',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Recevez directement vos notes, cours, messages et alertes d\'absence.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 12.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final granted = await OneSignalService.requestPermission();
+                final isActive = granted || OneSignalService.hasPermission();
+                if (mounted) {
+                  if (isActive) {
+                    setState(() => _notifsActive = true);
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isActive
+                            ? '✅ Notifications activées avec succès !'
+                            : '🔔 Demande de notifications transmise.',
+                      ),
+                      backgroundColor: const Color(0xFF0D55B0),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+              label: const Text(
+                'Activer les notifications',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF0D55B0),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 Widget _buildHeader(BuildContext context) {
     final initiales =
         '${widget.profile.prenoms.isNotEmpty ? widget.profile.prenoms[0] : ''}'
