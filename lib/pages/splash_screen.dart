@@ -249,7 +249,8 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     SocketService().connect(profile.matricule);
-    OneSignalService.login(profile.matricule);
+    final loginId = profile.matricule.isNotEmpty ? profile.matricule : (profile.email ?? '');
+    OneSignalService.login(loginId);
 
     void logout() {
       OneSignalService.logout();
