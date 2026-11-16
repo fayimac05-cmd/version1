@@ -78,13 +78,22 @@ class _IntroVideoState extends State<IntroVideo> {
     if (!_pret || c == null) {
       return const ColoredBox(color: Colors.white);
     }
-    return ClipRect(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: c.value.size.width,
-          height: c.value.size.height,
-          child: VideoPlayer(c),
+    final ecran = MediaQuery.of(context).size;
+    final ratioVideo = c.value.size.width / c.value.size.height;
+    // Écran plus « haut » que la vidéo (téléphone en portrait) : on montre toute
+    // la vidéo (contain) au lieu de la zoomer. Sinon (ordinateur, tablette
+    // paysage) : plein écran comme avant (cover).
+    final portrait = (ecran.width / ecran.height) < ratioVideo;
+    return ColoredBox(
+      color: Colors.white,
+      child: ClipRect(
+        child: FittedBox(
+          fit: portrait ? BoxFit.contain : BoxFit.cover,
+          child: SizedBox(
+            width: c.value.size.width,
+            height: c.value.size.height,
+            child: VideoPlayer(c),
+          ),
         ),
       ),
     );
