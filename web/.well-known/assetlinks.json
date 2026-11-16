@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "bf.scolarhub.app",
+    "sha256_cert_fingerprints": ["23:7A:83:B5:7C:A5:DC:FD:E9:B6:5A:B1:65:3C:90:8E:BE:42:FF:6E:01:93:46:83:DC:D7:39:3A:92:16:FF:10"]
+  }
+}]
