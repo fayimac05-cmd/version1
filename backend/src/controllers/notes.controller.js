@@ -53,6 +53,9 @@ const getNotesEtudiant = async (req, res) => {
 
         const result = await pool.query(`
             SELECT n.id, n.valeur AS note, n.mention, m.id AS module_id, m.nom AS module_nom, m.coefficient,
+                   (SELECT COUNT(*) FROM notes_historique h WHERE h.note_id = n.id::text)::int AS nb_corrections,
+                   (SELECT h.ancienne_valeur FROM notes_historique h WHERE h.note_id = n.id::text
+                     ORDER BY h.created_at ASC LIMIT 1) AS valeur_initiale,
                    sn.date_session, sn.semestre, sn.annee_academique,
                    u.nom AS prof_nom, u.prenoms AS prof_prenoms
             FROM notes n

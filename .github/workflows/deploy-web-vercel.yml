@@ -1,0 +1,49 @@
+# .github/workflows/deploy-web-vercel.yml
+# À chaque push sur la branche ci-dessous : construit le site Flutter web et le met en ligne sur Vercel.
+# L'APK (qui affiche scolarhub.vercel.app) se met alors à jour tout seul, sans régénération.
+name: Deploy web to Vercel
+
+on:
+  push:
+    branches: [ibrahim-kouraogo]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/deploy-web-vercel.yml'
+  workflow_dispatch:   # bouton « Run workflow » pour relancer à la main
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Le .env n'est pas dans Git : on le recrée depuis le secret FLUTTER_ENV (contenu complet du fichier).
+      - name: Créer le fichier .env
+        env:
+          FLUTTER_ENV: ${{ secrets.FLUTTER_ENV }}
+        run: |
+          if [ -z "$FLUTTER_ENV" ]; then echo "Secret FLUTTER_ENV manquant" && exit 1; fi
+          printf '%s\n' "$FLUTTER_ENV" > .env
+
+      - run: flutter pub get
+      - run: flutter build web --release --no-wasm-dry-run
+
+      # build/web contient déjà vercel.json (copié depuis web/)
+      - name: Déployer sur Vercel
+        working-directory: build/web
+        run: npx --yes vercel@65 deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
