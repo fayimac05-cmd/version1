@@ -82,6 +82,7 @@ class _AdminCantineState extends State<AdminCantine> {
   List<CantinePlat> _plats = [];
   final Map<String, bool> _publie = {'petit_dejeuner': false, 'dejeuner': false, 'diner': false};
   bool _publication = false;
+  bool _reprise = false;
 
   // Filtre / recherche de la liste
   String _filtre = 'tous';
@@ -189,6 +190,94 @@ class _AdminCantineState extends State<AdminCantine> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: erreur ? Colors.redAccent : const Color(0xFF1E293B)),
+    );
+  }
+
+  // ── Reprendre le menu d'un autre jour ───────────────────────────────────
+  String _isoDe(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _dateCourte(DateTime d) => '${_jours[d.weekday - 1]} ${d.day} ${_mois[d.month - 1]}';
+
+  Future<void> _reprendreMenu() async {
+    final src = await showDatePicker(
+      context: context,
+      initialDate: _date.subtract(const Duration(days: 1)),
+      firstDate: DateTime.now().subtract(const Duration(days: 90)),
+      lastDate: DateTime.now().add(const Duration(days: 60)),
+      helpText: 'Reprendre le menu du…',
+    );
+    if (src == null || !mounted) return;
+    final srcIso = _isoDe(src);
+    if (srcIso == _dateIso) {
+      _snack('Choisissez un autre jour que celui affiché.', erreur: true);
+      return;
+    }
+    final choix = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Reprendre ce menu ?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        content: Text("Les plats du ${_dateCourte(src)} seront copiés vers le ${_dateLongue}. "
+            "Rien n'est publié : vous pourrez les vérifier avant."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, 'repas'), child: Text(_libelleRepas)),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 'tous'),
+            style: ElevatedButton.styleFrom(backgroundColor: _bleu, foregroundColor: Colors.white, elevation: 0),
+            child: const Text('Tous les repas'),
+          ),
+        ],
+      ),
+    );
+    if (choix == null || !mounted) return;
+    setState(() => _reprise = true);
+    final r = await CantineService.copier(source: srcIso, cible: _dateIso, repas: choix == 'repas' ? _repas : null);
+    if (!mounted) return;
+    setState(() {
+      _reprise = false;
+      if (r['success'] == true) _plats.addAll(List<CantinePlat>.from(r['plats'] as List));
+    });
+    if (r['success'] == true) {
+      _snack(r['message'] as String? ?? 'Menu repris.');
+    } else {
+      _snack(r['error'] as String? ?? 'Erreur.', erreur: true);
+    }
+  }
+
+  Widget _barreReprise(bool compact) {
+    final bouton = OutlinedButton.icon(
+      onPressed: _reprise ? null : _reprendreMenu,
+      icon: _reprise
+          ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.content_copy_rounded, size: 17),
+      label: const Text('Reprendre un menu'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _bleu,
+        side: const BorderSide(color: Color(0xFFC7D7F8)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16, vertical: 10),
+      decoration: _carte,
+      child: Row(children: [
+        const Icon(Icons.history_rounded, color: _bleu, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            compact ? "Même menu qu'un autre jour ?" : "Vous servez le même menu qu'un autre jour ? Reprenez-le au lieu de le retaper.",
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(width: 10),
+        bouton,
+      ]),
     );
   }
 
@@ -758,6 +847,8 @@ class _AdminCantineState extends State<AdminCantine> {
                               _vueCommandes(compact, w)
                             else ...[
                               _selecteurRepas(compact),
+                              const SizedBox(height: 12),
+                              _barreReprise(compact),
                               const SizedBox(height: 12),
                               _formulaire(compact, w),
                               const SizedBox(height: 12),
