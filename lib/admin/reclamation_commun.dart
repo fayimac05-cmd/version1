@@ -27,6 +27,14 @@ String fmtDateRecl(dynamic iso, {bool heure = false}) {
   return heure ? '$d ${d2(dt.hour)}:${d2(dt.minute)}' : d;
 }
 
+/// 12 → « 12 », 12.5 → « 12,5 » (virgule à la française).
+String fmtNote(double? v) {
+  if (v == null) return '—';
+  var t = v.toStringAsFixed(2);
+  if (t.contains('.')) t = t.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  return t.replaceAll('.', ',');
+}
+
 // ── API ─────────────────────────────────────────────────────────────────────
 class ReclamationsApi {
   static Future<Map<String, dynamic>> _req(
@@ -59,6 +67,19 @@ class ReclamationsApi {
       _req('PATCH', '/$id/transferer', body: {'prof_id': profId, 'consigne': consigne});
   static Future<Map<String, dynamic>> retour(String id, String commentaire) =>
       _req('PATCH', '/$id/retour', body: {'commentaire': commentaire});
+  // Réclamation de note : décision du professeur, vérification et publication par l'administration.
+  static Future<Map<String, dynamic>> notesConcernees(String id) => _req('GET', '/$id/notes-concernees');
+  static Future<Map<String, dynamic>> retourDecision(String id,
+          {required String decision, required String commentaire, String? noteId, String? nouvelleNote}) =>
+      _req('PATCH', '/$id/retour', body: {
+        'decision': decision, 'commentaire': commentaire,
+        if (noteId != null) 'note_id': noteId,
+        if (nouvelleNote != null) 'nouvelle_note': nouvelleNote,
+      });
+  static Future<Map<String, dynamic>> renvoyer(String id, String consigne) =>
+      _req('PATCH', '/$id/renvoyer', body: {'consigne': consigne});
+  static Future<Map<String, dynamic>> repondreNote(String id, {String reponse = '', String? noteFinale}) =>
+      _req('PATCH', '/$id/repondre', body: {'reponse': reponse, if (noteFinale != null) 'note_finale': noteFinale});
   static Future<Map<String, dynamic>> repondre(String id, String reponse) =>
       _req('PATCH', '/$id/repondre', body: {'reponse': reponse});
   static Future<Map<String, dynamic>> rejeter(String id, String motif) =>
@@ -116,6 +137,12 @@ class Recl {
   String get date => fmtDateRecl(j['created_at']);
   int get nbPieces => int.tryParse('${j['nb_pieces'] ?? 0}') ?? 0;
   bool get cloturee => statut == 'resolu' || statut == 'rejete';
+  bool get estNote => categorie == 'Notes & Moyennes';
+  String get decisionProf => j['decision_prof']?.toString() ?? '';
+  double? _num(String k) => j[k] == null ? null : double.tryParse(j[k].toString());
+  double? get ancienneNote => _num('ancienne_note');
+  double? get noteProposee => _num('note_proposee');
+  double? get noteFinale => _num('note_finale');
 
   String get statutLabel {
     switch (statut) {
@@ -158,12 +185,13 @@ class CircuitReclamation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = r.etape;
-    int actif = e == 'admin' ? 1 : e == 'professeur' ? 2 : e == 'verification' ? 3 : 5;
+    // Numéro (1 à 5) de l'étape en cours : l'administration reçoit (2), le professeur décide (3), l'administration vérifie (4).
+    int actif = e == 'admin' ? 2 : e == 'professeur' ? 3 : e == 'verification' ? 4 : 6;
     final rejetee = r.statut == 'rejete';
     final etapes = <List<String>>[
       ['Étudiant', 'Dépose'],
       ['Administration', rejetee ? 'Rejette' : 'Reçoit et transmet'],
-      ['Professeur', 'Traite'],
+      ['Professeur', 'Décide'],
       ['Administration', 'Vérifie'],
       ['Étudiant', 'Reçoit la réponse'],
     ];
@@ -176,7 +204,7 @@ class CircuitReclamation extends StatelessWidget {
         child: Row(children: [
           for (int i = 0; i < etapes.length; i++) ...[
             _etape(i + 1, etapes[i][0], etapes[i][1],
-                fait: (rejetee ? (i < 2) : i < actif - 1) || (e == 'termine' && !rejetee),
+                fait: (rejetee ? (i < 2 || i == 4) : i < actif - 1) || (e == 'termine' && !rejetee),
                 courant: !r.cloturee && i == actif - 1,
                 saute: rejetee && i >= 2 && i < 4),
             if (i < etapes.length - 1)
@@ -804,6 +832,53 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
     consigne.dispose();
   }
 
+  // Professeur : maintenir la note ou proposer une correction.
+  Future<void> _decider() async {
+    setState(() => _busy = true);
+    final nr = await ReclamationsApi.notesConcernees(widget.id);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    final notes = nr['success'] == true
+        ? (nr['data'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList()
+        : <Map<String, dynamic>>[];
+    final res = await showDialog<Map<String, dynamic>>(
+        context: context, builder: (_) => _DialogDecisionProf(notes: notes));
+    if (res == null) return;
+    await _action(
+        () => ReclamationsApi.retourDecision(widget.id,
+            decision: res['decision'] as String, commentaire: res['commentaire'] as String,
+            noteId: res['noteId'] as String?, nouvelleNote: res['nouvelleNote'] as String?),
+        'Décision transmise à l\'administration.');
+  }
+
+  // Administration : valider la décision (la note est alors modifiée et publiée à l'étudiant).
+  Future<void> _validerNote(Recl r) async {
+    final res = await showDialog<Map<String, dynamic>>(
+        context: context, builder: (_) => _DialogValidationNote(r: r));
+    if (res == null) return;
+    setState(() => _busy = true);
+    final out = await ReclamationsApi.repondreNote(widget.id,
+        reponse: res['reponse'] as String, noteFinale: res['noteFinale'] as String?);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (out['success'] != true) { _snack(out['error']?.toString() ?? 'Erreur.', ok: false); return; }
+    _snack(r.decisionProf == 'modifiee' ? 'Note corrigée et envoyée à l\'étudiant.' : 'Décision envoyée à l\'étudiant.');
+    final bulletins = (out['bulletins_a_republier'] as List?) ?? const [];
+    if (bulletins.isNotEmpty && mounted) {
+      final sem = bulletins.map((b) => '${(b as Map)['semestre']} (${b['annee_academique']})').toSet().join(', ');
+      await showDialog(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Bulletin à republier'),
+          content: Text('Un bulletin déjà publié pour $sem contient l\'ancienne note. '
+              'Ouvrez « Publication des bulletins » et republiez-le pour que l\'étudiant voie la note corrigée.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Compris'))],
+        ),
+      );
+    }
+    await _charger();
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _r;
@@ -880,6 +955,7 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
                     style: TextStyle(height: 1.5, color: r.statut == 'rejete' ? AdminTheme.danger : AdminTheme.success)),
               ),
             ],
+            ..._carteDecision(r),
             if (widget.role != 'etudiant' && (r.j['prof_commentaire'] ?? '').toString().isNotEmpty && !r.cloturee) ...[
               const SizedBox(height: 16),
               _titre('Retour du professeur'),
@@ -900,6 +976,43 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
         ),
       ),
     );
+  }
+
+  // Décision du professeur (administration / professeur, avant clôture) et note définitive (tous, après clôture).
+  List<Widget> _carteDecision(Recl r) {
+    Widget carte(IconData ic, Color fg, Color bg, String titre, String texte) => Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: fg.withValues(alpha: 0.35))),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(ic, color: fg, size: 22),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(titre, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: fg)),
+                const SizedBox(height: 3),
+                Text(texte, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+              ])),
+            ]),
+          ),
+        );
+    if (r.statut == 'resolu' && r.noteFinale != null) {
+      return [carte(Icons.check_circle_rounded, AdminTheme.success, AdminTheme.successLight, 'NOTE DÉFINITIVE',
+          r.ancienneNote != null
+              ? 'Note corrigée : ${fmtNote(r.ancienneNote)} → ${fmtNote(r.noteFinale)} / 20'
+              : 'Note définitive : ${fmtNote(r.noteFinale)} / 20')];
+    }
+    if (r.statut == 'resolu' && r.estNote && r.decisionProf == 'maintenue') {
+      return [carte(Icons.verified_rounded, AdminTheme.info, AdminTheme.infoLight, 'DÉCISION', 'Note maintenue après vérification')];
+    }
+    if (!r.cloturee && widget.role != 'etudiant' && r.decisionProf.isNotEmpty) {
+      return [carte(Icons.gavel_rounded, AdminTheme.warning, AdminTheme.warningLight, 'DÉCISION DU PROFESSEUR',
+          r.decisionProf == 'modifiee'
+              ? 'Correction proposée : ${fmtNote(r.ancienneNote)} → ${fmtNote(r.noteProposee)} / 20'
+              : 'Note maintenue')];
+    }
+    return const [];
   }
 
   Widget _bulle(Map<String, dynamic> m) {
@@ -931,6 +1044,9 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
     final peutTransmettre = role == 'admin';
     final profPeutRetourner = role == 'professeur' && r.etape == 'professeur';
     final enAttenteProf = role == 'professeur' && r.etape != 'professeur';
+    // Circuit « note » : l'administration vérifie la décision du professeur avant de publier.
+    final noteEnVerif = role == 'admin' && r.estNote && r.etape == 'verification' && r.decisionProf.isNotEmpty;
+    final noteChezProf = role == 'admin' && r.estNote && r.etape == 'professeur';
 
     final champ = Row(children: [
       Expanded(
@@ -969,14 +1085,33 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
                 label: const Text('Rejeter'),
                 style: OutlinedButton.styleFrom(foregroundColor: AdminTheme.danger),
               ),
+              if (noteEnVerif)
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () async {
+                    final m = await _saisir('Demander une révision au professeur',
+                        'Ce que le professeur doit revoir…', ok: 'Renvoyer', couleur: AdminTheme.info);
+                    if (m != null) _action(() => ReclamationsApi.renvoyer(widget.id, m), 'Renvoyée au professeur.');
+                  },
+                  icon: const Icon(Icons.undo_rounded, size: 16),
+                  label: const Text('Demander une révision'),
+                  style: OutlinedButton.styleFrom(foregroundColor: AdminTheme.info),
+                ),
               // Transmission possible seulement pour les catégories d'ordre académique.
-              if (kCategoriesTransmissibles.contains(r.categorie) || r.categorie.isEmpty)
+              if (!noteEnVerif && (kCategoriesTransmissibles.contains(r.categorie) || r.categorie.isEmpty))
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _transmettre,
                   icon: const Icon(Icons.forward_rounded, size: 16),
                   label: Text(r.etape == 'admin' ? 'Renvoyer au professeur' : 'Renvoyer à un professeur'),
                   style: OutlinedButton.styleFrom(foregroundColor: AdminTheme.info),
                 ),
+              if (noteEnVerif)
+                ElevatedButton.icon(
+                  onPressed: _busy ? null : () => _validerNote(r),
+                  icon: const Icon(Icons.publish_rounded, size: 16),
+                  label: Text(r.decisionProf == 'modifiee' ? 'Valider et publier la note' : 'Valider la décision'),
+                  style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.success, foregroundColor: Colors.white),
+                )
+              else if (!noteChezProf)
               ElevatedButton.icon(
                 onPressed: _busy ? null : () async {
                   final m = await _saisir(
@@ -994,7 +1129,16 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              child: r.estNote
+                  ? ElevatedButton.icon(
+                      onPressed: _busy ? null : _decider,
+                      icon: const Icon(Icons.gavel_rounded, size: 16),
+                      label: const Text('Rendre ma décision'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AdminTheme.primary, foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14)),
+                    )
+                  : ElevatedButton.icon(
                 onPressed: _busy ? null : () async {
                   final m = await _saisir('Valider et retourner à l\'administration',
                       'Votre commentaire / conclusion (obligatoire)…', ok: 'Retourner');
@@ -1035,4 +1179,229 @@ class _ReclamationDetailPageState extends State<ReclamationDetailPage> {
           Expanded(child: Text(v, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
         ]),
       );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DIALOGUE PROFESSEUR — maintenir la note ou proposer une correction
+// ════════════════════════════════════════════════════════════════════════════
+class _DialogDecisionProf extends StatefulWidget {
+  final List<Map<String, dynamic>> notes;
+  const _DialogDecisionProf({required this.notes});
+
+  @override
+  State<_DialogDecisionProf> createState() => _DialogDecisionProfState();
+}
+
+class _DialogDecisionProfState extends State<_DialogDecisionProf> {
+  String _decision = 'maintenue';
+  String? _noteId;
+  final _nouvelle = TextEditingController();
+  final _comm = TextEditingController();
+  String? _erreur;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.notes.length == 1) _noteId = widget.notes.first['note_id'].toString();
+  }
+
+  @override
+  void dispose() {
+    _nouvelle.dispose();
+    _comm.dispose();
+    super.dispose();
+  }
+
+  String _libelle(Map<String, dynamic> n) {
+    final v = double.tryParse('${n['valeur']}');
+    final mod = (n['module_nom'] ?? '').toString();
+    return '${mod.isEmpty ? '' : '$mod · '}${fmtDateRecl(n['date_session'])} · ${fmtNote(v)} / 20';
+  }
+
+  void _valider() {
+    if (_comm.text.trim().isEmpty) {
+      setState(() => _erreur = 'La justification est obligatoire.');
+      return;
+    }
+    String? nouvelle;
+    if (_decision == 'modifiee') {
+      if (_noteId == null) { setState(() => _erreur = 'Choisissez le devoir à corriger.'); return; }
+      final v = double.tryParse(_nouvelle.text.trim().replaceAll(',', '.'));
+      if (v == null || v < 0 || v > 20) { setState(() => _erreur = 'Nouvelle note invalide (0 à 20).'); return; }
+      nouvelle = _nouvelle.text.trim().replaceAll(',', '.');
+    }
+    Navigator.pop(context, {
+      'decision': _decision,
+      'commentaire': _comm.text.trim(),
+      'noteId': _decision == 'modifiee' ? _noteId : null,
+      'nouvelleNote': nouvelle,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Ma décision'),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'maintenue', label: Text('Maintenir la note'), icon: Icon(Icons.lock_outline_rounded)),
+                ButtonSegment(value: 'modifiee', label: Text('Corriger la note'), icon: Icon(Icons.edit_rounded)),
+              ],
+              selected: {_decision},
+              onSelectionChanged: (s) => setState(() { _decision = s.first; _erreur = null; }),
+            ),
+            const SizedBox(height: 14),
+            if (_decision == 'modifiee') ...[
+              if (widget.notes.isEmpty)
+                const Text('Aucune note validée que vous avez saisie n\'a été trouvée pour cet étudiant.',
+                    style: TextStyle(color: AdminTheme.danger, fontSize: 12.5))
+              else
+                DropdownButtonFormField<String>(
+                  value: widget.notes.any((n) => n['note_id'].toString() == _noteId) ? _noteId : null,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Devoir à corriger', border: OutlineInputBorder()),
+                  items: widget.notes
+                      .map((n) => DropdownMenuItem(value: n['note_id'].toString(), child: Text(_libelle(n), overflow: TextOverflow.ellipsis)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _noteId = v),
+                ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _nouvelle,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Nouvelle note / 20', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _comm, maxLines: 4,
+              decoration: InputDecoration(
+                  labelText: 'Justification *',
+                  hintText: _decision == 'modifiee' ? 'Pourquoi la note change…' : 'Pourquoi la note est maintenue…',
+                  border: const OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            const Text('La note ne sera modifiée qu\'après validation de l\'administration.',
+                style: TextStyle(fontSize: 11.5, color: AdminTheme.textSecondary)),
+            if (_erreur != null)
+              Padding(padding: const EdgeInsets.only(top: 8),
+                  child: Text(_erreur!, style: const TextStyle(color: AdminTheme.danger, fontSize: 12.5, fontWeight: FontWeight.w700))),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: _valider,
+          style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primary, foregroundColor: Colors.white),
+          child: const Text('Retourner à l\'administration'),
+        ),
+      ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DIALOGUE ADMINISTRATION — valider la décision et publier la note définitive
+// ════════════════════════════════════════════════════════════════════════════
+class _DialogValidationNote extends StatefulWidget {
+  final Recl r;
+  const _DialogValidationNote({required this.r});
+
+  @override
+  State<_DialogValidationNote> createState() => _DialogValidationNoteState();
+}
+
+class _DialogValidationNoteState extends State<_DialogValidationNote> {
+  late final TextEditingController _finale;
+  final _msg = TextEditingController();
+  String? _erreur;
+
+  @override
+  void initState() {
+    super.initState();
+    _finale = TextEditingController(text: widget.r.noteProposee == null ? '' : fmtNote(widget.r.noteProposee));
+  }
+
+  @override
+  void dispose() {
+    _finale.dispose();
+    _msg.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.r;
+    final modifiee = r.decisionProf == 'modifiee';
+    return AlertDialog(
+      title: Text(modifiee ? 'Valider et publier la note' : 'Valider la décision'),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: AdminTheme.warningLight, borderRadius: BorderRadius.circular(10)),
+              child: Text(
+                  modifiee
+                      ? 'Le professeur propose : ${fmtNote(r.ancienneNote)} → ${fmtNote(r.noteProposee)} / 20'
+                      : 'Le professeur maintient la note.',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            if ((r.j['prof_commentaire'] ?? '').toString().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Justification : ${r.j['prof_commentaire']}', style: const TextStyle(fontSize: 12.5, height: 1.4)),
+            ],
+            const SizedBox(height: 14),
+            if (modifiee) ...[
+              TextField(
+                controller: _finale,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Note définitive / 20', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _msg, maxLines: 3,
+              decoration: const InputDecoration(
+                  labelText: 'Message à l\'étudiant (facultatif)',
+                  hintText: 'Un message est généré automatiquement si vide.',
+                  border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            Text(
+                modifiee
+                    ? 'La note sera modifiée immédiatement et l\'étudiant en sera informé. L\'ancienne valeur est conservée dans l\'historique.'
+                    : 'La réclamation sera clôturée et l\'étudiant en sera informé.',
+                style: const TextStyle(fontSize: 11.5, color: AdminTheme.textSecondary)),
+            if (_erreur != null)
+              Padding(padding: const EdgeInsets.only(top: 8),
+                  child: Text(_erreur!, style: const TextStyle(color: AdminTheme.danger, fontSize: 12.5, fontWeight: FontWeight.w700))),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: () {
+            String? finale;
+            if (modifiee) {
+              final v = double.tryParse(_finale.text.trim().replaceAll(',', '.'));
+              if (v == null || v < 0 || v > 20) { setState(() => _erreur = 'Note invalide (0 à 20).'); return; }
+              finale = _finale.text.trim().replaceAll(',', '.');
+            }
+            Navigator.pop(context, {'reponse': _msg.text.trim(), 'noteFinale': finale});
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.success, foregroundColor: Colors.white),
+          child: Text(modifiee ? 'Publier la note' : 'Valider'),
+        ),
+      ],
+    );
+  }
 }

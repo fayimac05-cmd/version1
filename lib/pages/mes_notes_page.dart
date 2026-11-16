@@ -7,7 +7,6 @@ import '../theme/app_palette.dart';
 import 'reclamation_form_sheet.dart';
 import 'mes_reclamations_page.dart';
 import 'mes_previsions_page.dart';
-import '../services/releves_pdf.dart';
 
 /// Écran "Mes notes" — extrait de home_tab.dart (anciennement classe privée
 /// `_NotesPage`, qui recevait ses données déjà chargées par HomeTab). Se
@@ -36,7 +35,17 @@ class _MesNotesPageState extends State<MesNotesPage> {
 
   String _noteKey(Map<String, dynamic> note) {
     final id = note['id'] ?? note['note_id'] ?? note['evaluation_id'];
-    return id.toString();
+    // Une note corrigée redevient « nouvelle » : la clé change à chaque correction.
+    final nb = int.tryParse('${note['nb_corrections'] ?? 0}') ?? 0;
+    return nb > 0 ? '$id#c$nb' : id.toString();
+  }
+
+  bool _corrigee(Map<String, dynamic> note) => (int.tryParse('${note['nb_corrections'] ?? 0}') ?? 0) > 0;
+
+  String _avant(Map<String, dynamic> note) {
+    final n = double.tryParse('${note['valeur_initiale'] ?? ''}');
+    if (n == null) return '';
+    return n.toStringAsFixed(n % 1 == 0 ? 0 : 2).replaceAll('.', ',');
   }
 
   Future<void> _charger() async {
@@ -128,11 +137,7 @@ class _MesNotesPageState extends State<MesNotesPage> {
   }
 
   String _mentionNote(Map<String, dynamic> note) {
-    final m = (note['mention'] ?? '').toString().trim();
-    if (m.isNotEmpty) return m;
-    // Pas de mention enregistrée : appréciation calculée à partir de la note.
-    return appreciationDepuisNote(
-        double.tryParse('${note['valeur'] ?? note['note'] ?? note['score'] ?? ''}'));
+    return (note['mention'] ?? '').toString().trim();
   }
 
   String _dateNote(Map<String, dynamic> note) {
@@ -180,30 +185,6 @@ class _MesNotesPageState extends State<MesNotesPage> {
     if (mounted) setState(() {});
   }
 
-  bool _pdfEnCours = false;
-
-  Future<void> _telechargerPdf() async {
-    if (_pdfEnCours) return;
-    setState(() => _pdfEnCours = true);
-    try {
-      await telechargerNotesPdf(
-        nom: widget.profile.nom,
-        prenoms: widget.profile.prenoms,
-        filiere: widget.profile.filiere,
-        niveau: widget.profile.niveau,
-        notes: _notes,
-      );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible de générer le PDF.'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _pdfEnCours = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -226,11 +207,6 @@ class _MesNotesPageState extends State<MesNotesPage> {
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         actions: [
-          IconButton(
-            icon: Icon(_pdfEnCours ? Icons.hourglass_top_rounded : Icons.picture_as_pdf_rounded, size: 20, color: const Color(0xFFEF4444)),
-            tooltip: 'Télécharger mes notes (PDF)',
-            onPressed: _pdfEnCours || _notes.isEmpty ? null : _telechargerPdf,
-          ),
           IconButton(
             icon: const Icon(Icons.query_stats_rounded, size: 20),
             tooltip: 'Prévision de mes moyennes',
@@ -449,6 +425,34 @@ class _MesNotesPageState extends State<MesNotesPage> {
                       ],
                     ],
                   ),
+                  if (_corrigee(note)) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.edit_note_rounded, size: 13, color: Color(0xFF15803D)),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            _avant(note).isNotEmpty
+                                ? 'Note corrigée · avant : ${_avant(note)}'
+                                : 'Note corrigée après réclamation',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF15803D),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
                   if (_mentionNote(note).isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Container(
@@ -486,7 +490,7 @@ class _MesNotesPageState extends State<MesNotesPage> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  isRead ? 'Lu' : 'Nouveau',
+                  isRead ? 'Lu' : (_corrigee(note) ? 'Corrigée' : 'Nouveau'),
                   style: TextStyle(
                     color: isRead
                         ? AppPalette.grey
