@@ -6,6 +6,13 @@ class OneSignalService {
 
   /// Initialise OneSignal au lancement de l'application
   static Future<void> init() async {
+    // OneSignal Flutter SDK = mobile uniquement (Android/iOS)
+    // Sur le web, c'est le SDK JavaScript dans index.html qui gère tout
+    if (kIsWeb) {
+      debugPrint('ℹ️ [OneSignal] Web détecté — SDK JS géré dans index.html');
+      return;
+    }
+
     try {
       if (kDebugMode) {
         OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
@@ -26,7 +33,6 @@ class OneSignalService {
       // Écouter les notifications reçues quand l'app est au premier plan
       OneSignal.Notifications.addForegroundWillDisplayListener((event) {
         debugPrint('[OneSignal] Notification reçue au premier plan: ${event.notification.title}');
-        // event.preventDefault() si on voulait bloquer l'affichage système
       });
 
       debugPrint('✅ [OneSignal] Initialisé avec succès (App ID: $appId)');
@@ -38,6 +44,7 @@ class OneSignalService {
   /// Associe l'utilisateur connecté (par son matricule ou son identifiant)
   /// pour lui envoyer des notifications ciblées depuis le backend.
   static Future<void> login(String externalUserId) async {
+    if (kIsWeb) return; // Géré côté JS pour le web
     if (externalUserId.trim().isEmpty) return;
     try {
       await OneSignal.login(externalUserId.trim());
@@ -49,6 +56,7 @@ class OneSignalService {
 
   /// Déconnecte l'utilisateur de OneSignal lors du logout
   static Future<void> logout() async {
+    if (kIsWeb) return; // Géré côté JS pour le web
     try {
       await OneSignal.logout();
       debugPrint('🚪 [OneSignal] Utilisateur déconnecté');
