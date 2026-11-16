@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'onesignal_web_bridge.dart';
 
 class OneSignalService {
   static const String appId = '1d27fa01-4cdf-4ea7-8c47-1af912cc740b';
@@ -62,6 +63,36 @@ class OneSignalService {
       debugPrint('🚪 [OneSignal] Utilisateur déconnecté');
     } catch (e) {
       debugPrint('❌ [OneSignal] Erreur lors du logout OneSignal: $e');
+    }
+  }
+
+  /// Demande manuellement l'autorisation d'envoyer des notifications
+  static Future<bool> requestPermission() async {
+    if (kIsWeb) {
+      debugPrint('🔔 [OneSignal Web] Déclenchement demande de permission navigateur...');
+      final granted = await requestWebNotificationPermission();
+      debugPrint('🔔 [OneSignal Web] Permission retournée: $granted');
+      return granted;
+    }
+    try {
+      final granted = await OneSignal.Notifications.requestPermission(true);
+      debugPrint('🔔 [OneSignal] Permission accordée: $granted');
+      return granted;
+    } catch (e) {
+      debugPrint('❌ [OneSignal] Erreur demande permission: $e');
+      return false;
+    }
+  }
+
+  /// Vérifie si les notifications sont actuellement autorisées
+  static bool hasPermission() {
+    if (kIsWeb) {
+      return isWebNotificationGranted();
+    }
+    try {
+      return OneSignal.Notifications.permission;
+    } catch (_) {
+      return false;
     }
   }
 }

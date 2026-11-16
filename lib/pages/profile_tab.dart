@@ -6,6 +6,7 @@ import '../widgets/profile_header_cover.dart';
 import '../widgets/change_password_sheet.dart';
 
 import '../models/student_profile.dart';
+import '../services/onesignal_service.dart';
 import 'splash_screen.dart';
 
 enum NotifType { examen, note, cours, inscription, message }
@@ -64,6 +65,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
 
   bool _emailVisible = true;
   bool _telVisible = true;
+  bool _notifsActive = false;
 
   @override
   void initState() {
@@ -71,6 +73,7 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
     _email = widget.profile.email;
     _telephone = widget.profile.telephone;
     _adresse = widget.profile.adresse ?? '';
+    _notifsActive = OneSignalService.hasPermission();
     _chargerProfil();
   }
 
@@ -333,6 +336,88 @@ _bentoCard(
               ]),
             ),
           ),
+
+          // ── BENTO BLOCK 7 : NOTIFICATIONS PUSH (disparaît si déjà activé) ───
+          if (!_notifsActive) ...[
+            const SizedBox(height: 16),
+            _bentoCard(
+              titre: 'Notifications & Alertes',
+              icon: Icons.notifications_active_outlined,
+              color: const Color(0xFF0D55B0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: _bgGlobal, borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCEAFF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF0D55B0), size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Alertes en direct',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Notes, messages, appels & annonces',
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final granted = await OneSignalService.requestPermission();
+                          final isActive = granted || OneSignalService.hasPermission();
+                          if (mounted) {
+                            if (isActive) {
+                              setState(() => _notifsActive = true);
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isActive
+                                      ? '✅ Notifications activées avec succès !'
+                                      : '🔔 Demande de notifications transmise.',
+                                ),
+                                backgroundColor: const Color(0xFF0D55B0),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                        label: const Text('Activer les notifications', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D55B0),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 24),
 
