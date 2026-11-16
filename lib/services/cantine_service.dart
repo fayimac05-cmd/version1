@@ -277,6 +277,19 @@ class CantineService {
       _json((h) => http.post(Uri.parse('${ApiService.baseUrl}/cantine/publier'), headers: h, body: jsonEncode({'date': date, 'repas': repas})),
           'Erreur lors de la publication.');
 
+  /// Reprend les plats d'un autre jour vers [cible] (sans publier).
+  /// [repas] : un seul repas, ou null pour les trois. Renvoie {success, message, plats}.
+  static Future<Map<String, dynamic>> copier({required String source, required String cible, String? repas}) async {
+    final r = await _json(
+        (h) => http.post(Uri.parse('${ApiService.baseUrl}/cantine/copier'),
+            headers: h, body: jsonEncode({'source': source, 'cible': cible, if (repas != null) 'repas': repas})),
+        'Erreur lors de la reprise du menu.');
+    if (r['success'] == true) {
+      r['plats'] = [for (final p in (r['data'] as List? ?? [])) CantinePlat.fromJson(Map<String, dynamic>.from(p as Map))];
+    }
+    return r;
+  }
+
   /// Envoie la photo d'un plat ; renvoie {success, url}.
   static Future<Map<String, dynamic>> televerserImage(List<int> bytes, String nomFichier) async {
     try {
