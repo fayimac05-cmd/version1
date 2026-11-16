@@ -368,6 +368,32 @@
         return Notification.permission === 'granted';
       };
 
+      // Lie ce navigateur au compte ScolarHub connecté (external_id =
+      // matricule, ou email pour les comptes sans matricule). C'est ce que
+      // le backend cible avec include_aliases.external_id : sans cet appel,
+      // l'abonné reste anonyme et aucun push ciblé ne lui arrive.
+      window.oneSignalLogin = function(externalId) {
+        if (!externalId || !window.OneSignalDeferred) return;
+        window.OneSignalDeferred.push(async function(OneSignal) {
+          try {
+            await OneSignal.login(String(externalId).trim());
+          } catch (e) {
+            console.warn('[OneSignal] Erreur login:', e);
+          }
+        });
+      };
+
+      window.oneSignalLogout = function() {
+        if (!window.OneSignalDeferred) return;
+        window.OneSignalDeferred.push(async function(OneSignal) {
+          try {
+            await OneSignal.logout();
+          } catch (e) {
+            console.warn('[OneSignal] Erreur logout:', e);
+          }
+        });
+      };
+
       function verifierNotification() {
         if (!('Notification' in window)) return;
         if (Notification.permission === 'granted') {
