@@ -484,6 +484,16 @@ exports.envoyerEdt = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Emploi du temps introuvable.' });
     }
 
+    // Un programme archivé ou dont la semaine est terminée n'est plus visible côté étudiants :
+    // on refuse de le notifier (sinon la notification mène à « Programme non disponible »).
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    if (edt.archive || (edt.dateFin && String(edt.dateFin).slice(0, 10) < aujourdhui)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cet emploi du temps est archivé ou terminé : créez-en un nouveau avant de l\'envoyer.',
+      });
+    }
+
     const filiereId = edt.filiere;      // id de filière stocké dans l'EDT
     const niveau = edt.niveau || null;  // ex. "Licence 2"
 
