@@ -29,6 +29,7 @@ class _CoursesTabState extends State<CoursesTab> {
 
   List<Map<String, dynamic>> _cours = [];
   bool _isLoading = true;
+  String? _erreur; // message affiché si le chargement échoue (au lieu d'une liste vide trompeuse)
 
   // Filière et niveau de l'étudiant : profil connecté, sinon déduits des cours reçus.
   String get _sousTitre {
@@ -50,6 +51,7 @@ class _CoursesTabState extends State<CoursesTab> {
   }
 
   Future<void> _fetchCours() async {
+    if (mounted) setState(() { _isLoading = true; _erreur = null; });
     try {
       final res = await ProfessorService.getCours();
       if (res['success'] == true && mounted) {
@@ -77,10 +79,20 @@ class _CoursesTabState extends State<CoursesTab> {
           _isLoading = false;
         });
       } else {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _erreur = res['error']?.toString() ?? 'Impossible de charger les cours.';
+          });
+        }
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _erreur = 'Impossible de charger les cours. Vérifiez votre connexion.';
+        });
+      }
     }
   }
 
@@ -225,6 +237,26 @@ class _CoursesTabState extends State<CoursesTab> {
         Expanded(
           child: _isLoading 
             ? const Center(child: CircularProgressIndicator())
+            : _erreur != null
+              ? Center(child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.wifi_off_rounded, size: 54, color: Color(0xFFCBD5E1)),
+                    const SizedBox(height: 12),
+                    Text(_erreur!, textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Réessayer'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppPalette.blue, foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: _fetchCours,
+                    ),
+                  ]),
+                ))
             : filtered.isEmpty
               ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.search_off_rounded, size: 70,
