@@ -5,6 +5,22 @@ import 'api_service.dart';
 class ProfessorService {
   static final String baseUrl = ApiService.baseUrl;
 
+  // GET avec 3 essais : absorbe les coupures passagères (serveur qui se réveille, 502/503).
+  static Future<http.Response> _getAvecReprise(Uri uri) async {
+    late http.Response r;
+    for (var i = 0; i < 3; i++) {
+      try {
+        final headers = await ApiService.getHeaders();
+        r = await http.get(uri, headers: headers).timeout(const Duration(seconds: 25));
+        if (r.statusCode < 500) return r;
+      } catch (_) {
+        if (i == 2) rethrow;
+      }
+      await Future.delayed(Duration(seconds: 2 * (i + 1)));
+    }
+    return r;
+  }
+
   static Future<Map<String, dynamic>> getProfile() async {
     try {
       final headers = await ApiService.getHeaders();
@@ -49,17 +65,13 @@ class ProfessorService {
   // ── Classes & Modules ──────────────────────────────────────
   static Future<Map<String, dynamic>> getClasses() async {
     try {
-      final headers = await ApiService.getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/professeurs/classes'),
-        headers: headers,
-      );
+      final response = await _getAvecReprise(Uri.parse('$baseUrl/professeurs/classes'));
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['success'] == true) return {'success': true, 'data': body['data']};
         return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return {'success': false, 'error': 'Erreur lors du chargement des classes.'};
+      return {'success': false, 'error': 'Erreur lors du chargement des classes (code ${response.statusCode}).'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
@@ -67,17 +79,13 @@ class ProfessorService {
 
   static Future<Map<String, dynamic>> getModules() async {
     try {
-      final headers = await ApiService.getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/professeurs/modules'),
-        headers: headers,
-      );
+      final response = await _getAvecReprise(Uri.parse('$baseUrl/professeurs/modules'));
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['success'] == true) return {'success': true, 'data': body['data']};
         return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return {'success': false, 'error': 'Erreur lors du chargement des modules.'};
+      return {'success': false, 'error': 'Erreur lors du chargement des modules (code ${response.statusCode}).'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
@@ -210,17 +218,13 @@ class ProfessorService {
   // ── Cours (Upload & List) ──────────────────────────────────
   static Future<Map<String, dynamic>> getCours() async {
     try {
-      final headers = await ApiService.getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/cours'),
-        headers: headers,
-      );
+      final response = await _getAvecReprise(Uri.parse('$baseUrl/cours'));
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['success'] == true) return {'success': true, 'data': body['data']};
         return {'success': false, 'error': 'Réponse inattendue du serveur.'};
       }
-      return {'success': false, 'error': 'Erreur lors du chargement des cours.'};
+      return {'success': false, 'error': 'Erreur lors du chargement des cours (code ${response.statusCode}).'};
     } catch (e) {
       return {'success': false, 'error': 'Serveur injoignable. Vérifiez votre connexion.'};
     }
