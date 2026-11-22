@@ -41,7 +41,7 @@ jobs:
           printf '%s\n' "$FLUTTER_ENV" > .env
 
       - run: flutter pub get
-      - run: flutter build web --release --no-wasm-dry-run
+      - run: flutter build web --release --no-wasm-dry-run --no-web-resources-cdn
 
       # build/web contient déjà vercel.json (copié depuis web/)
       - name: Déployer sur Vercel

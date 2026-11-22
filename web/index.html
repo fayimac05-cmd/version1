@@ -70,7 +70,7 @@
             prompts: [
               {
                 type: "push",
-                autoPrompt: true,
+                autoPrompt: false,
                 text: {
                   actionMessage: "📚 Recevez vos notes, messages et alertes d'absence en temps réel !",
                   acceptButton: "Activer",
@@ -101,6 +101,13 @@
       font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     }
     #sh-loader.sh-fin { opacity: 0; pointer-events: none; }
+    /* Message d'aide si le demarrage est trop long */
+    #sh-loader #sh-aide { margin-top: 22px; text-align: center; max-width: 280px; padding: 0 16px; }
+    #sh-loader #sh-aide p { margin: 0 0 12px; font-size: 13px; color: #475569; line-height: 1.45; }
+    #sh-loader #sh-aide button {
+      border: 0; border-radius: 12px; padding: 11px 24px; font-size: 14px; font-weight: 700;
+      background: #0D55B0; color: #fff; font-family: inherit; cursor: pointer;
+    }
     #sh-loader .sh-logo {
       width: min(200px, 50vw); height: min(200px, 50vw); object-fit: contain;
       animation: sh-pop .9s ease-out both, sh-vie 1.6s ease-in-out .9s infinite;
@@ -177,6 +184,10 @@
     <img class="sh-logo" src="icons/logo.png" alt="ScolarHub">
     <img class="sh-titre" src="icons/titre_scolarhub.png" alt="ScolarHub">
     <div class="sh-barre"><i></i></div>
+    <div id="sh-aide" style="display:none">
+      <p>Le chargement prend plus de temps que prévu.<br>Vérifiez votre connexion internet.</p>
+      <button id="sh-reessayer" type="button">Réessayer</button>
+    </div>
   </div>
   <script>
     // Retire l'écran de chargement dès que la première image de l'application est affichée
@@ -192,7 +203,41 @@
         setTimeout(function () { if (l.parentNode) l.parentNode.removeChild(l); }, 600);
       }
       window.addEventListener('flutter-first-frame', retirer);
-      setTimeout(retirer, 15000);
+      // Filet de securite : si le moteur Flutter est present mais que l'evenement n'est pas arrive,
+      // on retire l'ecran de chargement. Tant que rien n'a demarre (telechargement lent ou
+      // bloque), l'ecran reste affiche et le message d'aide apparait plus bas.
+      setTimeout(function surveiller() {
+        if (retire) return;
+        if (document.querySelector('flt-glass-pane')) { retirer(); return; }
+        setTimeout(surveiller, 2000);
+      }, 15000);
+
+      // Rien n'a demarre au bout de 20 s : on propose de reessayer (vide le cache puis recharge).
+      setTimeout(function () {
+        if (retire) return;
+        var aide = document.getElementById('sh-aide');
+        if (aide) aide.style.display = 'block';
+      }, 20000);
+
+      var btn = document.getElementById('sh-reessayer');
+      if (btn) btn.addEventListener('click', function () {
+        btn.disabled = true;
+        btn.textContent = 'Nettoyage…';
+        function recharger() { location.reload(); }
+        var taches = [];
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          taches.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+            return Promise.all(rs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+        if (window.caches && caches.keys) {
+          taches.push(caches.keys().then(function (ks) {
+            return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+          }));
+        }
+        Promise.all(taches).then(recharger, recharger);
+        setTimeout(recharger, 4000);
+      });
     })();
   </script>
   <!-- Bandeau d'installation de l'application (affiché seulement sur téléphone) -->
