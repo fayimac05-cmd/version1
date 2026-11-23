@@ -20,12 +20,34 @@ String? _vignetteUrl(String url) {
   return base.replaceFirst('/video/upload/', '/video/upload/so_0,w_640,c_limit/') + '.jpg';
 }
 
-/// URL qui force le téléchargement (Cloudinary : drapeau fl_attachment).
-String _urlTelechargement(String url) =>
-    url.contains('/upload/') ? url.replaceFirst('/upload/', '/upload/fl_attachment/') : url;
+/// Nom de fichier sûr pour Cloudinary : sans extension (Cloudinary la remet),
+/// accents retirés, tout caractère spécial remplacé par « _ ».
+String _nomPourTelechargement(String nom) {
+  var n = nom.trim();
+  final point = n.lastIndexOf('.');
+  if (point > 0 && n.length - point <= 6) n = n.substring(0, point);
+  const accents = {
+    'à': 'a', 'â': 'a', 'ä': 'a', 'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e', 'î': 'i', 'ï': 'i',
+    'ô': 'o', 'ö': 'o', 'ù': 'u', 'û': 'u', 'ü': 'u', 'ç': 'c',
+    'À': 'A', 'Â': 'A', 'É': 'E', 'È': 'E', 'Ê': 'E', 'Ô': 'O', 'Ç': 'C',
+  };
+  n = n.split('').map((c) => accents[c] ?? c).join();
+  n = n.replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_').replaceAll(RegExp(r'_+'), '_');
+  n = n.replaceAll(RegExp(r'^_+|_+$'), '');
+  return n;
+}
 
-Future<void> ouvrirFichier(BuildContext context, String url, {bool telecharger = false}) async {
-  final cible = telecharger ? _urlTelechargement(url) : url;
+/// URL qui force le téléchargement (Cloudinary : drapeau fl_attachment).
+/// Avec un nom, le fichier enregistré porte ce nom (et non « 1795…-nom.pdf »).
+String _urlTelechargement(String url, [String? nom]) {
+  if (!url.contains('/upload/')) return url;
+  final propre = nom == null ? '' : _nomPourTelechargement(nom);
+  final drapeau = propre.isEmpty ? 'fl_attachment' : 'fl_attachment:$propre';
+  return url.replaceFirst('/upload/', '/upload/$drapeau/');
+}
+
+Future<void> ouvrirFichier(BuildContext context, String url, {bool telecharger = false, String? nom}) async {
+  final cible = telecharger ? _urlTelechargement(url, nom) : url;
   try {
     final ok = await launchUrl(Uri.parse(cible), mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
@@ -160,7 +182,7 @@ class _VisionneuseVideoState extends State<VisionneuseVideo> {
                 child: Row(children: [
                   _rond(Icons.close_rounded, () => Navigator.pop(context)),
                   const Spacer(),
-                  _rond(Icons.download_rounded, () => ouvrirFichier(context, widget.url, telecharger: true)),
+                  _rond(Icons.download_rounded, () => ouvrirFichier(context, widget.url, telecharger: true, nom: widget.nom)),
                 ]),
               ),
             ),
@@ -216,9 +238,13 @@ class FichierDocumentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => ouvrirFichier(context, url),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      // Appui sur le document : l'ouvrir sans le télécharger.
+      Flexible(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => ouvrirFichier(context, url),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 38, height: 38,
           decoration: BoxDecoration(color: const Color(0xFF7F66FF).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
@@ -232,9 +258,24 @@ class FichierDocumentCard extends StatelessWidget {
             Text('Document · appuyer pour ouvrir', style: TextStyle(fontSize: 11.5, color: texteColor.withValues(alpha: 0.7))),
           ]),
         ),
-        const SizedBox(width: 6),
-        Icon(Icons.download_rounded, size: 20, color: texteColor.withValues(alpha: 0.7)),
-      ]),
-    );
+          ]),
+        ),
+      ),
+      // Flèche : télécharger sur l'appareil, avec le vrai nom du fichier.
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Téléchargement de $nom…'),
+            duration: const Duration(seconds: 2),
+          ));
+          ouvrirFichier(context, url, telecharger: true, nom: nom);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(Icons.download_rounded, size: 22, color: texteColor.withValues(alpha: 0.8)),
+        ),
+      ),
+    ]);
   }
 }

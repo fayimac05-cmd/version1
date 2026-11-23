@@ -39,7 +39,7 @@ Future<void> telechargerMessage(BuildContext context, String contenu) async {
     content: Text('Téléchargement de ${f.nom}…'),
     duration: const Duration(seconds: 2),
   ));
-  await ouvrirFichier(context, f.url, telecharger: true);
+  await ouvrirFichier(context, f.url, telecharger: true, nom: f.nom);
 }
 
 /// Texte lisible d'un message : pour un fichier → « nom + lien », pour un GIF → le lien.
