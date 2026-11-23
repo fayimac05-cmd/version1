@@ -10,6 +10,10 @@ import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../pages/emoji_gif_sticker_picker.dart';
 import '../pages/galerie_photos.dart';
+import '../pages/message_actions.dart';
+import '../pages/message_extras.dart';
+import '../pages/video_message.dart';
+import '../pages/voice_message.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES INTERNES
@@ -999,6 +1003,23 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
 
   Widget _contenuMsg(String contenu, bool estMoi) {
     if (estMessagePhotos(contenu)) return GrillePhotos(urls: urlsGalerie(contenu));
+    final fichier = lireFichierMessage(contenu);
+    if (fichier != null) {
+      final couleurTexte = estMoi ? Colors.white : const Color(0xFF0F172A);
+      switch (fichier.type) {
+        case 'video':
+          return VideoMessageCard(url: fichier.url, nom: fichier.nom);
+        case 'vocal':
+          return VoiceMessagePlayer(
+            url: fichier.url,
+            dureeLabel: fichier.nom,
+            couleur: estMoi ? Colors.white : AppPalette.blue,
+            texteColor: couleurTexte,
+          );
+        default:
+          return FichierDocumentCard(url: fichier.url, nom: fichier.nom, texteColor: couleurTexte);
+      }
+    }
     if (contenu.startsWith('[GIF]')) {
       final url = contenu.substring(5);
       return ClipRRect(
