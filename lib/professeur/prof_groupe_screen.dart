@@ -9,6 +9,7 @@ import '../services/professor_service.dart';
 import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../pages/emoji_gif_sticker_picker.dart';
+import '../pages/galerie_photos.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODÈLES INTERNES
@@ -591,6 +592,8 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
   }
 
   String _apercu(String contenu) {
+    if (contenu.startsWith('[GALERIE]')) return '📷 ${urlsGalerie(contenu).length} photos';
+    if (urlPhotoMessage(contenu) != null) return '📷 Photo';
     if (contenu.startsWith('[GIF]')) return 'GIF';
     if (contenu.startsWith('[STICKER]')) return 'Sticker';
     return contenu;
@@ -716,6 +719,42 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
     _scrollBas();
   }
 
+  /// Photos envoyées d'affilée par la même personne → UNE seule bulle (grille façon WhatsApp).
+  List<_Msg> _messagesAffiches() {
+    final lots = calculerLotsPhotos<_Msg>(
+      _messages,
+      contenu: (m) => m.contenu,
+      auteur: (m) => m.estMoi ? 'moi' : (m.auteurId.isEmpty ? null : m.auteurId),
+      jour: (m) => '${m.heure.year}-${m.heure.month}-${m.heure.day}',
+      minutes: (m) => m.heure.hour * 60 + m.heure.minute,
+    );
+    final res = <_Msg>[];
+    for (var i = 0; i < _messages.length; i++) {
+      final lot = lots[i];
+      if (lot == null) {
+        res.add(_messages[i]);
+        continue;
+      }
+      if (lot.isEmpty) continue;
+      final membres = lot.map((k) => _messages[k]).toList();
+      final premier = membres.first;
+      res.add(_Msg(
+        id: premier.id,
+        auteurId: premier.auteurId,
+        auteurNom: premier.auteurNom,
+        contenu: contenuGalerie(membres.map((m) => urlPhotoMessage(m.contenu)!).toList()),
+        type: premier.type,
+        heure: membres.last.heure,
+        estMoi: premier.estMoi,
+        reactions: premier.reactions,
+        replyId: premier.replyId,
+        replyTexte: premier.replyTexte,
+        replyAuteur: premier.replyAuteur,
+      ));
+    }
+    return res;
+  }
+
   String _initiales(String nom) {
     final parts = nom.trim().split(RegExp(r'\s+'));
     if (parts.length >= 2) {
@@ -732,6 +771,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
 
   @override
   Widget build(BuildContext context) {
+    final affiches = _messagesAffiches();
     return Scaffold(
       backgroundColor: const Color(0xFFEBF4FF),
       appBar: AppBar(
@@ -821,12 +861,12 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
                   : ListView.builder(
                       controller: _scrollCtrl,
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                      itemCount: _messages.length,
+                      itemCount: affiches.length,
                       itemBuilder: (_, i) {
-                        final msg = _messages[i];
+                        final msg = affiches[i];
                         final showDate = i == 0 ||
                             !_memeJour(
-                                _messages[i - 1].heure, msg.heure);
+                                affiches[i - 1].heure, msg.heure);
                         return Column(children: [
                           if (showDate) _separateurDate(msg.heure),
                           _bulle(msg),
@@ -958,6 +998,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
   }
 
   Widget _contenuMsg(String contenu, bool estMoi) {
+    if (estMessagePhotos(contenu)) return GrillePhotos(urls: urlsGalerie(contenu));
     if (contenu.startsWith('[GIF]')) {
       final url = contenu.substring(5);
       return ClipRRect(
@@ -1061,7 +1102,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
                       constraints: BoxConstraints(
                           maxWidth:
                               MediaQuery.of(context).size.width * 0.72),
-                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                      padding: estMessagePhotos(msg.contenu) ? const EdgeInsets.all(3) : const EdgeInsets.fromLTRB(14, 10, 14, 10),
                       decoration: BoxDecoration(
                         color: isProf
                             ? AppPalette.blue
