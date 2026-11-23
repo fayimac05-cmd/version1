@@ -16,6 +16,7 @@ import 'chat_theme_picker_sheet.dart';
 import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
 import 'message_actions.dart';
+import 'galerie_photos.dart';
 import 'partager_message.dart';
 import 'profil_public_page.dart';
 import 'voice_message.dart';
@@ -63,6 +64,8 @@ class _MessageGroupe {
   final String? idMessageRepondu;
   final String? texteRepondu;
   final String? expediteurRepondu;
+  /// Ids des messages d'un lot de photos regroupées (vide = message simple).
+  final List<String> idsLot;
 
   _MessageGroupe({
     required this.id,
@@ -77,6 +80,7 @@ class _MessageGroupe {
     this.idMessageRepondu,
     this.texteRepondu,
     this.expediteurRepondu,
+    this.idsLot = const [],
   });
 
   _MessageGroupe copyWith({Map<String, String>? reactions}) => _MessageGroupe(
@@ -92,6 +96,7 @@ class _MessageGroupe {
     idMessageRepondu: idMessageRepondu,
     texteRepondu: texteRepondu,
     expediteurRepondu: expediteurRepondu,
+    idsLot: idsLot,
   );
 }
 
@@ -101,6 +106,7 @@ class _MessageGroupe {
 /// Libellé lisible d'un message pour l'aperçu de réponse / la citation :
 /// évite d'afficher le texte brut « [FICHIER]vocal|https://... ».
 String _apercuCitation(String t) {
+  if (t.startsWith('[GALERIE]')) return '📷 ${urlsGalerie(t).length} photos';
   if (t.startsWith('[FICHIER]')) {
     final p = t.substring(9).split('|');
     if (p[0] == 'vocal') return '🎤 Message vocal';
@@ -354,6 +360,59 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     niveau: widget.profile.niveau,
     photoUrl: widget.profile.photoUrl,
   );
+
+  /// Photos envoyées d'affilée par la même personne → UNE seule bulle (grille façon WhatsApp).
+  List<_MessageGroupe> _messagesAffiches() {
+    final lots = calculerLotsPhotos<_MessageGroupe>(
+      _messages,
+      contenu: (m) => m.contenu,
+      auteur: (m) => m.estMoi ? 'moi' : (m.auteur.matricule.isEmpty ? null : m.auteur.matricule),
+      jour: (m) => '${m.heure.year}-${m.heure.month}-${m.heure.day}',
+      minutes: (m) => m.heure.hour * 60 + m.heure.minute,
+    );
+    final res = <_MessageGroupe>[];
+    for (var i = 0; i < _messages.length; i++) {
+      final lot = lots[i];
+      if (lot == null) {
+        res.add(_messages[i]);
+        continue;
+      }
+      if (lot.isEmpty) continue; // absorbée par le lot précédent
+      final membres = lot.map((k) => _messages[k]).toList();
+      final premier = membres.first;
+      res.add(_MessageGroupe(
+        id: premier.id,
+        auteur: premier.auteur,
+        contenu: contenuGalerie(membres.map((m) => urlPhotoMessage(m.contenu)!).toList()),
+        type: premier.type,
+        heure: membres.last.heure,
+        reactions: premier.reactions,
+        estMoi: premier.estMoi,
+        epingle: membres.any((m) => m.epingle),
+        important: membres.any((m) => m.important),
+        idMessageRepondu: premier.idMessageRepondu,
+        texteRepondu: premier.texteRepondu,
+        expediteurRepondu: premier.expediteurRepondu,
+        idsLot: membres.map((m) => m.id).toList(),
+      ));
+    }
+    return res;
+  }
+
+  /// Remplace l'id d'un lot par les ids de toutes ses photos (pour supprimer).
+  List<String> _idsAvecLots(Iterable<String> ids) {
+    final affiches = _messagesAffiches();
+    final res = <String>[];
+    for (final id in ids) {
+      final rep = affiches.where((m) => m.id == id);
+      if (rep.isNotEmpty && rep.first.idsLot.isNotEmpty) {
+        res.addAll(rep.first.idsLot);
+      } else {
+        res.add(id);
+      }
+    }
+    return res;
+  }
 
   DateTime _heure(int minutesAvant) =>
       DateTime.now().subtract(Duration(minutes: -minutesAvant.abs()));
@@ -718,6 +777,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
 
   Future<void> _supprimerSelection() async {
     final idsSelectionnes = _selectionnes.toList();
+    final idsASupprimer = _idsAvecLots(idsSelectionnes);
     final tousMoi = idsSelectionnes.every((id) {
       for (final m in _messages) {
         if (m.id == id) return m.estMoi;
@@ -761,13 +821,13 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     if (choix == null) return;
 
     setState(() {
-      _messages.removeWhere((m) => idsSelectionnes.contains(m.id));
+      _messages.removeWhere((m) => idsASupprimer.contains(m.id));
       _modeSelection = false;
       _selectionnes.clear();
     });
 
     final headers = await ApiService.getHeaders();
-    for (final id in idsSelectionnes) {
+    for (final id in idsASupprimer) {
       final idNumerique = int.tryParse(id);
       if (idNumerique == null) continue; // message pas encore confirmé par le serveur
       try {
@@ -942,12 +1002,15 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                       ),
                     );
                     if (confirme != true) return;
-                    setState(() => _messages.removeWhere((m) => m.id == msg.id));
-                    final idNumerique = int.tryParse(msg.id);
-                    if (idNumerique == null) return;
+                    final ids = _idsAvecLots([msg.id]);
+                    setState(() => _messages.removeWhere((m) => ids.contains(m.id)));
                     try {
                       final headers = await ApiService.getHeaders();
-                      await http.delete(Uri.parse('${ApiService.baseUrl}/messages/groupe/$idNumerique'), headers: headers);
+                      for (final id in ids) {
+                        final idNumerique = int.tryParse(id);
+                        if (idNumerique == null) continue;
+                        await http.delete(Uri.parse('${ApiService.baseUrl}/messages/groupe/$idNumerique'), headers: headers);
+                      }
                     } catch (_) {}
                   }),
               SizedBox(height: 8 + MediaQuery.of(context).padding.bottom),
@@ -1241,6 +1304,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     final filiere = widget.profile.filiere.isNotEmpty
         ? widget.profile.filiere
         : 'Réseaux Informatiques et Télécom';
+    final affiches = _messagesAffiches();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4F8),
@@ -1463,15 +1527,15 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                     : ListView.builder(
               controller: _scrollCtrl,
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-              itemCount: _messages.length,
+              itemCount: affiches.length,
               itemBuilder: (_, i) {
-                final msg = _messages[i];
+                final msg = affiches[i];
                 final showDate =
-                    i == 0 || !_memeJour(_messages[i - 1].heure, msg.heure);
+                    i == 0 || !_memeJour(affiches[i - 1].heure, msg.heure);
                 // Séries de messages d'un même expéditeur (façon WhatsApp) :
                 // la photo n'apparaît qu'une fois, sur le premier de la série.
-                final prec = i > 0 ? _messages[i - 1] : null;
-                final suiv = i < _messages.length - 1 ? _messages[i + 1] : null;
+                final prec = i > 0 ? affiches[i - 1] : null;
+                final suiv = i < affiches.length - 1 ? affiches[i + 1] : null;
                 final memeQuePrec = prec != null && !showDate &&
                     prec.estMoi == msg.estMoi && prec.auteur.matricule == msg.auteur.matricule;
                 final memeQueSuiv = suiv != null && _memeJour(msg.heure, suiv.heure) &&
@@ -1781,7 +1845,7 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                     constraints: BoxConstraints(
                       maxWidth: MediaQuery.of(context).size.width * 0.72,
                     ),
-                    padding: const EdgeInsets.fromLTRB(14, 10, 12, 8),
+                    padding: estMessagePhotos(msg.contenu) ? const EdgeInsets.all(3) : const EdgeInsets.fromLTRB(14, 10, 12, 8),
                     decoration: BoxDecoration(
                       color: estMoi ? theme.bulleMoi : theme.bulleAutre,
                       borderRadius: BorderRadius.only(
@@ -1818,9 +1882,10 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                           ]),
                         ),
                       _contenuMessage(msg, estMoi, theme),
-                      const SizedBox(height: 2),
-                      // Heure en bas à droite de la bulle, façon WhatsApp.
-                      Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (!estMessagePhotos(msg.contenu)) const SizedBox(height: 2),
+                      // Heure en bas à droite de la bulle, façon WhatsApp
+                      // (pour des photos, elle est posée sur l'image).
+                      if (!estMessagePhotos(msg.contenu)) Row(mainAxisSize: MainAxisSize.min, children: [
                         Text(
                           _formatHeure(msg.heure),
                           style: TextStyle(
@@ -2075,28 +2140,15 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
                 : Image.file(File(chemin), width: 120, height: 120, fit: BoxFit.cover),
           );
         }
+        if (estGalerie(msg.contenu)) {
+          return GrillePhotos(urls: urlsGalerie(msg.contenu), heure: _formatHeure(msg.heure));
+        }
         if (msg.contenu.startsWith('[FICHIER]')) {
           final parts = msg.contenu.substring(9).split('|');
           final fType = parts.isNotEmpty ? parts[0] : 'document';
           final url = parts.length > 1 ? parts[1] : '';
           final nom = parts.length > 2 ? parts.sublist(2).join('|') : 'Fichier';
-          if (fType == 'image') {
-            return GestureDetector(
-              onTap: () => Navigator.push(context, PageRouteBuilder(
-                opaque: false, barrierColor: Colors.black,
-                pageBuilder: (_, __, ___) => VisionneuseImage(url: url),
-              )),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: SizedBox(width: 300, height: 155,
-                  child: Image.network(url, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(color: const Color(0xFFCCD0D5), alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image_outlined, color: Color(0xFF8696A0))),
-                  ),
-                ),
-              ),
-            );
-          }
+          if (fType == 'image') return GrillePhotos(urls: [url], heure: _formatHeure(msg.heure));
           if (fType == 'vocal') {
             return VoiceMessagePlayer(
               url: url, dureeLabel: nom,
