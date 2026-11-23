@@ -17,6 +17,7 @@ import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
 import 'message_actions.dart';
 import 'galerie_photos.dart';
+import 'swipe_reply.dart';
 import 'partager_message.dart';
 import 'profil_public_page.dart';
 import 'voice_message.dart';
@@ -1779,7 +1780,16 @@ class _GroupeFiliereState extends State<GroupeFiliere> {
     );
   }
 
+  /// Glisser le message vers la droite = répondre (comme WhatsApp).
   Widget _bulleMessage(_MessageGroupe msg, {bool premierDeSerie = true, bool suiviParMemeAuteur = false}) {
+    return SwipeToReply(
+      enabled: !_modeSelection,
+      onReply: () => _repondreA(msg),
+      child: _bulleMessageBrute(msg, premierDeSerie: premierDeSerie, suiviParMemeAuteur: suiviParMemeAuteur),
+    );
+  }
+
+  Widget _bulleMessageBrute(_MessageGroupe msg, {bool premierDeSerie = true, bool suiviParMemeAuteur = false}) {
     final estMoi = msg.estMoi;
     final theme = ChatThemes.byId(_themeId);
     final hovered = _hoveredMsgId == msg.id;

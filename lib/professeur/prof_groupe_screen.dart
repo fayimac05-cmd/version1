@@ -10,6 +10,7 @@ import '../services/socket_service.dart';
 import '../theme/app_palette.dart';
 import '../pages/emoji_gif_sticker_picker.dart';
 import '../pages/galerie_photos.dart';
+import '../pages/swipe_reply.dart';
 import '../pages/message_actions.dart';
 import '../pages/message_extras.dart';
 import '../pages/video_message.dart';
@@ -873,7 +874,7 @@ class _ProfChatFiliereState extends State<_ProfChatFiliere> {
                                 affiches[i - 1].heure, msg.heure);
                         return Column(children: [
                           if (showDate) _separateurDate(msg.heure),
-                          _bulle(msg),
+                          SwipeToReply(onReply: () => _repondreA(msg), child: _bulle(msg)),
                         ]);
                       }),
         ),
