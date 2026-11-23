@@ -20,6 +20,7 @@ import '../pages/chat_theme_picker_sheet.dart';
 import '../pages/voice_message.dart';
 import '../pages/video_message.dart';
 import '../pages/message_actions.dart';
+import '../pages/galerie_photos.dart';
 import '../pages/partager_message.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -35,6 +36,8 @@ class MessageAdmin {
   // Texte + expéditeur du message cité (pour l'affichage sans chercher dans la liste)
   final String? texteRepondu;
   final String? expediteurRepondu;
+  /// Ids des messages d'un lot de photos regroupées (vide = message simple).
+  final List<String> idsLot;
   bool lu;
   Map<String, int> reactions;
   bool epingle, important;
@@ -50,6 +53,7 @@ class MessageAdmin {
     this.idMessageRepondu,
     this.texteRepondu,
     this.expediteurRepondu,
+    this.idsLot = const [],
   }) : reactions = reactions ?? {};
 }
 
@@ -1082,6 +1086,7 @@ class AdminMessagesState extends State<AdminMessages>
   /// Aperçu lisible du dernier message (au lieu du texte brut « [FICHIER]… »).
   String _apercu(MessageAdmin m) {
     final t = m.texte;
+    if (t.startsWith('[GALERIE]')) return '📷 ${urlsGalerie(t).length} photos';
     if (t.startsWith('[FICHIER]')) {
       switch (t.substring(9).split('|').first) {
         case 'image': return '📷 Photo';
@@ -1384,18 +1389,67 @@ class AdminMessagesState extends State<AdminMessages>
   }
 
   // ── Liste des messages avec swipe-to-reply ───────────────────────────
+  int _minutesDe(String h) {
+    final p = h.split(':');
+    if (p.length < 2) return 0;
+    return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0);
+  }
+
+  /// Photos envoyées d'affilée par la même personne → UNE seule bulle (grille façon WhatsApp).
+  List<MessageAdmin> _messagesAffiches(GroupeAdmin g) {
+    final lots = calculerLotsPhotos<MessageAdmin>(
+      g.messages,
+      contenu: (m) => m.texte,
+      auteur: (m) => m.estMoi ? 'moi' : m.expediteur,
+      jour: (m) => '',
+      minutes: (m) => _minutesDe(m.heure),
+    );
+    final res = <MessageAdmin>[];
+    for (var i = 0; i < g.messages.length; i++) {
+      final lot = lots[i];
+      if (lot == null) {
+        res.add(g.messages[i]);
+        continue;
+      }
+      if (lot.isEmpty) continue;
+      final membres = lot.map((k) => g.messages[k]).toList();
+      final premier = membres.first;
+      res.add(MessageAdmin(
+        id: premier.id,
+        expediteur: premier.expediteur,
+        texte: contenuGalerie(membres.map((m) => urlPhotoMessage(m.texte)!).toList()),
+        heure: membres.last.heure,
+        type: premier.type,
+        estMoi: premier.estMoi,
+        etudiantRole: premier.etudiantRole,
+        niveau: premier.niveau,
+        photoUrl: premier.photoUrl,
+        lu: membres.every((m) => m.lu),
+        reactions: premier.reactions,
+        epingle: membres.any((m) => m.epingle),
+        important: membres.any((m) => m.important),
+        idMessageRepondu: premier.idMessageRepondu,
+        texteRepondu: premier.texteRepondu,
+        expediteurRepondu: premier.expediteurRepondu,
+        idsLot: membres.map((m) => m.id).toList(),
+      ));
+    }
+    return res;
+  }
+
   Widget _listeMessages(GroupeAdmin g) {
+    final affiches = _messagesAffiches(g);
     // Prépare une GlobalKey par message
-    for (final msg in g.messages) {
+    for (final msg in affiches) {
       _msgKeys.putIfAbsent(msg.id, () => GlobalKey());
     }
     return ListView.builder(
       clipBehavior: Clip.hardEdge,
       controller: _scrollCtrl,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-      itemCount: g.messages.length,
+      itemCount: affiches.length,
       itemBuilder: (_, i) {
-        final msg = g.messages[i];
+        final msg = affiches[i];
         // Retrouve le texte du message cité
         MessageAdmin? msgCite;
         if (msg.idMessageRepondu != null) {
@@ -1542,11 +1596,25 @@ class AdminMessagesState extends State<AdminMessages>
           _act(msg.epingle ? Icons.push_pin_outlined : Icons.push_pin_rounded,
             msg.epingle ? 'Désépingler' : 'Épingler',
             const Color(0xFF54656F), () { Navigator.pop(context);
-              _epinglerMessage(msg, g, !msg.epingle); }),
+              final v = !msg.epingle;
+              if (msg.idsLot.isEmpty) {
+                _epinglerMessage(msg, g, v);
+              } else {
+                setState(() => msg.epingle = v);
+                for (final o in g.messages.where((m) => msg.idsLot.contains(m.id))) {
+                  _epinglerMessage(o, g, v);
+                }
+              } }),
           _act(msg.important ? Icons.star_rounded : Icons.star_outline_rounded,
             msg.important ? 'Retirer des importants' : 'Marquer comme important',
             const Color(0xFF54656F), () { Navigator.pop(context);
-              setState(() => msg.important = !msg.important); }),
+              final v = !msg.important;
+              setState(() {
+                for (final o in g.messages.where((m) => msg.idsLot.contains(m.id))) {
+                  o.important = v;
+                }
+                msg.important = v;
+              }); }),
           if (estTelechargeable(msg.texte))
             _act(Icons.download_rounded, 'Télécharger',
                 const Color(0xFF54656F), () { Navigator.pop(context);
@@ -1561,7 +1629,11 @@ class AdminMessagesState extends State<AdminMessages>
           if (msg.estMoi)
             _act(Icons.delete_outline_rounded, 'Supprimer',
                 const Color(0xFFDC2626), () { Navigator.pop(context);
-                  setState(() => g.messages.remove(msg)); }),
+                  if (msg.idsLot.isEmpty) {
+                    setState(() => g.messages.remove(msg));
+                  } else {
+                    setState(() => g.messages.removeWhere((m) => msg.idsLot.contains(m.id)));
+                  } }),
           SizedBox(height: 8 + MediaQuery.of(context).padding.bottom),
         ]),
           ),
@@ -2423,7 +2495,9 @@ class _BulleAdminState extends State<_BulleAdmin>
                             Padding(
                               padding: msg.type == 'sticker'
                                   ? EdgeInsets.zero
-                                  : const EdgeInsets.fromLTRB(10, 5, 10, 2),
+                                  : estMessagePhotos(msg.texte)
+                                      ? const EdgeInsets.fromLTRB(3, 3, 3, 0)
+                                      : const EdgeInsets.fromLTRB(10, 5, 10, 2),
                               child: _contenu()),
 
                             // Heure + statut + réactions
@@ -2521,6 +2595,7 @@ class _BulleAdminState extends State<_BulleAdmin>
   }
 
   Widget _contenu() {
+    if (estGalerie(msg.texte)) return GrillePhotos(urls: urlsGalerie(msg.texte));
     if (msg.type == 'sticker') {
       final estFichierOuUrl = msg.texte.startsWith('http') || msg.texte.contains('/');
       if (!estFichierOuUrl) {
@@ -2583,37 +2658,7 @@ class _BulleAdminState extends State<_BulleAdmin>
       final fType = parts.isNotEmpty ? parts[0] : 'document';
       final url = parts.length > 1 ? parts[1] : '';
       final nom = parts.length > 2 ? parts.sublist(2).join('|') : 'Fichier';
-      if (fType == 'image') {
-        return GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            PageRouteBuilder(
-              opaque: false,
-              barrierColor: Colors.black,
-              pageBuilder: (_, __, ___) => _VisionneuseImage(url: url),
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 300,
-              height: 155,
-              child: Image.network(
-                url, fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : Container(color: const Color(0xFFE9EDF0), alignment: Alignment.center,
-                        child: const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
-                errorBuilder: (_, __, ___) => Container(
-                  color: const Color(0xFFCCD0D5),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.broken_image_outlined, color: Color(0xFF8696A0)),
-                ),
-              ),
-            ),
-          ),
-        );
-      }
+      if (fType == 'image') return GrillePhotos(urls: [url]);
       if (fType == 'vocal') {
         return VoiceMessagePlayer(
           url: url, dureeLabel: nom,
@@ -3347,72 +3392,6 @@ class _SondageWidgetState extends State<_SondageWidget> {
               ),
           ]),
         ],
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// VISIONNEUSE PLEIN ÉCRAN — image agrandie, zoom au pincement, fermeture
-// par le bouton ou en balayant vers le bas.
-// ════════════════════════════════════════════════════════════════════════
-class _VisionneuseImage extends StatelessWidget {
-  const _VisionneuseImage({required this.url});
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onVerticalDragEnd: (details) {
-        if ((details.primaryVelocity ?? 0) > 200) Navigator.pop(context);
-      },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(children: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 80),
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 4,
-                child: Image.network(
-                  url,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
-                  loadingBuilder: (_, child, progress) => progress == null
-                      ? child
-                      : const CircularProgressIndicator(color: Colors.white),
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 38, height: 38,
-                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
-                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => ouvrirFichier(context, url, telecharger: true),
-                    child: Container(
-                      width: 38, height: 38,
-                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
-                      child: const Icon(Icons.download_rounded, color: Colors.white, size: 22),
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-          ),
-        ]),
       ),
     );
   }
