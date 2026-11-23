@@ -17,6 +17,7 @@ import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
 import 'message_actions.dart';
 import 'galerie_photos.dart';
+import 'swipe_reply.dart';
 import 'partager_message.dart';
 import 'profil_public_page.dart';
 import 'voice_message.dart';
@@ -1417,7 +1418,10 @@ class _CanalDetailState extends State<_CanalDetail> {
                       final memeQueSuiv = i < affiches.length - 1 && affiches[i + 1].date == affiches[i].date && affiches[i + 1].expediteurId == affiches[i].expediteurId && affiches[i].expediteurId != null;
                       return Column(children: [
                         if (showDate) _separateur(affiches[i].date),
-                        _BulleCanal(
+                        SwipeToReply(
+                          enabled: !_modeSelection,
+                          onReply: () => _repondreA(affiches[i]),
+                          child: _BulleCanal(
                           key: ValueKey(affiches[i].id),
                           premierDeSerie: !memeQuePrec,
                           suiviParMemeAuteur: memeQueSuiv,
@@ -1430,7 +1434,7 @@ class _CanalDetailState extends State<_CanalDetail> {
                           selectionne: _selectionnes.contains(affiches[i].id),
                           onToggleSelection: () => _basculerSelection(affiches[i].id),
                           onDemarrerSelection: () => _demarrerSelection(affiches[i].id),
-                        ),
+                        )),
                       ]);
                     },
                   ))),
