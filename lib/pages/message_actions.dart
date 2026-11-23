@@ -47,6 +47,7 @@ String texteAPartager(String contenu) {
   final f = lireFichierMessage(contenu);
   if (f != null) return '${f.nom}\n${f.url}';
   if (contenu.startsWith('[GIF]')) return contenu.substring(5);
+  if (contenu.startsWith('[GALERIE]')) return contenu.substring(9).trim(); // lot de photos : leurs liens
   return contenu;
 }
 

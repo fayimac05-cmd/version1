@@ -16,6 +16,7 @@ import 'messages_screen.dart';
 import 'emoji_gif_sticker_picker.dart';
 import 'message_extras.dart';
 import 'message_actions.dart';
+import 'galerie_photos.dart';
 import 'partager_message.dart';
 import 'profil_public_page.dart';
 import 'voice_message.dart';
@@ -42,6 +43,8 @@ class _MessageCanal {
   final String? idMessageRepondu;
   final String? texteRepondu;
   final String? expediteurRepondu;
+  /// Ids des messages d'un lot de photos regroupées (vide = message simple).
+  final List<String> idsLot;
 
   _MessageCanal({
     required this.id,
@@ -60,6 +63,7 @@ class _MessageCanal {
     this.idMessageRepondu,
     this.texteRepondu,
     this.expediteurRepondu,
+    this.idsLot = const [],
   }) : reactions = reactions ?? {};
 
   factory _MessageCanal.fromJson(Map<String, dynamic> json, Color color) {
@@ -1237,6 +1241,76 @@ class _CanalDetailState extends State<_CanalDetail> {
     Future.delayed(const Duration(milliseconds: 600), jump);
   }
 
+  int _minutesDe(String h) {
+    final p = h.split(':');
+    if (p.length < 2) return 0;
+    return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
+  }
+
+  /// Photos envoyées d'affilée par la même personne → UNE seule bulle (grille façon WhatsApp).
+  List<_MessageCanal> _msgsAffiches() {
+    final lots = calculerLotsPhotos<_MessageCanal>(
+      _msgs,
+      contenu: (m) => m.texte,
+      auteur: (m) => m.expediteurId,
+      jour: (m) => m.date,
+      minutes: (m) => _minutesDe(m.heure),
+    );
+    final res = <_MessageCanal>[];
+    for (var i = 0; i < _msgs.length; i++) {
+      final lot = lots[i];
+      if (lot == null) {
+        res.add(_msgs[i]);
+        continue;
+      }
+      if (lot.isEmpty) continue; // absorbée par le lot précédent
+      final membres = lot.map((k) => _msgs[k]).toList();
+      final premier = membres.first;
+      final fusion = _MessageCanal(
+        id: premier.id,
+        expediteur: premier.expediteur,
+        initiales: premier.initiales,
+        texte: contenuGalerie(membres.map((m) => urlPhotoMessage(m.texte)!).toList()),
+        heure: membres.last.heure,
+        date: premier.date,
+        type: premier.type,
+        color: premier.color,
+        etudiantRole: premier.etudiantRole,
+        niveau: premier.niveau,
+        photoUrl: premier.photoUrl,
+        expediteurId: premier.expediteurId,
+        reactions: premier.reactions,
+        idMessageRepondu: premier.idMessageRepondu,
+        texteRepondu: premier.texteRepondu,
+        expediteurRepondu: premier.expediteurRepondu,
+        idsLot: membres.map((m) => m.id).toList(),
+      );
+      fusion.epingle = membres.any((m) => m.epingle);
+      fusion.important = membres.any((m) => m.important);
+      res.add(fusion);
+    }
+    return res;
+  }
+
+  /// Messages réels derrière une bulle (un lot de photos = plusieurs messages).
+  List<_MessageCanal> _originaux(_MessageCanal m) =>
+      m.idsLot.isEmpty ? [m] : _msgs.where((x) => m.idsLot.contains(x.id)).toList();
+
+  /// Remplace l'id d'un lot par les ids de toutes ses photos (pour supprimer).
+  List<String> _idsAvecLots(Iterable<String> ids) {
+    final affiches = _msgsAffiches();
+    final res = <String>[];
+    for (final id in ids) {
+      final rep = affiches.where((m) => m.id == id);
+      if (rep.isNotEmpty && rep.first.idsLot.isNotEmpty) {
+        res.addAll(rep.first.idsLot);
+      } else {
+        res.add(id);
+      }
+    }
+    return res;
+  }
+
   List<_MessageCanal> _fallbackMsgs() => [
     _MessageCanal(id: 'F1', expediteur: 'Direction Pédagogique', initiales: 'DP',
         texte: 'Bienvenue sur le canal de l\'${widget.nom}. Les annonces importantes seront publiées ici.',
@@ -1245,6 +1319,7 @@ class _CanalDetailState extends State<_CanalDetail> {
 
   @override
   Widget build(BuildContext context) {
+    final affiches = _msgsAffiches();
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Fond gris pro très doux
       appBar: _modeSelection
@@ -1334,27 +1409,27 @@ class _CanalDetailState extends State<_CanalDetail> {
                 : ListView.builder(
                     controller: _scroll,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    itemCount: _msgs.length,
+                    itemCount: affiches.length,
                     itemBuilder: (_, i) {
-                      final showDate = i == 0 || _msgs[i - 1].date != _msgs[i].date;
+                      final showDate = i == 0 || affiches[i - 1].date != affiches[i].date;
                       // Séries d'un même expéditeur (façon WhatsApp) : photo une seule fois, en haut.
-                      final memeQuePrec = i > 0 && !showDate && _msgs[i - 1].expediteurId == _msgs[i].expediteurId && _msgs[i].expediteurId != null;
-                      final memeQueSuiv = i < _msgs.length - 1 && _msgs[i + 1].date == _msgs[i].date && _msgs[i + 1].expediteurId == _msgs[i].expediteurId && _msgs[i].expediteurId != null;
+                      final memeQuePrec = i > 0 && !showDate && affiches[i - 1].expediteurId == affiches[i].expediteurId && affiches[i].expediteurId != null;
+                      final memeQueSuiv = i < affiches.length - 1 && affiches[i + 1].date == affiches[i].date && affiches[i + 1].expediteurId == affiches[i].expediteurId && affiches[i].expediteurId != null;
                       return Column(children: [
-                        if (showDate) _separateur(_msgs[i].date),
+                        if (showDate) _separateur(affiches[i].date),
                         _BulleCanal(
-                          key: ValueKey(_msgs[i].id),
+                          key: ValueKey(affiches[i].id),
                           premierDeSerie: !memeQuePrec,
                           suiviParMemeAuteur: memeQueSuiv,
-                          message: _msgs[i],
+                          message: affiches[i],
                           couleur: widget.couleur,
                           theme: ChatThemes.byId(_themeId),
-                          estMoi: _myUserId != null && _msgs[i].expediteurId == _myUserId,
-                          onMenu: () => _menuOptions(_msgs[i]),
+                          estMoi: _myUserId != null && affiches[i].expediteurId == _myUserId,
+                          onMenu: () => _menuOptions(affiches[i]),
                           modeSelection: _modeSelection,
-                          selectionne: _selectionnes.contains(_msgs[i].id),
-                          onToggleSelection: () => _basculerSelection(_msgs[i].id),
-                          onDemarrerSelection: () => _demarrerSelection(_msgs[i].id),
+                          selectionne: _selectionnes.contains(affiches[i].id),
+                          onToggleSelection: () => _basculerSelection(affiches[i].id),
+                          onDemarrerSelection: () => _demarrerSelection(affiches[i].id),
                         ),
                       ]);
                     },
@@ -1571,6 +1646,7 @@ Widget _zoneSaisie() {
 
   Future<void> _supprimerSelection() async {
     final idsSelectionnes = _selectionnes.toList();
+    final idsASupprimer = _idsAvecLots(idsSelectionnes);
     final tousMoi = idsSelectionnes.every((id) {
       for (final m in _msgs) {
         if (m.id == id) return m.expediteurId == _myUserId;
@@ -1614,13 +1690,13 @@ Widget _zoneSaisie() {
     if (choix == null) return;
 
     setState(() {
-      _msgs.removeWhere((m) => idsSelectionnes.contains(m.id));
+      _msgs.removeWhere((m) => idsASupprimer.contains(m.id));
       _modeSelection = false;
       _selectionnes.clear();
     });
 
     final headers = await ApiService.getHeaders();
-    for (final id in idsSelectionnes) {
+    for (final id in idsASupprimer) {
       final idNumerique = int.tryParse(id);
       if (idNumerique == null) continue; // message pas encore confirmé par le serveur
       try {
@@ -1717,12 +1793,27 @@ Widget _zoneSaisie() {
                 title: Text(msg.epingle ? 'Désépingler le message' : 'Épingler en haut du canal', style: TextStyle(fontSize: 14, color: widget.couleur, fontWeight: FontWeight.w500)),
                 onTap: () {
                   Navigator.pop(context);
-                  setState(() => msg.epingle = !msg.epingle);
+                  final v = !msg.epingle;
+                  setState(() {
+                    for (final o in _originaux(msg)) {
+                      o.epingle = v;
+                    }
+                    msg.epingle = v;
+                  });
                 }),
               ListTile(
                 leading: Icon(msg.important ? Icons.star_rounded : Icons.star_outline_rounded, color: const Color(0xFF64748B)),
                 title: Text(msg.important ? 'Retirer des importants' : 'Marquer comme important', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                onTap: () { Navigator.pop(context); setState(() => msg.important = !msg.important); }),
+                onTap: () {
+                  Navigator.pop(context);
+                  final v = !msg.important;
+                  setState(() {
+                    for (final o in _originaux(msg)) {
+                      o.important = v;
+                    }
+                    msg.important = v;
+                  });
+                }),
               if (estTelechargeable(msg.texte))
                 ListTile(
                   leading: const Icon(Icons.download_rounded, color: Color(0xFF64748B)),
@@ -1770,12 +1861,15 @@ Widget _zoneSaisie() {
                       ),
                     );
                     if (confirme != true) return;
-                    setState(() => _msgs.removeWhere((m) => m.id == msg.id));
-                    final idNumerique = int.tryParse(msg.id);
-                    if (idNumerique == null) return; // message pas encore confirmé par le serveur
+                    final ids = msg.idsLot.isEmpty ? [msg.id] : msg.idsLot;
+                    setState(() => _msgs.removeWhere((m) => ids.contains(m.id)));
                     try {
                       final headers = await ApiService.getHeaders();
-                      await http.delete(Uri.parse('$_baseUrl/messages/$idNumerique'), headers: headers);
+                      for (final id in ids) {
+                        final idNumerique = int.tryParse(id);
+                        if (idNumerique == null) continue; // message pas encore confirmé par le serveur
+                        await http.delete(Uri.parse('$_baseUrl/messages/$idNumerique'), headers: headers);
+                      }
                     } catch (_) {}
                   }),
               SizedBox(height: 8 + MediaQuery.of(context).padding.bottom),
@@ -1946,7 +2040,7 @@ class _BulleCanalState extends State<_BulleCanal> {
                   onLongPress: onMenu,
                   child: Container(
                     constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                    padding: const EdgeInsets.fromLTRB(13, 11, 11, 8),
+                    padding: estMessagePhotos(message.texte) ? const EdgeInsets.all(3) : const EdgeInsets.fromLTRB(13, 11, 11, 8),
                     decoration: BoxDecoration(
                       color: bulleColor,
                       borderRadius: BorderRadius.only(
@@ -1975,10 +2069,11 @@ class _BulleCanalState extends State<_BulleCanal> {
                           ]),
                         ),
                       _contenuBulleCanal(context, message, isPDF, texteColor, estMoi),
-                      const SizedBox(height: 2),
+                      if (!estMessagePhotos(message.texte)) const SizedBox(height: 2),
                       // Heure + épingle en bas à droite de la bulle, façon
                       // WhatsApp (au lieu d'une ligne séparée au-dessus).
-                      Row(mainAxisSize: MainAxisSize.min, children: [
+                      // Pour des photos, l'heure est posée sur l'image (GrillePhotos).
+                      if (!estMessagePhotos(message.texte)) Row(mainAxisSize: MainAxisSize.min, children: [
                         if (message.epingle) ...[
                           Icon(Icons.push_pin_rounded, size: 11, color: texteColor.withValues(alpha: 0.7)),
                           const SizedBox(width: 4),
@@ -2061,28 +2156,15 @@ class _BulleCanalState extends State<_BulleCanal> {
             : Image.file(File(message.texte.substring(9)), width: 120, height: 120, fit: BoxFit.cover),
       );
     }
+    if (estGalerie(message.texte)) {
+      return GrillePhotos(urls: urlsGalerie(message.texte), heure: message.heure);
+    }
     if (message.texte.startsWith('[FICHIER]')) {
       final parts = message.texte.substring(9).split('|');
       final fType = parts.isNotEmpty ? parts[0] : 'document';
       final url = parts.length > 1 ? parts[1] : '';
       final nom = parts.length > 2 ? parts.sublist(2).join('|') : 'Fichier';
-      if (fType == 'image') {
-        return GestureDetector(
-          onTap: () => Navigator.push(context, PageRouteBuilder(
-            opaque: false, barrierColor: Colors.black,
-            pageBuilder: (_, __, ___) => VisionneuseImage(url: url),
-          )),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(width: 300, height: 155,
-              child: Image.network(url, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(color: const Color(0xFFCCD0D5), alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image_outlined, color: Color(0xFF8696A0))),
-              ),
-            ),
-          ),
-        );
-      }
+      if (fType == 'image') return GrillePhotos(urls: [url], heure: message.heure);
       if (fType == 'vocal') {
         return VoiceMessagePlayer(
           url: url, dureeLabel: nom,
@@ -2402,6 +2484,7 @@ class _BlinkingDotCanalState extends State<_BlinkingDotCanal> with SingleTickerP
 /// Libellé lisible d'un message pour l'aperçu de réponse / la citation :
 /// évite d'afficher le texte brut « [FICHIER]vocal|https://... ».
 String _apercuMessage(String t) {
+  if (t.startsWith('[GALERIE]')) return '📷 ${urlsGalerie(t).length} photos';
   if (t.startsWith('[FICHIER]')) {
     final p = t.substring(9).split('|');
     if (p[0] == 'vocal') return '🎤 Message vocal';
