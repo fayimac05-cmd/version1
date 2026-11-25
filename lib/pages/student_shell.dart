@@ -14,6 +14,7 @@ import 'app_drawer.dart';
 import '../services/annuel_service.dart';
 import 'reinscription_page.dart';
 import '../services/messages_prefetch.dart';
+import '../services/offline_cache.dart';
 
 class StudentShell extends StatefulWidget {
   const StudentShell({
@@ -151,10 +152,15 @@ class _StudentShellState extends State<StudentShell> with WidgetsBindingObserver
       // à jour. IndexedStack garde tous les onglets vivants en mémoire, donc
       // cet état survit — même comportement que ParentShell, où ça
       // fonctionnait déjà.
-      body: IndexedStack(
-        index: _currentTab,
-        children: pages,
-      ),
+      body: Column(children: [
+        const BandeauHorsLigne(), // « Mode hors ligne » quand on affiche des données gardées
+        Expanded(
+          child: IndexedStack(
+            index: _currentTab,
+            children: pages,
+          ),
+        ),
+      ]),
       bottomNavigationBar: _buildNavBar(),
     );
   }
