@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/scolar_hub_app.dart';
@@ -7,18 +8,25 @@ import 'models/student_profile.dart';
 import 'pages/splash_screen.dart';
 import 'pages/student_shell.dart';
 import 'services/onesignal_service.dart';
+import 'services/offline_cache.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
   final chrono = Stopwatch()..start();
 
-  // ⚡ L'écran d'accueil (vidéo + logo) n'a pas besoin de Supabase : on
-  // l'affiche IMMÉDIATEMENT et on initialise le reste en arrière-plan.
-  // Supabase n'est utilisé qu'après la connexion, bien plus tard.
-  runApp(const ScolarHubApp());
-  debugPrint('⏱ Première image lancée après ${chrono.elapsedMilliseconds} ms');
-
-  await _initialiserServices(chrono);
+  // Mode hors ligne : toutes les requêtes http de l'app passent par
+  // OfflineCacheClient (copie des réponses, relecture sans réseau).
+  // Le client réel est créé AVANT la zone pour ne pas se rappeler lui-même ;
+  // l'initialisation de Flutter doit se faire DANS la zone.
+  final clientReel = http.Client();
+  http.runWithClient(() {
+    WidgetsFlutterBinding.ensureInitialized();
+    // ⚡ L'écran d'accueil (vidéo + logo) n'a pas besoin de Supabase : on
+    // l'affiche IMMÉDIATEMENT et on initialise le reste en arrière-plan.
+    // Supabase n'est utilisé qu'après la connexion, bien plus tard.
+    runApp(const ScolarHubApp());
+    debugPrint('⏱ Première image lancée après ${chrono.elapsedMilliseconds} ms');
+    _initialiserServices(chrono);
+  }, () => OfflineCacheClient(clientReel));
 }
 
 Future<void> _initialiserServices(Stopwatch chrono) async {
