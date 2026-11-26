@@ -262,7 +262,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ).createShader(rect),
           blendMode: BlendMode.dstIn,
           child: Image.asset(
-            'assets/images/etablissement_banner.png',
+            'assets/images/etablissement_banner.jpg',
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const SizedBox(),
           ),

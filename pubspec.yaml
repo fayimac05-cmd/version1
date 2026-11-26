@@ -62,15 +62,15 @@ flutter:
 
   assets:
     - .env
-    - assets/images/cantine_food.png
-    - assets/images/students_group.png
-    - assets/images/etudiant_ist.png
-    - assets/images/campus_banner.png
-    - assets/images/etablissement_banner.png
+    - assets/images/cantine_food.jpg
+    - assets/images/students_group.jpg
+    - assets/images/etudiant_ist.jpg
+    - assets/images/campus_banner.jpg
+    - assets/images/etablissement_banner.jpg
     - assets/images/logo_scolarhub.png
     - assets/images/logo_scolarhub_sombre.png
     - assets/images/titre_scolarhub.png
     - assets/images/app_icon.png
     - assets/images/diplomes.png
-    - assets/images/cantine_etudiant.png
+    - assets/images/cantine_etudiant.jpg
     - assets/videos/diplomes.mp4

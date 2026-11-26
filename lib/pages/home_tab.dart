@@ -1215,7 +1215,7 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
         badge: _menuCantinePublie ? 'Menu publié' : null,
         badgeColor: const Color(0xFF2E8B3C),
         watermarkIcon: Icons.lunch_dining_rounded,
-        imageAsset: 'assets/images/cantine_food.png',
+        imageAsset: 'assets/images/cantine_food.jpg',
         grand: grand,
         imageWidth: imgW,
         onTap: () => _showCantineSheet(context),
@@ -1227,7 +1227,7 @@ Widget _buildCantineEtFiliereRow(BuildContext context) {
         subtitle: widget.profile.filiere.isNotEmpty
             ? widget.profile.filiere : 'Canal de la filière',
         watermarkIcon: Icons.groups_rounded,
-        imageAsset: 'assets/images/students_group.png',
+        imageAsset: 'assets/images/students_group.jpg',
         unreadCount: _nonLusMaFiliere,
         grand: grand,
         imageWidth: imgW,

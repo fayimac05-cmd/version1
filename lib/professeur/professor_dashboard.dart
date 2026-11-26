@@ -753,10 +753,10 @@ class _ProfessorDashboardState extends State<ProfessorDashboard> {
       child: Stack(
         children: [
           // Photo du campus, visible sans assombrissement — voir
-          // assets/images/campus_banner.png
+          // assets/images/campus_banner.jpg
           Positioned.fill(
             child: Image.asset(
-              'assets/images/campus_banner.png',
+              'assets/images/campus_banner.jpg',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(color: const Color(0xFFE2E8F0)),
             ),
