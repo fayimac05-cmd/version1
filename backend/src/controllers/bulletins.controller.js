@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { accesNotesBloque, accesNotesBloqueParUser, etudiantsBloques, MESSAGE_BLOCAGE } = require('./finances.controller'); // [FINANCES]
 const { envoyerNotificationAuto } = require('./notifications.controller');
 const { envoyerNotification } = require('../services/onesignal.service');
 
@@ -540,6 +541,9 @@ const getMonBulletin = async (req, res) => {
     try {
         const userId = req.user.id;
 
+        // [FINANCES] accès suspendu par l'administration (scolarité à régulariser)
+        const _blq = await accesNotesBloqueParUser(req.user.id);
+        if (_blq.bloque) return res.status(403).json({ success: false, code: 'SCOLARITE_BLOQUEE', message: MESSAGE_BLOCAGE, motif: _blq.motif });
         const etudiantResult = await pool.query(
             `SELECT id, nom, prenoms, filiere_nom, niveau, COALESCE(date_naissance, (SELECT u.date_naissance FROM users u WHERE u.id = etudiants.user_id)) AS date_naissance, lieu_naissance FROM etudiants WHERE user_id = $1`,
             [userId]

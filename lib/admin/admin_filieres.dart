@@ -359,7 +359,7 @@ class _AdminFilieresState extends State<AdminFilieres> {
               shaderCallback: (r) => const LinearGradient(
                 colors: [Colors.transparent, Colors.white], stops: [0.0, 0.45],
               ).createShader(r),
-              child: Image.asset('assets/images/etablissement_banner.png',
+              child: Image.asset('assets/images/etablissement_banner.jpg',
                   fit: BoxFit.cover, alignment: Alignment.centerRight,
                   errorBuilder: (_, __, ___) => const SizedBox()),
             ),

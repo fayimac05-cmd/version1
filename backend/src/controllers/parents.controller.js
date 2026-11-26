@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { accesNotesBloque, accesNotesBloqueParUser, etudiantsBloques, MESSAGE_BLOCAGE } = require('./finances.controller'); // [FINANCES]
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { envoyerNotificationAuto } = require('./notifications.controller');
@@ -382,7 +383,10 @@ const getMesEnfants = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Aucun enfant rattaché trouvé.' });
     }
-    res.json({ success: true, data: result.rows });
+    // [FINANCES] moyenne masquée pour un enfant dont l'accès est suspendu
+    const _bl = await etudiantsBloques(result.rows.map((r) => r.etudiant_id));
+    const _rows = result.rows.map((r) => (_bl.has(String(r.etudiant_id)) ? { ...r, moyenne: null, notes_non_lues: 0, bulletins_non_lus: 0, bloque: true } : r));
+    res.json({ success: true, data: _rows });
   } catch (err) {
     console.error('[parents] GET /mes-enfants', err);
     res.status(500).json({ success: false, message: 'Erreur serveur.' });
@@ -421,6 +425,11 @@ const getBulletinsEnfant = async (req, res) => {
     const { etudiantId } = req.params;
     if (!(await accesEtudiant(req, etudiantId))) {
       return res.status(403).json({ success: false, message: 'Accès refusé à cet étudiant.' });
+    }
+    // [FINANCES] accès suspendu par l'administration (ne concerne pas l'administration elle-même)
+    if (req.user.role !== 'admin' && req.user.role !== 'direction') {
+      const _blq = await accesNotesBloque(etudiantId);
+      if (_blq.bloque) return res.status(403).json({ success: false, code: 'SCOLARITE_BLOQUEE', message: MESSAGE_BLOCAGE, motif: _blq.motif });
     }
     const result = await pool.query(
       `SELECT id, semestre, annee_academique, moyenne_generale, statut, date_publication,
@@ -484,6 +493,11 @@ const getNotesEnfant = async (req, res) => {
     const { etudiantId } = req.params;
     if (!(await accesEtudiant(req, etudiantId))) {
       return res.status(403).json({ success: false, message: 'Accès refusé à cet étudiant.' });
+    }
+    // [FINANCES] accès suspendu par l'administration (ne concerne pas l'administration elle-même)
+    if (req.user.role !== 'admin' && req.user.role !== 'direction') {
+      const _blq = await accesNotesBloque(etudiantId);
+      if (_blq.bloque) return res.status(403).json({ success: false, code: 'SCOLARITE_BLOQUEE', message: MESSAGE_BLOCAGE, motif: _blq.motif });
     }
     const result = await pool.query(
       `SELECT * FROM vue_notes_etudiants WHERE etudiant_id = $1 ORDER BY date_session DESC`,

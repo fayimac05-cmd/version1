@@ -1099,7 +1099,7 @@ class _SplashScreenState extends State<SplashScreen>
                     width: isTablet ? 380 : 560,
                     height: isTablet ? 330 : 490,
                     child: Image.asset(
-                      'assets/images/etudiant_ist.png',
+                      'assets/images/etudiant_ist.jpg',
                       fit: BoxFit.cover,
                       alignment: Alignment.center,
                       errorBuilder: (
@@ -1481,7 +1481,7 @@ class _SplashScreenState extends State<SplashScreen>
                 width: 270,
                 height: 240,
                 child: Image.asset(
-                  'assets/images/etudiant_ist.png',
+                  'assets/images/etudiant_ist.jpg',
                   fit: BoxFit.cover,
                   alignment: Alignment.center,
                   errorBuilder: (

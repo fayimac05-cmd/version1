@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../theme/app_palette.dart';
 import 'chat_ia_screen.dart';
 import 'revision_ia_screen.dart';
 import 'tickets_screen.dart';
+import 'ma_scolarite_screen.dart';
 import 'evaluations_a_faire_page.dart';
 import '../widgets/guide_utilisation.dart';
 import '../widgets/session_settings_sheet.dart';
@@ -137,6 +138,17 @@ class AppDrawer extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                       builder: (_) => TicketsScreen(profile: profile))),
+            ),
+            _item(
+              context,
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Ma scolarité',
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                          appBar: AppBar(title: const Text('Ma scolarité')),
+                          body: const MaScolariteScreen()))),
             ),
             _item(
               context,

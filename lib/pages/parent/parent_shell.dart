@@ -8,6 +8,7 @@ import 'parent_grades_tab.dart';
 import 'parent_bulletins_tab.dart';
 import '../planning_tab.dart';
 import 'parent_profile_tab.dart';
+import '../ma_scolarite_screen.dart';
 
 class ParentShell extends StatefulWidget {
   final StudentProfile profile;
@@ -168,6 +169,15 @@ class _ParentShellState extends State<ParentShell> {
                     profile: widget.profile,
                     selectedEtudiantId: _selectedEtudiantId,
                   ),
+                  // Scolarité (ajoutée en dernier pour ne décaler aucun onglet existant)
+                  if (selected != null)
+                    MaScolariteScreen(
+                      key: ValueKey('scolarite-${selected.etudiantId}'),
+                      etudiantId: selected.etudiantId,
+                      nomEnfant: selected.nomComplet,
+                    )
+                  else
+                    const SizedBox.shrink(),
                 ],
               ),
             ),
@@ -197,6 +207,7 @@ class _ParentShellState extends State<ParentShell> {
           ),
           const NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded), label: 'Planning'),
           const NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Profil'),
+          const NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet_rounded), label: 'Scolarité'),
         ],
       ),
     );

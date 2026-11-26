@@ -1,522 +1,289 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
-  <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
-  <meta name="color-scheme" content="light">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="ScolarHub - La plateforme académique tout-en-un">
-
-  <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="ScolarHub">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>ScolarHub</title>
-
-  <!-- OneSignal Web Push -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "1d27fa01-4cdf-4ea7-8c47-1af912cc740b",
-        allowLocalhostAsSecureOrigin: true,
-        notifyButton: {
-          enable: true,
-          size: 'large',
-          position: 'bottom-right',
-          prenotify: true,
-          showCredit: false,
-          text: {
-            'tip.state.unsubscribed': 'Activer les notifications',
-            'tip.state.subscribed': 'Notifications activées',
-            'tip.state.blocked': 'Notifications bloquées',
-            'message.prenotify': 'Cliquez pour activer les notifications ScolarHub',
-            'message.action.subscribed': '✅ Notifications activées !',
-            'message.action.resubscribed': 'Notifications réactivées !',
-            'message.action.unsubscribed': 'Vous ne recevrez plus de notifications.',
-            'dialog.main.title': 'Notifications ScolarHub',
-            'dialog.main.button.subscribe': 'Activer',
-            'dialog.main.button.unsubscribe': 'Désactiver',
-            'dialog.blocked.title': 'Débloquer les notifications',
-            'dialog.blocked.message': 'Pour recevoir les notifications, autorisez-les dans les paramètres de votre navigateur.',
-          }
-        },
-        welcomeNotification: {
-          title: "ScolarHub",
-          message: "Vous recevrez désormais les notifications de notes, messages et absences.",
-        },
-        promptOptions: {
-          slidedown: {
-            prompts: [
-              {
-                type: "push",
-                autoPrompt: false,
-                text: {
-                  actionMessage: "📚 Recevez vos notes, messages et alertes d'absence en temps réel !",
-                  acceptButton: "Activer",
-                  cancelButton: "Plus tard",
-                },
-                delay: {
-                  pageViews: 0,
-                  timeDelay: 3,
-                },
-              }
-            ]
-          }
-        }
-      });
-
-    });
-  </script>
-  <meta name="theme-color" content="#0D55B0">
-  <link rel="manifest" href="manifest.json">
-
-  <!-- Écran de chargement : logo ScolarHub affiché pendant le démarrage de l'application -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connais-tu réellement IB Chékété ?</title>
   <style>
-    html, body { margin: 0; height: 100%; background: #F8FAFE; }
-    #sh-loader {
-      position: fixed; inset: 0; z-index: 9999;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      background: #F8FAFE; transition: opacity .5s ease;
-      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: linear-gradient(to right, #fdf6e3, #e0f7fa);
     }
-    #sh-loader.sh-fin { opacity: 0; pointer-events: none; }
-    /* Message d'aide si le demarrage est trop long */
-    #sh-loader #sh-aide { margin-top: 22px; text-align: center; max-width: 280px; padding: 0 16px; }
-    #sh-loader #sh-aide p { margin: 0 0 12px; font-size: 13px; color: #475569; line-height: 1.45; }
-    #sh-loader #sh-aide button {
-      border: 0; border-radius: 12px; padding: 11px 24px; font-size: 14px; font-weight: 700;
-      background: #0D55B0; color: #fff; font-family: inherit; cursor: pointer;
+    #quiz, #result, #question-container, #leaderboard-container {
+      display: none;
     }
-    #sh-loader .sh-logo {
-      width: min(200px, 50vw); height: min(200px, 50vw); object-fit: contain;
-      animation: sh-pop .9s ease-out both, sh-vie 1.6s ease-in-out .9s infinite;
+    button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      cursor: pointer;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 5px;
     }
-    #sh-loader .sh-titre { margin-top: 18px; height: 38px; width: auto; object-fit: contain; }
-    #sh-loader .sh-barre { margin-top: 22px; width: 120px; height: 4px; border-radius: 4px; background: #DCEAFF; overflow: hidden; }
-    #sh-loader .sh-barre i { display: block; width: 40%; height: 100%; border-radius: 4px; background: #F8C400; animation: sh-glisse 1.2s ease-in-out infinite; }
-    @keyframes sh-pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
-    @keyframes sh-vie { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.09); } }
-    @keyframes sh-glisse { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
-    /* Bandeau « Installer l'application » (mobile uniquement) */
-    #sh-install {
-      position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 10000;
-      padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
-      background: #fff; border-radius: 16px; border: 1px solid #DCEAFF;
-      box-shadow: 0 8px 28px rgba(8, 59, 135, .22);
-      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #0F172A;
-      display: none; max-width: 520px; margin: 0 auto;
+    .question {
+      font-weight: bold;
+      margin-top: 20px;
     }
-    #sh-install.sh-visible { display: block; animation: sh-monte .35s ease-out both; }
-    #sh-install .sh-ligne { display: flex; align-items: center; gap: 12px; }
-    #sh-install img { width: 44px; height: 44px; border-radius: 10px; flex: none; }
-    #sh-install .sh-titre { font-size: 15px; font-weight: 800; color: #083B87; }
-    #sh-install .sh-texte { font-size: 12.5px; color: #475569; line-height: 1.4; margin-top: 2px; }
-    #sh-install .sh-fermer {
-      position: absolute; top: 6px; right: 8px; border: 0; background: none;
-      font-size: 22px; line-height: 1; color: #94A3B8; padding: 6px; cursor: pointer;
+    .option {
+      margin: 5px 0;
     }
-    #sh-install .sh-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    #sh-install .sh-btn {
-      flex: 1 1 140px; text-align: center; text-decoration: none; cursor: pointer;
-      border: 0; border-radius: 12px; padding: 11px 12px; font-size: 14px; font-weight: 700;
-      font-family: inherit;
+    .avatar-img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-right: 8px;
     }
-    #sh-install .sh-btn-principal { background: #0D55B0; color: #fff; }
-    #sh-install .sh-btn-secondaire { background: #EAF2FF; color: #083B87; }
-    #sh-install .sh-etapes { font-size: 13px; color: #334155; margin: 10px 0 0; padding-left: 0; list-style: none; }
-    #sh-install .sh-etapes li { margin: 4px 0; }
-    @keyframes sh-monte { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* Bandeau d'activation des notifications */
-    #sh-notif-prompt {
-      position: fixed; top: 16px; right: 16px; z-index: 9999999;
-      padding: 14px 16px; background: #ffffff; border-radius: 16px;
-      border: 1px solid #DCEAFF; box-shadow: 0 10px 32px rgba(13, 85, 176, 0.22);
-      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-      color: #0F172A; max-width: 360px; display: none;
-      pointer-events: auto !important;
-      animation: sh-notif-enter .35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    #leaderboard {
+      margin-top: 20px;
+      padding: 10px;
+      background: #ffffffaa;
+      border-radius: 8px;
     }
-    @keyframes sh-notif-enter {
-      from { opacity: 0; transform: translateY(-16px) scale(0.96); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
+    .player-entry {
+      margin-bottom: 5px;
     }
-    #sh-notif-prompt * { pointer-events: auto !important; }
-    #sh-notif-prompt .sh-np-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    #sh-notif-prompt .sh-np-icon {
-      width: 36px; height: 36px; border-radius: 10px; background: #EFF6FF;
-      display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none;
+    .decor {
+      font-size: 24px;
+      margin-right: 5px;
     }
-    #sh-notif-prompt .sh-np-title { font-size: 14.5px; font-weight: 700; color: #083B87; }
-    #sh-notif-prompt .sh-np-body { font-size: 12.5px; color: #475569; line-height: 1.4; margin-bottom: 12px; }
-    #sh-notif-prompt .sh-np-actions { display: flex; gap: 8px; }
-    #sh-notif-prompt .sh-np-btn {
-      flex: 1; border: 0; border-radius: 10px; padding: 9px 12px;
-      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
-    }
-    #sh-notif-prompt .sh-np-btn-ok { background: #0D55B0; color: #fff; }
-    #sh-notif-prompt .sh-np-btn-cancel { background: #F1F5F9; color: #64748B; }
   </style>
 </head>
 <body>
-  <div id="sh-loader">
-    <img class="sh-logo" src="icons/logo.png" alt="ScolarHub">
-    <img class="sh-titre" src="icons/titre_scolarhub.png" alt="ScolarHub">
-    <div class="sh-barre"><i></i></div>
-    <div id="sh-aide" style="display:none">
-      <p>Le chargement prend plus de temps que prévu.<br>Vérifiez votre connexion internet.</p>
-      <button id="sh-reessayer" type="button">Réessayer</button>
-    </div>
+  <h2>🌸 Quiz : Connais-tu réellement IB Chékété ? 💰</h2>
+
+  <div id="start">
+    <label>Pseudo : <input type="text" id="username"></label><br><br>
+    <label>Mot de passe : <input type="password" id="password"></label><br><br>
+    <label>Choisis un avatar : <input type="file" id="avatarInput" accept="image/*"></label><br><br>
+    <button onclick="validateAccess()">Commencer</button>
+    <p id="error" style="color:red"></p>
   </div>
-  <script>
-    // Retire l'écran de chargement dès que la première image de l'application est affichée
-    // (avec un filet de sécurité au bout de 15 s).
-    (function () {
-      var retire = false;
-      function retirer() {
-        if (retire) return;
-        retire = true;
-        var l = document.getElementById('sh-loader');
-        if (!l) return;
-        l.classList.add('sh-fin');
-        setTimeout(function () { if (l.parentNode) l.parentNode.removeChild(l); }, 600);
-      }
-      window.addEventListener('flutter-first-frame', retirer);
-      // Filet de securite : si le moteur Flutter est present mais que l'evenement n'est pas arrive,
-      // on retire l'ecran de chargement. Tant que rien n'a demarre (telechargement lent ou
-      // bloque), l'ecran reste affiche et le message d'aide apparait plus bas.
-      setTimeout(function surveiller() {
-        if (retire) return;
-        if (document.querySelector('flt-glass-pane')) { retirer(); return; }
-        setTimeout(surveiller, 2000);
-      }, 15000);
 
-      // Rien n'a demarre au bout de 20 s : on propose de reessayer (vide le cache puis recharge).
-      setTimeout(function () {
-        if (retire) return;
-        var aide = document.getElementById('sh-aide');
-        if (aide) aide.style.display = 'block';
-      }, 20000);
-
-      var btn = document.getElementById('sh-reessayer');
-      if (btn) btn.addEventListener('click', function () {
-        btn.disabled = true;
-        btn.textContent = 'Nettoyage…';
-        function recharger() { location.reload(); }
-        var taches = [];
-        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-          taches.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
-            return Promise.all(rs.map(function (r) { return r.unregister(); }));
-          }));
-        }
-        if (window.caches && caches.keys) {
-          taches.push(caches.keys().then(function (ks) {
-            return Promise.all(ks.map(function (k) { return caches.delete(k); }));
-          }));
-        }
-        Promise.all(taches).then(recharger, recharger);
-        setTimeout(recharger, 4000);
-      });
-    })();
-  </script>
-  <!-- Bandeau d'installation de l'application (affiché seulement sur téléphone) -->
-  <div id="sh-install" role="dialog" aria-label="Installer ScolarHub">
-    <button class="sh-fermer" id="sh-install-fermer" aria-label="Fermer">&times;</button>
-    <div class="sh-ligne">
-      <img src="icons/Icon-192.png" alt="">
-      <div>
-        <div class="sh-titre">Installer ScolarHub</div>
-        <div class="sh-texte" id="sh-install-texte"></div>
-      </div>
-    </div>
-    <ul class="sh-etapes" id="sh-install-etapes" style="display:none"></ul>
-    <div class="sh-actions" id="sh-install-actions"></div>
-  </div>
-  <script>
-    (function () {
-      // ── Réglage : lien de téléchargement de l'APK (GitHub Releases).
-      // Le dépôt doit être PUBLIC pour que ce lien fonctionne sans compte GitHub.
-      // Laisser vide ('') pour ne pas proposer l'APK.
-      var APK_URL = 'https://github.com/fayimac05-cmd/version1/releases/latest/download/scolarhub.apk';
-
-      var ua = navigator.userAgent || '';
-      var estIos = /iphone|ipad|ipod/i.test(ua) ||
-                   (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
-      var estAndroid = /android/i.test(ua);
-      if (!estIos && !estAndroid) return; // ordinateur : rien à afficher
-
-      // Déjà installée (ouverte comme une appli) : on n'affiche rien.
-      var installee = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-                      window.navigator.standalone === true;
-      if (installee) return;
-
-      // Fermé récemment : on ne réaffiche pas avant 7 jours.
-      var CLE = 'sh-install-ferme';
-      try {
-        var t = parseInt(localStorage.getItem(CLE) || '0', 10);
-        if (t && Date.now() - t < 7 * 24 * 3600 * 1000) return;
-      } catch (e) {}
-
-      var boite = document.getElementById('sh-install');
-      var texte = document.getElementById('sh-install-texte');
-      var etapes = document.getElementById('sh-install-etapes');
-      var actions = document.getElementById('sh-install-actions');
-      var promptInstall = null;
-
-      function ajouterBouton(libelle, classe, surClic, href) {
-        var el = document.createElement(href ? 'a' : 'button');
-        el.className = 'sh-btn ' + classe;
-        el.textContent = libelle;
-        if (href) { el.href = href; el.setAttribute('download', ''); }
-        if (surClic) el.addEventListener('click', surClic);
-        actions.appendChild(el);
-        return el;
-      }
-
-      function afficher() {
-        actions.innerHTML = '';
-        if (estIos) {
-          var safari = /safari/i.test(ua) && !/crios|fxios|edgios|opios/i.test(ua);
-          if (safari) {
-            texte.textContent = 'Ajoutez l\'application à votre écran d\'accueil, sans passer par l\'App Store.';
-            etapes.innerHTML =
-              '<li>1. Touchez le bouton <b>Partager</b> (le carré avec une flèche vers le haut) en bas de l\'écran.</li>' +
-              '<li>2. Choisissez <b>« Sur l\'écran d\'accueil »</b>.</li>' +
-              '<li>3. Touchez <b>Ajouter</b>.</li>';
-          } else {
-            texte.textContent = 'Pour installer l\'application sur iPhone, ouvrez ce site dans Safari.';
-            etapes.innerHTML =
-              '<li>Dans Safari : <b>Partager</b>, puis <b>« Sur l\'écran d\'accueil »</b>.</li>';
-          }
-          etapes.style.display = 'block';
-        } else {
-          texte.textContent = 'Accédez plus vite à ScolarHub depuis votre écran d\'accueil.';
-          etapes.style.display = 'none';
-          if (promptInstall) {
-            ajouterBouton('Installer l\'application', 'sh-btn-principal', function () {
-              promptInstall.prompt();
-              promptInstall.userChoice.then(function () { promptInstall = null; fermer(false); });
-            });
-          }
-          if (APK_URL) {
-            ajouterBouton('Télécharger l\'APK', promptInstall ? 'sh-btn-secondaire' : 'sh-btn-principal', null, APK_URL);
-          }
-          if (!actions.children.length) return; // rien à proposer
-        }
-        boite.classList.add('sh-visible');
-      }
-
-      function fermer(memoriser) {
-        boite.classList.remove('sh-visible');
-        if (memoriser !== false) {
-          try { localStorage.setItem(CLE, String(Date.now())); } catch (e) {}
-        }
-      }
-      document.getElementById('sh-install-fermer').addEventListener('click', function () { fermer(true); });
-
-      // Android / Chrome : l'installation « native » de la PWA n'est possible que si le navigateur la propose.
-      window.addEventListener('beforeinstallprompt', function (e) {
-        e.preventDefault();
-        promptInstall = e;
-        if (boite.classList.contains('sh-visible')) afficher();
-      });
-      window.addEventListener('appinstalled', function () { fermer(false); });
-
-      // On attend que l'application soit affichée (et un petit délai) avant de montrer le bandeau.
-      var pret = false;
-      function planifier() { if (pret) return; pret = true; setTimeout(afficher, 2500); }
-      window.addEventListener('flutter-first-frame', planifier);
-      setTimeout(planifier, 15000);
-    })();
-  </script>
-
-  <!-- Invite interactive d'activation des notifications push -->
-  <div id="sh-notif-prompt">
-    <div class="sh-np-header">
-      <div class="sh-np-icon">🔔</div>
-      <div class="sh-np-title">Notifications ScolarHub</div>
-    </div>
-    <div class="sh-np-body">
-      Activez les notifications pour recevoir vos notes, messages, appels et annonces en temps réel.
-    </div>
-    <div class="sh-np-actions">
-      <button class="sh-np-btn sh-np-btn-ok" id="sh-np-ok">Activer</button>
-      <button class="sh-np-btn sh-np-btn-cancel" id="sh-np-cancel">Plus tard</button>
+  <div id="quiz">
+    <div id="timer"></div>
+    <div id="question-container">
+      <p id="question" class="question"></p>
+      <div id="options"></div>
+      <button onclick="nextQuestion()">Suivant</button>
     </div>
   </div>
 
+  <div id="result">
+    <h3>🌟 Quiz terminé ! 🌟</h3>
+    <p id="score"></p>
+    <p id="success"></p>
+    <p id="duration"></p>
+  </div>
+
+  <div id="leaderboard-container">
+    <h3>🏆 Classement en direct</h3>
+    <div id="leaderboard"></div>
+  </div>
+
   <script>
-    (function () {
-      function cacherDefinitivement() {
-        var promptEl = document.getElementById('sh-notif-prompt');
-        if (promptEl) {
-          promptEl.style.display = 'none';
-          if (promptEl.parentNode) promptEl.parentNode.removeChild(promptEl);
-        }
+    const PASSWORD = "56DD@ib57FR58";
+    const TIME_LIMIT = 20;
+    let currentQuestion = 0, score = 0, timer, timeLeft, startTime;
+    const players = [];
+    let avatarURL = "";
+// Les questions et les options
+    const questions = [
+      {
+        question: "Quel est le nom complet de chekété à l'état civil ?",
+        options: ["Boureima kouraogo", "Ibrahim check kouraogo", "Ibrahim Kouraogo", "Iblo ibrahim check Kouraogo"],
+        answer: 3
+      },
+      {
+        question: "Quel âge a chekété ?",
+        options: ["29 ans", "20 ans", "23 ans", "25 ans"],
+        answer: 2
+      },
+      {
+        question: "C'est quoi le divertissement préféré de chekété ?",
+        options: ["films & series", "music", "lecture", "Football"],
+        answer: 3
+      },
+      {
+        question: "Quel est le genre de go (fille) de chekété ?",
+        options: [
+          "respectueuse, compréhensive, Authentique , Modeste, Altruiste, Éprise de l’âme, pas du paraître",
+          "Simple, Pure, stricte, et belle forme.",
+          "Modeste, compréhensive, clair, bavard",
+          "rebelle , sportif, intentionnée,mysterieuse"
+        ],
+        answer: 0
+      },
+      {
+        question: "c'est quoi le plat préféré de chekété ?",
+        options: [
+          "riz gras poisson","Riz sauce graine","riz sauce tomate","Foutou sauce sioko", "tout"],
+        answer:4
+      },
+      {
+        question: "Quelle est ma boisson favorite ?",
+        options: ["sucrerie","Alcool","l'eau","autres"],
+        answer:3
+      },
+      {
+        question: "Quand je suis énervé, qu’est-ce que je fais ?",
+        options: [" je casse tout","je me defoule sur quelqu'un","je m'éloigne des gens","je me fache jamais"],
+        answer:3
+      },
+      {
+        question: "Est-ce que je suis du genre jaloux(se), oui ou non ?",
+        options: [ " oui","non"],
+        answer:1
+      },
+      {
+        question:"j’ai déjà dormi en classe.",
+        options: ["vrai","faux"],
+        answer:0
+      },
+      {
+        question: "Quel est le prénom de ma mère?",
+        options: ["Moussa","cherifa","Rayna","shadèn","autre"],
+        answer:4
+      },
+      {
+        question: "Dans quelle ville ou quel quartier j’ai grandi ?",
+        options: ["Gagnoa","Abidjan","Ouaga","Koupela","Patte d'oie"],
+        answer:0,
+      },
+      {
+        question: "Si je devais choisir entre deux choses que serait ?",
+        options: ["1 million d'Euro","l’amour de ma vie","autres"],
+        answer:0
+      },
+      {
+        question: "Qui est mon/ma meilleur(e) ami(e) ?",
+        options: ["Flavia","carmelle","latif","binjamin","Rahinatou","Vakaba","autres"],
+        answer:5
+      },
+      {
+        question: "chekete a t'il une go (copine) ?",
+        options: ["oui","plusieurs","zero dans la base","2 go"],
+        answer:2
+      },
+      {
+        question: "je suis chauve",
+        options: ["non","très","à devenir bientot"],
+        answer:2
+      },
+      {
+        question:"Quel est le footballeur préféré de chekété ?",
+        options: ["pélé","Robinho","Zidane","Léo Messi","Ronaldo bresilin","Cristiano Ronaldo","Gavi","Ronaldinho Gaucho"],
+        answer:7
+      }
+      // Ajoute les autres questions ici...
+    ];
+
+    function validateAccess() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const avatarFile = document.getElementById("avatarInput").files[0];
+
+      if (!username || !password) {
+        document.getElementById("error").innerText = "Pseudo et mot de passe requis.";
+        return;
+      }
+      if (password !== PASSWORD) {
+        document.getElementById("error").innerText = "Mot de passe incorrect.";
+        return;
       }
 
-      // Fonctions passerelle vers Flutter Web
-      window.demanderPermissionOneSignal = async function() {
-        cacherDefinitivement();
-        try {
-          if (window.OneSignalDeferred) {
-            return new Promise(function(resolve) {
-              window.OneSignalDeferred.push(async function(OneSignal) {
-                try {
-                  var granted = await OneSignal.Notifications.requestPermission();
-                  if (granted || (typeof Notification !== 'undefined' && Notification.permission === 'granted')) {
-                    cacherDefinitivement();
-                    resolve(true);
-                  } else {
-                    resolve(false);
-                  }
-                } catch(e) {
-                  resolve(typeof Notification !== 'undefined' && Notification.permission === 'granted');
-                }
-              });
-            });
-          } else if ('Notification' in window) {
-            var perm = await Notification.requestPermission();
-            if (perm === 'granted') cacherDefinitivement();
-            return perm === 'granted';
-          }
-          return false;
-        } catch(e) {
-          console.error('[OneSignal Bridge] Erreur:', e);
-          return false;
+      if (avatarFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          avatarURL = e.target.result;
+          startQuiz(username);
         }
-      };
-
-      window.estPermissionOneSignalAccordee = function() {
-        if (typeof Notification === 'undefined') return false;
-        return Notification.permission === 'granted';
-      };
-
-      // Lie ce navigateur au compte ScolarHub connecté (external_id =
-      // matricule, ou email pour les comptes sans matricule). C'est ce que
-      // le backend cible avec include_aliases.external_id : sans cet appel,
-      // l'abonné reste anonyme et aucun push ciblé ne lui arrive.
-      window.oneSignalLogin = function(externalId) {
-        if (!externalId || !window.OneSignalDeferred) return;
-        window.OneSignalDeferred.push(async function(OneSignal) {
-          try {
-            await OneSignal.login(String(externalId).trim());
-          } catch (e) {
-            console.warn('[OneSignal] Erreur login:', e);
-          }
-        });
-      };
-
-      window.oneSignalLogout = function() {
-        if (!window.OneSignalDeferred) return;
-        window.OneSignalDeferred.push(async function(OneSignal) {
-          try {
-            await OneSignal.logout();
-          } catch (e) {
-            console.warn('[OneSignal] Erreur logout:', e);
-          }
-        });
-      };
-
-      function verifierNotification() {
-        if (!('Notification' in window)) return;
-        if (Notification.permission === 'granted') {
-          cacherDefinitivement();
-          return;
-        }
-
-        var promptEl = document.getElementById('sh-notif-prompt');
-
-        var refuseRecemment = false;
-        try {
-          var t = parseInt(localStorage.getItem('sh_notif_dismissed') || '0', 10);
-          if (t && Date.now() - t < 24 * 3600 * 1000) refuseRecemment = true;
-        } catch (e) {}
-
-        if (!refuseRecemment && promptEl) {
-          promptEl.style.display = 'block';
-        }
+        reader.readAsDataURL(avatarFile);
+      } else {
+        avatarURL = "https://via.placeholder.com/40";
+        startQuiz(username);
       }
+    }
 
-      function declencherPermission() {
-        if (window.OneSignalDeferred) {
-          window.OneSignalDeferred.push(async function(OneSignal) {
-            try {
-              var granted = await OneSignal.Notifications.requestPermission();
-              if (granted || Notification.permission === 'granted') {
-                cacherDefinitivement();
-              }
-            } catch (err) {
-              console.warn('[OneSignal] Erreur demande permission:', err);
-            }
-          });
-        } else if ('Notification' in window) {
-          Notification.requestPermission().then(function(perm) {
-            if (perm === 'granted') {
-              cacherDefinitivement();
-            }
-          });
-        }
+    function startQuiz(username) {
+      document.getElementById("start").style.display = "none";
+      document.getElementById("quiz").style.display = "block";
+      document.getElementById("leaderboard-container").style.display = "block";
+      startTime = Date.now();
+      players.push({ name: username, score: 0, avatar: avatarURL, duration: 0 });
+      showQuestion();
+    }
+
+    function showQuestion() {
+      if (currentQuestion >= questions.length) {
+        endQuiz();
+        return;
       }
-
-      // Écouter si la permission change
-      if (window.OneSignalDeferred) {
-        window.OneSignalDeferred.push(function(OneSignal) {
-          OneSignal.Notifications.addEventListener('permissionChange', function(permission) {
-            if (permission) {
-              cacherDefinitivement();
-            }
-          });
-        });
-      }
-
-      var btnOk = document.getElementById('sh-np-ok');
-      if (btnOk) btnOk.addEventListener('click', declencherPermission);
-
-      var btnCancel = document.getElementById('sh-np-cancel');
-      if (btnCancel) {
-        btnCancel.addEventListener('click', function () {
-          var promptEl = document.getElementById('sh-notif-prompt');
-          if (promptEl) promptEl.style.display = 'none';
-          try { localStorage.setItem('sh_notif_dismissed', String(Date.now())); } catch (e) {}
-        });
-      }
-
-      window.addEventListener('flutter-first-frame', function () {
-        setTimeout(verifierNotification, 1800);
+      const q = questions[currentQuestion];
+      document.getElementById("question").innerText = q.question;
+      const optionsDiv = document.getElementById("options");
+      optionsDiv.innerHTML = "";
+      q.options.forEach((opt, i) => {
+        const div = document.createElement("div");
+        div.className = "option";
+        div.innerHTML = `<label><input type='radio' name='option' value='${i}'> ${opt}</label>`;
+        optionsDiv.appendChild(div);
       });
-      setTimeout(verifierNotification, 4000);
-    })();
-  </script>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+      startTimer();
+    }
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
-  <script src="flutter_bootstrap.js" async></script>
+    function startTimer() {
+      timeLeft = TIME_LIMIT;
+      document.getElementById("timer").innerText = `⏳ Temps restant : ${timeLeft} s`;
+      timer = setInterval(() => {
+        timeLeft--;
+        document.getElementById("timer").innerText = `⏳ Temps restant : ${timeLeft} s`;
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          nextQuestion();
+        }
+      }, 1000);
+    }
+
+    function nextQuestion() {
+      clearInterval(timer);
+      const selected = document.querySelector("input[name='option']:checked");
+      if (selected && parseInt(selected.value) === questions[currentQuestion].answer) {
+        score++;
+      }
+      currentQuestion++;
+      showQuestion();
+    }
+
+    function endQuiz() {
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+      const username = document.getElementById("username").value.trim();
+      const percent = Math.round((score / questions.length) * 100);
+
+      document.getElementById("quiz").style.display = "none";
+      document.getElementById("result").style.display = "block";
+      document.getElementById("score").innerText = `🎯 ${username}, tu as obtenu ${score} / ${questions.length}`;
+      document.getElementById("success").innerText = `💯 Taux de réussite : ${percent}%`;
+      document.getElementById("duration").innerText = `⏱️ Temps écoulé : ${duration} secondes`;
+
+      const player = players.find(p => p.name === username);
+      if (player) {
+        player.score = score;
+        player.duration = duration;
+      }
+      updateLeaderboard();
+    }
+
+    function updateLeaderboard() {
+      players.sort((a, b) => b.score - a.score || a.duration - b.duration);
+      const lbDiv = document.getElementById("leaderboard");
+      lbDiv.innerHTML = "";
+      players.forEach(player => {
+        lbDiv.innerHTML += `<div class='player-entry'>🌸💰 <img src='${player.avatar}' class='avatar-img'> <strong>${player.name}</strong> - ${player.score} pts - ${player.duration}s</div>`;
+      });
+    }
+  </script>
 </body>
 </html>

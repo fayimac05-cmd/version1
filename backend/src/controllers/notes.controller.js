@@ -1,5 +1,6 @@
 const PDFDocument = require('pdfkit');
 const pool = require('../config/db');
+const { accesNotesBloque, accesNotesBloqueParUser, etudiantsBloques, MESSAGE_BLOCAGE } = require('./finances.controller'); // [FINANCES]
 const { envoyerNotificationAuto } = require('./notifications.controller');
 const { envoyerNotification } = require('../services/onesignal.service');
 const { parseSemestre, niveauCompatible, niveauDuSemestre } = require('../utils/semestres');
@@ -38,6 +39,9 @@ function normaliserNote(v) {
 const getNotesEtudiant = async (req, res) => {
     try {
         const userId = req.user.id;
+        // [FINANCES] accès suspendu par l'administration (scolarité à régulariser)
+        const _blq = await accesNotesBloqueParUser(req.user.id);
+        if (_blq.bloque) return res.status(403).json({ success: false, code: 'SCOLARITE_BLOQUEE', message: MESSAGE_BLOCAGE, motif: _blq.motif });
         const { semestre, annee_academique } = req.query;
 
         const params = [userId];
@@ -660,7 +664,8 @@ const getMonApercu = async (req, res) => {
             tauxPresence = Math.round((presents / presResult.rows.length) * 10000) / 100;
         }
 
-        res.json({ success: true, data: { moyenne, tauxPresence } });
+        const _blqA = await accesNotesBloque(etudiant.id); // [FINANCES]
+        res.json({ success: true, data: { moyenne: _blqA.bloque ? null : moyenne, tauxPresence, bloque: _blqA.bloque } });
     } catch (error) {
         console.error('[getMonApercu]', error);
         res.status(500).json({ success: false, message: 'Erreur lors du calcul de l\'aperçu.' });

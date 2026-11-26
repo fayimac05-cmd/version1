@@ -3,7 +3,7 @@ import '../services/cantine_service.dart';
 
 /// Menu de la cantine côté étudiant : page plein écran ouverte depuis l'accueil
 /// (Navigator.push). Le nom de classe reste « CantineSheet » pour ne pas toucher aux imports.
-/// La photo de la bannière est lue dans `assets/images/cantine_etudiant.png`
+/// La photo de la bannière est lue dans `assets/images/cantine_etudiant.jpg`
 /// (si le fichier est absent, la bannière reste simplement bleue).
 class CantineSheet extends StatefulWidget {
   const CantineSheet({super.key});
@@ -561,7 +561,7 @@ class _CantineSheetState extends State<CantineSheet> {
             child: ShaderMask(
               blendMode: BlendMode.dstIn,
               shaderCallback: (r) => LinearGradient(colors: const [Colors.transparent, Colors.black], stops: [0.0, compact ? 0.6 : 0.45]).createShader(r),
-              child: Image.asset('assets/images/cantine_etudiant.png', fit: BoxFit.cover, alignment: Alignment.centerRight, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              child: Image.asset('assets/images/cantine_etudiant.jpg', fit: BoxFit.cover, alignment: Alignment.centerRight, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
             ),
           ),
           Padding(
