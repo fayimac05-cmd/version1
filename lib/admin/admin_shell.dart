@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // admin_shell.dart — ScolarHub Admin Shell (v3 — production)
 // Auteur  : ScolarHub Team
 // Version : 3.0.0
@@ -68,6 +68,7 @@ import '../widgets/profile_header_cover.dart';
 import '../admin/admin_delegues.dart';
 import '../admin/admin_bde_membres.dart';
 import '../admin/admin_cantine.dart';
+import '../admin/admin_finances.dart';
 import '../widgets/mobile_nav.dart';
 import '../widgets/guide_utilisation.dart';
 import '../widgets/session_settings_sheet.dart';
@@ -122,6 +123,7 @@ const _items = <_MenuItem>[
   _MenuItem(icon: Icons.how_to_reg_outlined, iconActive: Icons.how_to_reg_rounded, label: 'Réinscriptions', group: 'ACADÉMIQUE'),
   _MenuItem(icon: Icons.event_available_outlined, iconActive: Icons.event_available_rounded, label: 'Disponibilités profs', group: 'ACADÉMIQUE'),
   _MenuItem(icon: Icons.help_outline_rounded, iconActive: Icons.help_rounded, label: 'Guide d\'utilisation', group: 'GÉNÉRAL'),
+  _MenuItem(icon: Icons.account_balance_wallet_outlined, iconActive: Icons.account_balance_wallet_rounded, label: 'Finances', group: 'FINANCES'), // index 26
 ];
 
 const _menuGroups = <Map<String, Object>>[
@@ -132,6 +134,7 @@ const _menuGroups = <Map<String, Object>>[
   {'key': 'ÉVÉNEMENTS', 'items': [11]},
   {'key': 'SERVICES',   'items': [19]},
   {'key': 'RAPPORTS',   'items': [12, 13, 16]},
+  {'key': 'FINANCES',   'items': [26]},
 ];
 
 
@@ -175,10 +178,10 @@ class AdminMenuService {
     switch (role) {
       case AdminRole.superAdmin:
         // Accès total (0..20)
-        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
+        return {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26};
       case AdminRole.scolarite:
         // Tableau de bord, Filières & Modules, Emplois du Temps, Étudiants, Professeurs, Statistiques
-        return {0, 2, 3, 6, 7, 12, 23, 24};
+        return {0, 2, 3, 6, 7, 12, 23, 24, 26};
       case AdminRole.examens:
         // Tableau de bord, Notes & Moyennes, Bulletins, Réclamations, Statistiques, Éval. Professeurs, Élèves à risque
         return {0, 4, 17, 5, 12, 13, 16, 21, 22};
@@ -399,6 +402,8 @@ class _AdminShellState extends State<AdminShell>
       AdminDisponibilites(onVu: () {
         if (mounted && _badges.containsKey(24)) setState(() => _badges.remove(24));
       }),
+      const SizedBox.shrink(), // 25 : Guide (ouvert à part)
+      const AdminFinances(), // 26
     ];
 
     _pageAnim = AnimationController(
